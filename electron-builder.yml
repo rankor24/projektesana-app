@@ -1,0 +1,36 @@
+appId: lv.buvdizains.projektesana
+productName: Projektesana App
+copyright: SIA BŪVDIZAINS.LV
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - package.json
+  - "!**/*.map"
+
+# rules.json and the likumi.lv snapshots must be real files next to the app
+extraResources:
+  - from: data
+    to: data
+
+# pi runs in-process (no vendor CLI binaries to unpack); the tools server runs from the archive with ELECTRON_RUN_AS_NODE.
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Unsigned internal tool: SmartScreen warns on first run.
+  signAndEditExecutable: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Projektēšanas App
+  # Keep settings and the encrypted key on uninstall.
+  deleteAppDataOnUninstall: false

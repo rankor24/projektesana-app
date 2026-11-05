@@ -1,0 +1,283 @@
+
+ Noteikumi par Latvijas būvnormatīvu LBN 202-18 "Būvniecības ieceres dokumentācijas noformēšana" 
+ Teksta versija
+ Uzmanību! Jūs lietojat novecojušu tīmekļa pārlūkprogrammas versiju.
+ Lai varētu izmantot visas vietnē Likumi.lv piedāvātās iespējas, aicinām lejupielādēt jaunāko pārlūkprogrammas versiju. Piedāvājam lietot arī vietnes mobilo versiju – m.likumi.lv. 
+ nerādīt turpmāk šo paziņojumu
+ Apstiprināt
+Aicinām vēl šonedēļ piedalīties lietotāju apmierinātības aptaujā!
+Paldies par viedokli!
+ Rādīt vēlāk
+LATVIJAS REPUBLIKAS TIESĪBU AKTI
+veidi
+tēmas
+visvairāk skatītie
+jaunākie
+ LV 
+ EN
+ uz sākumu
+ meklēt
+ Izvērstā meklēšana
+ Noklusējuma vērtības
+Izvērstā meklēšana
+Kā meklēt?
+ Meklēt nosaukumā
+ meklēt locījumos
+ meklēt frāzi
+ Meklēt tekstā
+ meklēt locījumos
+ meklēt frāzi
+ Izdevējs
+ Veids
+ nemeklēt grozījumos
+ Pieņemts
+ Stājas spēkā
+ Dokumenta Nr.
+līdz
+līdz
+ Publicēts LV
+ Zaudējis spēku
+ Redakcija uz
+līdz
+līdz
+ Statuss:
+ spēkā esošs
+ vēl nav spēkā
+ zaudējis spēku
+ meklēt
+notīrīt
+Autorizēties savā kontā
+Kādēļ autorizēties vai reģistrēties?
+Attēlotā redakcija
+Ministru kabineta noteikumi Nr. 545
+Rīgā 2018. gada 28. augustā (prot. Nr. 40 5. §)
+Noteikumi par Latvijas būvnormatīvu LBN 202-18 "Būvniecības ieceres dokumentācijas noformēšana"
+Izdoti saskaņā ar Būvniecības likuma
+5. panta pirmās daļas 3. punktu
+1. Noteikumi apstiprina Latvijas būvnormatīvu LBN 202-18 "Būvniecības ieceres dokumentācijas noformēšana" (turpmāk – būvnormatīvs).
+2
+2. Ekonomikas ministrija sadarbībā ar attiecīgo standartu tehnisko komiteju iesaka nacionālajai standartizācijas institūcijai saistībā ar šiem noteikumiem izstrādājamo, adaptējamo un piemērojamo standartu sarakstu.
+3
+3. Nacionālā standartizācijas institūcija savā tīmekļvietnē publicē to Latvijas nacionālo standartu sarakstu, kurus piemēro būvnormatīva izpildei.
+4
+4. Atzīt par spēku zaudējušiem Ministru kabineta 2015. gada 9. jūnija noteikumus Nr. 281 "Noteikumi par Latvijas būvnormatīvu LBN 202-15 "Būvprojekta saturs un noformēšana"" (Latvijas Vēstnesis, 2015, 113. nr.).
+5
+5. Būvniecības ieceres dokumentācija, kas noteiktā kārtībā izstrādāta vai iesniegta saskaņošanai būvvaldē vai institūcijā, kura pilda būvvaldes funkcijas, līdz šo noteikumu spēkā stāšanās dienai, nav jāpārstrādā atbilstoši būvnormatīvā noteiktajām prasībām.
+6
+Ministru prezidents Māris Kučinskis
+Ministru prezidenta biedrs,
+ekonomikas ministrs Arvils Ašeradens
+Apstiprināts ar
+Ministru kabineta
+2018. gada 28. augusta
+noteikumiem Nr. 545
+Latvijas būvnormatīvs LBN 202-18 "Būvniecības ieceres dokumentācijas noformēšana"
+1. Būvnormatīvs nosaka prasības būvniecības ieceres dokumentācijas teksta un grafisko dokumentu, tai skaitā rasējumu, noformēšanai.
+7
+2. Būvnormatīvs neattiecas uz būvniecības ieceres metu, citiem pirmsprojekta grafiskajiem vai teksta dokumentiem un demonstrācijas materiāliem. Būvnormatīva prasības neattiecas uz būvniecības ieceres dokumentācijas noformēšanu autoceļu un ielu būvniecības jomā, piemērojot standartu LVS 190-1:2000 "Ceļu projektēšanas noteikumi – 1. daļa: Ceļa trase" vai standartu LVS 190-6:2009 "Ceļu projektēšanas noteikumi. 6. daļa: Autoceļu un tiltu būvprojektu saturs un noformēšana".
+8
+3. Būvniecības ieceres dokumentācijas teksta un grafiskās datnes būvniecības informācijas sistēmā augšupielādē portatīvā dokumenta (PDF) formātā, bet ģenerālplānu, savietoto demontējamo ārējo inženiertīklu plānu, savietoto projektējamo ārējo inženiertīklu plānu, situācijas plānu, novietnes plānu un novietojuma plānu augšupielādē PDF vai GeoPDF formātā. Būvniecības likuma 14. panta 1.4 daļā noteiktajā vienotajā būves reģistrācijas procesā ģenerālplāna, kā arī ēkas stāva plāna un telpu grupas plāna grafisko datni dublē vektordatu (DWG vai DGN) formātā. Citas datnes var augšupielādēt būvniecības informācijas sistēmā jebkurā formātā.
+9
+(MK 16.12.2025. noteikumu Nr. 762 redakcijā)
+4. Paskaidrojuma raksta un apliecinājuma kartes pielikumus, kuri atbilst būvprojekta sastāvā ietveramajiem teksta un grafiskajiem dokumentiem, noformē tādā pašā veidā kā būvprojektā ietveramos teksta un grafiskos dokumentus.
+10
+5. Ja paskaidrojuma rakstu un apliecinājuma karti aizpilda papīra dokumenta veidā, titullapu, sastāva lapu un satura rādītāju var nepievienot, kā arī pielikumus var neveidot sējumā.
+11
+6. Būvprojektu minimālā sastāvā un būvprojektu noformē vienādi.
+12
+7. Izmaiņas paskaidrojuma rakstā, apliecinājumu kartē, būvprojektā minimālā sastāvā un būvprojektā noformē tāpat kā sākotnējo būvniecības ieceres dokumentāciju.
+13
+8. Būvprojekta teksta lapas vai datnes satur nepieciešamo informāciju un skaidrojošos aprakstus par:
+8.1. objektu;
+8.2. būvprojekta risinājumiem;
+8.3. būvprojekta izstrādātāju;
+8.4. būvniecības ierosinātāju;
+8.5. būvniecības laiku un vietu.
+14
+9. Būvprojektu var iesniegt papīra formā, elektroniski vai augšupielādējot būvniecības informācijas sistēmā. Ja būvprojektu iesniedz papīra formā vai elektroniski, tam pievieno:
+9.1. titullapu;
+9.2. sastāva lapu (būvprojektā iekļautie sējumi ar markām un kārtas numuriem);
+9.3. satura rādītāju (sējumā ietvertā teksta lapu un rasējumu satura rādītājs ar lappušu norādēm).
+15
+10. Titullapā norāda šādu informāciju:
+10.1. juridiskām personām – būvprojekta izstrādātāja nosaukums, būvkomersanta reģistrācijas numurs, fiziskām personām – vārds, uzvārds, sertifikāta numurs;
+10.2. juridiskām personām – būvniecības ierosinātāja nosaukums, fiziskām personām – vārds, uzvārds;
+10.3. objekta nosaukums un adrese, ja tāda piešķirta;
+10.4. daļas nosaukums;
+10.5. sējuma numurs un tajā ietvertās daļas marka;
+10.6. būvprojekta vadītāja vārds, uzvārds, sertifikāta numurs.
+16
+11. Katrā sējumā aiz sējuma titullapas un sastāva lapas ietver satura rādītāja lapu ar lappušu norādēm. Ja būvprojektu augšupielādē būvniecības informācijas sistēmā, būvprojektam nav sējumu un tam nepievieno titullapu, satura rādītāju un sastāva lapu.
+17
+12. Būvprojekta vienas daļas sastāvā var iekļaut teksta, grafiskos dokumentus un rasējumus no vairākām markām. Ja būvprojektu augšupielādē būvniecības informācijas sistēmā, katra marka veido atsevišķu daļu.
+18
+13. Papīra formā grafiskos dokumentus, kas nav rasējumi, noformē, nodrošinot to vizuālu un skaidru uztveramību.
+19
+14. Būvprojekta daļas rasējumus ievada vispārīgo rādītāju lapa (var būt apvienota ar skaidrojošo aprakstu). Vispārīgo rādītāju lapā iekļauj:
+14.1. daļas rasējumu sarakstu un markas;
+14.2. projektēšanā izmantoto dokumentu sarakstu;
+14.3. norādījumus (var būt apvienoti ar skaidrojošo aprakstu) un nestandarta apzīmējumus.
+20
+15. Rasējuma lapas labajā apakšējā stūrī izvieto rakstlaukumu. Rakstlaukumā norāda šādu informāciju:
+15.1. juridiskām personām – būvprojekta izstrādātāja nosaukums, būvkomersanta reģistrācijas numurs, fiziskām personām – būvprojekta izstrādātāja vārds, uzvārds, sertifikāta numurs;
+15.2. objekta nosaukums un adrese, ja tāda piešķirta;
+15.3. rasējuma nosaukums vai saturs;
+15.4. marka un kārtas numurs;
+15.5. mērogs;
+15.6. rasējuma lapas izstrādātāja vārds, uzvārds;
+15.7. daļas vadītāja vārds, uzvārds (nenorāda, augšupielādējot būvniecības informācijas sistēmā).
+21
+16. Atkārtoti lietotiem rasējumiem rakstlaukumā norāda šādu informāciju:
+16.1. atkārtoti lietotā rasējuma piesaistītāja vārds, uzvārds;
+16.2. marka un numurs.
+22
+17. Būvprojekta atsevišķu daļu, darbu vai rasējumu nosaukumus saīsina, apzīmējot ar marku. Marku apzīmējumi norādīti šā būvnormatīva pielikumā. Ja nepieciešams, var veidot arī papildu markas.
+23
+Ministru prezidenta biedrs,
+ekonomikas ministrs Arvils Ašeradens
+Pielikums
+Latvijas būvnormatīvam LBN 202-18
+"Būvniecības ieceres dokumentācijas noformēšana"
+(apstiprināts ar Ministru kabineta
+2018. gada 28. augusta
+noteikumiem Nr. 545)
+Būvniecības ieceres dokumentācijas markas
+Nr.
+p.k.MarkaNosaukums
+1.AAAinavas analīze
+2.AATAukstumapgāde
+3.AMIArhitektoniski mākslinieciskā izpēte
+4.ARArhitektūras risinājumi
+5.ASApūdeņošanas sistēmas
+6.AVK-AApkure
+7.AVK-KKlimata kontroles sistēma
+8.AVK-VVentilācija
+9.BABūvdarbu apjomu saraksts
+10.BAABūvakustika
+11.BKBūvkonstrukcijas
+12.DNDūmu nosūce
+13.DOPDarbu organizācijas projekts
+14.DTDrenāžas inženiertīkli
+15.DVPDarbu veikšanas projekts
+16.DZKDzelzsbetona konstrukcijas
+17.ELElektroapgāde (iekšējā)
+18.ELTElektroapgāde (ārējā)
+19.ES-PPagaidu energosertifikāts
+20.ESSElektronisko sakaru sistēmas
+21.ESS- CICentralizētā izziņošanas sistēma
+22.ESS-DADūmu aizsardzība
+23.ESS- PKPiekļuves kontrole
+24.ESS-ASApsardzes signalizācija
+25.ESS-TKElektronisko sakaru inženiertīkli
+26.ESS-VASVadības un automatizācijas sistēmas
+27.ESS-VNVideonovērošana
+28.ESTElektronisko sakaru sistēmas (ārējās)
+29.FFFotofiksācija
+30.GAGāzes apgāde (iekšējā)
+31.GATGāzes apgāde (ārējā)
+32.GIĢeotehniskā izpēte
+33.GPĢenerālplāns
+34.HBHidrotehniskās būves
+35.HIHidrometeoroloģiskā izpēte
+36.IEIekārtu izvietojums
+37.INInterjers
+38.ISIekārtu, konstrukciju un būvizstrādājumu kopsavilkums
+39.KKKoka konstrukcijas
+40.KTDzelzceļa kontakttīkli
+41.LKTLietus ūdens kanalizācijas tīkli
+42.MKMetāla konstrukcijas
+43.MSMeliorācijas sistēmas
+44.MUKMūra konstrukcijas
+45.PKPlastmasas konstrukcijas
+46.SASkaidrojošais apraksts
+47.SATSiltumapgāde (ārējā)
+48.SCDzelzceļa sliežu ceļi, zemes klātne, garenprofili un šķērsprofili, ūdensnovade
+49.SCBDzelzceļa signalizācijas sistēmas un vilcienu kustības vadības sistēmas tīkli
+50.SKStikla konstrukcijas
+51.SMSiltummehānika
+52.SPSprinkleru sistēma
+53.TIzmaksu aprēķins
+54.TAATehniskās apsekošanas atzinums
+55.TIĢeodēziskā un topogrāfiskā izpēte
+56.TNTehnoloģiskā daļa
+57.TS-CDCeļa darbi
+58.TS-LLabiekārtojums
+59.UASUgunsdzēsības automātikas sistēmas
+60.UATSUgunsgrēka atklāšanas un trauksmes signalizācijas sistēmas
+61.UKŪdensapgāde un kanalizācija (iekšējā)
+62.UKTŪdensapgāde un kanalizācija (ārējā)
+63.UNŪdensnotekas
+64.UPPUgunsdrošības pasākumu pārskats
+65.URUzmērījuma rasējumi
+66.VAPVides aizsardzības pasākumi
+67.VIVēsturiskā izpēte
+68.ZPZemes robežu plāns
+Ministru prezidenta biedrs,
+ekonomikas ministrs Arvils Ašeradens
+Tiesību akta pase 
+ Nosaukums: Noteikumi par Latvijas būvnormatīvu LBN 202-18 "Būvniecības ieceres dokumentācijas noformēšana"
+ Statuss: 
+Spēkā esošs
+ spēkā esošs
+ Izdevējs: Ministru kabinets
+ Veids:
+ noteikumi
+ Numurs: 545Pieņemts: 28.08.2018.Stājas spēkā: 31.08.2018.Publicēts: Latvijas Vēstnesis, 172, 30.08.2018.
+ OP numurs: 
+ 2018/172.3
+Dokumenta valoda:
+Saistītie dokumenti
+ Grozījumi
+ Tiesību akti, kuriem maina statusu
+ Izdoti saskaņā ar
+ Anotācija
+ Latvijas standarti
+ Skaidrojumi
+ Citi saistītie dokumenti
+301303
+{"selected":{"value":"06.01.2026","content":"<font class='s-1'>06.01.2026.-...<\/font> <font class='s-3'>Sp\u0113k\u0101 eso\u0161\u0101<\/font>"},"data":[{"value":"06.01.2026","iso_value":"2026\/01\/06","content":"<font class='s-1'>06.01.2026.-...<\/font> <font class='s-3'>Sp\u0113k\u0101 eso\u0161\u0101<\/font>"},{"value":"31.08.2018","iso_value":"2018\/08\/31","content":"<font class='s-1'>31.08.2018.-05.01.2026.<\/font> <font class='s-2'>Pamata<\/font>"}]}
+87
+1
+ Ar grozījumu sarakstu
+ Ar pielikumiem
+ Ar manām piezīmēm
+ Ar lielāka izmēra fontu
+Drukāt tiesību aktu
+X
+Facebook
+Draugiem.lv
+0 
+ Šajā vietnē oficiālais izdevējs
+ "Latvijas Vēstnesis" nodrošina tiesību aktu
+ sistematizācijas funkciju.
+ Sistematizēti tiesību akti ir informatīvi. Pretrunu gadījumā vadās pēc oficiālās publikācijas.
+ Par Likumi.lv
+ Aktualitātes
+ Atsauksmēm
+ Apmācības
+ Kontakti
+ Mobilā versija
+ Lietošanas noteikumi
+ Privātuma politika
+ Sīkdatnes
+ Piekļūstamība
+RSS
+Šodien publicēti tiesību akti
+Likumi
+Ministru kabineta noteikumi
+Ministru kabineta instrukcijas
+Ministru kabineta rīkojumi
+Valsts prezidenta tiesību akti
+Ministru prezidenta rīkojumi
+Satversmes tiesas nolēmumi
+Latvijas bankas noteikumi
+FKTK noteikumi
+SPRK lemumi
+CVK lēmumi
+Rīgas domes saistošie noteikumi
+Visi tiesību akti
+Šodien stājas spēkā
+Šodien zaudē spēku 
+ "Ikvienam ir tiesības zināt savas tiesības."
+ Latvijas Republikas Satversmes 90. pants
+ © Oficiālais izdevējs "Latvijas Vēstnesis"
