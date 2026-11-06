@@ -1,0 +1,8 @@
+KADASTRĀLĀS UZMĒRĪŠANAS LIETA
+Būves kadastra apzīmējums 0000 000 0000 001
+Zemes vienības kadastra apzīmējums: 0000 000 0000
+Īpašnieks: Izdomātā pašvaldība
+Ēkas raksturojums
+Kopējā platība: 1 234,5 m2
+Apbūves laukums 456,7 m2
+Zemes vienības platība 0,4321 ha

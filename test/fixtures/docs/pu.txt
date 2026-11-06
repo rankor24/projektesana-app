@@ -1,0 +1,13 @@
+PROJEKTĒŠANAS UZDEVUMS Nr. 99/TEST
+Izdomātās pašvaldības sabiedriskās ēkas pārbūvei
+
+1. Vispārīgā informācija
+1.1. Objekta adrese: Testa iela 1, Izdomāti, LV-0000
+1.2. Kadastra apzīmējums 0000 000 0000 001
+1.3. Būvniecības veids – pārbūve, ēka atbilst 3. grupai.
+1.4. Finansējums: pašvaldības budžets.
+2. Prasības projektēšanai
+2.1. Projektētājs izstrādā skiču projektu un būvprojektu minimālā sastāvā.
+2.2. Būvprojektā paredz sadaļas AR, BK, ŪK, AVK, EL un DOP.
+2.3. Projektēšanu veic BIM vidē, modeļus nodod IFC formātā.
+2.4. Telpu programma saskaņā ar 1. pielikumu.
