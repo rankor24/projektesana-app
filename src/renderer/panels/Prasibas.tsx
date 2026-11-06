@@ -203,6 +203,16 @@ function Findings({ projectId }: { projectId: string }) {
 		<div className="pane fill">
 			<div className="row">
 				<button className="primary" onClick={() => act(call("findings.runAll", projectId))}>Palaist visas pārbaudes</button>
+				<button title="Atvērtie un pieņemtie atradumi kā BCF 2.1 (Solibri, Navisworks, BimCraft)" onClick={() => act(call("bcf.export", projectId, null))}>BCF eksports</button>
+				<button
+					title="BCF tēmas no Solibri / Navisworks kā atradumi, sakārtoti pa disciplīnām"
+					onClick={async () => {
+						const f = await call("dialog.pickFile", "BCF fails", ["bcf", "bcfzip"]);
+						if (f) act(call("bcf.import", projectId, f).then((r) => alert(`Importētas ${r.topics} tēmas: ${Object.entries(r.byDiscipline).map(([k, n]) => `${k} ${n}`).join(", ")}`)));
+					}}
+				>
+					BCF imports
+				</button>
 				{(["open", "overridden", "closed", "all"] as const).map((s) => (
 					<button key={s} className={show === s ? "primary" : ""} onClick={() => setShow(s)}>
 						{s === "open" ? "atvērtie" : s === "overridden" ? "pieņemtie" : s === "closed" ? "novērstie" : "visi"} ({(findings.data ?? []).filter((f) => s === "all" || f.state === s).length})

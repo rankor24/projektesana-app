@@ -1,5 +1,6 @@
 // The whole read of a project's inputs: scan 1.1 → hash in a worker → merge duplicates → containers → text in a worker →
 // old Office formats → OCR. Every step reports progress; every file ends with a text state, never silently empty.
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Source, Version } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
@@ -62,6 +63,7 @@ export async function scanProject(store: ProjectStore, progress: (p: Omit<ScanPr
 		(done, total, current) => progress({ phase: "hash", done, total, current }),
 	);
 	const merged = mergeSources(prev, hashed, scan.surveys, scan.folders);
+	keepBlobs(store, hashed);
 	let sources = await expandContainers(merged.sources, root);
 	store.write("sources", sources, { kind: "sources.scanned", by: "app", data: { added: merged.added.length, changed: merged.changed.length, gone: merged.gone.length } });
 
@@ -164,4 +166,23 @@ async function readAllText(store: ProjectStore, sources: Source[], progress: (p:
 		}
 	}
 	return sources;
+}
+
+/** Each PDF version (up to 30 MB) is copied once into the data folder by its sha, so an older issue can still be compared
+ *  after the office file was replaced. Content-addressed: the same bytes are stored once. */
+export const BLOB_MAX = 30 * 1024 * 1024;
+function keepBlobs(store: ProjectStore, files: { abs: string; rel: string; size: number; sha256: string | null }[]) {
+	const dir = join(store.dir, "blobs");
+	mkdirSync(dir, { recursive: true });
+	for (const f of files) {
+		if (!f.sha256 || f.sha256.startsWith("q:") || f.size > BLOB_MAX || extname(f.rel).toLowerCase() !== ".pdf") continue;
+		const to = join(dir, `${f.sha256}.pdf`);
+		if (!existsSync(to)) {
+			try {
+				copyFileSync(f.abs, to);
+			} catch {
+				// a file that went away between hash and copy: the next scan copies it
+			}
+		}
+	}
 }

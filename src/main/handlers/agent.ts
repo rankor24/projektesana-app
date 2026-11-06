@@ -13,11 +13,12 @@ export interface CoreDeps {
 	pi: () => Promise<PiRuntime>;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	pickFolder(title: string): Promise<string | null>;
+	pickFile(title: string, extensions: string[]): Promise<string | null>;
 	openPath(p: string): Promise<string>;
 	openUrl(url: string): void;
 }
 
-type K = "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | `agent.${string}`;
+type K = "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}`;
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -32,6 +33,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			return s;
 		},
 		"dialog.pickFolder": (title) => d.pickFolder(title),
+		"dialog.pickFile": (title, ext) => d.pickFile(title, ext),
 
 		"agent.status": () => d.session.status(),
 		"agent.providers": async () => {

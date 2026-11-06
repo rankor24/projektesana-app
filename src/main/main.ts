@@ -99,6 +99,7 @@ const engine = new ProjectEngine({
 });
 
 const handlers = createHandlers({
+	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	engine,
 	revit,
 	registry,
@@ -111,6 +112,10 @@ const handlers = createHandlers({
 	emit,
 	pickFolder: async (title) => {
 		const r = await dialog.showOpenDialog(win!, { title, properties: ["openDirectory"] });
+		return r.canceled ? null : r.filePaths[0];
+	},
+	pickFile: async (title, extensions) => {
+		const r = await dialog.showOpenDialog(win!, { title, properties: ["openFile"], filters: [{ name: extensions.join(", "), extensions }] });
 		return r.canceled ? null : r.filePaths[0];
 	},
 	openPath: (p) => shell.openPath(p),

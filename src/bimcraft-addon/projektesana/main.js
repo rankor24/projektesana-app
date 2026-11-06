@@ -87,6 +87,20 @@ export function activate(api) {
         api.model.select(ids);
         post('highlighted', { found: ids.length, asked: (m.guids || []).length });
         await poll();
+      } else if (m.type === 'compare') {
+        // BimCraft's own version compare (Models panel, ifc-compare.js): A opened, B added as a second model, both by GlobalId;
+        // BimCraft paints added / removed / changed itself
+        const M = globalThis.bimcraftModels;
+        const C = globalThis.bimcraftCompare;
+        if (!M || !C) throw new Error('compare needs BimCraft\'s Models panel (bimcraftModels / bimcraftCompare)');
+        pending = { bytes: new Uint8Array(m.a.bytes), name: String(m.a.name) };
+        await globalThis.ccAddons?.openFromAddon(new File([pending.bytes], `${pending.name}${PJ_EXT}`));
+        await M.add(new File([new Uint8Array(m.b.bytes)], String(m.b.name)));
+        const list = M.list();
+        const a = list[0];
+        const b = list[list.length - 1];
+        const r = C.run(a.mi, b.mi);
+        post('compared', { added: r.added.length, removed: r.removed.length, changed: r.changed.length, same: r.same, changes: r.changed.slice(0, 200).map((c) => ({ guid: c.guid, props: c.props.map((p) => p.field), moved: c.moved, reshaped: c.reshaped })) });
       } else if (m.type === 'sketch') {
         const sel = api.model.selection();
         post('sketch', { items: await describe(sel), note: String(m.note || '') });

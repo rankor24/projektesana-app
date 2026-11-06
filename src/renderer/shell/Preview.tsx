@@ -5,6 +5,7 @@ import type { Source } from "../../core/model";
 import { call } from "../bridge";
 import { SourcePdf } from "../preview/SourcePdf";
 import { IfcView } from "../preview/IfcView";
+import { SheetCompare } from "../preview/SheetCompare";
 import { TextView } from "../preview/TextView";
 import { useUi } from "../state";
 import { Empty, useLoad } from "../ui";
@@ -23,6 +24,19 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 		return (
 			<section className="preview">
 				<IfcView key={preview.path} name={preview.label} load={() => (preview.path.startsWith("rev:") ? call("revisions.ifc", projectId, preview.path.slice(4)) : call("models.bytes", projectId, preview.path))} />
+			</section>
+		);
+	const modelLoad = (ref: string) => () => (ref.startsWith("rev:") ? call("revisions.ifc", projectId, ref.slice(4)) : call("models.bytes", projectId, ref));
+	if (preview.kind === "compare" && preview.mode === "ifc")
+		return (
+			<section className="preview">
+				<IfcView key={`${preview.a}|${preview.b}`} name={preview.aLabel} load={modelLoad(preview.a)} compareWith={{ name: preview.bLabel, load: modelLoad(preview.b) }} />
+			</section>
+		);
+	if (preview.kind === "compare" && preview.mode === "sheet")
+		return (
+			<section className="preview">
+				<SheetCompare projectId={projectId} a={preview.a} b={preview.b} aLabel={preview.aLabel} bLabel={preview.bLabel} />
 			</section>
 		);
 	if (preview.kind !== "source") return <section className="preview">{extra?.(preview.kind) ?? <Empty title="no data">Skats nav pieejams.</Empty>}</section>;

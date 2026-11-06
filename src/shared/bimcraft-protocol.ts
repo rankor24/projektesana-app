@@ -1,7 +1,7 @@
 // The messages between the app (host) and the BimCraft bridge add-on (src/bimcraft-addon/projektesana/main.js).
 // Every message is { pj: 1, type, … }. Pure: the renderer, main and the tests use it.
 
-export type HostToBimcraft = { pj: 1; type: "open"; name: string; bytes: Uint8Array } | { pj: 1; type: "select"; ids: number[] } | { pj: 1; type: "highlight"; guids: string[] } | { pj: 1; type: "sketch"; note?: string };
+export type HostToBimcraft = { pj: 1; type: "open"; name: string; bytes: Uint8Array } | { pj: 1; type: "select"; ids: number[] } | { pj: 1; type: "highlight"; guids: string[] } | { pj: 1; type: "sketch"; note?: string } | { pj: 1; type: "compare"; a: { name: string; bytes: Uint8Array }; b: { name: string; bytes: Uint8Array } };
 
 export interface BimcraftItem {
 	id: number;
@@ -16,11 +16,12 @@ export type BimcraftToHost =
 	| { pj: 1; type: "selection"; items: BimcraftItem[] }
 	| { pj: 1; type: "highlighted"; found: number; asked: number }
 	| { pj: 1; type: "sketch"; items: BimcraftItem[]; note: string }
+	| { pj: 1; type: "compared"; added: number; removed: number; changed: number; same: number; changes: { guid: string; props: string[]; moved: number; reshaped: boolean }[] }
 	| { pj: 1; type: "error"; message: string };
 
 export function isBimcraftMessage(x: unknown): x is BimcraftToHost {
 	const m = x as { pj?: unknown; type?: unknown };
-	return !!m && typeof m === "object" && m.pj === 1 && typeof m.type === "string" && ["ready", "opened", "selection", "highlighted", "sketch", "error"].includes(m.type);
+	return !!m && typeof m === "object" && m.pj === 1 && typeof m.type === "string" && ["ready", "opened", "selection", "highlighted", "sketch", "compared", "error"].includes(m.type);
 }
 
 /** A model element as a Fokuss item. */

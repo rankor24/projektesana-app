@@ -4,6 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 
+
 export interface AppInfo {
 	version: string;
 	dataDir: string;
@@ -133,11 +134,33 @@ export interface ClockRow {
 	state: "gaida" | "kavē" | "saņemts";
 }
 
+export interface VersionRow {
+	at: string;
+	kind: "source" | "delivery" | "revision" | "data";
+	label: string;
+	detail?: string;
+	/** compare A (older) → B (newer), when both exist */
+	compare?: { a: string; b: string; mode: "sheet" | "ifc"; aLabel: string; bLabel: string };
+	/** open in the preview */
+	open?: { sourceId?: string; ifc?: string };
+}
+
+export interface SheetDiffRow {
+	a: number;
+	b: number;
+	sheetNo: string | null;
+	summary: string[];
+	where: { x: number; y: number }[];
+	frameA: { x0: number; y0: number; x1: number; y1: number } | null;
+	frameB: { x0: number; y0: number; x1: number; y1: number } | null;
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
 	"settings.set": (patch: Partial<Settings>) => Settings;
 	"dialog.pickFolder": (title: string) => string | null;
+	"dialog.pickFile": (title: string, extensions: string[]) => string | null;
 	"agent.status": () => AgentStatus;
 	"agent.providers": () => ProviderRow[];
 	"agent.setKey": (provider: string, key: string) => void;
@@ -179,6 +202,8 @@ export interface ApiSpec {
 	"findings.override": (id: string, findingId: string, reason: string) => void;
 	"findings.reopen": (id: string, findingId: string) => void;
 	"findings.runAll": (id: string) => number;
+	"bcf.export": (id: string, findingIds: string[] | null) => string;
+	"bcf.import": (id: string, file: string) => { topics: number; byDiscipline: Record<string, number>; notes: string[] };
 	"pins.list": (id: string) => Pin[];
 	"pins.add": (id: string, target: PinTarget, text: string) => Pin;
 	"pins.comment": (id: string, pinId: string, text: string) => void;
@@ -190,6 +215,10 @@ export interface ApiSpec {
 	"models.list": (id: string) => { rel: string; name: string; section: string | null; size: number; mtime: string }[];
 	"models.bytes": (id: string, rel: string) => Uint8Array;
 	"revisions.list": (id: string) => Revision[];
+	"sheets.bytes": (id: string, ref: string) => Uint8Array;
+	"versions.between": (id: string, from: string, to: string) => VersionRow[];
+	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
+	"models.diff": (id: string, a: string, b: string) => { added: string[]; removed: string[]; changed: { guid: string; props: string[]; moved: number; reshaped: boolean }[]; same: number; dupes: number };
 	"revisions.ifc": (id: string, revisionId: string) => Uint8Array;
 	"revit.rooms": () => RevitRoomRow[];
 	"revit.select": (elementIds: number[]) => void;
@@ -211,6 +240,7 @@ export const API_NAMES = [
 	"settings.get",
 	"settings.set",
 	"dialog.pickFolder",
+	"dialog.pickFile",
 	"agent.status",
 	"agent.providers",
 	"agent.setKey",
@@ -252,6 +282,8 @@ export const API_NAMES = [
 	"findings.override",
 	"findings.reopen",
 	"findings.runAll",
+	"bcf.export",
+	"bcf.import",
 	"pins.list",
 	"pins.add",
 	"pins.comment",
@@ -263,6 +295,10 @@ export const API_NAMES = [
 	"models.list",
 	"models.bytes",
 	"revisions.list",
+	"sheets.bytes",
+	"versions.between",
+	"sheets.diff",
+	"models.diff",
 	"revisions.ifc",
 	"revit.rooms",
 	"revit.select",
