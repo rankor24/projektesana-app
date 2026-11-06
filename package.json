@@ -1,0 +1,45 @@
+{
+	"name": "projektesana",
+	"version": "2.0.0",
+	"private": true,
+	"description": "Projektēšanas App v2 — design workstation for SIA BŪVDIZAINS",
+	"author": "SIA BŪVDIZAINS",
+	"main": "dist/main/main.js",
+	"type": "module",
+	"scripts": {
+		"build:main": "tsc -p tsconfig.main.json",
+		"build:renderer": "vite build",
+		"build": "node scripts/sync-skills.mjs && npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
+		"typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+		"test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\"",
+		"start": "npm run build && electron .",
+		"audit": "node --import tsx scripts/audit.ts",
+		"pack": "npm run build && electron-builder --win dir"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "1.4.0",
+		"@earendil-works/pi-ai": "1.4.0",
+		"@earendil-works/pi-mcp": "1.4.0",
+		"@modelcontextprotocol/sdk": "1.32.2",
+		"fflate": "0.8.3",
+		"pdfjs-dist": "6.5.438",
+		"react": "19.3.1",
+		"react-dom": "19.3.1",
+		"tesseract.js": "7.0.0",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@types/node": "22.20.5",
+		"@types/react": "19.3.0",
+		"@types/react-dom": "19.3.0",
+		"@vitejs/plugin-react": "6.2.1",
+		"electron": "43.8.7",
+		"electron-builder": "26.18.0",
+		"tsx": "4.23.15",
+		"typescript": "5.9.3",
+		"vite": "8.3.6"
+	},
+	"allowScripts": {
+		"esbuild@0.28.2": true
+	}
+}

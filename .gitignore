@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+resources/skills/
+*.log
+.env*
+# never commit real project data
+real/
+*.rvt
+*.edoc
+!test/fixtures/**

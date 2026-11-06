@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "ES2023",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"rootDir": "src",
+		"outDir": "dist",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"types": ["node"]
+	},
+	"include": ["src/core/**/*", "src/sources/**/*", "src/rules/**/*", "src/checks/**/*", "src/agent/**/*", "src/revit/**/*", "src/main/**/*", "src/shared/**/*"],
+	"exclude": ["src/main/preload.cts"]
+}
