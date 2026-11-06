@@ -15,6 +15,8 @@ import { Registry } from "../core/registry.js";
 import { ProjectEngine } from "./engine.js";
 import { RevitClient, launchSpec, resolveRevitLaunch } from "../revit/client.js";
 import { revitRead } from "../revit/commands.js";
+import { revitExport } from "../revit/exports.js";
+import { captureRevision, isWorkCopy } from "../revit/revision.js";
 import { REVIT_LEVELS, REVIT_TOOLS } from "../agent/tools/revit-levels.js";
 import { Ocr } from "../sources/text/ocr.js";
 import { officeText } from "../sources/text/office-com.js";
@@ -80,7 +82,19 @@ const session = new AgentSession({
 		const l = resolveRevitLaunch(settings.get());
 		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;
 	},
-	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir },
+	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir, skillsDir: join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills") },
+	revitWork: async (projectId) => {
+		if (!projectId) return { ok: false, title: "nav projekta" };
+		const doc = await revitExport.docInfo(revit);
+		return { ok: isWorkCopy(registry.store(projectId), doc.path), title: doc.title };
+	},
+	afterBatch: async (projectId, summary) => {
+		const store = registry.store(projectId);
+		const rev = await captureRevision(store, revit, { trigger: "agentBatch", summary, bimcraftApp: join(resourcesDir, "bimcraft", "app") });
+		const r = await engine.afterChange(store, "rooms");
+		emit("data.changed", { projectId, what: ["revisions", "findings"] });
+		return `revīzija ${rev.id}${rev.diffFromPrev ? ` (+${rev.diffFromPrev.added} −${rev.diffFromPrev.removed} ~${rev.diffFromPrev.changed})` : ""}; atvērtie atradumi: ${r.open}`;
+	},
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
 	emit: (runId, event) => emit("agent.event", { runId, event }),

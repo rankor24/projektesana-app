@@ -5,7 +5,9 @@ import { readFocus } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 export type { ToolDef } from "./tool.js";
 import type { Level } from "./levels.js";
-import { sourceTools } from "./sources.js";
+import { projectTools, sourceTools } from "./sources.js";
+import { skillTools } from "./revit.js";
+import { pinTools } from "./pins.js";
 import { requirementTools } from "./requirements.js";
 import { checkTools } from "./checks.js";
 import { viewerTools } from "./viewer.js";
@@ -22,7 +24,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...requirementTools, ...checkTools, ...viewerTools];
+	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...viewerTools, ...pinTools, ...skillTools];
 }
 
 /** Level table of the app's own tools, for the gate. */

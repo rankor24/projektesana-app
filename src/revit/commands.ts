@@ -119,28 +119,4 @@ p.Set(UnitUtils.ConvertToInternalUnits(double.Parse((string)parameters[1], Syste
 return "ok";`,
 } as const;
 
-export interface InvAreaItem {
-	elementId: number;
-	number: string;
-	name: string;
-	areaM2: number;
-}
-
-/** Writes INV Area on each room, one call per room, in order; stops at the first error and says which room. */
-export async function writeInvArea(r: RevitCaller, items: InvAreaItem[], onProgress?: (done: number, total: number) => void): Promise<{ written: number; noParam: string[] }> {
-	let written = 0;
-	const noParam: string[] = [];
-	for (const it of items) {
-		if (!Number.isInteger(it.elementId) || !Number.isFinite(it.areaM2)) throw new Error(`Nederīga rinda: telpa ${it.number}`);
-		let res: unknown;
-		try {
-			res = parseCodeResult(await r.call("send_code_to_revit", { code: SNIPPETS.setInvArea, parameters: [String(it.elementId), it.areaM2.toFixed(2)], transactionMode: "auto" }));
-		} catch (e) {
-			throw new Error(`Telpa ${it.number}: ${(e as Error).message} (ierakstītas ${written} no ${items.length})`);
-		}
-		if (res === "no-param") noParam.push(it.number);
-		else written++;
-		onProgress?.(written + noParam.length, items.length);
-	}
-	return { written, noParam };
-}
+export { writeInvArea, type InvAreaItem } from "./exports.js";

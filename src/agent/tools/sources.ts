@@ -170,3 +170,27 @@ export const sourceTools: ToolDef[] = [
 		},
 	}),
 ];
+
+export const projectTools: ToolDef[] = [
+	tool({
+		name: "list_deliveries",
+		level: "read",
+		description: "The deliveries read from 1.4_Nodevumi (and planned ones): kind, BIM stage, dates, sheets, whether checked and sent.",
+		input: {},
+		run: (ctx) => {
+			const d = storeOf(ctx).read("deliveries");
+			return d.length ? d.map((x) => ({ id: x.id, kind: x.kind, stage: x.stage, label: x.label, submitted: x.submittedDate, planned: x.plannedDate, sent: !!x.sent, sheets: x.items.map((i) => `${i.sheetNo ?? "?"} ${i.title}`), lastCheck: x.checksRun[x.checksRun.length - 1] ?? null })) : "no data: nodevumu nav.";
+		},
+	}),
+	tool({
+		name: "list_rooms",
+		level: "read",
+		description: "The inventory room table(s) read from the property documents: floor, room number, name, area (m²), page. For the model's rooms use the Revit tool export_room_data (areas there are in square feet).",
+		input: {},
+		run: async (ctx) => {
+			const { inventoryTables } = await import("../../sources/room-table.js");
+			const t = await inventoryTables(storeOf(ctx));
+			return t.length ? t.map((x) => ({ sourceId: x.sourceId, title: x.title, rows: x.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, page: r.page })) })) : "no data: telpu tabula nav atrasta.";
+		},
+	}),
+];

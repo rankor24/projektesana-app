@@ -7,7 +7,11 @@ import type { AgentStatus, FocusItem } from "../shared/api.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { focusText } from "./focus.js";
 import { isPiProvider, piAuthState, piProviderInfo, runPi, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
-import { SYSTEM_PROMPT, withEarlier } from "./prompt.js";
+import { SYSTEM_PROMPT, buildPrompt, withEarlier } from "./prompt.js";
+import { REVIT_RULES } from "./tools/revit.js";
+import { listSkills, skillsText } from "./skills.js";
+import { ProjectStore } from "../core/store.js";
+import type { Pin } from "../core/model.js";
 import { ctxEnv, type ToolCtx } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest, type Level } from "./tools/levels.js";
@@ -29,6 +33,10 @@ export interface SessionDeps {
 	runsDir: string;
 	chatDir: string;
 	emit: (runId: string, event: RunEvent) => void;
+	/** is the active Revit document this project's working copy? (6.3) */
+	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
+	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
+	afterBatch?: (projectId: string, summary: string) => Promise<string>;
 }
 
 interface Conversation {
@@ -111,6 +119,7 @@ export class AgentSession {
 	private async run(runId: string, projectId: string | null, text: string, focus: FocusItem[], signal: AbortSignal) {
 		const emit = (e: RunEvent) => this.d.emit(runId, e);
 		let answer = "";
+		let confirmedBatches = 0;
 		try {
 			const s = this.d.settings();
 			const runDir = join(this.d.runsDir, runId);
@@ -126,10 +135,22 @@ export class AgentSession {
 			const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = { "projektesana-tools": { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) } };
 			if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
 
-			const gate = new Gate(levelOf, (req: ConfirmRequest) => {
+			const revitTools = new Set(revit?.tools ?? []);
+			const gate = new Gate(levelOf, async (req: ConfirmRequest) => {
+				if (signal.aborted) return false;
+				// a batch that changes the Revit model runs only on this project's working copy (never the office file)
+				if (req.batch.some((b) => revitTools.has(b.tool)) && this.d.revitWork) {
+					const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
+					if (!w.ok) {
+						emit({ type: "error", engine: "pi", message: `Partija noraidīta: aktīvais Revit dokuments nav šī projekta darba kopija (${w.title}). Izveido to: Versijas → Revit → Darba kopija.` });
+						return false;
+					}
+				}
 				return new Promise<boolean>((resolve) => {
-					if (signal.aborted) return resolve(false);
-					this.confirms.set(req.id, resolve);
+					this.confirms.set(req.id, (ok) => {
+						if (ok) confirmedBatches++;
+						resolve(ok);
+					});
 					emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
 				});
 			});
@@ -137,14 +158,15 @@ export class AgentSession {
 			const key = `${s.provider}/${s.model}`;
 			const conv = this.conversations.get(projectId ?? "_");
 			const history = conv && conv.key === key ? conv.messages : [];
-			const system = history.length ? SYSTEM_PROMPT : withEarlier(SYSTEM_PROMPT, this.history(projectId).slice(-11, -1));
+			const standing = [SYSTEM_PROMPT, REVIT_RULES, skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].join("\n\n");
+			const system = history.length ? standing : withEarlier(standing, this.history(projectId).slice(-11, -1));
 			const rt = await this.d.runtime();
 			await runPi({
 				runtime: rt,
 				provider: s.provider,
 				modelId: s.model,
 				effort: (s.effort || undefined) as PiEffort | undefined,
-				prompt: `${focusText(focus)}\n\n${text}`,
+				prompt: buildPrompt(this.pinsOf(projectId), focus, text),
 				systemPrompt: system,
 				mcp,
 				signal,
@@ -160,6 +182,25 @@ export class AgentSession {
 			emit({ type: "error", engine: "pi", message: (e as Error).message });
 		} finally {
 			this.remember(projectId, "assistant", answer);
+		}
+		// after a batch Boris confirmed: the app captures a revision and runs the room check (6.2, 6.5)
+		if (confirmedBatches > 0 && projectId && this.d.afterBatch) {
+			try {
+				emit({ type: "text", text: "\n\n[lietotne] Fiksē revīziju un pārbauda telpas…" });
+				const r = await this.d.afterBatch(projectId, answer.slice(0, 500));
+				emit({ type: "text", text: `\n[lietotne] ${r}` });
+			} catch (e) {
+				emit({ type: "error", engine: "pi", message: `Revīzija netika fiksēta: ${(e as Error).message}` });
+			}
+		}
+	}
+
+	private pinsOf(projectId: string | null): Pin[] {
+		if (!projectId) return [];
+		try {
+			return ProjectStore.load(this.d.ctx.projectsDir, projectId).read("pins");
+		} catch {
+			return [];
 		}
 	}
 

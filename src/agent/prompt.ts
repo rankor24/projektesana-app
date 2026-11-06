@@ -1,3 +1,7 @@
+import type { Pin } from "../core/model.js";
+import type { FocusItem } from "../shared/api.js";
+import { focusText } from "./focus.js";
+import { pinsText } from "./tools/pins.js";
 // The agent's standing instructions. The working rules from the design doc, written for the model.
 
 export const SYSTEM_PROMPT = `Tu esi aģents Projektēšanas App — SIA BŪVDIZAINS projektēšanas darba vietā (arhitektūra, BIM, Latvijas būvnormatīvi).
@@ -18,4 +22,10 @@ export function withEarlier(system: string, earlier: { role: string; text: strin
 	if (!earlier.length) return system;
 	const lines = earlier.map((e) => `${e.role === "user" ? "Boris" : "Aģents"}: ${e.text.slice(0, 1500)}`);
 	return `${system}\n\nIepriekšējā saruna šajā projektā (pēdējie ieraksti, tikai konteksts):\n${lines.join("\n")}`;
+}
+
+/** The prompt of one turn: Boris's open pins first (they are the task list), then the Fokuss, then his message. */
+export function buildPrompt(pins: Pin[], focus: FocusItem[], text: string): string {
+	const p = pinsText(pins);
+	return [p, focusText(focus), text].filter(Boolean).join("\n\n");
 }

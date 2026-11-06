@@ -1,0 +1,6 @@
+Code execution successful!
+Result: {
+  "success": true,
+  "result": "{\"nonce\":\"NONCE\",\"value\":{\"id\":\"1000100\",\"name\":\"1. STĀVA PLĀNS\",\"type\":\"FloorPlan\",\"scale\":100,\"cropActive\":false,\"level\":\"1. stāvs\",\"elevMm\":450.0,\"min\":[1000.5,2000.25],\"max\":[21000.75,15000.5],\"origin\":[0.0,0.0,3450.0],\"right\":[1.0,0.0,0.0],\"up\":[0.0,1.0,0.0]}}",
+  "errorMessage": ""
+}

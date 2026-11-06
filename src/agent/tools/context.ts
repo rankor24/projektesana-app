@@ -16,6 +16,8 @@ export interface ToolCtx {
 	appDir: string;
 	/** this run's folder: focus.json */
 	runDir: string | null;
+	/** synced skills (resources/skills) */
+	skillsDir?: string;
 }
 
 export function ctxFromEnv(env: NodeJS.ProcessEnv): ToolCtx {
@@ -24,11 +26,11 @@ export function ctxFromEnv(env: NodeJS.ProcessEnv): ToolCtx {
 		if (!v) throw new Error(`tools server: ${k} not set`);
 		return v;
 	};
-	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null };
+	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null, skillsDir: env.PROJEKTESANA_SKILLS || undefined };
 }
 
 export function ctxEnv(c: ToolCtx): Record<string, string> {
-	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "" };
+	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "", PROJEKTESANA_SKILLS: c.skillsDir ?? "" };
 }
 
 export function storeOf(c: ToolCtx): ProjectStore {

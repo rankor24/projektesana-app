@@ -28,6 +28,7 @@ type Line =
 export function AgentDock() {
 	const { projectId, focus } = useUi();
 	const status = useLoad<AgentStatus>(() => call("agent.status"), []);
+	const tasks = useLoad(() => call("tasks.list"), []);
 	const [lines, setLines] = useState<Line[]>([]);
 	const [runId, setRunId] = useState<string | null>(null);
 	const [text, setText] = useState("");
@@ -133,6 +134,14 @@ export function AgentDock() {
 			</div>
 			{err && <div className="err">{err}</div>}
 			<div className="chat-input">
+				<div className="row">
+					<span className="dim small">Uzdevumi:</span>
+					{(tasks.data ?? []).map((t) => (
+						<button key={t.id} className="small ghost" title={t.text} onClick={() => setText(t.text)}>
+							{t.label}
+						</button>
+					))}
+				</div>
 				<textarea
 					rows={3}
 					value={text}

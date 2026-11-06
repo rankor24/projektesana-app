@@ -5,15 +5,47 @@ import type { Registry } from "../../core/registry.js";
 import { compareRooms, normNo } from "../../checks/checks/rooms.js";
 import { inventoryTables } from "../../sources/room-table.js";
 import type { Handlers } from "../../shared/api.js";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { revitExport } from "../../revit/exports.js";
+import { captureRevision, makeWorkCopy } from "../../revit/revision.js";
+import { TASKS } from "../../agent/tasks.js";
 import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
 import { listModels } from "../../sources/models.js";
 
-type K = "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
+type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
-export function revitHandlers(d: { revit: RevitClient; registry: Registry }): Pick<Handlers, K> {
+export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcraftApp: string; openPath(p: string): Promise<string> }): Pick<Handlers, K> {
+	const exportsDir = (id: string) => {
+		const store = d.registry.store(id);
+		const dir = join(store.dir, "exports");
+		mkdirSync(dir, { recursive: true });
+		return dir;
+	};
+	const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
 	return {
+		"tasks.list": () => TASKS,
+		"revit.views": () => revitExport.listViews(d.revit),
+		"revit.exportView": async (id, viewId, name) => {
+			const dir = exportsDir(id);
+			const file = `${name.replace(/[^\p{L}\d._ -]+/gu, "_").slice(0, 60)}_${stamp()}`;
+			await revitExport.exportPdf(d.revit, dir, file, [viewId]);
+			const out = join(dir, `${file}.pdf`);
+			if (!existsSync(out)) throw new Error(`Revit neizveidoja ${out}`);
+			d.registry.store(id).log({ kind: "revit.exported", by: "boris", data: { kind: "pdf", viewId } });
+			await d.openPath(out);
+			return out;
+		},
+		"revit.exportIfc": async (id) => {
+			const dir = exportsDir(id);
+			const file = `${id}_${stamp()}.ifc`;
+			await revitExport.exportIfc(d.revit, dir, file);
+			if (!existsSync(join(dir, file))) throw new Error(`Revit neizveidoja ${file}`);
+			d.registry.store(id).log({ kind: "revit.exported", by: "boris", data: { kind: "ifc" } });
+			return join(dir, file);
+		},
+		"revit.workCopy": (id) => makeWorkCopy(d.registry.store(id), d.revit),
+		"revisions.capture": (id, summary, sheetIds) => captureRevision(d.registry.store(id), d.revit, { trigger: "manualSave", summary, sheetIds, bimcraftApp: d.bimcraftApp }),
 		"models.list": (id) => listModels(d.registry.get(id).root),
 		"models.bytes": (id, rel) => {
 			const store = d.registry.store(id);

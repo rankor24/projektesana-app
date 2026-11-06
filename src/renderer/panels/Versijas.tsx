@@ -3,7 +3,7 @@
 // compare two.
 import { useState } from "react";
 import type { VersionRow } from "../../shared/api";
-import { call } from "../bridge";
+import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
@@ -51,6 +51,7 @@ export function Versijas() {
 					))}
 				</tbody>
 			</table>
+			<RevitSection projectId={projectId} />
 			<div className="section-title">Modeļi (IFC no 1.2_Projekta dalas)</div>
 			{models.error ? <Err error={models.error} /> : null}
 			{models.data?.length === 0 && <div className="dim small">no data: sadaļu mapēs IFC failu nav.</div>}
@@ -79,5 +80,66 @@ export function Versijas() {
 				</button>
 			)}
 		</div>
+	);
+}
+
+/** Revit: the working copy (the agent edits only it), exports of a view and of IFC, and a revision Boris fixes himself. */
+function RevitSection({ projectId }: { projectId: string }) {
+	const status = useLoad(() => call("revit.status"), []);
+	const [views, setViews] = useState<{ id: string; name: string; type: string }[] | null>(null);
+	const [view, setView] = useState("");
+	const [busy, setBusy] = useState<string | null>(null);
+	const [msg, setMsg] = useState<string | null>(null);
+	const run = (what: string, p: () => Promise<unknown>) => {
+		setBusy(what);
+		setMsg(null);
+		p()
+			.then((r) => setMsg(`${what}: ${typeof r === "string" ? r : "gatavs"}`))
+			.catch((e) => setMsg(`${what}: ${errText(e)}`))
+			.finally(() => setBusy(null));
+	};
+	const st = status.data;
+	return (
+		<>
+			<div className="section-title">Revit</div>
+			<div className="row small">
+				<Badge tone={st?.state === "savienots" ? "ok" : "dim"}>{st?.state ?? "…"}</Badge>
+				{st?.document && <span>{st.document}</span>}
+				{st?.message && <span className="dim">{st.message}</span>}
+			</div>
+			{st?.state === "savienots" && (
+				<>
+					<div className="row">
+						<button disabled={!!busy} title="Saglabā atvērto modeli kā <nosaukums>_WORK.rvt projekta datu mapē; aģents strādā tikai tajā" onClick={() => run("Darba kopija", () => call("revit.workCopy", projectId))}>
+							Darba kopija
+						</button>
+						<button disabled={!!busy} onClick={() => run("IFC eksports", () => call("revit.exportIfc", projectId))}>IFC eksports</button>
+						<button disabled={!!busy} onClick={() => run("Revīzija", () => call("revisions.capture", projectId, "Borisa saglabāta revīzija", []).then((r) => `${r.id}${r.diffFromPrev ? ` +${r.diffFromPrev.added} −${r.diffFromPrev.removed} ~${r.diffFromPrev.changed}` : ""}`))}>
+							Fiksēt revīziju
+						</button>
+					</div>
+					<div className="row">
+						<button disabled={!!busy} onClick={() => run("Skati", () => call("revit.views").then((v) => (setViews(v), `${v.length} skati`)))}>Nolasīt skatus</button>
+						{views && (
+							<>
+								<select value={view} onChange={(e) => setView(e.target.value)}>
+									<option value="">— skats —</option>
+									{views.map((v) => (
+										<option key={v.id} value={v.id}>
+											{v.type}: {v.name}
+										</option>
+									))}
+								</select>
+								<button disabled={!view || !!busy} onClick={() => run("PDF eksports", () => call("revit.exportView", projectId, view, views.find((v) => v.id === view)?.name ?? "skats"))}>
+									PDF
+								</button>
+							</>
+						)}
+					</div>
+				</>
+			)}
+			{busy && <div className="dim small">{busy}…</div>}
+			{msg && <div className="small">{msg}</div>}
+		</>
 	);
 }

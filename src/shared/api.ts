@@ -212,6 +212,12 @@ export interface ApiSpec {
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	"revit.status": () => RevitStatusRow;
+	"revit.views": () => { id: string; name: string; type: string }[];
+	"revit.exportView": (id: string, viewId: string, name: string) => string;
+	"revit.exportIfc": (id: string) => string;
+	"revit.workCopy": (id: string) => string;
+	"revisions.capture": (id: string, summary: string, sheetIds: string[]) => Revision;
+	"tasks.list": () => { id: string; label: string; text: string }[];
 	"models.list": (id: string) => { rel: string; name: string; section: string | null; size: number; mtime: string }[];
 	"models.bytes": (id: string, rel: string) => Uint8Array;
 	"revisions.list": (id: string) => Revision[];
@@ -292,6 +298,12 @@ export const API_NAMES = [
 	"notes.list",
 	"notes.write",
 	"revit.status",
+	"revit.views",
+	"revit.exportView",
+	"revit.exportIfc",
+	"revit.workCopy",
+	"revisions.capture",
+	"tasks.list",
 	"models.list",
 	"models.bytes",
 	"revisions.list",
