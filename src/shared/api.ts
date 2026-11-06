@@ -112,6 +112,10 @@ export interface ApiSpec {
 	"sources.bytes": (id: string, sourceId: string) => Uint8Array;
 	"sources.openOriginal": (id: string, sourceId: string) => void;
 	"rooms.table": (id: string) => InventoryTable[];
+	"facts.list": (id: string) => Fact[];
+	"deliveries.list": (id: string) => Delivery[];
+	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
+	"facts.setByBoris": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
 }
 
@@ -147,6 +151,10 @@ export const API_NAMES = [
 	"sources.bytes",
 	"sources.openOriginal",
 	"rooms.table",
+	"facts.list",
+	"deliveries.list",
+	"facts.decide",
+	"facts.setByBoris",
 	"rooms.exportXlsx",
 ] as const satisfies readonly ApiName[];
 
