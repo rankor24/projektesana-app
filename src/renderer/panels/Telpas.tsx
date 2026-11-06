@@ -1,7 +1,7 @@
 // Telpas: the inventory room table read from the property documents (1.10) with the sum check and the Excel export, and
 // the comparison with the rooms of the open Revit model (3.2). A row click selects the room in Revit (one Select call).
 import { useState } from "react";
-import type { InventoryTable, RoomCompareRow } from "../../shared/api";
+import type { InvAreaRow, InventoryTable, RoomCompareRow } from "../../shared/api";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
@@ -39,6 +39,7 @@ function Compare({ projectId }: { projectId: string }) {
 				)}
 			</div>
 			{err && <div className="err">{err}</div>}
+			<InvArea projectId={projectId} onErr={setErr} />
 			{c.error ? <Err error={c.error} /> : null}
 			{c.loading && <div className="dim small">lasa modeli…</div>}
 			{d && d.state !== "ok" && <Empty title={d.state}>{d.message}</Empty>}
@@ -77,6 +78,48 @@ function Compare({ projectId }: { projectId: string }) {
 					</tbody>
 				</table>
 			)}
+		</div>
+	);
+}
+
+/** INV Area into the model: first the batch (which rooms, which values), then Boris writes it. One Revit call per room. */
+function InvArea({ projectId, onErr }: { projectId: string; onErr: (e: string) => void }) {
+	const [plan, setPlan] = useState<InvAreaRow[] | null>(null);
+	const [busy, setBusy] = useState(false);
+	const [done, setDone] = useState<string | null>(null);
+	return (
+		<div className="confirm">
+			<div className="row">
+				<b>INV Area modelī</b>
+				<span className="dim small">inventarizācijas platība Revit telpu parametrā “INV Area”, lai pārbaudes birka to rāda</span>
+				<span className="grow" />
+				<button disabled={busy} onClick={() => (setDone(null), call("rooms.invAreaPlan", projectId).then(setPlan).catch((e) => onErr(errText(e))))}>Sagatavot partiju</button>
+			</div>
+			{plan && (
+				<>
+					<div className="small">
+						{plan.length} telpas: {plan.slice(0, 8).map((p) => `${p.number} → ${p.areaM2} m²`).join(", ")}
+						{plan.length > 8 ? " …" : ""}
+					</div>
+					<div className="row">
+						<button
+							className="primary"
+							disabled={busy || !plan.length}
+							onClick={() => {
+								setBusy(true);
+								call("rooms.writeInvArea", projectId, plan)
+									.then((r) => (setDone(`ierakstītas ${r.written}${r.noParam.length ? `; bez parametra: ${r.noParam.join(", ")}` : ""}`), setPlan(null)))
+									.catch((e) => onErr(errText(e)))
+									.finally(() => setBusy(false));
+							}}
+						>
+							{busy ? "raksta…" : `Ierakstīt ${plan.length} telpas`}
+						</button>
+						<button className="ghost" onClick={() => setPlan(null)}>Atcelt</button>
+					</div>
+				</>
+			)}
+			{done && <Badge tone="ok">{done}</Badge>}
 		</div>
 	);
 }

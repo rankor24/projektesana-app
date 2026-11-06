@@ -101,6 +101,13 @@ export interface RevitRoomRow {
 	phase: string;
 }
 
+export interface InvAreaRow {
+	elementId: number;
+	number: string;
+	name: string;
+	areaM2: number;
+}
+
 export interface RoomCompareRow {
 	state: "ok" | "nav savienojuma" | "nav inventarizācijas";
 	message?: string;
@@ -155,6 +162,8 @@ export interface ApiSpec {
 	"revit.rooms": () => RevitRoomRow[];
 	"revit.select": (elementIds: number[]) => void;
 	"rooms.compare": (id: string) => RoomCompareRow;
+	"rooms.invAreaPlan": (id: string) => InvAreaRow[];
+	"rooms.writeInvArea": (id: string, items: InvAreaRow[]) => { written: number; noParam: string[] };
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
 	"facts.setByBoris": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
@@ -208,6 +217,8 @@ export const API_NAMES = [
 	"revit.rooms",
 	"revit.select",
 	"rooms.compare",
+	"rooms.invAreaPlan",
+	"rooms.writeInvArea",
 	"facts.decide",
 	"facts.setByBoris",
 	"rooms.exportXlsx",

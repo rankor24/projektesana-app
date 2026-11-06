@@ -88,3 +88,59 @@ export async function revitSelect(r: RevitCaller, elementIds: number[]): Promise
 	if (!elementIds.length || elementIds.some((x) => !Number.isInteger(x))) throw new Error("Nederīgs elementa id.");
 	await r.call("operate_element", { data: { elementIds, action: "Select" } });
 }
+
+// ---- named code commands the app runs itself (not the agent: send_code_to_revit is `never` for the agent) ----
+
+/** Reply of send_code_to_revit, recorded from the live add-in on 2026-11-06:
+ *  "Code execution successful!\nResult: {\"success\":true,\"result\":\"\\\"…\\\"\",\"errorMessage\":\"\"}" — the result is
+ *  JSON-encoded once more inside. v1 expected {Success, Result} and never ran live. */
+export function parseCodeResult(text: string): unknown {
+	const t = text.trim();
+	if (/^Code execution failed/i.test(t)) throw new Error(t);
+	const i = t.indexOf("Result:");
+	const env = JSON.parse((i >= 0 ? t.slice(i + 7) : t).trim()) as { success?: boolean; Success?: boolean; result?: unknown; Result?: unknown; errorMessage?: string; ErrorMessage?: string };
+	const ok = env.success ?? env.Success;
+	if (ok === false) throw new Error(env.errorMessage || env.ErrorMessage || "Revit kļūda");
+	const r = env.result ?? env.Result;
+	if (typeof r !== "string") return r ?? null;
+	try {
+		return JSON.parse(r);
+	} catch {
+		return r;
+	}
+}
+
+export const SNIPPETS = {
+	/** parameters: [elementId, areaM2 with a dot]. One room, one parameter. */
+	setInvArea: `var e = document.GetElement(new ElementId(long.Parse((string)parameters[0])));
+var p = e == null ? null : e.LookupParameter("INV Area");
+if (p == null || p.IsReadOnly) return "no-param";
+p.Set(UnitUtils.ConvertToInternalUnits(double.Parse((string)parameters[1], System.Globalization.CultureInfo.InvariantCulture), UnitTypeId.SquareMeters));
+return "ok";`,
+} as const;
+
+export interface InvAreaItem {
+	elementId: number;
+	number: string;
+	name: string;
+	areaM2: number;
+}
+
+/** Writes INV Area on each room, one call per room, in order; stops at the first error and says which room. */
+export async function writeInvArea(r: RevitCaller, items: InvAreaItem[], onProgress?: (done: number, total: number) => void): Promise<{ written: number; noParam: string[] }> {
+	let written = 0;
+	const noParam: string[] = [];
+	for (const it of items) {
+		if (!Number.isInteger(it.elementId) || !Number.isFinite(it.areaM2)) throw new Error(`Nederīga rinda: telpa ${it.number}`);
+		let res: unknown;
+		try {
+			res = parseCodeResult(await r.call("send_code_to_revit", { code: SNIPPETS.setInvArea, parameters: [String(it.elementId), it.areaM2.toFixed(2)], transactionMode: "auto" }));
+		} catch (e) {
+			throw new Error(`Telpa ${it.number}: ${(e as Error).message} (ierakstītas ${written} no ${items.length})`);
+		}
+		if (res === "no-param") noParam.push(it.number);
+		else written++;
+		onProgress?.(written + noParam.length, items.length);
+	}
+	return { written, noParam };
+}
