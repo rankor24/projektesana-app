@@ -32,7 +32,7 @@ export async function hashFiles(files: (HashInput & { folderKey: string })[], kn
 	onProgress?.(done, out.length, "");
 	if (!todo.length) return out;
 	await new Promise<void>((resolve, reject) => {
-		const jobs: HashJob[] = todo.map((x) => ({ id: x.id, abs: x.f.abs }));
+		const jobs: HashJob[] = todo.map((x) => ({ id: x.id, abs: x.f.abs, size: x.f.size }));
 		const w = new Worker(workerUrl(), { workerData: { jobs } });
 		w.on("message", (m: HashMessage) => {
 			if (m.type === "done") return void w.terminate().then(() => resolve());

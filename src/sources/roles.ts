@@ -15,7 +15,7 @@ export const FIXED_ROLES: Record<string, string> = {
 };
 
 /** Roles a free folder can have. "Arhīvs" folders are not read: their files are counted, never listed one by one. */
-export const FREE_ROLES = ["TAA", "BIP / BIM prasības", "Info no pasūtītāja", "Būvatļauja / nosacījumi", "Saskaņojumi", "Arhīvs", "Cits"] as const;
+export const FREE_ROLES = ["TAA", "BIP / BIM prasības", "Grafiks", "Info no pasūtītāja", "Būvatļauja / nosacījumi", "Saskaņojumi", "Punktu mākonis", "Arhīvs", "Cits"] as const;
 
 /** "1.1.03_FF" → "1.1.3"; "1.1.12_arhivs" → "1.1.12"; anything else → null. */
 export function folderKeyOf(name: string): string | null {
@@ -34,6 +34,8 @@ export function proposeFreeRole(folderName: string): (typeof FREE_ROLES)[number]
 	if (/pasutitaj|\binfo\b/.test(n)) return "Info no pasūtītāja";
 	if (/buvatlauj|nosacijum|\bbis\b/.test(n)) return "Būvatļauja / nosacījumi";
 	if (/saskanoj/.test(n)) return "Saskaņojumi";
+	if (/grafik/.test(n)) return "Grafiks";
+	if (/punktu|makon|point ?cloud|skenej|lazer/.test(n)) return "Punktu mākonis";
 	return "Cits";
 }
 

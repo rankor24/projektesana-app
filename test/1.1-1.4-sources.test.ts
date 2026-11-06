@@ -156,3 +156,19 @@ test("1.4 pipeline: an .edoc shows its inner documents, its signers, and a twin 
 	assert.equal(again.length, src.length);
 	assert.equal(again.find((s) => s.id === kl.id)!.paths.length, 4);
 });
+
+test("1.3 a big binary gets a fast identity (size + edges), not a full read; two copies still match", async () => {
+	const { useFast } = await import("../src/sources/hash-worker.ts");
+	assert.equal(useFast("scan.e57", 300 * 1024 * 1024), true);
+	assert.equal(useFast("big.pdf", 300 * 1024 * 1024), true);
+	assert.equal(useFast("pu.pdf", 2 * 1024 * 1024), false);
+	const d = tmp();
+	const big = Buffer.alloc(9 * 1024 * 1024, 7);
+	writeFileSync(join(d, "a.e57"), big);
+	writeFileSync(join(d, "b.e57"), big);
+	const h = await hashFiles(["a.e57", "b.e57"].map((n) => ({ abs: join(d, n), rel: n, size: big.length, mtimeMs: 0, folderKey: "1.1.9" })), () => null);
+	assert.match(h[0].sha256!, /^q:[0-9a-f]{64}$/);
+	assert.equal(h[0].sha256, h[1].sha256);
+	assert.equal(proposeFreeRole("1.1.09_punktu makoni"), "Punktu mākonis");
+	assert.equal(proposeFreeRole("1.1.11_grafiks"), "Grafiks");
+});
