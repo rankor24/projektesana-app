@@ -19,14 +19,43 @@ const MOVED: Record<string, { to: string; why: string }> = {
 	"src/checks/run.ts": { to: "src/checks/gate.ts", why: "4.3 delivery gate in gate.ts, on top of run.ts" },
 };
 
-/** Tasks whose "done when" needs Boris on a real project or a live Revit / sign-in; the code and its tests are in place. */
+/** Tasks whose "done when" needs Boris: his eyes on the UI (no UI automation), a hand-made reference, a live Revit or
+ *  the sign-in. The code and its tests are in place; this part is not claimed. */
 const LIVE: Record<string, string> = {
+	"0.1": "`npm start` opening the window is Boris's playtest",
+	"0.4": "moving, docking, minimising a panel is Boris's playtest",
 	"0.5": "a chat turn through Codex needs Boris's ChatGPT sign-in in Iestatījumi",
+	"1.1": "the panel itself is Boris's playtest",
+	"1.7": "the panel itself is Boris's playtest",
+	"1.8": "clicking a page region is Boris's playtest",
 	"1.9": "the agent answering with page and quote needs the sign-in",
+	"1.10": "equal to the table Boris made by hand on a real project — his comparison",
+	"1.11": "the profile and timeline on screen are Boris's playtest",
+	"2.3": "the top-bar counter on screen is Boris's playtest",
+	"2.5": "the panel itself is Boris's playtest",
+	"3.1": "the open model's rooms were read live through the Revit MCP; the app's list on screen is Boris's playtest",
+	"3.2": "equal to the check sheets Boris made by hand — his comparison",
 	"3.3": "writing INV Area into Boris's model is his click (the batch is shown first)",
+	"3.4": "the overlay matching the plan is Boris's eye",
+	"4.3": "the panel itself is Boris's playtest",
+	"5.1": "a real IFC opening in BimCraft and click-to-focus are Boris's playtest",
+	"5.2": "the painting on screen is Boris's playtest",
+	"5.3": "opening the BCF in Solibri is Boris's",
+	"5.5": "the panel itself is Boris's playtest",
 	"6.1": "exports from the open model are Boris's click; view list and geometry were read live",
+	"6.2": "a revision after a real batch needs the sign-in and a working copy",
 	"6.3": "a confirmed batch needs the sign-in and a working copy open in Revit",
+	"6.4": "a pin becoming a change needs the sign-in",
 	"6.5": "modelling an existing building is the live acceptance of phase 6",
+};
+
+/** Done-when lines checked on a real project on Boris's PC (read-only, counts only — no project data in the repo). */
+const REAL: Record<string, string> = {
+	"1.2": "a project with survey photo folders and 84 GB of point clouds: scanned in 17 s, each survey one row",
+	"1.4": "a real .edoc: inner documents merged with their loose copies, 8 signers shown",
+	"1.5": "a real scanned annex read by OCR with 702 Latvian letters",
+	"2.2": "152 PU rows and 3 office-standard rows on one project",
+	"2.4": "after the fix no false errors; 3 info rows where property documents are missing",
 };
 
 const expand = (p: string): string[] => {
@@ -69,7 +98,8 @@ for (const line of plan.split("\n")) {
 	const t = testsFor(id);
 	const needsTest = !/^—/.test(testsCol.trim());
 	if (needsTest && !t.length) problems.push(`${id}: no test file`);
-	const status = !needsTest ? "built (UI; Boris playtests)" : t.length ? (LIVE[id] ? `built and tested; live: ${LIVE[id]}` : "built and tested") : "✗ no test";
+	const base = t.length ? "built and tested" : needsTest ? "✗ no test" : "built (UI)";
+	const status = [base, REAL[id] && `real: ${REAL[id]}`, LIVE[id] && `live: ${LIVE[id]}`].filter(Boolean).join("; ");
 	rows.push(`| ${id} | ${build.replace(/\|/g, "/").slice(0, 90)}${build.length > 90 ? "…" : ""} | ${fileNotes.join("<br>")} | ${t.join("<br>") || (needsTest ? "✗" : "—")} | ${status} |`);
 }
 
@@ -83,7 +113,7 @@ for (const t of missingTools) problems.push(`tool ${t} missing`);
 const out = `# Checklist — plan vs code
 
 Written by \`scripts/audit.ts\` on ${new Date().toISOString().slice(0, 16).replace("T", " ")}. Status per task of \`docs/v2-work-plan.md\`.
-"built and tested" = the task's files exist and its tests pass in \`npm test\`; "live" = the task's "done when" needs Boris on a real project, a live Revit or the sign-in, as written there.
+"built and tested" = the task's files exist and its tests pass in \`npm test\` (invented fixtures). "real" = its "done when" was also checked on a real project on Boris's PC (read-only, counts only). "live" = the part of its "done when" that needs Boris — his eyes on the UI, a hand-made reference, a live Revit or the sign-in — not claimed here.
 
 | Task | Build | Files | Tests | Status |
 |---|---|---|---|---|
