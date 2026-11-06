@@ -114,6 +114,16 @@ export interface ApiSpec {
 	"rooms.table": (id: string) => InventoryTable[];
 	"facts.list": (id: string) => Fact[];
 	"deliveries.list": (id: string) => Delivery[];
+	"requirements.list": (id: string) => Requirement[];
+	"requirements.notes": (id: string) => string[];
+	"requirements.decide": (id: string, reqId: string, state: "confirmed" | "rejected") => void;
+	"requirements.refresh": (id: string) => number;
+	"findings.list": (id: string) => Finding[];
+	"findings.override": (id: string, findingId: string, reason: string) => void;
+	"findings.reopen": (id: string, findingId: string) => void;
+	"findings.runAll": (id: string) => number;
+	"notes.list": (id: string, type?: NoteType) => Note[];
+	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
 	"facts.setByBoris": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
@@ -153,6 +163,16 @@ export const API_NAMES = [
 	"rooms.table",
 	"facts.list",
 	"deliveries.list",
+	"requirements.list",
+	"requirements.notes",
+	"requirements.decide",
+	"requirements.refresh",
+	"findings.list",
+	"findings.override",
+	"findings.reopen",
+	"findings.runAll",
+	"notes.list",
+	"notes.write",
 	"facts.decide",
 	"facts.setByBoris",
 	"rooms.exportXlsx",

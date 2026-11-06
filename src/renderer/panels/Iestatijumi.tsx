@@ -155,6 +155,19 @@ export function Iestatijumi() {
 					</label>
 				</div>
 			)}
+			<div className="section-title">Biroja standarts</div>
+			{s && (
+				<label className="row">
+					<span style={{ width: 150 }}>Projekta mapju koks (PDF)</span>
+					<input
+						className="grow mono"
+						defaultValue={s.officeStandardPdf ?? ""}
+						placeholder="nav norādīts — biroja prasības (nosaukumi, datumi) nav citējamas"
+						onBlur={(e) => act(() => call("settings.set", { officeStandardPdf: e.target.value.trim() || null }))}
+					/>
+				</label>
+			)}
+			<div className="dim small">Biroja standarta teksts tiek lasīts no šī faila, kad lietotne strādā; tas netiek glabāts lietotnes kodā.</div>
 			<div className="section-title">Izskats</div>
 			{s && (
 				<div className="row">

@@ -10,6 +10,7 @@ import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
 import { Registry } from "../core/registry.js";
+import { ProjectEngine } from "./engine.js";
 import { Ocr } from "../sources/text/ocr.js";
 import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
@@ -82,7 +83,10 @@ const resourcesDir = app.isPackaged ? process.resourcesPath : join(here, "..", "
 const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
 const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
+const engine = new ProjectEngine({ dataDir, officeStandardPdf: () => settings.get().officeStandardPdf });
+
 const handlers = createHandlers({
+	engine,
 	registry,
 	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr), officeText: (abs, ext) => officeText(join(resourcesDir, "office-text.ps1"), abs, ext) }),
 	version: app.getVersion(),

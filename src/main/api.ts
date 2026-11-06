@@ -5,9 +5,13 @@ import { coreHandlers, type CoreDeps } from "./handlers/agent.js";
 import { projectHandlers, type ProjectDeps } from "./handlers/projects.js";
 import { roomHandlers } from "./handlers/rooms.js";
 import { factHandlers } from "./handlers/facts.js";
+import { requirementHandlers } from "./handlers/requirements.js";
+import type { ProjectEngine } from "./engine.js";
 
-export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath">;
+export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine };
 
 export function createHandlers(d: AppDeps): Handlers {
-	return { ...coreHandlers(d), ...projectHandlers(d), ...roomHandlers(d), ...factHandlers(d) };
+	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);
+	const e = { ...d, afterChange };
+	return { ...coreHandlers(d), ...projectHandlers(e), ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers(d) };
 }
