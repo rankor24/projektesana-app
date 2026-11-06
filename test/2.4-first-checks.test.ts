@@ -96,3 +96,27 @@ test("without the office standard the finding says the requirement cannot be cit
 	assert.equal(f.requirementId, null);
 	assert.match(f.message, /biroja standarts nav norādīts/);
 });
+
+test("one truth: many buildings are not an error; a PU designation missing from the property documents is; non-addresses ignored", async () => {
+	const { normAddress, isAddress, oneTruthCheck } = await import("../src/checks/checks/one-truth.ts");
+	assert.equal(normAddress("…Testa bulvāris 9, Izdomāti"), "testa bulvaris 9");
+	assert.equal(isAddress("… nav"), false);
+	const s = ProjectStore.open(tmp(), { id: "BD998", name: "BD998", root: tmp(), createdAt: at });
+	const src = (id: string, role: string, sha: string): Source => ({ id, kind: "document", folderKey: "1.1.2", paths: [`${id}.pdf`], title: id, role, roleFrom: "folder", versions: [{ sha256: sha, size: 1, mtime: at, seenAt: at, textState: "ok", pages: 1 }], signers: [] });
+	s.write("sources", [src("pu", "PU", "a".repeat(64)), src("kl", "Īpašuma dokumenti", "b".repeat(64))], { kind: "t", by: "app" });
+	s.writeText("a".repeat(64), { state: "ok", pages: ["1.1. Objekta adrese: Testa iela 1\nBūves kadastra apzīmējums 0000 000 0000 001\nBūves kadastra apzīmējums 0000 000 0000 009\nAdrese: … nav"] });
+	s.writeText("b".repeat(64), { state: "ok", pages: ["Adrese: Testa iela 1\nBūves kadastra apzīmējums 0000 000 0000 001\nBūves kadastra apzīmējums 0000 000 0000 002\nBūves kadastra apzīmējums 0000 000 0000 003"] });
+	const r = await oneTruthCheck.run({ store: s, dataDir: DATA, today: "2026-11-06" });
+	assert.deepEqual(r.results.map((x) => x.key), ["cadastral.building:00000000000009"], JSON.stringify(r.results.map((x) => x.message)));
+	assert.match(r.results[0].message, /nav atrodams īpašuma dokumentos/);
+});
+
+test("one truth: designations the PU states with no property documents to check them against are shown, not silently skipped", async () => {
+	const { oneTruthCheck } = await import("../src/checks/checks/one-truth.ts");
+	const s = ProjectStore.open(tmp(), { id: "BD997", name: "BD997", root: tmp(), createdAt: at });
+	s.write("sources", [{ id: "pu", kind: "document", folderKey: "1.1.2", paths: ["pu.pdf"], title: "pu", role: "PU", roleFrom: "folder", versions: [{ sha256: "c".repeat(64), size: 1, mtime: at, seenAt: at, textState: "ok", pages: 1 }], signers: [] }], { kind: "t", by: "app" });
+	s.writeText("c".repeat(64), { state: "ok", pages: ["Būves kadastra apzīmējums 0000 000 0000 001\nBūves kadastra apzīmējums 0000 000 0000 002"] });
+	const r = await oneTruthCheck.run({ store: s, dataDir: DATA, today: "2026-11-06" });
+	assert.deepEqual(r.results.map((x) => [x.key, x.severity]), [["cadastral.building:no-property", "info"]]);
+	assert.match(r.results[0].message, /nosauc 2, bet avotos nav īpašuma dokumentu/);
+});
