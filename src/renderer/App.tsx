@@ -1,17 +1,19 @@
 // One view: top bar, timeline, split (preview | agent), panel bar, floating panel windows on top.
 import { useEffect } from "react";
-import { on } from "./bridge";
+import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
 import { PanelBar } from "./shell/PanelBar";
 import { Preview } from "./shell/Preview";
 import { Timeline } from "./shell/Timeline";
 import { TopBar } from "./shell/TopBar";
 import { WindowLayer } from "./shell/WindowLayer";
-import { ui } from "./state";
+import { ui, useUi } from "./state";
 import { Empty } from "./ui";
+import { Iestatijumi } from "./panels/Iestatijumi";
 import { PANEL_TITLE, useWindows, windows, type PanelId } from "./windows";
 
 function Panel({ id }: { id: PanelId; filter?: string }) {
+	if (id === "iestatijumi") return <Iestatijumi />;
 	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
 }
 
@@ -19,6 +21,13 @@ export function App() {
 	const w = useWindows();
 	const docked = w.windows.find((x) => x.mode === "docked");
 	useEffect(() => on("data.changed", () => ui.bump()), []);
+	const { tick } = useUi();
+	useEffect(() => {
+		call("settings.get").then((s) => {
+			const dark = s.theme === "dark" || (s.theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+			document.documentElement.dataset.theme = dark ? "dark" : "light";
+		});
+	}, [tick]);
 	return (
 		<div className="app">
 			<TopBar projectLabel={null} openFindings={null} />

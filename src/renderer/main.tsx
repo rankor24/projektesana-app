@@ -9,6 +9,11 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
 	static getDerivedStateFromError(error: Error) {
 		return { error };
 	}
+	// the stack and the component path go to the app log through the console (main logs renderer errors)
+	componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+		console.error(`render error: ${error.stack ?? error.message}
+${info.componentStack ?? ""}`);
+	}
 	render() {
 		if (this.state.error)
 			return (

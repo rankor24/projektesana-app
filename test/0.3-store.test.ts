@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { forgetLogCache } from "../src/core/log.ts";
 import { bdCodeOf, profileOf, type Collections, type Fact, type Project } from "../src/core/model.ts";
 import { ProjectStore } from "../src/core/store.ts";
 import { tmp } from "./helpers.ts";
@@ -22,14 +21,12 @@ const sample: Collections = {
 };
 
 test("store.open creates the folder set", () => {
-	forgetLogCache();
 	const s = ProjectStore.open(tmp(), project(tmp()));
 	for (const f of ["project.json", "sources.json", "facts.json", "requirements.json", "findings.json", "deliveries.json", "pins.json", "revisions.json", "log.jsonl", "notes", "revisions", "text", "versions"]) assert.ok(existsSync(join(s.dir, f)), f);
 	assert.equal(s.events()[0].kind, "project.created");
 });
 
 test("store round-trips every entity", () => {
-	forgetLogCache();
 	const dir = tmp();
 	const s = ProjectStore.open(dir, project(tmp()));
 	for (const c of Object.keys(sample) as (keyof Collections)[]) s.write(c, sample[c] as never, { kind: `${c}.set`, by: "app" });
@@ -40,7 +37,6 @@ test("store round-trips every entity", () => {
 });
 
 test("a write keeps the previous version and logs an event", () => {
-	forgetLogCache();
 	const s = ProjectStore.open(tmp(), project(tmp()));
 	const first = s.write("facts", sample.facts, { kind: "fact.proposed", by: "agent" });
 	const confirmed: Fact[] = [{ ...sample.facts[0], state: "confirmed", by: "boris" }];
@@ -53,7 +49,6 @@ test("a write keeps the previous version and logs an event", () => {
 });
 
 test("the store refuses to write when its data folder is inside the source root", () => {
-	forgetLogCache();
 	const root = tmp();
 	assert.throws(() => ProjectStore.open(root, project(root)), /Izejas mapē/);
 	assert.equal(existsSync(join(root, "BD999")), false);

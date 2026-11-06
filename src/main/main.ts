@@ -4,6 +4,8 @@ import { app, BrowserWindow, dialog, safeStorage, shell } from "electron";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_NAMES, type EventName, type EventSpec } from "../shared/api.js";
+import type { PiRuntime } from "../agent/pi/index.js";
+import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
@@ -44,10 +46,38 @@ const emit = <E extends EventName>(event: E, payload: EventSpec[E]) => {
 	if (events.has(event)) win?.webContents.send(`ev:${event}`, payload);
 };
 
+// pi loads on first use (about 1.4 s to import), so the window opens at once.
+let piRuntime: Promise<PiRuntime> | null = null;
+const pi = () =>
+	(piRuntime ??= import("../agent/pi/index.js").then((m) =>
+		m.createPiRuntime({
+			path: settings.piCredentialsFile(),
+			seal: crypto,
+			apiKey: (provider) => settings.apiKey(provider),
+			modelCachePath: settings.modelCacheFile(),
+			identity: { name: "Projektesana App", url: "https://buvdizains.lv" },
+		}),
+	));
+
+// The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
+const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
+const session = new AgentSession({
+	runtime: pi,
+	settings: () => settings.get(),
+	toolsServer: (env) => ({ command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1" } }),
+	revit: () => null,
+	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir },
+	runsDir: join(appDir, "runs"),
+	chatDir: settings.chatDir(),
+	emit: (runId, event) => emit("agent.event", { runId, event }),
+});
+
 const handlers = createHandlers({
 	version: app.getVersion(),
 	settings,
 	dataDir,
+	session,
+	pi,
 	emit,
 	pickFolder: async (title) => {
 		const r = await dialog.showOpenDialog(win!, { title, properties: ["openDirectory"] });

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { createPiRuntime } from "../src/agent/pi/models.ts";
+import { AgentSession } from "../src/agent/session.ts";
 import { createHandlers } from "../src/main/api.ts";
 import { AppSettings } from "../src/main/settings.ts";
 import { API_NAMES, EVENT_NAMES } from "../src/shared/api.ts";
@@ -11,7 +13,11 @@ import { tmp } from "./helpers.ts";
 const plainCrypto = { available: () => true, encrypt: (s: string) => Buffer.from(s), decrypt: (b: Buffer) => b.toString() };
 
 test("every contract method has a handler and there are no others", () => {
-	const h = createHandlers({ version: "test", settings: new AppSettings(tmp(), plainCrypto), dataDir: join(import.meta.dirname, "..", "data"), emit: () => {}, pickFolder: async () => null, openPath: async () => "", openUrl: () => {} });
+	const dir = tmp();
+	const settings = new AppSettings(dir, plainCrypto);
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const session = new AgentSession({ runtime: async () => rt, settings: () => settings.get(), toolsServer: () => ({ command: "node", args: [], env: {} }), revit: () => null, ctx: { projectsDir: dir, dataDir: dir, appDir: dir }, runsDir: dir, chatDir: dir, emit: () => {} });
+	const h = createHandlers({ version: "test", settings, dataDir: join(import.meta.dirname, "..", "data"), session, pi: async () => rt, emit: () => {}, pickFolder: async () => null, openPath: async () => "", openUrl: () => {} });
 	assert.deepEqual(Object.keys(h).sort(), [...API_NAMES].sort());
 	for (const k of API_NAMES) assert.equal(typeof h[k], "function", k);
 });

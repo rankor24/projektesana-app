@@ -132,3 +132,22 @@ tr.click:hover td { background: var(--elev); }
 .tabs button.on { border-bottom-color: var(--accent); color: var(--text); }
 .progress { height: 4px; background: var(--elev2); border-radius: 2px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
+
+.agent-head { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.focus-head { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip .x { border: none; background: transparent; padding: 0 2px; color: var(--muted); }
+.chip.bad { color: var(--bad); }
+.chat { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat-empty { margin: auto; }
+.msg { white-space: pre-wrap; padding: 6px 10px; border-radius: 8px; max-width: 95%; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 18%, var(--elev)); }
+.msg.assistant { align-self: flex-start; background: var(--elev); }
+.thinking { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.tool { font-size: 12px; color: var(--dim); border-left: 2px solid var(--border-strong); padding-left: 8px; }
+.tool.bad { border-left-color: var(--bad); }
+.tool pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: var(--bg); padding: 6px; border-radius: 4px; }
+.confirm { border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.confirm pre { white-space: pre-wrap; max-height: 180px; overflow: auto; margin: 0; }
+.chat-input { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.chat-input textarea { width: 100%; }
+button.small { font-size: 11.5px; padding: 2px 6px; }

@@ -4,7 +4,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { checkRead, checkWrite } from "../src/core/guard.ts";
-import { appendLog, forgetLogCache, readLog } from "../src/core/log.ts";
+import { appendLog, readLog } from "../src/core/log.ts";
 import { tmp } from "./helpers.ts";
 
 const cfg = { sourceRoot: "C:\\Projekti\\BD999 Testa projekts", dataDir: "C:\\AppData\\Projektesana\\projects\\BD999" };
@@ -33,7 +33,6 @@ test("guard: a data folder placed inside the source root is still not writable",
 
 test("log: appends with rising seq and keeps every line", () => {
 	const f = join(tmp(), "log.jsonl");
-	forgetLogCache();
 	const a = appendLog(f, { kind: "project.created", by: "boris" });
 	const b = appendLog(f, { kind: "source.scanned", by: "app", data: { n: 3 } });
 	assert.equal(a.seq, 1);
@@ -48,10 +47,8 @@ test("log: appends with rising seq and keeps every line", () => {
 
 test("log: a torn last line is skipped and the next entry starts on its own line", () => {
 	const f = join(tmp(), "log.jsonl");
-	forgetLogCache();
 	appendLog(f, { kind: "a", by: "app" });
 	appendFileSync(f, '{"kind":"torn","by":"ap');
-	forgetLogCache(f);
 	const c = appendLog(f, { kind: "c", by: "app" });
 	assert.equal(c.seq, 2);
 	const { entries, bad } = readLog(f);

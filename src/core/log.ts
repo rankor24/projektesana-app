@@ -1,6 +1,6 @@
 // Append-only log: one JSON object per line. Lines are never rewritten or removed.
 // Carried from v1 src/kernel/log.ts. Changed: the log path is given (the data folder owns it, not the project folder),
-// and the next sequence number is cached per file instead of re-reading the whole log on every append.
+// and the next sequence number comes from the file's tail instead of re-reading the whole log on every append.
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -35,34 +35,42 @@ export function readLog(file: string): { entries: StoredEntry[]; bad: number } {
 	return { entries, bad };
 }
 
-const nextSeq = new Map<string, number>();
+/** The tail of the file that is read to find the last sequence number and whether the last line is torn. */
+const TAIL = 64 * 1024;
+
+/** Last seq in the file and whether it ends without a newline. Reads only the tail, so two processes appending to the
+ *  same log (main and the tools server) both see each other's entries without a shared in-memory counter. */
+function tailState(file: string): { seq: number; torn: boolean } {
+	if (!existsSync(file)) return { seq: 0, torn: false };
+	const size = statSync(file).size;
+	if (size === 0) return { seq: 0, torn: false };
+	const len = Math.min(size, TAIL);
+	const fd = openSync(file, "r");
+	const b = Buffer.alloc(len);
+	try {
+		readSync(fd, b, 0, len, size - len);
+	} finally {
+		closeSync(fd);
+	}
+	const torn = b[len - 1] !== 0x0a;
+	const lines = b.toString("utf8").split("\n");
+	for (let i = lines.length - 1; i >= 0; i--) {
+		try {
+			const e = JSON.parse(lines[i]) as StoredEntry;
+			if (typeof e.seq === "number") return { seq: e.seq, torn };
+		} catch {
+			// torn or partial first line of the tail
+		}
+	}
+	// no whole entry in the tail (one huge line): read everything
+	return { seq: readLog(file).entries.reduce((m, x) => Math.max(m, x.seq), 0), torn };
+}
 
 export function appendLog(file: string, e: LogEntry, now = new Date()): StoredEntry {
 	mkdirSync(dirname(file), { recursive: true });
-	let seq = nextSeq.get(file);
-	let prefix = "";
-	if (seq === undefined) {
-		seq = readLog(file).entries.reduce((m, x) => Math.max(m, x.seq), 0) + 1;
-	}
-	if (existsSync(file)) {
-		// a torn last line must not glue onto the next entry: look at the last byte only
-		const size = statSync(file).size;
-		if (size > 0) {
-			const fd = openSync(file, "r");
-			const b = Buffer.alloc(1);
-			readSync(fd, b, 0, 1, size - 1);
-			closeSync(fd);
-			if (b[0] !== 0x0a) prefix = "\n";
-		}
-	}
-	const stored: StoredEntry = { at: now.toISOString(), seq, ...e };
-	appendFileSync(file, prefix + JSON.stringify(stored) + "\n", "utf8");
-	nextSeq.set(file, seq + 1);
+	const t = tailState(file);
+	const stored: StoredEntry = { at: now.toISOString(), seq: t.seq + 1, ...e };
+	// a torn last line must not glue onto the next entry
+	appendFileSync(file, (t.torn ? "\n" : "") + JSON.stringify(stored) + "\n", "utf8");
 	return stored;
-}
-
-/** Tests and a project re-open drop the cached sequence so it is read from the file again. */
-export function forgetLogCache(file?: string): void {
-	if (file) nextSeq.delete(file);
-	else nextSeq.clear();
 }

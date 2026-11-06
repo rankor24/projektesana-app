@@ -66,6 +66,18 @@ export interface ApiSpec {
 	"settings.get": () => Settings;
 	"settings.set": (patch: Partial<Settings>) => Settings;
 	"dialog.pickFolder": (title: string) => string | null;
+	"agent.status": () => AgentStatus;
+	"agent.providers": () => ProviderRow[];
+	"agent.setKey": (provider: string, key: string) => void;
+	"agent.clearKey": (provider: string) => void;
+	"agent.login": (provider: string) => void;
+	"agent.loginAnswer": (text: string) => void;
+	"agent.logout": (provider: string) => void;
+	"agent.send": (projectId: string | null, text: string, focus: FocusItem[]) => { runId: string };
+	"agent.stop": () => void;
+	"agent.confirm": (confirmId: string, allow: boolean) => void;
+	"agent.history": (projectId: string | null) => { role: "user" | "assistant"; text: string; at: string }[];
+	"agent.reset": (projectId: string | null) => void;
 }
 
 export type ApiName = keyof ApiSpec;
@@ -76,6 +88,18 @@ export const API_NAMES = [
 	"settings.get",
 	"settings.set",
 	"dialog.pickFolder",
+	"agent.status",
+	"agent.providers",
+	"agent.setKey",
+	"agent.clearKey",
+	"agent.login",
+	"agent.loginAnswer",
+	"agent.logout",
+	"agent.send",
+	"agent.stop",
+	"agent.confirm",
+	"agent.history",
+	"agent.reset",
 ] as const satisfies readonly ApiName[];
 
 // Compile-time check that API_NAMES lists every key of ApiSpec (and no other).
@@ -85,9 +109,11 @@ void _complete;
 
 export interface EventSpec {
 	"data.changed": { projectId: string | null; what: string[] };
+	"agent.event": { runId: string; event: RunEvent };
+	"agent.login": LoginNotice;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

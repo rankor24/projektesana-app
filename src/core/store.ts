@@ -2,7 +2,7 @@
 // Every write of a collection keeps the previous file as versions\<name>.<seq>.json, where <seq> is the log entry of the
 // write that replaced it — so "what did facts.json look like before event 41" is one file away (design doc 4.4).
 // Writes are atomic (temp file + rename); the office project folder is never written (guard).
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkWrite, isInside } from "./guard.js";
 import { appendLog, readLog, type StoredEntry } from "./log.js";
@@ -18,7 +18,7 @@ function atomicWrite(file: string, body: string | Uint8Array) {
 
 export class ProjectStore {
 	readonly dir: string;
-	private cache = new Map<CollectionName, unknown[]>();
+	private cache = new Map<CollectionName, { stamp: string; value: unknown[] }>();
 
 	private constructor(
 		readonly projectsDir: string,
@@ -69,12 +69,20 @@ export class ProjectStore {
 		return readLog(this.logFile()).entries;
 	}
 
+	/** The cache is keyed by the file's mtime and size: the tools server writes the same files from its own process. */
+	private stamp(f: string): string {
+		if (!existsSync(f)) return "none";
+		const s = statSync(f);
+		return `${s.mtimeMs}:${s.size}`;
+	}
+
 	read<C extends CollectionName>(c: C): Collections[C] {
-		const hit = this.cache.get(c);
-		if (hit) return structuredClone(hit) as Collections[C];
 		const f = this.file(c);
+		const stamp = this.stamp(f);
+		const hit = this.cache.get(c);
+		if (hit && hit.stamp === stamp) return structuredClone(hit.value) as Collections[C];
 		const v = existsSync(f) ? (JSON.parse(readFileSync(f, "utf8")) as Collections[C]) : ([] as unknown as Collections[C]);
-		this.cache.set(c, v);
+		this.cache.set(c, { stamp, value: v });
 		return structuredClone(v);
 	}
 
@@ -86,7 +94,7 @@ export class ProjectStore {
 		const entry = this.log({ ...e, data: { ...e.data, collection: c, count: value.length } });
 		if (existsSync(f)) renameSync(f, join(this.dir, "versions", `${c}.${entry.seq}.json`));
 		atomicWrite(f, JSON.stringify(value, null, 1));
-		this.cache.set(c, structuredClone(value));
+		this.cache.set(c, { stamp: this.stamp(f), value: structuredClone(value) });
 		return entry;
 	}
 
