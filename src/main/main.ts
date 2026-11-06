@@ -11,6 +11,7 @@ import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
 import { Registry } from "../core/registry.js";
 import { Ocr } from "../sources/text/ocr.js";
+import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
 import { PageRenderer } from "./offscreen.js";
 
@@ -83,7 +84,7 @@ const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
 const handlers = createHandlers({
 	registry,
-	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr) }),
+	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr), officeText: (abs, ext) => officeText(join(resourcesDir, "office-text.ps1"), abs, ext) }),
 	version: app.getVersion(),
 	settings,
 	dataDir,
