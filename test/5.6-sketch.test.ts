@@ -21,6 +21,6 @@ test("draw_sketch and highlight are screen instructions only", async () => {
 	assert.equal(t.draw_sketch.level, "annotate");
 	const out = (await t.draw_sketch.run({} as never, { guids: ["g1"], note: "šeit jauna siena" })) as string;
 	assert.deepEqual(readUi(out), { highlight: { guids: ["g1"], note: "šeit jauna siena" } });
-	assert.deepEqual(readUi((await t.open_panel.run({} as never, { name: "telpas" })) as string), { open_panel: { name: "telpas", filter: undefined } });
+	assert.deepEqual(readUi((await t.open_panel.run({} as never, { name: "telpas" })) as string), { open_panel: { name: "telpas" } });
 	assert.equal(readUi("plain text"), null);
 });
