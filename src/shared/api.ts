@@ -83,6 +83,24 @@ export interface InventoryTable {
 	unread: { page: number; line: string }[];
 }
 
+export interface RevitStatusRow {
+	state: "nav konfigurēts" | "nav savienojuma" | "savienots";
+	document: string | null;
+	activeView: string | null;
+	version: string | null;
+	message?: string;
+}
+
+export interface RevitRoomRow {
+	id: string;
+	uniqueId: string;
+	number: string;
+	name: string;
+	level: string;
+	areaM2: number;
+	phase: string;
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
@@ -124,6 +142,8 @@ export interface ApiSpec {
 	"findings.runAll": (id: string) => number;
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
+	"revit.status": () => RevitStatusRow;
+	"revit.rooms": () => RevitRoomRow[];
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
 	"facts.setByBoris": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
@@ -173,6 +193,8 @@ export const API_NAMES = [
 	"findings.runAll",
 	"notes.list",
 	"notes.write",
+	"revit.status",
+	"revit.rooms",
 	"facts.decide",
 	"facts.setByBoris",
 	"rooms.exportXlsx",

@@ -11,6 +11,9 @@ import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
 import { Registry } from "../core/registry.js";
 import { ProjectEngine } from "./engine.js";
+import { RevitClient, launchSpec, resolveRevitLaunch } from "../revit/client.js";
+import { revitRead } from "../revit/commands.js";
+import { REVIT_LEVELS, REVIT_TOOLS } from "../agent/tools/revit-levels.js";
 import { Ocr } from "../sources/text/ocr.js";
 import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
@@ -71,7 +74,10 @@ const session = new AgentSession({
 	runtime: pi,
 	settings: () => settings.get(),
 	toolsServer: (env) => ({ command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1" } }),
-	revit: () => null,
+	revit: () => {
+		const l = resolveRevitLaunch(settings.get());
+		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;
+	},
 	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir },
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
@@ -83,10 +89,16 @@ const resourcesDir = app.isPackaged ? process.resourcesPath : join(here, "..", "
 const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
 const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
-const engine = new ProjectEngine({ dataDir, officeStandardPdf: () => settings.get().officeStandardPdf });
+const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.execPath);
+const engine = new ProjectEngine({
+	dataDir,
+	officeStandardPdf: () => settings.get().officeStandardPdf,
+	modelRooms: async () => (revit.configured() ? (await revitRead.rooms(revit)).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.uniqueId })) : undefined),
+});
 
 const handlers = createHandlers({
 	engine,
+	revit,
 	registry,
 	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr), officeText: (abs, ext) => officeText(join(resourcesDir, "office-text.ps1"), abs, ext) }),
 	version: app.getVersion(),

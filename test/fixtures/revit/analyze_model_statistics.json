@@ -1,0 +1,19 @@
+{
+  "projectName": "BD999-AR-Testa-iela-1",
+  "totalElements": 1200,
+  "totalTypes": 80,
+  "totalFamilies": 12,
+  "totalViews": 20,
+  "totalSheets": 4,
+  "categories": [
+    { "categoryName": "Walls", "elementCount": 140, "typeCount": 0, "familyCount": 0, "types": [] },
+    { "categoryName": "Rooms", "elementCount": 3, "typeCount": 0, "familyCount": 0, "types": [] }
+  ],
+  "levels": [
+    { "levelName": "2. stāvs", "elevation": 11.1548556430446, "elementCount": 300 },
+    { "levelName": "Zeme", "elevation": -1.2321293407779876e-7, "elementCount": 10 },
+    { "levelName": "1. stāvs", "elevation": 1.4763779527559, "elementCount": 400 }
+  ],
+  "success": true,
+  "message": "Successfully analyzed model with 1200 elements across 2 categories"
+}

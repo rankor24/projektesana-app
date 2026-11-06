@@ -1,0 +1,11 @@
+{
+  "totalRooms": 3,
+  "totalArea": 452.0838,
+  "rooms": [
+    { "id": 1000001, "uniqueId": "00000000-0000-0000-0000-000000000001-000f4241", "name": "Gaitenis", "number": "102", "level": "1. stāvs", "area": 200.2087, "volume": 0, "perimeter": 64.3045, "unboundedHeight": 10.1706, "department": "", "comments": "", "phase": "Existing", "occupancy": "" },
+    { "id": 1000002, "uniqueId": "00000000-0000-0000-0000-000000000002-000f4242", "name": "Kabinets", "number": "103", "level": "1. stāvs", "area": 164.6889, "volume": 0, "perimeter": 52.4934, "unboundedHeight": 10.1706, "department": "", "comments": "", "phase": "Existing", "occupancy": "" },
+    { "id": 1000003, "uniqueId": "00000000-0000-0000-0000-000000000003-000f4243", "name": "Zāle", "number": "202", "level": "2. stāvs", "area": 87.1862, "volume": 0, "perimeter": 38.0577, "unboundedHeight": 9.5144, "department": "", "comments": "", "phase": "Existing", "occupancy": "" }
+  ],
+  "success": true,
+  "message": "Successfully exported 3 rooms"
+}

@@ -1,0 +1,21 @@
+{
+  "selectedPid": null,
+  "count": 1,
+  "instances": [
+    {
+      "pid": 11111,
+      "selected": false,
+      "revitVersion": "2026",
+      "port": 8080,
+      "activeDocument": {
+        "title": "BD999-AR-Testa-iela-1",
+        "path": "C:\\Projekti\\BD999-2026_Testa iela 1\\01_Projektesana\\1.2_Projekta dalas\\1.2.02_AR\\01_RVT\\BD999-AR-Testa-iela-1.rvt"
+      },
+      "activeView": "1. STĀVA PLĀNS",
+      "documents": [
+        { "title": "BD999-AR-Testa-iela-1", "path": "C:\\Projekti\\BD999-2026_Testa iela 1\\01_Projektesana\\1.2_Projekta dalas\\1.2.02_AR\\01_RVT\\BD999-AR-Testa-iela-1.rvt", "isFamily": false }
+      ],
+      "updatedAt": "2026-11-06T10:00:00.0000000Z"
+    }
+  ]
+}

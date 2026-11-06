@@ -55,7 +55,9 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 		const model = o.model ?? lookupPiModel(o.runtime, o.provider ?? "", o.modelId);
 		const mcp = await connectMcpServers(o.mcp, { maxResultChars: 200_000 });
 		closeTools = mcp.close;
-		if (mcp.missing.length) throw new Error(`The tool servers did not offer: ${mcp.missing.join(", ")}`);
+		// the app's own tools must all be there; an external server (Revit) of another version may lack some: they are just not offered
+		const missingOwn = mcp.missing.filter((m) => m.startsWith("projektesana-tools:"));
+		if (missingOwn.length) throw new Error(`The tool servers did not offer: ${missingOwn.join(", ")}`);
 
 		const maxTurns = o.maxTurns ?? DEFAULT_MAX_TURNS;
 		const identity = o.runtime.identity;
