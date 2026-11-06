@@ -87,7 +87,7 @@ export function mergeSources(prev: Source[], files: HashOutput[], surveys: Scann
 			roleFrom: info?.roleFrom ?? "folder",
 			versions: [{ sha256: "", size: sv.bytes, mtime: iso(sv.latestMtimeMs || now.getTime()), seenAt, textState: "unsupported", textReason: "fotofiksācija" }],
 			signers: [],
-			survey: { date: sv.date, count: sv.images + sv.videos, folder: sv.rel },
+			survey: { date: sv.date, count: sv.files, folder: sv.rel },
 		});
 	}
 

@@ -19,6 +19,8 @@ export interface ScannedSurvey {
 	folderKey: string;
 	date: string | null;
 	images: number;
+	/** every file in the survey folder (a viewer export has no images, only its files) */
+	files: number;
 	videos: number;
 	bytes: number;
 	latestMtimeMs: number;
@@ -129,7 +131,7 @@ export async function scanInputs(root: string, confirmed: Record<string, string>
 
 	const addSurvey = async (p: string, folderKey: string, date: string | null) => {
 		const c = await countFiles(p);
-		res.surveys.push({ rel: rel(p), folderKey, date, images: c.images, videos: c.videos, bytes: c.bytes, latestMtimeMs: c.latest });
+		res.surveys.push({ rel: rel(p), folderKey, date, images: c.images, videos: c.videos, files: c.n, bytes: c.bytes, latestMtimeMs: c.latest });
 		return c.n;
 	};
 
@@ -156,7 +158,7 @@ export async function scanInputs(root: string, confirmed: Record<string, string>
 				c.latest = Math.max(c.latest, s.mtimeMs);
 			}
 			const name = p.split(/[\\/]/).pop() ?? "";
-			res.surveys.push({ rel: rel(p), folderKey, date: surveyDateOf(name) ?? null, images: c.images, videos: c.videos, bytes: c.bytes, latestMtimeMs: c.latest });
+			res.surveys.push({ rel: rel(p), folderKey, date: surveyDateOf(name) ?? null, images: c.images, videos: c.videos, files: c.images + c.videos, bytes: c.bytes, latestMtimeMs: c.latest });
 			n += looseImages.length;
 		}
 		for (const d of entries) {
