@@ -20,4 +20,15 @@ extraResources:
 asarUnpack:
   - dist/agent/tools/**
 win:
-  target: dir
+  target:
+    - nsis
+# Setup: per-user install (no admin), Boris picks the folder; the app data in %APPDATA%\Projektesana stays on uninstall.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Projektēšana
+  deleteAppDataOnUninstall: false
+  artifactName: Projektesana-Setup-${version}.${ext}

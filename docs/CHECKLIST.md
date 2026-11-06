@@ -1,6 +1,6 @@
 # Checklist — plan vs code
 
-Written by `scripts/audit.ts` on 2026-11-06 12:10. Status per task of `docs/v2-work-plan.md`.
+Written by `scripts/audit.ts` on 2026-11-06 14:18. Status per task of `docs/v2-work-plan.md`.
 "built and tested" = the task's files exist and its tests pass in `npm test` (invented fixtures). "real" = its "done when" was also checked on a real project on Boris's PC (read-only, counts only). "live" = the part of its "done when" that needs Boris — his eyes on the UI, a hand-made reference, a live Revit or the sign-in — not claimed here.
 
 | Task | Build | Files | Tests | Status |

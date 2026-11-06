@@ -21,6 +21,12 @@ npm run typecheck
 npm test
 npm run build
 npm start
+npm run pack             # release/win-unpacked/Projektesana.exe (no installer)
+npm run dist             # release/Projektesana-Setup-<version>.exe (per-user setup, folder choice, shortcuts)
+npm run smoke:packaged   # the packaged exe loads its workers, pdfjs, OCR and tools server from app.asar
 ```
+
+The setup is not code-signed: Windows SmartScreen asks once ("More info" → "Run anyway"). App data stays in
+`%APPDATA%\Projektesana` across reinstalls and uninstall.
 
 Stack: Electron 43, React 19, Vite, TypeScript ESM, pi 1.4 (Codex sign-in default), pdfjs-dist, tesseract.js (Latvian), fflate.
