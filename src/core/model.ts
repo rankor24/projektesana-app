@@ -56,7 +56,7 @@ export interface Source {
 	versions: Version[];
 	signers: Signer[];
 	/** for a file inside an .edoc: the container's relative path and the inner name */
-	container?: { path: string; inner: string };
+	container?: { path: string; inner: string; containerSha?: string };
 	/** photo survey: one Source per YYMMDD_FF folder */
 	survey?: { date: string | null; count: number; folder: string };
 }

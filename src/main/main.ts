@@ -9,6 +9,7 @@ import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
+import { Registry } from "../core/registry.js";
 
 const here = import.meta.dirname; // dist/main
 const dataDir = app.isPackaged ? join(process.resourcesPath, "data") : join(here, "..", "..", "data");
@@ -72,7 +73,11 @@ const session = new AgentSession({
 	emit: (runId, event) => emit("agent.event", { runId, event }),
 });
 
+const registry = new Registry(settings.registryFile(), settings.projectsDir());
+
 const handlers = createHandlers({
+	registry,
+	hooks: () => ({}),
 	version: app.getVersion(),
 	settings,
 	dataDir,

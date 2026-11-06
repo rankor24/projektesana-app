@@ -119,6 +119,29 @@ export class ProjectStore {
 		return JSON.parse(readFileSync(join(this.dir, "versions", `${c}.${seq}.json`), "utf8")) as Collections[C];
 	}
 
+	// ---- small meta files (roles.json, scan.json): one object each, previous kept like a collection ----
+
+	readMeta<T>(name: string, fallback: T): T {
+		if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`Nederīgs nosaukums: ${name}`);
+		const f = join(this.dir, `${name}.json`);
+		if (!existsSync(f)) return fallback;
+		try {
+			return JSON.parse(readFileSync(f, "utf8")) as T;
+		} catch {
+			return fallback;
+		}
+	}
+
+	writeMeta(name: string, value: unknown, e?: { kind: string; by: Who | string; data?: Record<string, unknown> }): void {
+		if (!/^[a-z][a-z0-9-]*$/.test(name) || (COLLECTIONS as string[]).includes(name)) throw new Error(`Nederīgs nosaukums: ${name}`);
+		const f = join(this.dir, `${name}.json`);
+		if (e) {
+			const entry = this.log(e);
+			if (existsSync(f)) renameSync(f, join(this.dir, "versions", `${name}.${entry.seq}.json`));
+		}
+		atomicWrite(f, JSON.stringify(value, null, 1));
+	}
+
 	// ---- text cache (per sha, shared by every path of a source) ----
 
 	textFile(sha: string) {

@@ -23,16 +23,28 @@ export const TEXT_FORMATS = new Set([...PLAIN, ".pdf", ".docx", ".xlsx"]);
 
 export async function extractText(abs: string): Promise<Extracted> {
 	const ext = extname(abs).toLowerCase();
+	if (!TEXT_FORMATS.has(ext)) return unsupported(ext);
 	try {
-		if (PLAIN.has(ext)) return fromPages([readFileSync(abs, "utf8")]);
+		return await extractBytes(ext, new Uint8Array(readFileSync(abs)));
+	} catch (e) {
+		return { state: "error", pages: [], reason: (e as Error).message };
+	}
+}
+
+const unsupported = (ext: string): Extracted => ({ state: "unsupported", pages: [], reason: `Formāts ${ext || "(bez paplašinājuma)"} netiek lasīts.` });
+
+/** The same readers on bytes already in memory (a file inside an .edoc, a file read by the worker). */
+export async function extractBytes(ext: string, bytes: Uint8Array): Promise<Extracted> {
+	try {
+		if (PLAIN.has(ext)) return fromPages([new TextDecoder("utf-8").decode(bytes)]);
 		if (ext === ".pdf") {
-			const r = await pdfText(abs);
+			const r = await pdfText(bytes);
 			const out = fromPages(r.pages);
 			return r.emptyPages.length ? { ...out, emptyPages: r.emptyPages, reason: out.state === "empty" ? "PDF bez teksta slāņa (skenēts)" : `bez teksta slāņa: lpp. ${r.emptyPages.join(", ")}` } : out;
 		}
-		if (ext === ".docx") return fromPages([docxText(readFileSync(abs))]);
-		if (ext === ".xlsx") return fromPages([xlsxText(readFileSync(abs))]);
-		return { state: "unsupported", pages: [], reason: `Formāts ${ext || "(bez paplašinājuma)"} netiek lasīts.` };
+		if (ext === ".docx") return fromPages([docxText(bytes)]);
+		if (ext === ".xlsx") return fromPages([xlsxText(bytes)]);
+		return unsupported(ext);
 	} catch (e) {
 		return { state: "error", pages: [], reason: (e as Error).message };
 	}

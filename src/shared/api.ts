@@ -54,11 +54,25 @@ export interface ProjectRow extends Project {
 	openFindings: number;
 }
 
+export interface ScanSummaryRow {
+	at: string;
+	inputsRel: string | null;
+	files: number;
+	surveys: number;
+	added: number;
+	changed: number;
+	gone: number;
+	skipped: { archive: number; junk: number };
+	problems: string[];
+	folders: { folderKey: string; name: string; rel: string; role: string; roleFrom: "folder" | "confirmed" | "unconfirmed"; files: number }[];
+}
+
 export interface RoleQuestion {
 	folderKey: string;
 	folderName: string;
 	proposed: string;
 	files: number;
+	options: readonly string[];
 }
 
 export interface ApiSpec {
@@ -78,6 +92,17 @@ export interface ApiSpec {
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => { role: "user" | "assistant"; text: string; at: string }[];
 	"agent.reset": (projectId: string | null) => void;
+	"projects.list": () => ProjectRow[];
+	"projects.add": (root: string) => ProjectRow;
+	"projects.forget": (id: string) => void;
+	"projects.scan": (id: string) => void;
+	"projects.scanSummary": (id: string) => ScanSummaryRow | null;
+	"projects.roleQuestions": (id: string) => RoleQuestion[];
+	"projects.confirmRole": (id: string, folderKey: string, role: string) => void;
+	"sources.list": (id: string) => Source[];
+	"sources.text": (id: string, sourceId: string) => { pages: string[]; state: string; reason?: string } | null;
+	"sources.bytes": (id: string, sourceId: string) => Uint8Array;
+	"sources.openOriginal": (id: string, sourceId: string) => void;
 }
 
 export type ApiName = keyof ApiSpec;
@@ -100,6 +125,17 @@ export const API_NAMES = [
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",
+	"projects.list",
+	"projects.add",
+	"projects.forget",
+	"projects.scan",
+	"projects.scanSummary",
+	"projects.roleQuestions",
+	"projects.confirmRole",
+	"sources.list",
+	"sources.text",
+	"sources.bytes",
+	"sources.openOriginal",
 ] as const satisfies readonly ApiName[];
 
 // Compile-time check that API_NAMES lists every key of ApiSpec (and no other).
@@ -111,9 +147,10 @@ export interface EventSpec {
 	"data.changed": { projectId: string | null; what: string[] };
 	"agent.event": { runId: string; event: RunEvent };
 	"agent.login": LoginNotice;
+	"scan.progress": ScanProgress;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "scan.progress"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };
