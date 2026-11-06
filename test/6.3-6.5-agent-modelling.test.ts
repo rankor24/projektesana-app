@@ -77,3 +77,27 @@ test("6.5 the existing-building task: levels and grids first, batches per floor,
 	assert.match(t, /list_findings checkId=rooms/);
 	assert.match(t, /nepārbūvē/);
 });
+
+test("6.1/6.3 the app's named Revit commands: exports and the working copy run, view and sheet creation waits for Boris", async () => {
+	const lv = appLevels();
+	for (const t of ["export_room_table", "revit_export_pdf", "revit_export_ifc", "revit_save_copy", "revit_view_geometry"]) assert.equal(lv[t], "run", t);
+	for (const t of ["revit_create_plans", "revit_set_view_scale", "revit_create_elevations", "revit_create_sheet"]) assert.equal(lv[t], "confirm", t);
+	const { CREATE_SNIPPETS } = await import("../src/agent/tools/revit-commands.ts");
+	for (const [k, code] of Object.entries(CREATE_SNIPPETS)) assert.ok(code.split("\n").length <= 7, `${k} is short`);
+});
+
+test("export_room_table writes the inventory table to the data folder", async () => {
+	const { readFileSync, existsSync } = await import("node:fs");
+	const { revitCommandTools } = await import("../src/agent/tools/revit-commands.ts");
+	const { FIX } = await import("./helpers.ts");
+	const s = ProjectStore.open(tmp(), { id: "BD999", name: "BD999", root: tmp(), createdAt: "2026-11-06T00:00:00Z" });
+	const sha = "e".repeat(64);
+	s.write("sources", [{ id: "s_kl", kind: "document", folderKey: "1.1.2", paths: ["kl.txt"], title: "KL", role: "Īpašuma dokumenti", roleFrom: "folder", versions: [{ sha256: sha, size: 1, mtime: "2026-11-06T00:00:00Z", seenAt: "2026-11-06T00:00:00Z", textState: "ocr" }], signers: [] }], { kind: "t", by: "app" });
+	s.writeText(sha, { state: "ocr", pages: ["Telpu eksplikācija\n1. stāvs\n1 101 Vējtveris 4,2\n2 102 Gaitenis 18,6"] });
+	void readFileSync;
+	void FIX;
+	const t = revitCommandTools.find((x) => x.name === "export_room_table")!;
+	const r = (await t.run({ projectsDir: s.projectsDir, projectId: "BD999", dataDir: "", appDir: "", runDir: null }, {})) as { ok: boolean; file: string };
+	assert.equal(r.ok, true);
+	assert.ok(existsSync(r.file) && r.file.startsWith(s.dir));
+});

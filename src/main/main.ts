@@ -77,7 +77,10 @@ const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
 const session = new AgentSession({
 	runtime: pi,
 	settings: () => settings.get(),
-	toolsServer: (env) => ({ command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1" } }),
+	toolsServer: (env) => {
+		const r = settings.get();
+		return { command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1", PROJEKTESANA_REVIT_JS: r.revitServerJs ?? "", PROJEKTESANA_REVIT_NODE: r.revitNode ?? "" } };
+	},
 	revit: () => {
 		const l = resolveRevitLaunch(settings.get());
 		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;

@@ -26,6 +26,7 @@ export interface SessionDeps {
 	runtime: () => Promise<PiRuntime>;
 	settings: () => Settings;
 	/** how to start the app's tools server with a given context */
+	/** how to start the app's tools server with a given context (env includes the Revit launch for the named commands) */
 	toolsServer: (env: Record<string, string>) => McpLaunchSpec;
 	/** the Revit MCP server, when configured; null = not connected */
 	revit: () => ToolServer | null;
@@ -139,7 +140,7 @@ export class AgentSession {
 			const gate = new Gate(levelOf, async (req: ConfirmRequest) => {
 				if (signal.aborted) return false;
 				// a batch that changes the Revit model runs only on this project's working copy (never the office file)
-				if (req.batch.some((b) => revitTools.has(b.tool)) && this.d.revitWork) {
+				if (req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_")) && this.d.revitWork) {
 					const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
 					if (!w.ok) {
 						emit({ type: "error", engine: "pi", message: `Partija noraidīta: aktīvais Revit dokuments nav šī projekta darba kopija (${w.title}). Izveido to: Versijas → Revit → Darba kopija.` });
