@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { Source } from "../../core/model";
 import { call } from "../bridge";
-import { PdfView } from "../preview/PdfView";
+import { SourcePdf } from "../preview/SourcePdf";
 import { TextView } from "../preview/TextView";
 import { useUi } from "../state";
 import { Empty, useLoad } from "../ui";
@@ -25,7 +25,7 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	return (
 		<section className="preview">
 			{ext === ".pdf" ? (
-				<PdfView key={s.id} load={() => call("sources.bytes", projectId, s.id)} sourceId={s.id} title={s.title} initialPage={preview.page} />
+				<SourcePdf key={s.id} projectId={projectId} sourceId={s.id} title={s.title} page={preview.page} />
 			) : (
 				<TextView sourceId={s.id} title={s.title} page={preview.page} />
 			)}

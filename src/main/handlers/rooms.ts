@@ -7,16 +7,33 @@ import type { Handlers } from "../../shared/api.js";
 import { totalsCheck } from "../../sources/extract/kl.js";
 import { inventoryTables, roomTableOf } from "../../sources/room-table.js";
 import { writeXlsx } from "../../sources/export/xlsx.js";
+import { geometryCsv, pdfGeometry } from "../../sources/extract/kl-geometry.js";
+import { sourceBytes } from "../../sources/bytes.js";
 
 export interface RoomsDeps {
 	registry: Registry;
 	openPath(p: string): Promise<string>;
 }
 
-type K = "rooms.table" | "rooms.exportXlsx";
+type K = "rooms.table" | "rooms.exportXlsx" | "rooms.geometry" | "rooms.geometryCsv";
 
 export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 	return {
+		"rooms.geometry": async (id, sourceId) => (await pdfGeometry(sourceBytes(d.registry.store(id), sourceId))).map((p) => ({ page: p.page, floor: p.floor, fractions: p.fractions, segments: p.segments.length })),
+		"rooms.geometryCsv": async (id, sourceId) => {
+			const store = d.registry.store(id);
+			const s = store.read("sources").find((x) => x.id === sourceId);
+			if (!s) throw new Error(`Avots ${sourceId} nav atrasts.`);
+			const csv = geometryCsv(await pdfGeometry(sourceBytes(store, sourceId)));
+			const dir = join(store.dir, "exports");
+			const file = join(dir, `${id}_geometrija_${s.title.replace(/[^\p{L}\d]+/gu, "_").slice(0, 40)}.csv`);
+			const g = checkWrite(store.guard, file);
+			if (!g.ok) throw new Error(g.reason);
+			mkdirSync(dir, { recursive: true });
+			writeFileSync(g.path, "﻿" + csv, "utf8");
+			await d.openPath(g.path);
+			return g.path;
+		},
 		"rooms.table": async (id) => {
 			const tables = await inventoryTables(d.registry.store(id));
 			return tables.map(({ sourceId, title, table: t }) => ({ sourceId, title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread }));

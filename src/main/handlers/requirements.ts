@@ -1,6 +1,7 @@
 // Requirements and findings: list, Boris's decisions, override with reason, re-run.
 import { overrideFinding, reopenFinding } from "../../checks/run.js";
 import { newId } from "../../core/model.js";
+import { addPin, closePin, commentPin, reopenPin } from "../../core/pins.js";
 import type { Registry } from "../../core/registry.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 import type { ProjectEngine } from "../engine.js";
@@ -11,7 +12,7 @@ export interface RequirementDeps {
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 }
 
-type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.runAll" | "notes.list" | "notes.write";
+type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.runAll" | "notes.list" | "notes.write" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
 
 export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["requirements", "findings"] });
@@ -50,6 +51,26 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 			const r = await d.engine.afterChange(d.registry.store(id), "manual");
 			changed(id);
 			return r.open;
+		},
+		"pins.list": (id) => d.registry.store(id).read("pins"),
+		"pins.add": (id, target, text) => {
+			const p = addPin(d.registry.store(id), target, text, "boris");
+			d.emit("data.changed", { projectId: id, what: ["pins"] });
+			return p;
+		},
+		"pins.comment": (id, pinId, text) => {
+			commentPin(d.registry.store(id), pinId, text, "boris");
+			d.emit("data.changed", { projectId: id, what: ["pins"] });
+		},
+		"pins.close": async (id, pinId) => {
+			const store = d.registry.store(id);
+			closePin(store, pinId, "boris");
+			await d.engine.afterChange(store, "pins");
+			d.emit("data.changed", { projectId: id, what: ["pins"] });
+		},
+		"pins.reopen": (id, pinId) => {
+			reopenPin(d.registry.store(id), pinId);
+			d.emit("data.changed", { projectId: id, what: ["pins"] });
 		},
 		"notes.list": (id, type) => d.registry.store(id).notes(type),
 		"notes.write": (id, type, title, body) => {

@@ -156,6 +156,11 @@ export interface ApiSpec {
 	"findings.override": (id: string, findingId: string, reason: string) => void;
 	"findings.reopen": (id: string, findingId: string) => void;
 	"findings.runAll": (id: string) => number;
+	"pins.list": (id: string) => Pin[];
+	"pins.add": (id: string, target: PinTarget, text: string) => Pin;
+	"pins.comment": (id: string, pinId: string, text: string) => void;
+	"pins.close": (id: string, pinId: string) => void;
+	"pins.reopen": (id: string, pinId: string) => void;
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	"revit.status": () => RevitStatusRow;
@@ -163,6 +168,8 @@ export interface ApiSpec {
 	"revit.select": (elementIds: number[]) => void;
 	"rooms.compare": (id: string) => RoomCompareRow;
 	"rooms.invAreaPlan": (id: string) => InvAreaRow[];
+	"rooms.geometry": (id: string, sourceId: string) => { page: number; floor: string | null; fractions: { x1: number; y1: number; x2: number; y2: number }[]; segments: number }[];
+	"rooms.geometryCsv": (id: string, sourceId: string) => string;
 	"rooms.writeInvArea": (id: string, items: InvAreaRow[]) => { written: number; noParam: string[] };
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
 	"facts.setByBoris": (id: string, key: string, value: string) => void;
@@ -211,6 +218,11 @@ export const API_NAMES = [
 	"findings.override",
 	"findings.reopen",
 	"findings.runAll",
+	"pins.list",
+	"pins.add",
+	"pins.comment",
+	"pins.close",
+	"pins.reopen",
 	"notes.list",
 	"notes.write",
 	"revit.status",
@@ -218,6 +230,8 @@ export const API_NAMES = [
 	"revit.select",
 	"rooms.compare",
 	"rooms.invAreaPlan",
+	"rooms.geometry",
+	"rooms.geometryCsv",
 	"rooms.writeInvArea",
 	"facts.decide",
 	"facts.setByBoris",
