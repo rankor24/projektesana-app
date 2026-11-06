@@ -3,9 +3,10 @@
 import type { Handlers } from "../shared/api.js";
 import { coreHandlers, type CoreDeps } from "./handlers/agent.js";
 import { projectHandlers, type ProjectDeps } from "./handlers/projects.js";
+import { roomHandlers } from "./handlers/rooms.js";
 
 export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath">;
 
 export function createHandlers(d: AppDeps): Handlers {
-	return { ...coreHandlers(d), ...projectHandlers(d) };
+	return { ...coreHandlers(d), ...projectHandlers(d), ...roomHandlers(d) };
 }

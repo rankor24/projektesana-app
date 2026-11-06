@@ -75,6 +75,14 @@ export interface RoleQuestion {
 	options: readonly string[];
 }
 
+export interface InventoryTable {
+	sourceId: string;
+	title: string;
+	rows: { floor: string; no: string; name: string; area: number; height: number | null; page: number }[];
+	totals: { floor: string; stated: number; sum: number; ok: boolean }[];
+	unread: { page: number; line: string }[];
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
@@ -103,6 +111,8 @@ export interface ApiSpec {
 	"sources.text": (id: string, sourceId: string) => { pages: string[]; state: string; reason?: string } | null;
 	"sources.bytes": (id: string, sourceId: string) => Uint8Array;
 	"sources.openOriginal": (id: string, sourceId: string) => void;
+	"rooms.table": (id: string) => InventoryTable[];
+	"rooms.exportXlsx": (id: string, sourceId: string) => string;
 }
 
 export type ApiName = keyof ApiSpec;
@@ -136,6 +146,8 @@ export const API_NAMES = [
 	"sources.text",
 	"sources.bytes",
 	"sources.openOriginal",
+	"rooms.table",
+	"rooms.exportXlsx",
 ] as const satisfies readonly ApiName[];
 
 // Compile-time check that API_NAMES lists every key of ApiSpec (and no other).
