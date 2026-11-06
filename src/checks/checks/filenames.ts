@@ -23,11 +23,13 @@ export const filenameCheck: Check = {
 			const folder = basename(d.folder);
 			if (!dateOfFolder(folder)) results.push({ key: `${d.id}:date`, severity: "error", message: `${d.label}: mapes nosaukumā nav datuma YYMMDD (“${folder}”)${noStd}`, where: { deliveryId: d.id, path: d.folder }, requirementId: req("office:delivery-date") });
 			if (DIACRITIC.test(folder)) results.push({ key: `${d.id}:folder-diacritics`, severity: "error", message: `${d.label}: mapes nosaukumā ir garumzīmes vai mīkstinājuma zīmes (“${folder}”)${noStd}`, where: { deliveryId: d.id, path: d.folder }, requirementId: req("office:no-diacritics") });
-			for (const it of d.items) {
-				const name = basename(it.file);
-				if (DIACRITIC.test(name)) results.push({ key: `${d.id}:${name}:diacritics`, severity: "error", message: `${d.label}: “${name}” — nosaukumā ir garumzīmes vai mīkstinājuma zīmes${noStd}`, where: { deliveryId: d.id, path: it.file }, requirementId: req("office:no-diacritics") });
-				if (!SHEET_FILE.test(name)) results.push({ key: `${d.id}:${name}:pattern`, severity: "warning", message: `${d.label}: “${name}” — nav formā rasējuma numurs_nosaukums${noStd}`, where: { deliveryId: d.id, path: it.file }, requirementId: req("office:sheet-filenames") });
-			}
+			// one finding per delivery and rule, with the count and the first names (a real BP had 968 such files)
+			const names = d.items.map((it) => basename(it.file));
+			const list = (l: string[]) => `${l.slice(0, 5).map((n) => `“${n}”`).join(", ")}${l.length > 5 ? ` un vēl ${l.length - 5}` : ""}`;
+			const withDiacritics = names.filter((n) => DIACRITIC.test(n));
+			if (withDiacritics.length) results.push({ key: `${d.id}:diacritics`, severity: "error", message: `${d.label}: ${withDiacritics.length} failu nosaukumos ir garumzīmes vai mīkstinājuma zīmes: ${list(withDiacritics)}${noStd}`, where: { deliveryId: d.id, path: d.folder }, requirementId: req("office:no-diacritics") });
+			const noSheet = names.filter((n) => !SHEET_FILE.test(n));
+			if (noSheet.length) results.push({ key: `${d.id}:pattern`, severity: "warning", message: `${d.label}: ${noSheet.length} no ${names.length} failiem nav formā rasējuma numurs_nosaukums: ${list(noSheet)}${noStd}`, where: { deliveryId: d.id, path: d.folder }, requirementId: req("office:sheet-filenames") });
 		}
 		return { results };
 	},

@@ -4,7 +4,7 @@
 // Planned dates come from the BIP grafiks (a table row naming the kind and a date) or are typed by Boris.
 import { readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
-import { dateOfFolder, deliveryKindOf, stageOfDelivery } from "../core/stages.js";
+import { dateInName, dateOfFolder, deliveryKindOf, stageOfDelivery } from "../core/stages.js";
 import type { Delivery, DeliveryItem, DeliveryKind } from "../core/model.js";
 import { isJunk } from "./roles.js";
 
@@ -44,19 +44,30 @@ export async function readDeliveries(root: string): Promise<Omit<Delivery, "stag
 	const dir = await findDeliveriesDir(root);
 	if (!dir) return [];
 	const out: Omit<Delivery, "stage">[] = [];
-	for (const k of await readdir(dir, { withFileTypes: true })) {
-		if (!k.isDirectory()) continue;
+	const id = (...p: string[]) => `d_${p.join("_")}`.replace(/[^\p{L}\d_.-]+/gu, "_");
+	const top = await readdir(dir, { withFileTypes: true });
+	const rootFiles = top.filter((e) => e.isFile() && !isJunk(e.name));
+	if (rootFiles.length) out.push({ id: id("1.4"), kind: "custom", label: "1.4 (faili bez mapes)", plannedDate: null, submittedDate: null, folder: relative(root, dir), items: rootFiles.map((e) => itemOf(relative(root, join(dir, e.name)))), checksRun: [] });
+	for (const k of top) {
+		if (!k.isDirectory() || /^arh[iī]v/i.test(norm(k.name))) continue;
 		const kind = deliveryKindOf(k.name);
 		const kindDir = join(dir, k.name);
+		// the date in the kind folder's own name ("1.4.3_BP_260109"): the folder is one delivery
+		const own = dateInName(k.name);
+		if (own) {
+			const items = (await filesUnder(kindDir, root)).map(itemOf);
+			out.push({ id: id(kind, k.name), kind, label: k.name, plannedDate: null, submittedDate: own, folder: relative(root, kindDir), items, checksRun: [] });
+			continue;
+		}
 		const entries = await readdir(kindDir, { withFileTypes: true });
-		const dated = entries.filter((e) => e.isDirectory() && dateOfFolder(e.name) !== null);
+		const dated = entries.filter((e) => e.isDirectory() && (dateOfFolder(e.name) ?? dateInName(e.name)) !== null);
 		for (const e of dated) {
 			const folder = join(kindDir, e.name);
-			const date = dateOfFolder(e.name)!;
-			out.push({ id: `d_${kind}_${k.name}_${e.name}`.replace(/[^\p{L}\d_.-]+/gu, "_"), kind, label: `${k.name} ${e.name}`, plannedDate: null, submittedDate: date, folder: relative(root, folder), items: (await filesUnder(folder, root)).map(itemOf), checksRun: [] });
+			out.push({ id: id(kind, k.name, e.name), kind, label: `${k.name} ${e.name}`, plannedDate: null, submittedDate: (dateOfFolder(e.name) ?? dateInName(e.name))!, folder: relative(root, folder), items: (await filesUnder(folder, root)).map(itemOf), checksRun: [] });
 		}
-		// files (or undated folders) straight in the kind folder: one delivery without a date
-		const loose = entries.filter((e) => (e.isFile() && !isJunk(e.name)) || (e.isDirectory() && dateOfFolder(e.name) === null && !/^arh[iī]v/i.test(norm(e.name))));
+		// files or undated folders (sections like 01_VD, 02_SA) straight in the kind folder: one delivery without a date.
+		// The folder template's empty "datums" placeholder is not a delivery.
+		const loose = entries.filter((e) => (e.isFile() && !isJunk(e.name)) || (e.isDirectory() && !dated.includes(e) && !/^arh[iī]v/i.test(norm(e.name)) && norm(e.name) !== "datums"));
 		if (loose.length) {
 			const files: string[] = [];
 			for (const e of loose) files.push(...(e.isFile() ? [relative(root, join(kindDir, e.name))] : await filesUnder(join(kindDir, e.name), root)));

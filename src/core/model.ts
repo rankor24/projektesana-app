@@ -164,7 +164,8 @@ export interface Finding {
 
 // ---- deliveries, revisions, pins, notes, events -------------------------------------------------
 
-export type DeliveryKind = "SKICE" | "MBP" | "BP" | "DT" | "STARP" | "custom";
+/** PR = paskaidrojuma raksts (MK 529 route for simpler works) */
+export type DeliveryKind = "SKICE" | "MBP" | "BP" | "PR" | "DT" | "STARP" | "custom";
 
 export interface DeliveryItem {
 	sheetNo: string | null;
