@@ -10,3 +10,5 @@ real/
 *.edoc
 !test/fixtures/**
 resources/tessdata/
+resources/bimcraft/
+.bimcraft-check/

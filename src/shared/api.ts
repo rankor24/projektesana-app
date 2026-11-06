@@ -187,6 +187,10 @@ export interface ApiSpec {
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	"revit.status": () => RevitStatusRow;
+	"models.list": (id: string) => { rel: string; name: string; section: string | null; size: number; mtime: string }[];
+	"models.bytes": (id: string, rel: string) => Uint8Array;
+	"revisions.list": (id: string) => Revision[];
+	"revisions.ifc": (id: string, revisionId: string) => Uint8Array;
 	"revit.rooms": () => RevitRoomRow[];
 	"revit.select": (elementIds: number[]) => void;
 	"rooms.compare": (id: string) => RoomCompareRow;
@@ -256,6 +260,10 @@ export const API_NAMES = [
 	"notes.list",
 	"notes.write",
 	"revit.status",
+	"models.list",
+	"models.bytes",
+	"revisions.list",
+	"revisions.ifc",
 	"revit.rooms",
 	"revit.select",
 	"rooms.compare",

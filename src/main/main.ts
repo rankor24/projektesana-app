@@ -1,6 +1,8 @@
 // Electron main process: window and wiring. Logic lives in api.ts and the modules it calls.
 // Carried from v1 src/main/main.ts: crash log, link handling, reload / devtools keys, renderer recovery.
-import { app, BrowserWindow, dialog, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, net, protocol, safeStorage, shell } from "electron";
+import { pathToFileURL } from "node:url";
+import { BIMCRAFT_SCHEME, bimcraftResponse, bimcraftSite } from "./bimcraft-protocol.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_NAMES, type EventName, type EventSpec } from "../shared/api.js";
@@ -159,5 +161,18 @@ function createWindow(): void {
 	void win.loadFile(join(here, "..", "renderer", "index.html"));
 }
 
-app.whenReady().then(createWindow);
+// the BimCraft preview runs from bimcraft:// (its page uses absolute paths; file:// cannot serve it)
+protocol.registerSchemesAsPrivileged([{ scheme: BIMCRAFT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+
+app.whenReady().then(() => {
+	const site = bimcraftSite(join(resourcesDir, "bimcraft"));
+	protocol.handle(BIMCRAFT_SCHEME, async (req) => {
+		if (!site) return new Response("nav konfigurēts: BimCraft nav resources/bimcraft (npm run build)", { status: 404 });
+		const r = bimcraftResponse(site, req.url);
+		if (!r.file) return new Response("not found", { status: r.status, headers: r.headers });
+		const res = await net.fetch(pathToFileURL(r.file).href);
+		return new Response(res.body, { status: 200, headers: r.headers });
+	});
+	createWindow();
+});
 app.on("window-all-closed", () => app.quit());

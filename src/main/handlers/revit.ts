@@ -5,11 +5,32 @@ import type { Registry } from "../../core/registry.js";
 import { compareRooms, normNo } from "../../checks/checks/rooms.js";
 import { inventoryTables } from "../../sources/room-table.js";
 import type { Handlers } from "../../shared/api.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { checkRead } from "../../core/guard.js";
+import { listModels } from "../../sources/models.js";
 
-type K = "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
+type K = "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
 export function revitHandlers(d: { revit: RevitClient; registry: Registry }): Pick<Handlers, K> {
 	return {
+		"models.list": (id) => listModels(d.registry.get(id).root),
+		"models.bytes": (id, rel) => {
+			const store = d.registry.store(id);
+			const g = checkRead(store.guard, rel);
+			if (!g.ok) throw new Error(g.reason);
+			if (!/\.ifc$/i.test(g.path)) throw new Error("Tikai IFC faili.");
+			return new Uint8Array(readFileSync(g.path));
+		},
+		"revisions.list": (id) => d.registry.store(id).read("revisions"),
+		"revisions.ifc": (id, revisionId) => {
+			const store = d.registry.store(id);
+			const r = store.read("revisions").find((x) => x.id === revisionId);
+			if (!r?.ifc) throw new Error(`Revīzijai ${revisionId} nav IFC.`);
+			const g = checkRead(store.guard, join(store.dir, r.ifc));
+			if (!g.ok) throw new Error(g.reason);
+			return new Uint8Array(readFileSync(g.path));
+		},
 		"revit.status": async () => {
 			if (!d.revit.configured()) return { state: "nav konfigurēts", document: null, activeView: null, version: null, message: "Revit MCP serveris nav atrasts (Iestatījumi → Revit MCP)." };
 			try {

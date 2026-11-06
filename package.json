@@ -9,7 +9,7 @@
 	"scripts": {
 		"build:main": "tsc -p tsconfig.main.json",
 		"build:renderer": "vite build",
-		"build": "node scripts/sync-skills.mjs && node scripts/fetch-ocr-data.mjs && npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
+		"build": "node scripts/sync-skills.mjs && node scripts/fetch-ocr-data.mjs && node scripts/sync-bimcraft.mjs && npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
 		"typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
 		"test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\"",
 		"start": "npm run build && electron .",
@@ -34,6 +34,7 @@
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.2.1",
+		"bootstrap-icons": "1.13.2",
 		"electron": "43.8.7",
 		"electron-builder": "26.18.0",
 		"tsx": "4.23.15",

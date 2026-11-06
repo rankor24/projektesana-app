@@ -1,0 +1,13 @@
+{
+  "id": "projektesana",
+  "name": "Projektēšanas App",
+  "version": "2.0.0",
+  "apps": ["bimcraft"],
+  "api": "1.1",
+  "license": "Apache-2.0",
+  "entry": "./main.js",
+  "permissions": ["files"],
+  "description": "The bridge between BimCraft and Projektēšanas App: opens the model the app hands it, reports the selection for the agent's Fokuss, selects and highlights what the app asks, and captures sketches as instructions to the agent.",
+  "author": "SIA BŪVDIZAINS",
+  "default": "on"
+}

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { Source } from "../../core/model";
 import { call } from "../bridge";
 import { SourcePdf } from "../preview/SourcePdf";
+import { IfcView } from "../preview/IfcView";
 import { TextView } from "../preview/TextView";
 import { useUi } from "../state";
 import { Empty, useLoad } from "../ui";
@@ -18,6 +19,12 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	const sources = useLoad<Source[]>(() => (projectId ? call("sources.list", projectId) : Promise.resolve([])), [projectId]);
 	if (!projectId) return <section className="preview"><Empty title="nav projekta">Atver vai pievieno projektu panelī Projekts.</Empty></section>;
 	if (!preview) return <section className="preview"><Empty title="nav avota">Izvēlies avotu panelī Avoti.</Empty></section>;
+	if (preview.kind === "ifc")
+		return (
+			<section className="preview">
+				<IfcView key={preview.path} name={preview.label} load={() => (preview.path.startsWith("rev:") ? call("revisions.ifc", projectId, preview.path.slice(4)) : call("models.bytes", projectId, preview.path))} />
+			</section>
+		);
 	if (preview.kind !== "source") return <section className="preview">{extra?.(preview.kind) ?? <Empty title="no data">Skats nav pieejams.</Empty>}</section>;
 	const s = sources.data?.find((x) => x.id === preview.sourceId);
 	if (!s) return <section className="preview"><Empty title="nav avota">{sources.loading ? "…" : "Avots vairs nav sarakstā."}</Empty></section>;

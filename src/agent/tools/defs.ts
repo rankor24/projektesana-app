@@ -8,6 +8,7 @@ import type { Level } from "./levels.js";
 import { sourceTools } from "./sources.js";
 import { requirementTools } from "./requirements.js";
 import { checkTools } from "./checks.js";
+import { viewerTools } from "./viewer.js";
 
 
 export const focusTools: ToolDef[] = [
@@ -21,7 +22,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...requirementTools, ...checkTools];
+	return [...focusTools, ...sourceTools, ...requirementTools, ...checkTools, ...viewerTools];
 }
 
 /** Level table of the app's own tools, for the gate. */

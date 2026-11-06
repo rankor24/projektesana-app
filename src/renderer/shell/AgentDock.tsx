@@ -6,7 +6,17 @@ import type { RunEvent } from "../../shared/types";
 import { call, errText, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { useLoad } from "../ui";
-import { windows } from "../windows";
+import { windows, type PanelId } from "../windows";
+import { readUi, type UiInstruction } from "../../shared/ui-instruction";
+import { bimcraft } from "../preview/IfcView";
+
+/** Carries out what an agent tool asked the window to do. */
+function runUi(u: UiInstruction | null) {
+	if (!u) return;
+	if (u.open_panel) windows.open(u.open_panel.name as PanelId, u.open_panel.filter);
+	if (u.show_source) ui.show({ kind: "source", sourceId: u.show_source.sourceId, page: u.show_source.page });
+	if (u.highlight) bimcraft.send({ pj: 1, type: "highlight", guids: u.highlight.guids });
+}
 
 type Line =
 	| { kind: "user"; text: string }
@@ -39,6 +49,7 @@ export function AgentDock() {
 			on("agent.event", ({ runId: id, event }) => {
 				if (id !== runRef.current) return;
 				setLines((ls) => apply(ls, event));
+				if (event.type === "tool_result" && event.ok) runUi(readUi(event.output));
 				if (event.type === "done" || event.type === "error") {
 					runRef.current = null;
 					setRunId(null);
