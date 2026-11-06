@@ -1,993 +1,1141 @@
 [
- {
-  "id": "law-9-1-new",
-  "act": "Būvniecības likums",
-  "actId": "258572",
-  "article": "9.1 panta trešā daļa",
-  "url": "https://likumi.lv/ta/id/258572",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "work": "new_build"
-  },
-  "requires": [
-   "Atkāpju saskaņošana (jauna būvniecība)"
-  ],
-  "section": null,
-  "quote": "(3) Jaunas būvniecības gadījumā atkāpes no būvnormatīvu tehniskajām prasībām (izņemot atkāpes no mehāniskās stiprības un stabilitātes prasībām) ir pieļaujamas pēc paredzēto alternatīvo tehnisko risinājumu saskaņošanas vai pamatošanas šā panta septītajā vai devītajā daļā noteiktajā kārtībā, ja ar alternatīvajiem tehniskajiem risinājumiem tiek nodrošināta šā likuma 9. panta prasību izpilde. Jaunas būvniecības gadījumā alternatīvo risinājumu saskaņošanu vai pamatošanu var aizstāt ar atkāpju (izņemot atkāpes no mehāniskās stiprības un stabilitātes, ugunsdrošības un higiēnas, tai skaitā nekaitīguma, prasībām) saskaņošanu vai pamatošanu, neparedzot alternatīvos tehniskos risinājumus, ja jaunā būvniecība ir paredzēta pilsētas vai ciema vēsturiskās apbūves teritorijā vai vēsturiskajā centrā un atkāpes ir pamatotas ar kultūrvēsturisko vērtību saglabāšanu vai būvnormatīvu tehniskās prasības tehniski vai funkcionāli nav iespējams ievērot."
- },
- {
-  "id": "law-9-1-reconstr",
-  "act": "Būvniecības likums",
-  "actId": "258572",
-  "article": "9.1 panta ceturtā daļa",
-  "url": "https://likumi.lv/ta/id/258572",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "work": "reconstruction"
-  },
-  "requires": [
-   "Atkāpju saskaņošana (pārbūve, atjaunošana)"
-  ],
-  "section": null,
-  "quote": "(4) Atjaunošanas, pārbūves vai restaurācijas gadījumā atkāpes no būvnormatīvu tehniskajām prasībām (izņemot atkāpes no mehāniskās stiprības un stabilitātes prasībām) ir pieļaujamas pēc paredzēto atkāpju saskaņošanas vai pamatošanas šā panta septītajā vai devītajā daļā noteiktajā kārtībā, neparedzot alternatīvos tehniskos risinājumus, ciktāl tās nepasliktina būves esošo stāvokli, ja:"
- },
- {
-  "id": "hol-list",
-  "act": "Svētku dienu likums",
-  "actId": "72608",
-  "article": "1. punkts (svētku dienu saraksts)",
-  "url": "https://likumi.lv/ta/id/72608",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11
-  },
-  "requires": [],
-  "section": null,
-  "quote": "1. Noteikt par svētku dienām:"
- },
- {
-  "id": "hol-easter",
-  "act": "Svētku dienu likums",
-  "actId": "72608",
-  "article": "1. punkts (Lieldienas)",
-  "url": "https://likumi.lv/ta/id/72608",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11
-  },
-  "requires": [],
-  "section": null,
-  "quote": "Lielo Piektdienu un Pirmās Lieldienas un otro Lieldienu dienu;"
- },
- {
-  "id": "hol-christmas",
-  "act": "Svētku dienu likums",
-  "actId": "72608",
-  "article": "1. punkts (Ziemassvētki)",
-  "url": "https://likumi.lv/ta/id/72608",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11
-  },
-  "requires": [],
-  "section": null,
-  "quote": "24., 25. un 26. decembri — Ziemassvētkus (ziemas saulgriežus);"
- },
- {
-  "id": "hol-move",
-  "act": "Svētku dienu likums",
-  "actId": "72608",
-  "article": "1. punkts (pārcelšana uz nākamo darbdienu)",
-  "url": "https://likumi.lv/ta/id/72608",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11
-  },
-  "requires": [],
-  "section": null,
-  "quote": "Ja svētku dienas — 4.maijs, Vispārējo latviešu Dziesmu un deju svētku noslēguma diena un 18.novembris — iekrīt sestdienā vai svētdienā, nākamo darbdienu nosaka par brīvdienu."
- },
- {
-  "id": "grp1-single-storey",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.1.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 1
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.1.1. vienstāva ēkas ar apbūves laukumu līdz 60 m2, tai skaitā mazēkas;"
- },
- {
-  "id": "grp3-floors-above",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.1. ēkas, kurām ir vairāk nekā seši virszemes stāvi;"
- },
- {
-  "id": "grp3-floors-below",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.2. ēkas, kurām ir vairāk nekā viens apakšzemes stāvs;"
- },
- {
-  "id": "grp3-public-area",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.3. publiskas ēkas ar kopējo platību, lielāku par 1000 m2;"
- },
- {
-  "id": "grp3-prod-fire",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.4. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.4. rūpnieciskās ražošanas ēkas ar paredzēto ugunsslodzi, lielāku par 600 MJ/m2;"
- },
- {
-  "id": "grp3-prod-area",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.5. rūpnieciskās ražošanas ēkas ar kopējo platību, lielāku par 2000 m2;"
- },
- {
-  "id": "grp3-wh-fire",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.6. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.6. noliktavas ēkas ar paredzēto ugunsslodzi, lielāku par 600 MJ/m2;"
- },
- {
-  "id": "grp3-wh-area",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.2.7. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 3
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.2.7. noliktavas ēkas ar kopējo platību, lielāku par 2000 m2;"
- },
- {
-  "id": "grp2-rest",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "1. pielikums 2.3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "group": 2
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2.3. otrās grupas ēkas ir ēkas, kuras nav minētas šā pielikuma 2.1. un 2.2. apakšpunktā."
- },
- {
-  "id": "pu-stages",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "18.3 punkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {},
-  "requires": [
-   "PU: būvprojekta stadijas"
-  ],
-  "section": null,
-  "quote": "18.3 Projektēšanas uzdevumā norāda projektējamās būves vai tās daļas lietošanas veidu, būvprojekta stadijas, norādot izstrādājamās stadijas izmantojamību būvniecības ieceres īstenošanas procesā, lietošanas (ekspluatācijas) noteikumus (tai skaitā plānoto ražošanas procesu, ja tāds ir paredzēts) un sadalījumu kārtās (ja nepieciešams), kā arī prasības būvei, tās inženiertehniskajam un citam aprīkojumam, apdarei un energoefektivitātei. Projektēšanas uzdevumā var ietvert arī citu informāciju, kas attiecas uz būvniecības ieceri (piemēram, nepieciešamās atkāpes no būvnormatīvos noteiktajām prasībām vai alternatīvie risinājumi)."
- },
- {
-  "id": "stage-koncepcija",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "26.11. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "koncepcija"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "26.11. projekta koncepcija – stadija, kurā plānošanas risinājumu līmenī tiek izstrādāta un shematiski attēlota objekta novietne, plāni, telpiskie apjomi, kas dod priekšstatu par objekta veidolu un izvietojumu būvniecībai paredzētajā teritorijā (zemesgabalā);"
- },
- {
-  "id": "stage-skice",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "26.12. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "skice"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "26.12. skiču projekts – stadija, kad objekta projekts ir izstrādāts pakāpē, kas ļauj gūt plašu ieskatu par projekta plānojuma aspektiem, funkcionālo organizāciju, telpisko uzbūvi un izskatu, kā arī dod iespēju veikt stratēģisku izvēli starp funkcionālajām koncepcijām un paredzamajiem (plānotajiem) risinājumiem;"
- },
- {
-  "id": "stage-tehniskais",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "26.13. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "26.13. tehniskais projekts – stadija, kurā projekts ir izstrādāts tādā detalizācijas pakāpē, ka var noteikt būvdarbu izmaksas un izvēlēties būvdarbu veicēju, kā arī veikt būvekspertīzi;"
- },
- {
-  "id": "stage-darba",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "26.14. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "26.14. darba projekts – stadija, kurā projekts izstrādāts tādā tehniskās detalizācijas līmenī, kas nodrošina būvdarbu veikšanu un iekārtu izgatavošanu un to uzstādīšanu."
- },
- {
-  "id": "tr-request",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "27. punkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {},
-  "requires": [
-   "Tehniskie noteikumi: pieprasīt"
-  ],
-  "section": null,
-  "quote": "27. Pirms būvprojekta izstrādāšanas būvniecības ierosinātājam ir tiesības saņemt institūciju tehniskos un īpašos noteikumus, ja attiecīgās jomas normatīvie akti nosaka šādu tehnisko noteikumu nepieciešamību vai tie nepieciešami būvniecības ieceres realizācijai. Tehniskos un īpašos noteikumus var saņemt arī projektēšanas nosacījumu izpildes laikā vai atbilstoši nepieciešamībai, veicot būvprojekta izmaiņas. Atsevišķi tehniskie noteikumi par inženierbūvju šķērsošanu vai darbiem šo inženierbūvju aizsargjoslās nav nepieciešami, ja būvniecības informācijas sistēmā ir publicētas tehnisko noteikumu izdevēja tipveida prasības tā inženierbūvju šķērsošanai vai darbībām tā inženierbūvju aizsargjoslā. Ja izmanto būvniecības informācijas sistēmā publicētās tipveida prasības inženierbūvju šķērsošanai vai darbībām tā inženierbūvju aizsargjoslā, būvprojekts jāsaskaņo ar inženierbūves īpašnieku vai tiesisko valdītāju atbilstoši Aizsargjoslu likumam un inženierbūvju šķērsošanas gadījumā līdz objekta nodošanai ekspluatācijā jāsaņem inženierbūves īpašnieka atzinums par veikto būvdarbu atbilstību būvprojektā saskaņotajiem tehniskajiem risinājumiem."
- },
- {
-  "id": "tr-deadline-state",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "27.1 punkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11,
-   "issuer": "state_municipal"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "27.1 Valsts un pašvaldību institūcijas tehniskos un īpašos noteikumus būvniecības ieceres īstenošanai izdod 11 darbdienu laikā pēc pieprasījuma saņemšanas. Tehnisko un īpašo noteikumu izdošanas termiņu var pagarināt saskaņā ar Administratīvā procesa likumu."
- },
- {
-  "id": "tr-deadline-network",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "27.2 punkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 11,
-   "issuer": "network_owner"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "27.2 Inženierbūvju īpašnieki vai tiesiskie valdītāji tehniskos noteikumus būvniecības ieceres īstenošanai izdod bez maksas 11 darbdienu laikā pēc pieprasījuma saņemšanas. Sniedzot pamatojumu, tehnisko noteikumu izdošanas termiņu var pagarināt līdz 20 darbdienām."
- },
- {
-  "id": "mark-design-conditions",
-  "act": "MK 500",
-  "actId": "269069",
-  "article": "12.24. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269069",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "deadlineWorkdays": 15
-  },
-  "requires": [],
-  "section": null,
-  "quote": "12.24. 15 darbdienu laikā – atzīmi par projektēšanas nosacījumu izpildi;"
- },
- {
-  "id": "proc-notice-simplified-renov",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.1 1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "pazinojums",
-   "work": "simplified_renovation"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.1 1. otrās vai trešās grupas ēkas vai tās daļas vienkāršota atjaunošana, izņemot šo noteikumu 7. punktā minēto gadījumu un kultūras pieminekļus – ēkas;"
- },
- {
-  "id": "proc-notice-demolish",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.1 3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "pazinojums",
-   "work": "demolition",
-   "group": 1
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.1 3. pirmās grupas ēkas nojaukšana vai otrās grupas palīgēkas vai lauksaimniecības nedzīvojamās ēkas nojaukšana;"
- },
- {
-  "id": "proc-notice-new-g1",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.1 4. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "pazinojums",
-   "work": "new_build",
-   "group": 1
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.1 4. pirmās grupas dzīvojamās ēkas, palīgēkas vai lauksaimniecības nedzīvojamās ēkas un mazēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. punktā minēto gadījumu un būvniecību valsts aizsargājamo kultūras pieminekļu teritorijās;"
- },
- {
-  "id": "proc-notice-reconstr-g2",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.1 6. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "pazinojums",
-   "work": "reconstruction",
-   "group": 2
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.1 6. otrās grupas viena vai divu dzīvokļu dzīvojamās ēkas atjaunošana vai pārbūve, nemainot būvapjomu vai lietošanas veidu, izņemot šo noteikumu 7. punktā minēto gadījumu un kultūras pieminekļus – ēkas."
- },
- {
-  "id": "proc-expl-new-small",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "new_build"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 1. pirmās grupas ēkas vai otrās grupas viena dzīvokļa dzīvojamās ēkas ar kopējo platību, kas nepārsniedz 200 m2, palīgēkas vai lauksaimniecības nedzīvojamās ēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
- },
- {
-  "id": "proc-expl-seasonal",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "new_build",
-   "seasonal": true
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 2. otrās vai trešās grupas sezonas ēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. punktā minēto gadījumu;"
- },
- {
-  "id": "proc-expl-g1-reconstr",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 4. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "reconstruction",
-   "group": 1
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 4. pirmās grupas ēkas vai tās daļas pārbūve, nepārsniedzot vispārīgajos būvnoteikumos noteiktos apjoma rādītājus pirmajai grupai, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
- },
- {
-  "id": "proc-expl-demolish",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "demolition"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 5. otrās vai trešās grupas ēkas nojaukšana, izņemot šo noteikumu 7.1 punktā minēto gadījumu;"
- },
- {
-  "id": "proc-expl-renov",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 6. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "renovation"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 6. pirmās, otrās vai trešās grupas ēkas vai tās daļas atjaunošana, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
- },
- {
-  "id": "proc-expl-use-change",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 7. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "use_change"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 7. pirmās, otrās vai trešās grupas ēkas vai telpu grupas lietošanas veida maiņa bez pārbūves;"
- },
- {
-  "id": "proc-expl-simple-reconstr",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.2 8. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "paskaidrojuma_raksts",
-   "work": "simple_reconstruction"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.2 8. pirmās, otrās vai trešās grupas ēkas vai tās daļas vienkāršota pārbūve, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
- },
- {
-  "id": "proc-mbp",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "7.3 punkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "procedure": "mbp_buvatlauja"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "7.3 Pārējos gadījumos, kas nav minēti šo noteikumu 7., 7.1 un 7.2 punktā, izstrādā būvprojektu minimālā sastāvā un saņem būvatļauju."
- },
- {
-  "id": "mbp-intro",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26. punkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "26. Ierosinot būvniecību šo noteikumu 7.3 punktā minētajā gadījumā (izņemot šo noteikumu 26.1 punktā minēto gadījumu), institūcijā, kura pilda būvvaldes funkcijas, iesniedz būvniecības iesniegumu, kuram pievieno šo noteikumu 8. punktā minētos dokumentus un būvprojektu minimālā sastāvā, kurā ietver šādus dokumentus un informāciju:"
- },
- {
-  "id": "mbp-description",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp"
-  },
-  "requires": [
-   "Skaidrojošs apraksts"
-  ],
-  "section": "VISPARIGA",
-  "quote": "26.1. skaidrojošu aprakstu par plānoto būvniecības ieceri, tai skaitā par vides pieejamības risinājumiem, ja ēkai atbilstoši normatīvajiem aktiem nodrošināma vides pieejamība, un plānoto lietotāju skaitu, kas vienlaikus var atrasties ēkā;"
- },
- {
-  "id": "mbp-gp",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp"
-  },
-  "requires": [
-   "Ģenerālplāns"
-  ],
-  "section": "GP",
-  "quote": "26.2. ģenerālplānu, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums). Restaurācijas vai pārbūves gadījumā ģenerālplānu izstrādā, ja plānotie būvdarbi paredz apjoma vai ārējo tīklu izmaiņas vai ja ēkas fasādē veicamās izmaiņas skar blakus esošo nekustamo īpašumu īpašnieku tiesiskās intereses;"
- },
- {
-  "id": "mbp-plans",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.4.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp",
-   "work": "new_build"
-  },
-  "requires": [
-   "Stāvu plāni ar telpu eksplikāciju",
-   "Jumta plāns"
-  ],
-  "section": "AR",
-  "quote": "26.4.1. ēkas stāvu un jumta plānus, kuros norādīta telpu vai telpu grupu eksplikācija (otrās grupas viena vai divu dzīvokļu dzīvojamām ēkām un palīgēkām – bez telpu vai telpu grupu eksplikācijas);"
- },
- {
-  "id": "mbp-facades",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.4.2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp",
-   "work": "new_build"
-  },
-  "requires": [
-   "Fasādes ar augstuma atzīmēm"
-  ],
-  "section": "AR",
-  "quote": "26.4.2. ēkas fasādes ar augstuma atzīmēm;"
- },
- {
-  "id": "mbp-sections",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.4.3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp",
-   "work": "new_build"
-  },
-  "requires": [
-   "Raksturīgie griezumi ar augstuma atzīmēm"
-  ],
-  "section": "AR",
-  "quote": "26.4.3. raksturīgos griezumus ar augstuma atzīmēm;"
- },
- {
-  "id": "mbp-reconstr",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "26.6. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp",
-   "work": "reconstruction"
-  },
-  "requires": [
-   "Grafiskais dokuments ar plānotajām izmaiņām"
-  ],
-  "section": "AR",
-  "quote": "26.6. ja paredzēta pārbūve, papildus ietver grafisko dokumentu, kurā parādītas ēkas vai tās daļas plānotās izmaiņas ēkas fasādē, ēkas vai tās daļas stāvos un telpās un ēkas vai telpu grupas lietošanas veidi;"
- },
- {
-  "id": "bp2-gp",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "71.1.5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 2
-  },
-  "requires": [
-   "Ģenerālplāns"
-  ],
-  "section": "GP",
-  "quote": "71.1.5. ģenerālplāns, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums);"
- },
- {
-  "id": "bp2-ar-plans",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "71.2.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 2
-  },
-  "requires": [
-   "Jumta un stāvu plāni ar telpu eksplikāciju"
-  ],
-  "section": "AR",
-  "quote": "71.2.1. ēkas jumta un stāvu plāni ar telpu izmēriem un sadalījumu telpu grupās un telpu grupu lietošanas veidu eksplikāciju, bet visām telpu grupām ar publisku funkciju un viena vai divu dzīvokļu dzīvojamām ēkām, ja tajās ir telpas ar atšķirīgu izmantošanu atbilstoši būvju klasifikācijai, papildus – telpu nosaukumi;"
- },
- {
-  "id": "bp2-ar-facades",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "71.2.2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 2
-  },
-  "requires": [
-   "Fasādes ar augstuma atzīmēm"
-  ],
-  "section": "AR",
-  "quote": "71.2.2. ēkas fasādes ar augstuma atzīmēm;"
- },
- {
-  "id": "bp2-ar-sections",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "71.2.3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 2
-  },
-  "requires": [
-   "Raksturīgie griezumi ar augstuma atzīmēm"
-  ],
-  "section": "AR",
-  "quote": "71.2.3. raksturīgie griezumi ar augstuma atzīmēm;"
- },
- {
-  "id": "bp2-ar-spec",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "71.2.5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 2
-  },
-  "requires": [
-   "Būvizstrādājumu specifikācijas (AR)"
-  ],
-  "section": "AR",
-  "quote": "71.2.5. būvizstrādājumu specifikācijas;"
- },
- {
-  "id": "bp3-gp",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.1.5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Ģenerālplāns"
-  ],
-  "section": "GP",
-  "quote": "72.1.5. ģenerālplāns, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums);"
- },
- {
-  "id": "bp3-ar-plans",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.2.1. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Jumta un stāvu plāni ar telpu eksplikāciju"
-  ],
-  "section": "AR",
-  "quote": "72.2.1. ēkas jumta un stāvu plāni ar telpu izmēriem un sadalījumu telpu grupās un telpu grupu lietošanas veidu eksplikāciju, bet visām telpu grupām ar publisku funkciju un viena vai divu dzīvokļu dzīvojamām ēkām, ja tajās ir telpas ar atšķirīgu izmantošanu atbilstoši būvju klasifikācijai, papildus – telpu nosaukumi;"
- },
- {
-  "id": "bp3-ar-facades",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.2.2. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Fasādes ar augstuma atzīmēm un apdares norādēm"
-  ],
-  "section": "AR",
-  "quote": "72.2.2. ēkas fasādes ar būtisko elementu (tai skaitā dekoratīvo) augstuma atzīmēm, norādēm par fasādes apdares būvizstrādājumiem, dekoratīvajām un konstruktīvajām detaļām, tehnisko iekārtu un atvērumu izvietojumu;"
- },
- {
-  "id": "bp3-ar-sections",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.2.3. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Raksturīgie griezumi ar augstuma atzīmēm un konstrukciju slāņiem"
-  ],
-  "section": "AR",
-  "quote": "72.2.3. raksturīgie griezumi ar esošā un (vai) plānotā reljefa, grīdu un galveno būvelementu – piemēram, ārsienu ailu, parapetu, dzegu, koru, jumtu, kāpņu laukumu – augstuma atzīmēm, augstumu izmēriem no grīdas līdz griestiem, tai skaitā iekārtiem griestiem, ārējo norobežojošo un starpstāvu pārsegumu konstrukciju slāņu aprakstu;"
- },
- {
-  "id": "bp3-ar-spec",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.2.5. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Būvizstrādājumu specifikācijas (AR)"
-  ],
-  "section": "AR",
-  "quote": "72.2.5. būvizstrādājumu specifikācijas;"
- },
- {
-  "id": "bp3-ar-details",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "72.2.6. apakšpunkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3
-  },
-  "requires": [
-   "Galveno detaļu mezgli"
-  ],
-  "section": "AR",
-  "quote": "72.2.6. galveno ēkas detaļu mezglu risinājumi (cokola, jumta, pārsegumu, logu, durvju pieslēgumu mezgli);"
- },
- {
-  "id": "bim-model",
-  "act": "MK 529",
-  "actId": "269164",
-  "article": "74.1 punkts",
-  "url": "https://likumi.lv/ta/id/269164",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "bp",
-   "group": 3,
-   "publicFunded": true,
-   "work": "new_build"
-  },
-  "requires": [
-   "Būves informācijas modelis (atvērtais formāts) caur BIS"
-  ],
-  "section": null,
-  "quote": "74.1 No publisko tiesību juridiskās personas līdzekļiem finansētu trešās grupas ēku jaunai būvniecībai arhitektūras daļā, būvkonstrukciju daļā un ēkai nepieciešamo attiecīgo inženiertīklu daļās ietver attiecīgās būvprojekta daļas būves informācijas modeli, kas ir digitāls trīsdimensiju būves attēlojums un satur informāciju (piemēram, tekstuālu, grafisku) par būves fizikālajām un tehniskajām īpašībām un funkcijām. Būves informācijas modeli būvniecības informācijas sistēmā pievieno atvērto datņu formātā, izmantojot būvniecības informācijas sistēmas funkcionalitāti būves informācijas modeļa pievienošanai."
- },
- {
-  "id": "lbn202-scope",
-  "act": "LBN 202-18",
-  "actId": "301303",
-  "article": "2. punkts",
-  "url": "https://likumi.lv/ta/id/301303",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "skice"
-  },
-  "requires": [],
-  "section": null,
-  "quote": "2. Būvnormatīvs neattiecas uz būvniecības ieceres metu, citiem pirmsprojekta grafiskajiem vai teksta dokumentiem un demonstrācijas materiāliem. Būvnormatīva prasības neattiecas uz būvniecības ieceres dokumentācijas noformēšanu autoceļu un ielu būvniecības jomā, piemērojot standartu LVS 190-1:2000 \"Ceļu projektēšanas noteikumi – 1. daļa: Ceļa trase\" vai standartu LVS 190-6:2009 \"Ceļu projektēšanas noteikumi. 6. daļa: Autoceļu un tiltu būvprojektu saturs un noformēšana\"."
- },
- {
-  "id": "lbn202-pdf",
-  "act": "LBN 202-18",
-  "actId": "301303",
-  "article": "3. punkts",
-  "url": "https://likumi.lv/ta/id/301303",
-  "read_on": "2026-11-03",
-  "valid_from": null,
-  "valid_to": null,
-  "applies_when": {
-   "stage": "mbp"
-  },
-  "requires": [
-   "PDF formāts BIS"
-  ],
-  "section": null,
-  "quote": "3. Būvniecības ieceres dokumentācijas teksta un grafiskās datnes būvniecības informācijas sistēmā augšupielādē portatīvā dokumenta (PDF) formātā, bet ģenerālplānu, savietoto demontējamo ārējo inženiertīklu plānu, savietoto projektējamo ārējo inženiertīklu plānu, situācijas plānu, novietnes plānu un novietojuma plānu augšupielādē PDF vai GeoPDF formātā. Būvniecības likuma 14. panta 1.4 daļā noteiktajā vienotajā būves reģistrācijas procesā ģenerālplāna, kā arī ēkas stāva plāna un telpu grupas plāna grafisko datni dublē vektordatu (DWG vai DGN) formātā. Citas datnes var augšupielādēt būvniecības informācijas sistēmā jebkurā formātā."
- }
+	{
+		"id": "law-9-1-new",
+		"act": "Būvniecības likums",
+		"actId": "258572",
+		"article": "9.1 panta trešā daļa",
+		"url": "https://likumi.lv/ta/id/258572",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"work": "new_build"
+		},
+		"requires": [
+			"Atkāpju saskaņošana (jauna būvniecība)"
+		],
+		"section": null,
+		"quote": "(3) Jaunas būvniecības gadījumā atkāpes no būvnormatīvu tehniskajām prasībām (izņemot atkāpes no mehāniskās stiprības un stabilitātes prasībām) ir pieļaujamas pēc paredzēto alternatīvo tehnisko risinājumu saskaņošanas vai pamatošanas šā panta septītajā vai devītajā daļā noteiktajā kārtībā, ja ar alternatīvajiem tehniskajiem risinājumiem tiek nodrošināta šā likuma 9. panta prasību izpilde. Jaunas būvniecības gadījumā alternatīvo risinājumu saskaņošanu vai pamatošanu var aizstāt ar atkāpju (izņemot atkāpes no mehāniskās stiprības un stabilitātes, ugunsdrošības un higiēnas, tai skaitā nekaitīguma, prasībām) saskaņošanu vai pamatošanu, neparedzot alternatīvos tehniskos risinājumus, ja jaunā būvniecība ir paredzēta pilsētas vai ciema vēsturiskās apbūves teritorijā vai vēsturiskajā centrā un atkāpes ir pamatotas ar kultūrvēsturisko vērtību saglabāšanu vai būvnormatīvu tehniskās prasības tehniski vai funkcionāli nav iespējams ievērot."
+	},
+	{
+		"id": "law-9-1-reconstr",
+		"act": "Būvniecības likums",
+		"actId": "258572",
+		"article": "9.1 panta ceturtā daļa",
+		"url": "https://likumi.lv/ta/id/258572",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"work": "reconstruction"
+		},
+		"requires": [
+			"Atkāpju saskaņošana (pārbūve, atjaunošana)"
+		],
+		"section": null,
+		"quote": "(4) Atjaunošanas, pārbūves vai restaurācijas gadījumā atkāpes no būvnormatīvu tehniskajām prasībām (izņemot atkāpes no mehāniskās stiprības un stabilitātes prasībām) ir pieļaujamas pēc paredzēto atkāpju saskaņošanas vai pamatošanas šā panta septītajā vai devītajā daļā noteiktajā kārtībā, neparedzot alternatīvos tehniskos risinājumus, ciktāl tās nepasliktina būves esošo stāvokli, ja:"
+	},
+	{
+		"id": "hol-list",
+		"act": "Svētku dienu likums",
+		"actId": "72608",
+		"article": "1. punkts (svētku dienu saraksts)",
+		"url": "https://likumi.lv/ta/id/72608",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11
+		},
+		"requires": [],
+		"section": null,
+		"quote": "1. Noteikt par svētku dienām:"
+	},
+	{
+		"id": "hol-easter",
+		"act": "Svētku dienu likums",
+		"actId": "72608",
+		"article": "1. punkts (Lieldienas)",
+		"url": "https://likumi.lv/ta/id/72608",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11
+		},
+		"requires": [],
+		"section": null,
+		"quote": "Lielo Piektdienu un Pirmās Lieldienas un otro Lieldienu dienu;"
+	},
+	{
+		"id": "hol-christmas",
+		"act": "Svētku dienu likums",
+		"actId": "72608",
+		"article": "1. punkts (Ziemassvētki)",
+		"url": "https://likumi.lv/ta/id/72608",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11
+		},
+		"requires": [],
+		"section": null,
+		"quote": "24., 25. un 26. decembri — Ziemassvētkus (ziemas saulgriežus);"
+	},
+	{
+		"id": "hol-move",
+		"act": "Svētku dienu likums",
+		"actId": "72608",
+		"article": "1. punkts (pārcelšana uz nākamo darbdienu)",
+		"url": "https://likumi.lv/ta/id/72608",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11
+		},
+		"requires": [],
+		"section": null,
+		"quote": "Ja svētku dienas — 4.maijs, Vispārējo latviešu Dziesmu un deju svētku noslēguma diena un 18.novembris — iekrīt sestdienā vai svētdienā, nākamo darbdienu nosaka par brīvdienu."
+	},
+	{
+		"id": "grp1-single-storey",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.1.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 1
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.1.1. vienstāva ēkas ar apbūves laukumu līdz 60 m2, tai skaitā mazēkas;"
+	},
+	{
+		"id": "grp3-floors-above",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.1. ēkas, kurām ir vairāk nekā seši virszemes stāvi;"
+	},
+	{
+		"id": "grp3-floors-below",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.2. ēkas, kurām ir vairāk nekā viens apakšzemes stāvs;"
+	},
+	{
+		"id": "grp3-public-area",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.3. publiskas ēkas ar kopējo platību, lielāku par 1000 m2;"
+	},
+	{
+		"id": "grp3-prod-fire",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.4. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.4. rūpnieciskās ražošanas ēkas ar paredzēto ugunsslodzi, lielāku par 600 MJ/m2;"
+	},
+	{
+		"id": "grp3-prod-area",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.5. rūpnieciskās ražošanas ēkas ar kopējo platību, lielāku par 2000 m2;"
+	},
+	{
+		"id": "grp3-wh-fire",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.6. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.6. noliktavas ēkas ar paredzēto ugunsslodzi, lielāku par 600 MJ/m2;"
+	},
+	{
+		"id": "grp3-wh-area",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.2.7. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 3
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.2.7. noliktavas ēkas ar kopējo platību, lielāku par 2000 m2;"
+	},
+	{
+		"id": "grp2-rest",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "1. pielikums 2.3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"group": 2
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2.3. otrās grupas ēkas ir ēkas, kuras nav minētas šā pielikuma 2.1. un 2.2. apakšpunktā."
+	},
+	{
+		"id": "pu-stages",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "18.3 punkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {},
+		"requires": [
+			"PU: būvprojekta stadijas"
+		],
+		"section": null,
+		"quote": "18.3 Projektēšanas uzdevumā norāda projektējamās būves vai tās daļas lietošanas veidu, būvprojekta stadijas, norādot izstrādājamās stadijas izmantojamību būvniecības ieceres īstenošanas procesā, lietošanas (ekspluatācijas) noteikumus (tai skaitā plānoto ražošanas procesu, ja tāds ir paredzēts) un sadalījumu kārtās (ja nepieciešams), kā arī prasības būvei, tās inženiertehniskajam un citam aprīkojumam, apdarei un energoefektivitātei. Projektēšanas uzdevumā var ietvert arī citu informāciju, kas attiecas uz būvniecības ieceri (piemēram, nepieciešamās atkāpes no būvnormatīvos noteiktajām prasībām vai alternatīvie risinājumi)."
+	},
+	{
+		"id": "stage-koncepcija",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "26.11. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "koncepcija"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "26.11. projekta koncepcija – stadija, kurā plānošanas risinājumu līmenī tiek izstrādāta un shematiski attēlota objekta novietne, plāni, telpiskie apjomi, kas dod priekšstatu par objekta veidolu un izvietojumu būvniecībai paredzētajā teritorijā (zemesgabalā);"
+	},
+	{
+		"id": "stage-skice",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "26.12. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "skice"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "26.12. skiču projekts – stadija, kad objekta projekts ir izstrādāts pakāpē, kas ļauj gūt plašu ieskatu par projekta plānojuma aspektiem, funkcionālo organizāciju, telpisko uzbūvi un izskatu, kā arī dod iespēju veikt stratēģisku izvēli starp funkcionālajām koncepcijām un paredzamajiem (plānotajiem) risinājumiem;"
+	},
+	{
+		"id": "stage-tehniskais",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "26.13. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "26.13. tehniskais projekts – stadija, kurā projekts ir izstrādāts tādā detalizācijas pakāpē, ka var noteikt būvdarbu izmaksas un izvēlēties būvdarbu veicēju, kā arī veikt būvekspertīzi;"
+	},
+	{
+		"id": "stage-darba",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "26.14. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "26.14. darba projekts – stadija, kurā projekts izstrādāts tādā tehniskās detalizācijas līmenī, kas nodrošina būvdarbu veikšanu un iekārtu izgatavošanu un to uzstādīšanu."
+	},
+	{
+		"id": "tr-request",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "27. punkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {},
+		"requires": [
+			"Tehniskie noteikumi: pieprasīt"
+		],
+		"section": null,
+		"quote": "27. Pirms būvprojekta izstrādāšanas būvniecības ierosinātājam ir tiesības saņemt institūciju tehniskos un īpašos noteikumus, ja attiecīgās jomas normatīvie akti nosaka šādu tehnisko noteikumu nepieciešamību vai tie nepieciešami būvniecības ieceres realizācijai. Tehniskos un īpašos noteikumus var saņemt arī projektēšanas nosacījumu izpildes laikā vai atbilstoši nepieciešamībai, veicot būvprojekta izmaiņas. Atsevišķi tehniskie noteikumi par inženierbūvju šķērsošanu vai darbiem šo inženierbūvju aizsargjoslās nav nepieciešami, ja būvniecības informācijas sistēmā ir publicētas tehnisko noteikumu izdevēja tipveida prasības tā inženierbūvju šķērsošanai vai darbībām tā inženierbūvju aizsargjoslā. Ja izmanto būvniecības informācijas sistēmā publicētās tipveida prasības inženierbūvju šķērsošanai vai darbībām tā inženierbūvju aizsargjoslā, būvprojekts jāsaskaņo ar inženierbūves īpašnieku vai tiesisko valdītāju atbilstoši Aizsargjoslu likumam un inženierbūvju šķērsošanas gadījumā līdz objekta nodošanai ekspluatācijā jāsaņem inženierbūves īpašnieka atzinums par veikto būvdarbu atbilstību būvprojektā saskaņotajiem tehniskajiem risinājumiem."
+	},
+	{
+		"id": "tr-deadline-state",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "27.1 punkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11,
+			"issuer": "state_municipal"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "27.1 Valsts un pašvaldību institūcijas tehniskos un īpašos noteikumus būvniecības ieceres īstenošanai izdod 11 darbdienu laikā pēc pieprasījuma saņemšanas. Tehnisko un īpašo noteikumu izdošanas termiņu var pagarināt saskaņā ar Administratīvā procesa likumu."
+	},
+	{
+		"id": "tr-deadline-network",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "27.2 punkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 11,
+			"issuer": "network_owner"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "27.2 Inženierbūvju īpašnieki vai tiesiskie valdītāji tehniskos noteikumus būvniecības ieceres īstenošanai izdod bez maksas 11 darbdienu laikā pēc pieprasījuma saņemšanas. Sniedzot pamatojumu, tehnisko noteikumu izdošanas termiņu var pagarināt līdz 20 darbdienām."
+	},
+	{
+		"id": "mark-design-conditions",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "12.24. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"deadlineWorkdays": 15
+		},
+		"requires": [],
+		"section": null,
+		"quote": "12.24. 15 darbdienu laikā – atzīmi par projektēšanas nosacījumu izpildi;"
+	},
+	{
+		"id": "proc-notice-simplified-renov",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.1 1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "pazinojums",
+			"work": "simplified_renovation"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.1 1. otrās vai trešās grupas ēkas vai tās daļas vienkāršota atjaunošana, izņemot šo noteikumu 7. punktā minēto gadījumu un kultūras pieminekļus – ēkas;"
+	},
+	{
+		"id": "proc-notice-demolish",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.1 3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "pazinojums",
+			"work": "demolition",
+			"group": 1
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.1 3. pirmās grupas ēkas nojaukšana vai otrās grupas palīgēkas vai lauksaimniecības nedzīvojamās ēkas nojaukšana;"
+	},
+	{
+		"id": "proc-notice-new-g1",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.1 4. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "pazinojums",
+			"work": "new_build",
+			"group": 1
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.1 4. pirmās grupas dzīvojamās ēkas, palīgēkas vai lauksaimniecības nedzīvojamās ēkas un mazēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. punktā minēto gadījumu un būvniecību valsts aizsargājamo kultūras pieminekļu teritorijās;"
+	},
+	{
+		"id": "proc-notice-reconstr-g2",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.1 6. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "pazinojums",
+			"work": "reconstruction",
+			"group": 2
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.1 6. otrās grupas viena vai divu dzīvokļu dzīvojamās ēkas atjaunošana vai pārbūve, nemainot būvapjomu vai lietošanas veidu, izņemot šo noteikumu 7. punktā minēto gadījumu un kultūras pieminekļus – ēkas."
+	},
+	{
+		"id": "proc-expl-new-small",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "new_build"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 1. pirmās grupas ēkas vai otrās grupas viena dzīvokļa dzīvojamās ēkas ar kopējo platību, kas nepārsniedz 200 m2, palīgēkas vai lauksaimniecības nedzīvojamās ēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-expl-seasonal",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "new_build",
+			"seasonal": true
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 2. otrās vai trešās grupas sezonas ēkas jauna būvniecība vai novietošana, izņemot šo noteikumu 7. punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-expl-g1-reconstr",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 4. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "reconstruction",
+			"group": 1
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 4. pirmās grupas ēkas vai tās daļas pārbūve, nepārsniedzot vispārīgajos būvnoteikumos noteiktos apjoma rādītājus pirmajai grupai, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-expl-demolish",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "demolition"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 5. otrās vai trešās grupas ēkas nojaukšana, izņemot šo noteikumu 7.1 punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-expl-renov",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 6. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "renovation"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 6. pirmās, otrās vai trešās grupas ēkas vai tās daļas atjaunošana, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-expl-use-change",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 7. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "use_change"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 7. pirmās, otrās vai trešās grupas ēkas vai telpu grupas lietošanas veida maiņa bez pārbūves;"
+	},
+	{
+		"id": "proc-expl-simple-reconstr",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.2 8. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "paskaidrojuma_raksts",
+			"work": "simple_reconstruction"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.2 8. pirmās, otrās vai trešās grupas ēkas vai tās daļas vienkāršota pārbūve, izņemot šo noteikumu 7. un 7.1 punktā minēto gadījumu;"
+	},
+	{
+		"id": "proc-mbp",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "7.3 punkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"procedure": "mbp_buvatlauja"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "7.3 Pārējos gadījumos, kas nav minēti šo noteikumu 7., 7.1 un 7.2 punktā, izstrādā būvprojektu minimālā sastāvā un saņem būvatļauju."
+	},
+	{
+		"id": "mbp-intro",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26. punkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "26. Ierosinot būvniecību šo noteikumu 7.3 punktā minētajā gadījumā (izņemot šo noteikumu 26.1 punktā minēto gadījumu), institūcijā, kura pilda būvvaldes funkcijas, iesniedz būvniecības iesniegumu, kuram pievieno šo noteikumu 8. punktā minētos dokumentus un būvprojektu minimālā sastāvā, kurā ietver šādus dokumentus un informāciju:"
+	},
+	{
+		"id": "mbp-description",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp"
+		},
+		"requires": [
+			"Skaidrojošs apraksts"
+		],
+		"section": "VISPARIGA",
+		"quote": "26.1. skaidrojošu aprakstu par plānoto būvniecības ieceri, tai skaitā par vides pieejamības risinājumiem, ja ēkai atbilstoši normatīvajiem aktiem nodrošināma vides pieejamība, un plānoto lietotāju skaitu, kas vienlaikus var atrasties ēkā;"
+	},
+	{
+		"id": "mbp-gp",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp"
+		},
+		"requires": [
+			"Ģenerālplāns"
+		],
+		"section": "GP",
+		"quote": "26.2. ģenerālplānu, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums). Restaurācijas vai pārbūves gadījumā ģenerālplānu izstrādā, ja plānotie būvdarbi paredz apjoma vai ārējo tīklu izmaiņas vai ja ēkas fasādē veicamās izmaiņas skar blakus esošo nekustamo īpašumu īpašnieku tiesiskās intereses;"
+	},
+	{
+		"id": "mbp-plans",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.4.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp",
+			"work": "new_build"
+		},
+		"requires": [
+			"Stāvu plāni ar telpu eksplikāciju",
+			"Jumta plāns"
+		],
+		"section": "AR",
+		"quote": "26.4.1. ēkas stāvu un jumta plānus, kuros norādīta telpu vai telpu grupu eksplikācija (otrās grupas viena vai divu dzīvokļu dzīvojamām ēkām un palīgēkām – bez telpu vai telpu grupu eksplikācijas);"
+	},
+	{
+		"id": "mbp-facades",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.4.2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp",
+			"work": "new_build"
+		},
+		"requires": [
+			"Fasādes ar augstuma atzīmēm"
+		],
+		"section": "AR",
+		"quote": "26.4.2. ēkas fasādes ar augstuma atzīmēm;"
+	},
+	{
+		"id": "mbp-sections",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.4.3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp",
+			"work": "new_build"
+		},
+		"requires": [
+			"Raksturīgie griezumi ar augstuma atzīmēm"
+		],
+		"section": "AR",
+		"quote": "26.4.3. raksturīgos griezumus ar augstuma atzīmēm;"
+	},
+	{
+		"id": "mbp-reconstr",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "26.6. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp",
+			"work": "reconstruction"
+		},
+		"requires": [
+			"Grafiskais dokuments ar plānotajām izmaiņām"
+		],
+		"section": "AR",
+		"quote": "26.6. ja paredzēta pārbūve, papildus ietver grafisko dokumentu, kurā parādītas ēkas vai tās daļas plānotās izmaiņas ēkas fasādē, ēkas vai tās daļas stāvos un telpās un ēkas vai telpu grupas lietošanas veidi;"
+	},
+	{
+		"id": "bp2-gp",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "71.1.5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 2
+		},
+		"requires": [
+			"Ģenerālplāns"
+		],
+		"section": "GP",
+		"quote": "71.1.5. ģenerālplāns, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums);"
+	},
+	{
+		"id": "bp2-ar-plans",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "71.2.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 2
+		},
+		"requires": [
+			"Jumta un stāvu plāni ar telpu eksplikāciju"
+		],
+		"section": "AR",
+		"quote": "71.2.1. ēkas jumta un stāvu plāni ar telpu izmēriem un sadalījumu telpu grupās un telpu grupu lietošanas veidu eksplikāciju, bet visām telpu grupām ar publisku funkciju un viena vai divu dzīvokļu dzīvojamām ēkām, ja tajās ir telpas ar atšķirīgu izmantošanu atbilstoši būvju klasifikācijai, papildus – telpu nosaukumi;"
+	},
+	{
+		"id": "bp2-ar-facades",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "71.2.2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 2
+		},
+		"requires": [
+			"Fasādes ar augstuma atzīmēm"
+		],
+		"section": "AR",
+		"quote": "71.2.2. ēkas fasādes ar augstuma atzīmēm;"
+	},
+	{
+		"id": "bp2-ar-sections",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "71.2.3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 2
+		},
+		"requires": [
+			"Raksturīgie griezumi ar augstuma atzīmēm"
+		],
+		"section": "AR",
+		"quote": "71.2.3. raksturīgie griezumi ar augstuma atzīmēm;"
+	},
+	{
+		"id": "bp2-ar-spec",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "71.2.5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 2
+		},
+		"requires": [
+			"Būvizstrādājumu specifikācijas (AR)"
+		],
+		"section": "AR",
+		"quote": "71.2.5. būvizstrādājumu specifikācijas;"
+	},
+	{
+		"id": "bp3-gp",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.1.5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Ģenerālplāns"
+		],
+		"section": "GP",
+		"quote": "72.1.5. ģenerālplāns, kurā norādīta projektējamo būvju eksplikācija ar kadastra apzīmējumu (ja tāds ir piešķirts), galveno lietošanas veidu un apbūves rādītājiem (piemēram, apbūves laukums, būvtilpums), kā arī galvenie apbūvi raksturojošie parametri (piemēram, apbūves blīvums, apbūves intensitāte, brīvās zaļās teritorijas rādītājs, apbūves augstums);"
+	},
+	{
+		"id": "bp3-ar-plans",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.2.1. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Jumta un stāvu plāni ar telpu eksplikāciju"
+		],
+		"section": "AR",
+		"quote": "72.2.1. ēkas jumta un stāvu plāni ar telpu izmēriem un sadalījumu telpu grupās un telpu grupu lietošanas veidu eksplikāciju, bet visām telpu grupām ar publisku funkciju un viena vai divu dzīvokļu dzīvojamām ēkām, ja tajās ir telpas ar atšķirīgu izmantošanu atbilstoši būvju klasifikācijai, papildus – telpu nosaukumi;"
+	},
+	{
+		"id": "bp3-ar-facades",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.2.2. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Fasādes ar augstuma atzīmēm un apdares norādēm"
+		],
+		"section": "AR",
+		"quote": "72.2.2. ēkas fasādes ar būtisko elementu (tai skaitā dekoratīvo) augstuma atzīmēm, norādēm par fasādes apdares būvizstrādājumiem, dekoratīvajām un konstruktīvajām detaļām, tehnisko iekārtu un atvērumu izvietojumu;"
+	},
+	{
+		"id": "bp3-ar-sections",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.2.3. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Raksturīgie griezumi ar augstuma atzīmēm un konstrukciju slāņiem"
+		],
+		"section": "AR",
+		"quote": "72.2.3. raksturīgie griezumi ar esošā un (vai) plānotā reljefa, grīdu un galveno būvelementu – piemēram, ārsienu ailu, parapetu, dzegu, koru, jumtu, kāpņu laukumu – augstuma atzīmēm, augstumu izmēriem no grīdas līdz griestiem, tai skaitā iekārtiem griestiem, ārējo norobežojošo un starpstāvu pārsegumu konstrukciju slāņu aprakstu;"
+	},
+	{
+		"id": "bp3-ar-spec",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.2.5. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Būvizstrādājumu specifikācijas (AR)"
+		],
+		"section": "AR",
+		"quote": "72.2.5. būvizstrādājumu specifikācijas;"
+	},
+	{
+		"id": "bp3-ar-details",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "72.2.6. apakšpunkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3
+		},
+		"requires": [
+			"Galveno detaļu mezgli"
+		],
+		"section": "AR",
+		"quote": "72.2.6. galveno ēkas detaļu mezglu risinājumi (cokola, jumta, pārsegumu, logu, durvju pieslēgumu mezgli);"
+	},
+	{
+		"id": "bim-model",
+		"act": "MK 529",
+		"actId": "269164",
+		"article": "74.1 punkts",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "bp",
+			"group": 3,
+			"publicFunded": true,
+			"work": "new_build"
+		},
+		"requires": [
+			"Būves informācijas modelis (atvērtais formāts) caur BIS"
+		],
+		"section": null,
+		"quote": "74.1 No publisko tiesību juridiskās personas līdzekļiem finansētu trešās grupas ēku jaunai būvniecībai arhitektūras daļā, būvkonstrukciju daļā un ēkai nepieciešamo attiecīgo inženiertīklu daļās ietver attiecīgās būvprojekta daļas būves informācijas modeli, kas ir digitāls trīsdimensiju būves attēlojums un satur informāciju (piemēram, tekstuālu, grafisku) par būves fizikālajām un tehniskajām īpašībām un funkcijām. Būves informācijas modeli būvniecības informācijas sistēmā pievieno atvērto datņu formātā, izmantojot būvniecības informācijas sistēmas funkcionalitāti būves informācijas modeļa pievienošanai."
+	},
+	{
+		"id": "lbn202-scope",
+		"act": "LBN 202-18",
+		"actId": "301303",
+		"article": "2. punkts",
+		"url": "https://likumi.lv/ta/id/301303",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "skice"
+		},
+		"requires": [],
+		"section": null,
+		"quote": "2. Būvnormatīvs neattiecas uz būvniecības ieceres metu, citiem pirmsprojekta grafiskajiem vai teksta dokumentiem un demonstrācijas materiāliem. Būvnormatīva prasības neattiecas uz būvniecības ieceres dokumentācijas noformēšanu autoceļu un ielu būvniecības jomā, piemērojot standartu LVS 190-1:2000 \"Ceļu projektēšanas noteikumi – 1. daļa: Ceļa trase\" vai standartu LVS 190-6:2009 \"Ceļu projektēšanas noteikumi. 6. daļa: Autoceļu un tiltu būvprojektu saturs un noformēšana\"."
+	},
+	{
+		"id": "lbn202-pdf",
+		"act": "LBN 202-18",
+		"actId": "301303",
+		"article": "3. punkts",
+		"url": "https://likumi.lv/ta/id/301303",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {
+			"stage": "mbp"
+		},
+		"requires": [
+			"PDF formāts BIS"
+		],
+		"section": null,
+		"quote": "3. Būvniecības ieceres dokumentācijas teksta un grafiskās datnes būvniecības informācijas sistēmā augšupielādē portatīvā dokumenta (PDF) formātā, bet ģenerālplānu, savietoto demontējamo ārējo inženiertīklu plānu, savietoto projektējamo ārējo inženiertīklu plānu, situācijas plānu, novietnes plānu un novietojuma plānu augšupielādē PDF vai GeoPDF formātā. Būvniecības likuma 14. panta 1.4 daļā noteiktajā vienotajā būves reģistrācijas procesā ģenerālplāna, kā arī ēkas stāva plāna un telpu grupas plāna grafisko datni dublē vektordatu (DWG vai DGN) formātā. Citas datnes var augšupielādēt būvniecības informācijas sistēmā jebkurā formātā."
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "mbp-stages",
+		"article": "26.3. apakšpunkts",
+		"applies_when": {
+			"stage": "mbp",
+			"phased": true
+		},
+		"requires": [
+			"Sadalījums pa būves kārtām (robežas, secība)"
+		],
+		"section": "VISPARIGA",
+		"quote": "26.3. konkrētu sadalījumu pa būves kārtām, norādot kārtu robežas un secību, ja paredzēta būvniecība vai nodošana ekspluatācijā pa būves kārtām;"
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-tech",
+		"article": "73. punkts",
+		"applies_when": {
+			"stage": "bp",
+			"production": true
+		},
+		"requires": [
+			"Tehnoloģiskā daļa (shēmas, iekārtu izvietojums, tehniskie noteikumi)"
+		],
+		"section": "VISPARIGA",
+		"quote": "73. Otrās vai trešās grupas rūpnieciskās ražošanas (arī ēdināšanas uzņēmumiem) un noliktavu ēkām, ja zināms konkrēts ražošanas process, papildus būvprojektā ietver tehnoloģisko daļu:"
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-econ",
+		"article": "74. punkts",
+		"applies_when": {
+			"stage": "bp",
+			"publicFunded": true
+		},
+		"requires": [
+			"Ekonomiskā daļa: kopsavilkums, būvdarbu apjoms, tāme"
+		],
+		"section": "VISPARIGA",
+		"quote": "74. No publisko tiesību juridiskās personas, Eiropas Savienības politiku instrumentu vai citas ārvalstu finanšu palīdzības līdzekļiem finansētajām otrās vai trešās grupas ēkām papildus būvprojektā ietver ekonomisko daļu:"
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-energy",
+		"article": "75.1 punkts",
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [
+			"Ēkas energoefektivitātes novērtējums BIS"
+		],
+		"section": "VISPARIGA",
+		"quote": "75.1 Ēkas energoefektivitātes novērtējumu aprēķinātajai energoefektivitātei, kas veikts saskaņā ar normatīvajiem aktiem ēku energoefektivitātes jomā, pievieno būvniecības informācijas sistēmā."
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-dop",
+		"article": "76. punkts",
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [
+			"Darbu organizēšanas projekts (DOP)"
+		],
+		"section": "VISPARIGA",
+		"quote": "76. Darbu organizēšanas projektu izstrādā visam būvdarbu apjomam (būvprojektam), un tam ir šādas sastāvdaļas:"
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-dop-gp",
+		"article": "77. punkts",
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [
+			"DOP: būvdarbu ģenerālplāns"
+		],
+		"section": "VISPARIGA",
+		"quote": "77. Būvdarbu ģenerālplānu izstrādā atsevišķiem būvniecības posmiem. Būvdarbu ģenerālplānos atzīmē jaunceļamās, esošās un nojaucamās ēkas, pagaidu būves, pastāvīgos un pagaidu ceļus, būvmašīnu, arī montāžas celtņu izvietojumu un pārvietošanās ceļus, reperus un piesaistu asu nostiprināšanas vietas, inženiertīklus (elektroenerģijas, ūdens, siltuma un citu resursu inženiertīklus), norādot pastāvīgās un pagaidu pieslēgšanās vietas, kā arī būvizstrādājumu un konstrukciju nokraušanas laukumus."
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-dop-desc",
+		"article": "79. punkts",
+		"applies_when": {
+			"stage": "bp"
+		},
+		"requires": [
+			"DOP: skaidrojošais apraksts"
+		],
+		"section": "VISPARIGA",
+		"quote": "79. Skaidrojošajā aprakstā raksturo vispārējos un speciālos būvniecības apstākļus, iespējamos sarežģījumus un īpatnības, pamato būvdarbu kopējo ilgumu, kā arī norāda svarīgākos vides aizsardzības pasākumus un ieteikumus kvalitātes kontroles nodrošināšanai būvlaukumā."
+	},
+	{
+		"act": "MK 529",
+		"actId": "269164",
+		"url": "https://likumi.lv/ta/id/269164",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"id": "bp-dop-inuse",
+		"article": "80. punkts",
+		"applies_when": {
+			"stage": "bp",
+			"inUse": true
+		},
+		"requires": [
+			"DOP: pārbūve bez pamatfunkciju pārtraukšanas (80.1–80.5)"
+		],
+		"section": "VISPARIGA",
+		"quote": "80. Izstrādājot būvprojektus ekspluatācijā esošo ēku pārbūvei, kas jāveic, nepārtraucot to pamatfunkciju izpildi, darbu organizēšanas projektā papildus norāda:"
+	}
 ]
