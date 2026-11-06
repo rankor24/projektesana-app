@@ -16,6 +16,7 @@ import { Avoti } from "./panels/Avoti";
 import { Telpas } from "./panels/Telpas";
 import { Prasibas } from "./panels/Prasibas";
 import { Atmina } from "./panels/Atmina";
+import { Nodevumi } from "./panels/Nodevumi";
 import { PANEL_TITLE, useWindows, windows, type PanelId } from "./windows";
 
 function Panel({ id, filter }: { id: PanelId; filter?: string }) {
@@ -25,6 +26,7 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "telpas") return <Telpas />;
 	if (id === "prasibas") return <Prasibas filter={filter} />;
 	if (id === "atmina") return <Atmina />;
+	if (id === "nodevumi") return <Nodevumi filter={filter} />;
 	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
 }
 

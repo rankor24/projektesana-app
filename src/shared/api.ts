@@ -117,6 +117,22 @@ export interface RoomCompareRow {
 	diffs: { kind: string; no: string; message: string; inventory?: { floor: string; no: string; name: string; area: number }; model?: { number: string; name: string; level: string; area: number; id: string }; delta?: number; tolerance?: number }[];
 }
 
+export interface ClockRow {
+	id: string;
+	kind: "tn" | "approval";
+	issuer: string;
+	issuerKind: "state_municipal" | "network_owner";
+	requestedOn: string;
+	extended: boolean;
+	receivedOn: string | null;
+	label: string;
+	due: string;
+	daysLeft: number;
+	point: string;
+	caveat: string;
+	state: "gaida" | "kavē" | "saņemts";
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
@@ -148,6 +164,13 @@ export interface ApiSpec {
 	"rooms.table": (id: string) => InventoryTable[];
 	"facts.list": (id: string) => Fact[];
 	"deliveries.list": (id: string) => Delivery[];
+	"deliveries.prepare": (id: string, deliveryId: string) => { open: number };
+	"deliveries.markSent": (id: string, deliveryId: string) => void;
+	"deliveries.setPlanned": (id: string, deliveryId: string, date: string | null) => void;
+	"deliveries.addPlanned": (id: string, kind: string, date: string) => void;
+	"timeline.clocks": (id: string) => ClockRow[];
+	"clocks.add": (id: string, c: { kind: "tn" | "approval"; issuer: string; issuerKind: "state_municipal" | "network_owner"; requestedOn: string }) => void;
+	"clocks.update": (id: string, clockId: string, patch: { receivedOn?: string | null; extended?: boolean }) => void;
 	"requirements.list": (id: string) => Requirement[];
 	"requirements.notes": (id: string) => string[];
 	"requirements.decide": (id: string, reqId: string, state: "confirmed" | "rejected") => void;
@@ -210,6 +233,13 @@ export const API_NAMES = [
 	"rooms.table",
 	"facts.list",
 	"deliveries.list",
+	"deliveries.prepare",
+	"deliveries.markSent",
+	"deliveries.setPlanned",
+	"deliveries.addPlanned",
+	"timeline.clocks",
+	"clocks.add",
+	"clocks.update",
 	"requirements.list",
 	"requirements.notes",
 	"requirements.decide",

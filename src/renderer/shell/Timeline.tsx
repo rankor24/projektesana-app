@@ -2,6 +2,7 @@
 // deliveries (4.1) and clocks (4.2) when they exist. BP spans Tehniskais to Detalizācijas (design doc, answer 1).
 import { BIM_STAGES, type BimStage, type Delivery, type Fact } from "../../core/model";
 import { STAGES_OF } from "../../core/stages";
+import type { ClockRow } from "../../shared/api";
 import { call } from "../bridge";
 import { useUi } from "../state";
 import { useLoad } from "../ui";
@@ -11,6 +12,7 @@ export function Timeline() {
 	const { projectId } = useUi();
 	const facts = useLoad<Fact[]>(() => (projectId ? call("facts.list", projectId) : Promise.resolve([])), [projectId]);
 	const deliveries = useLoad<Delivery[]>(() => (projectId ? call("deliveries.list", projectId) : Promise.resolve([])), [projectId]);
+	const clocks = useLoad<ClockRow[]>(() => (projectId ? call("timeline.clocks", projectId) : Promise.resolve([])), [projectId]);
 	const stagesInContract = new Set(
 		(facts.data ?? [])
 			.filter((f) => f.key === "profile.stagesInContract" && f.state !== "rejected")
@@ -31,6 +33,15 @@ export function Timeline() {
 								{d.submittedDate ? ` ${d.submittedDate.slice(2).replace(/-/g, "")}` : d.plannedDate ? ` ⏱ ${d.plannedDate.slice(5)}` : ""}
 							</button>
 						))}
+					{s === "Skice" &&
+						(clocks.data ?? [])
+							.filter((c) => c.state !== "saņemts")
+							.map((c) => (
+								<button key={c.id} className={`chip ${c.state === "kavē" ? "bad" : ""}`} title={`${c.label} · pieprasīts ${c.requestedOn} · termiņš ${c.due} (${c.point})
+${c.caveat}`} onClick={() => windows.open("nodevumi")}>
+									⏱ {c.issuer.slice(0, 14)} {c.daysLeft >= 0 ? `${c.daysLeft} d.d.` : `kavē ${-c.daysLeft}`}
+								</button>
+							))}
 				</div>
 			))}
 		</div>

@@ -58,10 +58,13 @@ export function completenessOf(reqs: Requirement[], d: Delivery): { results: Che
 export const completenessCheck: Check = {
 	id: "completeness",
 	title: "Nodevuma pilnība pēc likuma",
-	on: ["delivery", "requirements", "facts"],
+	on: ["delivery", "requirements", "facts", "sources"],
 	run: ({ store, deliveryId }) => {
 		const reqs = store.read("requirements");
-		const deliveries = store.read("deliveries").filter((d) => (deliveryId ? d.id === deliveryId : !d.sent) && (d.kind === "MBP" || d.kind === "BP") && d.items.length);
+		const all = store.read("deliveries").filter((d) => (d.kind === "MBP" || d.kind === "BP") && d.items.length);
+		// a named delivery (being prepared) — else the newest unsent delivery of each kind; older ones are history
+		const newest = (k: string) => all.filter((d) => d.kind === k && !d.sent).sort((a, b) => (b.submittedDate ?? "9999").localeCompare(a.submittedDate ?? "9999"))[0];
+		const deliveries = deliveryId ? all.filter((d) => d.id === deliveryId) : [newest("MBP"), newest("BP")].filter((d): d is NonNullable<typeof d> => !!d);
 		const out = { results: [] as CheckResult[], met: [] as string[] };
 		for (const d of deliveries) {
 			const r = completenessOf(reqs, d);

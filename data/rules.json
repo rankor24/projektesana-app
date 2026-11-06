@@ -1137,5 +1137,19 @@
 		],
 		"section": "VISPARIGA",
 		"quote": "80. Izstrādājot būvprojektus ekspluatācijā esošo ēku pārbūvei, kas jāveic, nepārtraucot to pamatfunkciju izpildi, darbu organizēšanas projektā papildus norāda:"
+	},
+	{
+		"id": "approval-deadline",
+		"act": "MK 500",
+		"actId": "269069",
+		"article": "27.3 punkts",
+		"url": "https://likumi.lv/ta/id/269069",
+		"read_on": "2026-11-03",
+		"valid_from": null,
+		"valid_to": null,
+		"applies_when": {},
+		"requires": [],
+		"section": "PROCESS",
+		"quote": "27.3 Valsts un pašvaldību institūcijas un inženierbūves īpašnieki vai tiesiskie valdītāji saskaņo būvprojektu vai sniedz atteikumu to saskaņot saprātīgā termiņā, bet ne ilgāk kā 15 darbdienu laikā pēc būvprojekta saņemšanas. Sniedzot pamatojumu, būvprojekta saskaņošanas termiņu var pagarināt līdz 20 darbdienām. Valsts vides dienests ir tiesīgs izdarīt būvniecības informācijas sistēmā atzīmi, ka nepiedalīsies būvprojekta saskaņošanā, ja būvprojekta risinājumi no vides aizsardzības viedokļa nerada nozīmīgus riskus."
 	}
 ]

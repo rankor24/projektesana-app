@@ -5,6 +5,7 @@ import type { Source, Version } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
 import type { ScanProgress } from "../shared/api.js";
 import { mergeSources } from "./dedupe.js";
+import { mergeDeliveries, plannedFromSchedule, readDeliveries } from "./deliveries.js";
 import { expandContainers } from "./edoc-sources.js";
 import { hashFiles } from "./hash.js";
 import { scanInputs, type ScanResult } from "./scan.js";
@@ -66,6 +67,13 @@ export async function scanProject(store: ProjectStore, progress: (p: Omit<ScanPr
 
 	sources = await readAllText(store, sources, progress, hooks);
 	store.write("sources", sources, { kind: "sources.text", by: "app" });
+
+	// deliveries from 1.4_Nodevumi; planned dates from the BIP grafiks / schedule sources
+	const planned = sources
+		.filter((s) => s.kind === "document" && (s.role === "Grafiks" || s.role === "BIP / BIM prasības"))
+		.flatMap((s) => plannedFromSchedule(store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "")?.pages ?? []));
+	const deliveries = mergeDeliveries(store.read("deliveries"), await readDeliveries(root), planned);
+	if (JSON.stringify(deliveries) !== JSON.stringify(store.read("deliveries"))) store.write("deliveries", deliveries, { kind: "deliveries.read", by: "app", data: { count: deliveries.length } });
 
 	const summary: ScanSummary = {
 		at: new Date().toISOString(),
