@@ -48,6 +48,33 @@ const SURVEY_MIN_IMAGES = 20;
 const MAX_FILES = 20_000;
 const MAX_DEPTH = 10;
 
+/** A folder with at least this many files, almost none of them readable documents, is aggregated into one row. */
+const BULK_MIN = 100;
+const DOC_EXT = new Set([".pdf", ".docx", ".doc", ".xlsx", ".xls", ".msg", ".rtf", ".txt", ".edoc", ".asice", ".dwg", ".dxf", ".ifc", ".rvt"]);
+
+/** Inside the photo folder, surveys are named by date and who made them: "261013_AA", "261023_Dalux". */
+export function datedFolderOf(name: string): string | null | undefined {
+	const m = /^(\d{6}|\d{8})(?![\d])/.exec(name.trim());
+	if (!m) return undefined;
+	const d = m[1];
+	const iso = d.length === 6 ? `20${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4, 6)}` : `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+	const t = Date.parse(`${iso}T00:00:00Z`);
+	return Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== iso ? null : iso;
+}
+
+/** File and readable-document counts by name only (no stat), stopping at 5 000. */
+async function quickCount(p: string, depth = 0, acc = { files: 0, docs: 0 }): Promise<{ files: number; docs: number }> {
+	if (depth > MAX_DEPTH || acc.files > 5000) return acc;
+	for (const d of await readdir(p, { withFileTypes: true })) {
+		if (d.isDirectory()) await quickCount(join(p, d.name), depth + 1, acc);
+		else if (d.isFile()) {
+			acc.files++;
+			if (DOC_EXT.has(extname(d.name).toLowerCase())) acc.docs++;
+		}
+	}
+	return acc;
+}
+
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 async function dirs(p: string) {
@@ -140,9 +167,15 @@ export async function scanInputs(root: string, confirmed: Record<string, string>
 					res.skipped.archive += c.n;
 					continue;
 				}
-				const sd = surveyDateOf(d.name);
+				const sd = surveyDateOf(d.name) ?? (inSurveyFolder ? datedFolderOf(d.name) : undefined);
 				if (sd !== undefined) {
 					n += await addSurvey(full, folderKey, sd);
+					continue;
+				}
+				// a bulk folder (a 360° viewer export, a photo dump) is one row, decided by names only before any stat
+				const q = await quickCount(full);
+				if (q.files >= BULK_MIN && q.docs / q.files < 0.05) {
+					n += await addSurvey(full, folderKey, datedFolderOf(d.name) ?? null);
 					continue;
 				}
 				n += await walk(full, folderKey, inSurveyFolder, depth + 1);

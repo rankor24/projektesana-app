@@ -172,3 +172,24 @@ test("1.3 a big binary gets a fast identity (size + edges), not a full read; two
 	assert.equal(proposeFreeRole("1.1.09_punktu makoni"), "Punktu mākonis");
 	assert.equal(proposeFreeRole("1.1.11_grafiks"), "Grafiks");
 });
+
+test("1.2 real-layout photo folder: YYMMDD_<who> surveys and a 360° viewer export are one row each", async () => {
+	const { mkdirSync } = await import("node:fs");
+	const { PNG } = await import("./project-tree.ts");
+	const t = makeProjectTree(tmp(), { photos: 3 });
+	const ff = join(t.inputs, "1.1.03_FF");
+	for (const who of ["261013_AA", "261023_Dalux"]) {
+		mkdirSync(join(ff, who), { recursive: true });
+		for (let i = 0; i < 5; i++) writeFileSync(join(ff, who, `IMG_${i}.jpg`), PNG);
+	}
+	const pano = join(ff, "Foto_vietu_plans", "Interior_360", "pano");
+	mkdirSync(pano, { recursive: true });
+	for (let i = 0; i < 120; i++) writeFileSync(join(pano, `p${i}.js`), "var x=1");
+	writeFileSync(join(ff, "Foto_vietu_plans", "index.html"), "<html></html>");
+	const r = await scanInputs(t.root);
+	const { basename } = await import("node:path");
+	const dates = r.surveys.map((s) => [basename(s.rel), s.date]);
+	assert.deepEqual(dates.filter((d) => d[0] !== "Foto_vietu_plans").sort(), [["261001_FF", "2026-10-01"], ["261013_AA", "2026-10-13"], ["261023_Dalux", "2026-10-23"]]);
+	assert.ok(r.surveys.some((s) => s.rel.endsWith("Foto_vietu_plans")), "viewer export aggregated");
+	assert.ok(!r.files.some((f) => f.rel.endsWith(".js")), "no .js file registered");
+});
