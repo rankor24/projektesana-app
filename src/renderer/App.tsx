@@ -12,11 +12,13 @@ import { ui, useUi } from "./state";
 import { Empty } from "./ui";
 import { Iestatijumi } from "./panels/Iestatijumi";
 import { Projekts } from "./panels/Projekts";
+import { Avoti } from "./panels/Avoti";
 import { PANEL_TITLE, useWindows, windows, type PanelId } from "./windows";
 
-function Panel({ id }: { id: PanelId; filter?: string }) {
+function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
 	if (id === "projekts") return <Projekts />;
+	if (id === "avoti") return <Avoti filter={filter} />;
 	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
 }
 
