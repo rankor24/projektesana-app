@@ -13,6 +13,7 @@ export interface RunSummary {
 	results: number;
 	open: number;
 	failedChecks: { id: string; error: string }[];
+	skipped: { id: string; reason: string }[];
 }
 
 export async function runChecks(store: ProjectStore, event: CheckEvent, opts: Omit<CheckContext, "store"> & { only?: string[] }): Promise<RunSummary> {
@@ -22,11 +23,16 @@ export async function runChecks(store: ProjectStore, event: CheckEvent, opts: Om
 	const produced = new Map<string, { checkId: string; r: CheckResult }>();
 	const ran: string[] = [];
 	const failedChecks: RunSummary["failedChecks"] = [];
+	const skipped: RunSummary["skipped"] = [];
 	const met = new Set<string>();
 	const failedReq = new Set<string>();
 	for (const c of list) {
 		try {
 			const out = await c.run(ctx);
+			if (out.skipped) {
+				skipped.push({ id: c.id, reason: out.skipped });
+				continue;
+			}
 			ran.push(c.id);
 			for (const r of out.results) {
 				produced.set(`${c.id}:${r.key}`, { checkId: c.id, r });
@@ -71,7 +77,7 @@ export async function runChecks(store: ProjectStore, event: CheckEvent, opts: Om
 		});
 		if (JSON.stringify(upd) !== JSON.stringify(reqs)) store.write("requirements", upd, { kind: "requirements.status", by: "app", data: { met: met.size, failed: failedReq.size } });
 	}
-	return { ran, results: produced.size, open: next.filter((f) => f.state === "open").length, failedChecks };
+	return { ran, results: produced.size, open: next.filter((f) => f.state === "open").length, failedChecks, skipped };
 }
 
 /** Boris keeps a finding open no longer: the reason is recorded; the check is not changed. */

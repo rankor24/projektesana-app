@@ -101,6 +101,15 @@ export interface RevitRoomRow {
 	phase: string;
 }
 
+export interface RoomCompareRow {
+	state: "ok" | "nav savienojuma" | "nav inventarizācijas";
+	message?: string;
+	inventory: number;
+	model: number;
+	matched: number;
+	diffs: { kind: string; no: string; message: string; inventory?: { floor: string; no: string; name: string; area: number }; model?: { number: string; name: string; level: string; area: number; id: string }; delta?: number; tolerance?: number }[];
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
@@ -144,6 +153,8 @@ export interface ApiSpec {
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	"revit.status": () => RevitStatusRow;
 	"revit.rooms": () => RevitRoomRow[];
+	"revit.select": (elementIds: number[]) => void;
+	"rooms.compare": (id: string) => RoomCompareRow;
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
 	"facts.setByBoris": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
@@ -195,6 +206,8 @@ export const API_NAMES = [
 	"notes.write",
 	"revit.status",
 	"revit.rooms",
+	"revit.select",
+	"rooms.compare",
 	"facts.decide",
 	"facts.setByBoris",
 	"rooms.exportXlsx",

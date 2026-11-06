@@ -96,3 +96,13 @@ test("session: without a credential the status is nav pieslēgts", async () => {
 	assert.equal(st.reason, "nav pieslēgts");
 	assert.equal(st.revit, "nav konfigurēts");
 });
+
+test("gate: operate_element with Delete is blocked even inside a confirmed batch", async () => {
+	const lv = makeLevelOf({ operate_element: "confirm" });
+	const g = new Gate(lv, async () => true);
+	const m = { role: "assistant", content: [{ type: "toolCall", id: "a", name: "operate_element", arguments: {} }] } as never;
+	const del = { assistantMessage: m, toolCall: { type: "toolCall", id: "a", name: "operate_element", arguments: { data: { action: "Delete", elementIds: [1] } } }, args: { data: { action: "Delete", elementIds: [1] } }, context: {} } as never;
+	const sel = { assistantMessage: m, toolCall: { type: "toolCall", id: "a", name: "operate_element", arguments: { data: { action: "Select", elementIds: [1] } } }, args: { data: { action: "Select", elementIds: [1] } }, context: {} } as never;
+	assert.equal((await g.before(del))?.block, true);
+	assert.equal(await g.before(sel), undefined);
+});

@@ -1,13 +1,12 @@
 // Inventory room tables (1.10) and their Excel export. Read from every property document whose text has a room table.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import { checkWrite } from "../../core/guard.js";
 import type { Registry } from "../../core/registry.js";
-import type { ProjectStore } from "../../core/store.js";
 import type { Handlers } from "../../shared/api.js";
-import { pdfLayoutLines, roomsFromLines, totalsCheck, type RoomTable } from "../../sources/extract/kl.js";
+import { totalsCheck } from "../../sources/extract/kl.js";
+import { inventoryTables, roomTableOf } from "../../sources/room-table.js";
 import { writeXlsx } from "../../sources/export/xlsx.js";
-import { sourceBytes } from "./projects.js";
 
 export interface RoomsDeps {
 	registry: Registry;
@@ -16,36 +15,11 @@ export interface RoomsDeps {
 
 type K = "rooms.table" | "rooms.exportXlsx";
 
-const ROOM_ROLES = new Set(["Īpašuma dokumenti", "Iepirkums", "PU", "Info no pasūtītāja", "Cits"]);
-
-/** The room table of one source; PDFs from text positions, everything else from the cached text lines. */
-export async function roomTableOf(store: ProjectStore, sourceId: string): Promise<RoomTable | null> {
-	const s = store.read("sources").find((x) => x.id === sourceId);
-	const v = s?.versions[s.versions.length - 1];
-	if (!s || !v?.sha256) return null;
-	const name = s.container?.inner ?? s.paths[0] ?? "";
-	const cached = store.readText(v.sha256);
-	let lines: string[][];
-	if (extname(name.split("::").pop() ?? "").toLowerCase() === ".pdf" && v.textState === "ok") lines = await pdfLayoutLines(sourceBytes(store, sourceId));
-	else if (cached) lines = cached.pages.map((p) => p.split("\n"));
-	else return null;
-	const t = roomsFromLines(lines);
-	return t.rows.length ? t : null;
-}
-
 export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 	return {
 		"rooms.table": async (id) => {
-			const store = d.registry.store(id);
-			const out = [];
-			for (const s of store.read("sources")) {
-				if (s.kind !== "document" || !ROOM_ROLES.has(s.role)) continue;
-				const txt = store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "");
-				if (!txt || !/eksplikācij|telpas\s+nosaukums|telpu\s+grup/i.test(txt.pages.join(" "))) continue;
-				const t = await roomTableOf(store, s.id);
-				if (t) out.push({ sourceId: s.id, title: s.title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread });
-			}
-			return out;
+			const tables = await inventoryTables(d.registry.store(id));
+			return tables.map(({ sourceId, title, table: t }) => ({ sourceId, title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread }));
 		},
 		"rooms.exportXlsx": async (id, sourceId) => {
 			const store = d.registry.store(id);

@@ -18,6 +18,16 @@ export const ALWAYS_NEVER = new Set(["delete_element", "send_code_to_revit"]);
 
 export type LevelOf = (tool: string) => Level;
 
+/** Tools whose level depends on what they are asked to do. operate_element also deletes ("Delete") — deletion is never
+ *  an agent action, whatever the batch confirmation says. */
+export function neverByArgs(tool: string, args: unknown): string | null {
+	if (tool === "operate_element") {
+		const action = String((args as { data?: { action?: unknown } } | null)?.data?.action ?? "").toLowerCase();
+		if (action === "delete") return "operate_element ar darbību Delete nav atļauts: elementus dzēš tikai Boris.";
+	}
+	return null;
+}
+
 export function makeLevelOf(...tables: Record<string, Level>[]): LevelOf {
 	return (tool) => {
 		if (ALWAYS_NEVER.has(tool)) return "never";
@@ -55,6 +65,8 @@ export class Gate {
 		const name = ctx.toolCall.name;
 		const level = this.levelOf(name);
 		if (level === "never") return { block: true, reason: `Rīks ${name} nav atļauts (līmenis: nekad).` };
+		const argNever = neverByArgs(name, ctx.args ?? ctx.toolCall.arguments);
+		if (argNever) return { block: true, reason: argNever };
 		if (level !== "confirm") return undefined;
 		const msg = ctx.assistantMessage as object;
 		let ok = this.answered.get(msg);

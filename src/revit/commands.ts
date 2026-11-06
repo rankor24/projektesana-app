@@ -82,3 +82,9 @@ export const revitRead = {
 	rooms: async (r: RevitCaller) => parseRooms(await r.call("export_room_data", { includeUnplacedRooms: false, includeNotEnclosedRooms: false })),
 	levels: async (r: RevitCaller) => parseLevels(await r.call("analyze_model_statistics", { includeDetailedTypes: false })),
 };
+
+/** Boris's click on a room row selects that element in Revit (Select only: one short call). */
+export async function revitSelect(r: RevitCaller, elementIds: number[]): Promise<void> {
+	if (!elementIds.length || elementIds.some((x) => !Number.isInteger(x))) throw new Error("Nederīgs elementa id.");
+	await r.call("operate_element", { data: { elementIds, action: "Select" } });
+}

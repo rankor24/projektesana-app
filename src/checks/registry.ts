@@ -30,6 +30,8 @@ export interface CheckRun {
 	results: CheckResult[];
 	/** requirements this run looked at and found met */
 	met?: string[];
+	/** the check could not run (no Revit, no delivery): its earlier findings are kept as they are */
+	skipped?: string;
 }
 
 export interface Check {

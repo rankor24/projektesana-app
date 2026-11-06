@@ -1,16 +1,89 @@
-// Telpas: the inventory room table read from the property documents (1.10), with the sum check and the Excel export.
-// Task 3.2 adds the comparison with the Revit model rooms.
+// Telpas: the inventory room table read from the property documents (1.10) with the sum check and the Excel export, and
+// the comparison with the rooms of the open Revit model (3.2). A row click selects the room in Revit (one Select call).
 import { useState } from "react";
-import type { InventoryTable } from "../../shared/api";
+import type { InventoryTable, RoomCompareRow } from "../../shared/api";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
+const KIND: Record<string, string> = { "missing-in-model": "nav modelī", "missing-in-inventory": "nav inventarizācijā", area: "platība", name: "nosaukums", floor: "stāvs", duplicate: "dubults Nr." };
+
 export function Telpas() {
 	const { projectId } = useUi();
-	const tables = useLoad<InventoryTable[]>(() => (projectId ? call("rooms.table", projectId) : Promise.resolve([])), [projectId]);
-	const [err, setErr] = useState<string | null>(null);
+	const [tab, setTab] = useState<"inv" | "cmp">("inv");
 	if (!projectId) return <Empty title="nav projekta" />;
+	return (
+		<div className="fill-col">
+			<div className="tabs">
+				<button className={tab === "inv" ? "on" : ""} onClick={() => setTab("inv")}>Inventarizācija</button>
+				<button className={tab === "cmp" ? "on" : ""} onClick={() => setTab("cmp")}>Salīdzinājums ar modeli</button>
+			</div>
+			{tab === "inv" ? <Inventory projectId={projectId} /> : <Compare projectId={projectId} />}
+		</div>
+	);
+}
+
+function Compare({ projectId }: { projectId: string }) {
+	const c = useLoad<RoomCompareRow>(() => call("rooms.compare", projectId), [projectId]);
+	const [err, setErr] = useState<string | null>(null);
+	const d = c.data;
+	return (
+		<div className="pane fill">
+			<div className="row">
+				<button className="primary" onClick={() => c.reload()}>Salīdzināt vēlreiz</button>
+				<button onClick={() => call("findings.runAll", projectId).catch((e) => setErr(errText(e)))}>Ierakstīt atradumos</button>
+				{d && d.state === "ok" && (
+					<span className="dim small">
+						inventarizācijā {d.inventory}, modelī {d.model}, sakrīt pēc Nr. {d.matched}, atšķirības {d.diffs.length}
+					</span>
+				)}
+			</div>
+			{err && <div className="err">{err}</div>}
+			{c.error ? <Err error={c.error} /> : null}
+			{c.loading && <div className="dim small">lasa modeli…</div>}
+			{d && d.state !== "ok" && <Empty title={d.state}>{d.message}</Empty>}
+			{d && d.state === "ok" && d.diffs.length === 0 && <Empty title="atšķirību nav">Visas telpas sakrīt pielaides robežās.</Empty>}
+			{d && d.diffs.length > 0 && (
+				<table>
+					<thead>
+						<tr>
+							<th>Nr.</th>
+							<th>Atšķirība</th>
+							<th>Inventarizācija</th>
+							<th>Modelis</th>
+							<th />
+						</tr>
+					</thead>
+					<tbody>
+						{d.diffs.map((x, i) => (
+							<tr key={i}>
+								<td>{x.no}</td>
+								<td>
+									<Badge tone={x.kind === "name" ? "warn" : "bad"}>{KIND[x.kind] ?? x.kind}</Badge>
+									{x.delta !== undefined && <span className="small"> {x.delta > 0 ? "+" : ""}{x.delta} m² (±{x.tolerance})</span>}
+								</td>
+								<td className="small">{x.inventory ? `${x.inventory.floor}. st. · ${x.inventory.name} · ${x.inventory.area} m²` : "—"}</td>
+								<td className="small">{x.model ? `${x.model.level} · ${x.model.name} · ${x.model.area} m²` : "—"}</td>
+								<td>
+									{x.model && (
+										<button className="small" onClick={() => call("revit.select", [Number(x.model!.id)]).catch((e) => setErr(errText(e)))}>
+											Revit
+										</button>
+									)}
+									<button className="small ghost" onClick={() => ui.focusAdd({ kind: "room", id: x.no, label: `telpa ${x.no}: ${KIND[x.kind] ?? x.kind}`, data: { ...x } })}>→ aģentam</button>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
+		</div>
+	);
+}
+
+function Inventory({ projectId }: { projectId: string }) {
+	const tables = useLoad<InventoryTable[]>(() => call("rooms.table", projectId), [projectId]);
+	const [err, setErr] = useState<string | null>(null);
 	return (
 		<div className="pane fill">
 			{err && <div className="err">{err}</div>}
