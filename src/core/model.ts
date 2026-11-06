@@ -245,9 +245,10 @@ export interface Collections {
 export type CollectionName = keyof Collections;
 export const COLLECTIONS: CollectionName[] = ["sources", "facts", "requirements", "findings", "deliveries", "pins", "revisions"];
 
-/** BD code from an office folder name: "BD427 Kaut kas" → "BD427". */
+/** BD code from an office folder name: "BD427-2026_Pilseta_Iela 9" → "BD427"; a prefix such as "AU_" (autoruzraudzība)
+ *  before the code is allowed. */
 export function bdCodeOf(folderName: string): string | null {
-	const m = /^\s*(BD\s?\d{3,4})(?=\b|_|\s|-)/i.exec(folderName);
+	const m = /^\s*(?:[A-Z]{1,4}_)?(BD\s?\d{3,4})(?![\d])/i.exec(folderName);
 	return m ? m[1].replace(/\s/, "").toUpperCase() : null;
 }
 

@@ -63,5 +63,8 @@ test("profile: confirmed beats proposed, rejected never counts", () => {
 test("BD code from the office folder name", () => {
 	assert.equal(bdCodeOf("BD999 Testa iela 1"), "BD999");
 	assert.equal(bdCodeOf("BD1001_Kaut kas"), "BD1001");
+	assert.equal(bdCodeOf("AU_BD265-2022_Pilseta_Iela 34"), "BD265");
+	assert.equal(bdCodeOf("BD427-2026_Pilseta_Iela 9"), "BD427");
+	assert.equal(bdCodeOf("BD12345"), null);
 	assert.equal(bdCodeOf("Arhīvs"), null);
 });
