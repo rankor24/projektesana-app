@@ -9,3 +9,4 @@ real/
 *.rvt
 *.edoc
 !test/fixtures/**
+resources/tessdata/

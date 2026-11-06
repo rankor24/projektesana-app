@@ -9,12 +9,13 @@
 	"scripts": {
 		"build:main": "tsc -p tsconfig.main.json",
 		"build:renderer": "vite build",
-		"build": "node scripts/sync-skills.mjs && npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
+		"build": "node scripts/sync-skills.mjs && node scripts/fetch-ocr-data.mjs && npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
 		"typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
 		"test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\"",
 		"start": "npm run build && electron .",
 		"audit": "node --import tsx scripts/audit.ts",
-		"pack": "npm run build && electron-builder --win dir"
+		"pack": "npm run build && electron-builder --win dir",
+		"fixtures": "electron scripts/make-fixtures.mjs"
 	},
 	"dependencies": {
 		"@earendil-works/pi-agent-core": "1.4.0",

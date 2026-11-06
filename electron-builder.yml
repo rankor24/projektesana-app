@@ -1,0 +1,21 @@
+appId: lv.buvdizains.projektesana
+productName: Projektesana
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+  - "!**/*.map"
+extraResources:
+  - from: data
+    to: data
+  - from: resources/tessdata
+    to: tessdata
+  - from: resources/skills
+    to: skills
+  - from: resources/office-text.ps1
+    to: office-text.ps1
+asarUnpack:
+  - dist/agent/tools/**
+win:
+  target: dir

@@ -10,6 +10,9 @@ import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
 import { AppSettings } from "./settings.js";
 import { Registry } from "../core/registry.js";
+import { Ocr } from "../sources/text/ocr.js";
+import { ocrHook } from "./ocr-hook.js";
+import { PageRenderer } from "./offscreen.js";
 
 const here = import.meta.dirname; // dist/main
 const dataDir = app.isPackaged ? join(process.resourcesPath, "data") : join(here, "..", "..", "data");
@@ -74,10 +77,13 @@ const session = new AgentSession({
 });
 
 const registry = new Registry(settings.registryFile(), settings.projectsDir());
+const resourcesDir = app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources");
+const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
+const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
 const handlers = createHandlers({
 	registry,
-	hooks: () => ({}),
+	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr) }),
 	version: app.getVersion(),
 	settings,
 	dataDir,
