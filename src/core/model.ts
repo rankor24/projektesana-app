@@ -100,7 +100,9 @@ export type RequirementOrigin = "law" | "pu" | "bip" | "tn" | "permit" | "office
 
 export type Citation =
 	| { kind: "law"; act: string; actId: string; actVersionDate: string | null; readOn: string; point: string; url: string; quote: string }
-	| { kind: "document"; sourceId: string; sha: string; page: number; quote: string };
+	| { kind: "document"; sourceId: string; sha: string; page: number; quote: string }
+	/** the office standard document, read at run time from the file Boris set (never shipped: it is company-internal) */
+	| { kind: "office"; file: string; page: number; quote: string };
 
 export interface AppliesTo {
 	stages?: BimStage[];

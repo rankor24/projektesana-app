@@ -22,7 +22,7 @@ export const requirementTools: ToolDef[] = [
 				.read("requirements")
 				.filter((r) => r.state !== "rejected" && (!f.origin || r.origin === f.origin) && (!f.status || r.status === f.status) && (!f.stage || !r.appliesTo.stages || r.appliesTo.stages.includes(f.stage)))
 				.filter((r) => !words.length || words.every((w) => `${r.text} ${r.citation.quote}`.toLowerCase().includes(w)))
-				.map((r) => ({ id: r.id, origin: r.origin, text: r.text, status: r.status, state: r.state, cite: r.citation.kind === "law" ? `${r.citation.act} ${r.citation.point} (${r.citation.url})` : `${r.citation.sourceId} lpp. ${r.citation.page}`, appliesTo: r.appliesTo }));
+				.map((r) => ({ id: r.id, origin: r.origin, text: r.text, status: r.status, state: r.state, cite: r.citation.kind === "law" ? `${r.citation.act} ${r.citation.point} (${r.citation.url})` : r.citation.kind === "office" ? `biroja standarts, lpp. ${r.citation.page}` : `${r.citation.sourceId} lpp. ${r.citation.page}`, appliesTo: r.appliesTo }));
 			return rows.length ? rows : "no data: prasību nav (Prasības → Atjaunot).";
 		},
 	}),

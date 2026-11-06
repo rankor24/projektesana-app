@@ -41,3 +41,8 @@ test("validFrom read from the note right after the quote", () => {
 	assert.equal(validFromOf("74.2 Prasība par BIM modeli. (Punkts stājas spēkā 01.03.2027. un iekļauts …)", "Prasība par BIM modeli.", "2026-11-03"), "2027-03-01");
 	assert.equal(validFromOf("74.1 Cita prasība. (MK 01.01.2020. noteikumu redakcijā, kas stājas spēkā 15.01.2020.)", "Cita prasība.", "2026-11-03"), null);
 });
+
+test("the next point's note does not leak into the previous point (26.2 vs 26.3.1)", () => {
+	const t = "26.2. ģenerālplānu, kurā norādīta eksplikācija; 26.3. sadalījumu pa kārtām; 26.3.1 (apakšpunkts stājas spēkā 01.03.2027. un iekļauts …)";
+	assert.equal(validFromOf(t, "26.2. ģenerālplānu, kurā norādīta eksplikācija;", "2026-11-03"), null);
+});

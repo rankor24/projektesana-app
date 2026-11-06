@@ -32,7 +32,7 @@ export class AppSettings {
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf"];
 		const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
 		const s = { ...this.get(), ...clean };
 		writeFileSync(join(this.dir, "settings.json"), JSON.stringify(s, null, 2), "utf8");

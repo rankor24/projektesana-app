@@ -45,7 +45,8 @@ export function validFromOf(text: string, quote: string, readOn: string): string
 	if (i < 0) return null;
 	const after = t.slice(i + norm(quote).length, i + norm(quote).length + 300);
 	const before = t.slice(Math.max(0, i - 200), i);
-	const m = /\((?:[^()]*?)stājas\s+spēkā\s+(\d{2})\.(\d{2})\.(\d{4})/.exec(after) ?? /\((?:Punkts|Apakšpunkts|Pants|Daļa)[^()]*?stājas\s+spēkā\s+(\d{2})\.(\d{2})\.(\d{4})[^()]*\)\s*$/.exec(before);
+	// only a note that follows the quote directly belongs to it (the next point's note must not leak in)
+	const m = /^\s*(?:\d+\s+)?\((?:[^()]*?)stājas\s+spēkā\s+(\d{2})\.(\d{2})\.(\d{4})/.exec(after) ??/\((?:Punkts|Apakšpunkts|Pants|Daļa)[^()]*?stājas\s+spēkā\s+(\d{2})\.(\d{2})\.(\d{4})[^()]*\)\s*$/.exec(before);
 	if (!m) return null;
 	const iso = `${m[3]}-${m[2]}-${m[1]}`;
 	return iso > readOn ? iso : null;

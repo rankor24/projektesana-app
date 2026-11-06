@@ -26,9 +26,11 @@ export interface Settings {
 	revitServerJs: string | null;
 	/** node.exe that runs the Revit MCP server. null = Electron's own node */
 	revitNode: string | null;
+	/** the office standard (projekta mapju koks) PDF; its text gives the office rules their quotes. null = not set */
+	officeStandardPdf: string | null;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =
