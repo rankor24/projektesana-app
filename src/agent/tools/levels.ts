@@ -9,7 +9,7 @@ export const LEVEL_LABEL: Record<Level, string> = {
 	propose: "auto, kā priekšlikums",
 	annotate: "auto, anotē",
 	run: "auto, palaiž",
-	confirm: "apstiprina Boris (pa partijām)",
+	confirm: "apstiprina lietotājs (pa partijām)",
 	never: "nekad",
 };
 
@@ -23,7 +23,7 @@ export type LevelOf = (tool: string) => Level;
 export function neverByArgs(tool: string, args: unknown): string | null {
 	if (tool === "operate_element") {
 		const action = String((args as { data?: { action?: unknown } } | null)?.data?.action ?? "").toLowerCase();
-		if (action === "delete") return "operate_element ar darbību Delete nav atļauts: elementus dzēš tikai Boris.";
+		if (action === "delete") return "operate_element ar darbību Delete nav atļauts: elementus dzēš tikai lietotājs.";
 	}
 	return null;
 }
@@ -48,7 +48,7 @@ export interface ConfirmRequest {
 }
 
 /**
- * Confirm per batch: the first `confirm` tool call of an assistant message asks Boris once for all the confirm-level calls in
+ * Confirm per batch: the first `confirm` tool call of an assistant message asks the user once for all the confirm-level calls in
  * that message; his answer covers the rest of the message. `never` tools are blocked even if a model names one.
  */
 export class Gate {
@@ -82,6 +82,6 @@ export class Gate {
 			ok = await p;
 			this.answered.set(msg, ok);
 		}
-		return ok ? undefined : { block: true, reason: "Boris šo partiju noraidīja. Neatkārto to; jautā, ko darīt citādi." };
+		return ok ? undefined : { block: true, reason: "Lietotājs šo partiju noraidīja. Neatkārto to; jautā, ko darīt citādi." };
 	};
 }

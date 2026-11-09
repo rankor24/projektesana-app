@@ -10,7 +10,7 @@
  *                    sketch                     answer with the current markup (the selection with its places)
  *   BimCraft → app   ready { api }              the bridge is active
  *                    opened { name }            a model is open
- *                    selection { items }        what Boris selected: [{ id, guid, cls, name }] (≤ 50)
+ *                    selection { items }        what the user selected: [{ id, guid, cls, name }] (≤ 50)
  *                    sketch { items }           the sketch as an instruction (never written to the model)
  *                    error { message }
  */

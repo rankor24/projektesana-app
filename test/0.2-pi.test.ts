@@ -33,7 +33,7 @@ test("pi events: tool start and end carry the tool name", () => {
 	const a = piEvents({ type: "tool_execution_start", toolCallId: "t1", toolName: "get_focus", args: {} } as never, st);
 	const b = piEvents({ type: "tool_execution_end", toolCallId: "t1", toolName: "get_focus", result: { content: [{ type: "text", text: "nekas" }] }, isError: false } as never, st);
 	assert.equal(a[0].type, "tool");
-	assert.deepEqual(b[0], { type: "tool_result", name: "get_focus", id: "t1", ok: true, detail: undefined, output: "nekas" });
+	assert.deepEqual(b[0], { type: "tool_result", name: "get_focus", id: "t1", ok: true, detail: undefined, output: "nekas", chars: 5 });
 });
 
 test("credentials: Claude subscription tokens are refused, API key is used", async () => {

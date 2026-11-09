@@ -19,6 +19,72 @@ export interface AgentStatus {
 	signedIn: boolean;
 	reason: string;
 	revit: "nav savienojuma" | "savienots" | "nav konfigurēts";
+	/** the chosen model takes images (screenshots); null = not known (not signed in, unknown model) */
+	images: boolean | null;
+	/** the model's own limits for images (from pi's catalog); null = it takes none, or the model is not known */
+	imageLimits: { maxEdge: number; maxBytes: number; maxPerRequest: number | null; maxRequestBytes: number | null } | null;
+}
+
+/** What the next request carries and where the limits are. Numbers are tokens. */
+export interface ContextInfo {
+	window: number;
+	/** compaction starts here: min(200K, 80% of the window) */
+	compactAt: number;
+	/** the context now; null = no conversation in memory yet (a new project, or the app was restarted) */
+	used: number | null;
+	/** `usage` = the provider's own count of the last prompt (+ an estimate of what came after); `estimate` = sizes alone */
+	source: "usage" | "estimate" | "none";
+	/** where it goes, by size; null when `used` is null */
+	parts: { fixed: number; chat: number; docs: number; tools: number; images: number } | null;
+	imageCount: number;
+	messages: number;
+	/** what every request carries before the user types (system prompt, rules, skills, the app's tool declarations); Revit's tools are added when connected */
+	fixedEstimate: number;
+	/** what the last run added to the context; null = not known */
+	lastAdded: number | null;
+	/** compactions of this conversation since the app started */
+	compactions: number;
+	/** what the message being typed would add, without files: the text, the Fokuss, the open pins */
+	draft: { text: number; focus: number; pins: number } | null;
+}
+
+/** What one attached file will add to the context. */
+export interface FileCost {
+	kind: "image" | "document";
+	tokens: number;
+	pages?: number;
+	/** a document longer than the limit per file: only the beginning goes */
+	cut?: boolean;
+	/** characters of the document text that go */
+	chars?: number;
+}
+
+/** A file attached to a chat message, as the window sends it. */
+export interface ChatAttachment {
+	name: string;
+	mimeType: string;
+	/** the file's bytes, base64 (an image already downscaled by the window) */
+	data: string;
+	/** images: a small JPEG data URL the transcript keeps */
+	thumb?: string;
+}
+
+/** What the transcript remembers of an attachment. */
+export interface ChatAttachmentRef {
+	name: string;
+	kind: "image" | "document";
+	thumb?: string;
+}
+
+/** One line of a project's chat transcript. A `compaction` line holds the summary that replaced the older conversation. */
+export interface ChatEntry {
+	role: "user" | "assistant";
+	text: string;
+	at: string;
+	attachments?: ChatAttachmentRef[];
+	kind?: "compaction";
+	/** compaction: estimated context before and after */
+	tokens?: { before: number; after: number };
 }
 
 export interface ProviderRow {
@@ -31,7 +97,7 @@ export interface ProviderRow {
 	models: { id: string; name: string; legacy: boolean; efforts: string[]; defaultEffort: string }[];
 }
 
-/** What the agent receives as the Fokuss: what Boris has selected in panels and the preview. */
+/** What the agent receives as the Fokuss: what the user has selected in panels and the preview. */
 export interface FocusItem {
 	kind: "source" | "page-region" | "fact" | "requirement" | "finding" | "room" | "delivery" | "element" | "pin" | "note" | "sketch" | "text";
 	id: string;
@@ -52,7 +118,10 @@ export interface ScanProgress {
 export interface ProjectRow extends Project {
 	missing: boolean;
 	stage: BimStage | null;
+	/** open errors and warnings: what needs action */
 	openFindings: number;
+	/** open info notes: shown, never red */
+	openInfo: number;
 }
 
 export interface ScanSummaryRow {
@@ -157,6 +226,49 @@ export interface SheetDiffRow {
 	frameB: { x0: number; y0: number; x1: number; y1: number } | null;
 }
 
+/** The law library (global, in the app data): one act or standard. Same shape as rules/library.ts Source. */
+export type LibraryCategory = "likums" | "mk" | "lvs" | "es";
+export interface LibraryRow {
+	id: string;
+	title: string;
+	category: LibraryCategory;
+	kind: "builtin" | "url" | "file";
+	url: string | null;
+	file: string | null;
+	/** ISO date the text was read */
+	readOn: string;
+	paragraphs: number;
+	sha256: string;
+	/** set by a re-read when the live text differs from what was saved */
+	changedOn?: string;
+}
+
+/** One act or standard of data/applicable-acts.json, judged against the project's CONFIRMED profile facts. */
+export interface ApplicableRow {
+	id: string;
+	title: string;
+	category: LibraryCategory;
+	/** likumi = free text on likumi.lv (one click to fetch); paid = LVS / EN / ISO standard, the user adds their own PDF */
+	kind: "likumi" | "paid";
+	url: string | null;
+	actId: string | null;
+	ref: string | null;
+	catalogue: string | null;
+	state: "attiecas" | "nav zināms" | "neattiecas";
+	/** confirmed facts that make it apply */
+	because: string[];
+	/** conditions with no confirmed fact yet */
+	missing: string[];
+	/** confirmed facts that rule it out */
+	notMatched: string[];
+	/** the act's own paragraph that says what it covers */
+	why: { act: string; actId: string; point: string; url: string; quote: string };
+	caveat: string | null;
+	inLibrary: { id: string; readOn: string; changedOn: string | null } | null;
+	/** the quote found in the library text of the citing act; null = that act is not in the library */
+	quoteFound: boolean | null;
+}
+
 export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
@@ -170,11 +282,15 @@ export interface ApiSpec {
 	"agent.login": (provider: string) => void;
 	"agent.loginAnswer": (text: string) => void;
 	"agent.logout": (provider: string) => void;
-	"agent.send": (projectId: string | null, text: string, focus: FocusItem[]) => { runId: string };
+	"agent.send": (projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string };
 	"agent.stop": () => void;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
-	"agent.history": (projectId: string | null) => { role: "user" | "assistant"; text: string; at: string }[];
+	"agent.history": (projectId: string | null) => ChatEntry[];
 	"agent.reset": (projectId: string | null) => void;
+	"agent.context": (projectId: string | null, draft?: { text: string; focus: FocusItem[] }) => ContextInfo;
+	"agent.measureFile": (attachment: ChatAttachment) => FileCost;
+	/** Summarizes the older part of the conversation now (the same compaction that starts by itself at the limit). */
+	"agent.compact": (projectId: string | null) => { before: number; after: number };
 	"projects.list": () => ProjectRow[];
 	"projects.add": (root: string) => ProjectRow;
 	"projects.forget": (id: string) => void;
@@ -182,6 +298,8 @@ export interface ApiSpec {
 	"projects.scanSummary": (id: string) => ScanSummaryRow | null;
 	"projects.roleQuestions": (id: string) => RoleQuestion[];
 	"projects.confirmRole": (id: string, folderKey: string, role: string) => void;
+	/** the role of one document (wins over its folder's); null = back to the folder's role */
+	"sources.setRole": (id: string, sourceId: string, role: string | null) => void;
 	"sources.list": (id: string) => Source[];
 	"sources.text": (id: string, sourceId: string) => { pages: string[]; state: string; reason?: string } | null;
 	"sources.bytes": (id: string, sourceId: string) => Uint8Array;
@@ -203,6 +321,8 @@ export interface ApiSpec {
 	"findings.list": (id: string) => Finding[];
 	"findings.override": (id: string, findingId: string, reason: string) => void;
 	"findings.reopen": (id: string, findingId: string) => void;
+	/** only info notes, BCF topics and closed findings; errors and warnings need a fix or a reason */
+	"findings.remove": (id: string, findingId: string) => void;
 	"findings.runAll": (id: string) => number;
 	"bcf.export": (id: string, findingIds: string[] | null) => string;
 	"bcf.import": (id: string, file: string) => { topics: number; byDiscipline: Record<string, number>; notes: string[] };
@@ -236,8 +356,18 @@ export interface ApiSpec {
 	"rooms.geometryCsv": (id: string, sourceId: string) => string;
 	"rooms.writeInvArea": (id: string, items: InvAreaRow[]) => { written: number; noParam: string[] };
 	"facts.decide": (id: string, factId: string, state: "confirmed" | "rejected") => void;
-	"facts.setByBoris": (id: string, key: string, value: string) => void;
+	"facts.setByUser": (id: string, key: string, value: string) => void;
 	"rooms.exportXlsx": (id: string, sourceId: string) => string;
+	"library.list": () => LibraryRow[];
+	"library.paragraphs": (sourceId: string) => { source: LibraryRow; paragraphs: string[] };
+	/** likumi.lv only; fetched in main, saved with its read date */
+	"library.addUrl": (url: string, category: LibraryCategory, title?: string) => LibraryRow;
+	/** a file the user owns (paid LVS / EN / ISO PDF); a copy is kept in the library */
+	"library.addFile": (file: string, category: LibraryCategory, title?: string) => LibraryRow;
+	"library.remove": (sourceId: string) => void;
+	"library.reread": (sourceId: string) => { changed: boolean; source: LibraryRow };
+	/** which acts apply to the project, from its confirmed profile facts and data/applicable-acts.json */
+	"library.applicable": (id: string) => { rows: ApplicableRow[]; readOn: string; notRead: string };
 }
 
 export type ApiName = keyof ApiSpec;
@@ -261,6 +391,9 @@ export const API_NAMES = [
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",
+	"agent.context",
+	"agent.measureFile",
+	"agent.compact",
 	"projects.list",
 	"projects.add",
 	"projects.forget",
@@ -268,6 +401,7 @@ export const API_NAMES = [
 	"projects.scanSummary",
 	"projects.roleQuestions",
 	"projects.confirmRole",
+	"sources.setRole",
 	"sources.list",
 	"sources.text",
 	"sources.bytes",
@@ -289,6 +423,7 @@ export const API_NAMES = [
 	"findings.list",
 	"findings.override",
 	"findings.reopen",
+	"findings.remove",
 	"findings.runAll",
 	"bcf.export",
 	"bcf.import",
@@ -322,8 +457,15 @@ export const API_NAMES = [
 	"rooms.geometryCsv",
 	"rooms.writeInvArea",
 	"facts.decide",
-	"facts.setByBoris",
+	"facts.setByUser",
 	"rooms.exportXlsx",
+	"library.list",
+	"library.paragraphs",
+	"library.addUrl",
+	"library.addFile",
+	"library.remove",
+	"library.reread",
+	"library.applicable",
 ] as const satisfies readonly ApiName[];
 
 // Compile-time check that API_NAMES lists every key of ApiSpec (and no other).

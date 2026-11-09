@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { join } from "node:path";
 import { checkWrite, isInside } from "./guard.js";
 import { appendLog, readLog, type StoredEntry } from "./log.js";
-import { COLLECTIONS, type CollectionName, type Collections, type Note, type NoteType, type Project, type Who } from "./model.js";
+import { COLLECTIONS, upgradeWho, type CollectionName, type Collections, type Note, type NoteType, type Project, type Who } from "./model.js";
 
 export const SUBDIRS = ["notes", "revisions", "text", "versions"] as const;
 
@@ -38,7 +38,7 @@ export class ProjectStore {
 		const fresh = !existsSync(pj);
 		if (fresh) atomicWrite(pj, JSON.stringify(project, null, 1));
 		for (const c of COLLECTIONS) if (!existsSync(s.file(c))) atomicWrite(s.file(c), "[]");
-		if (fresh) s.log({ kind: "project.created", by: "boris", data: { id: project.id, root: project.root } });
+		if (fresh) s.log({ kind: "project.created", by: "user", data: { id: project.id, root: project.root } });
 		return s;
 	}
 
@@ -66,7 +66,7 @@ export class ProjectStore {
 	}
 
 	events(): StoredEntry[] {
-		return readLog(this.logFile()).entries;
+		return upgradeWho(readLog(this.logFile()).entries);
 	}
 
 	/** The cache is keyed by the file's mtime and size: the tools server writes the same files from its own process. */
@@ -81,7 +81,7 @@ export class ProjectStore {
 		const stamp = this.stamp(f);
 		const hit = this.cache.get(c);
 		if (hit && hit.stamp === stamp) return structuredClone(hit.value) as Collections[C];
-		const v = existsSync(f) ? (JSON.parse(readFileSync(f, "utf8")) as Collections[C]) : ([] as unknown as Collections[C]);
+		const v = existsSync(f) ? upgradeWho(JSON.parse(readFileSync(f, "utf8")) as Collections[C]) : ([] as unknown as Collections[C]);
 		this.cache.set(c, { stamp, value: v });
 		return structuredClone(v);
 	}
@@ -116,7 +116,7 @@ export class ProjectStore {
 	}
 
 	readVersion<C extends CollectionName>(c: C, seq: number): Collections[C] {
-		return JSON.parse(readFileSync(join(this.dir, "versions", `${c}.${seq}.json`), "utf8")) as Collections[C];
+		return upgradeWho(JSON.parse(readFileSync(join(this.dir, "versions", `${c}.${seq}.json`), "utf8")) as Collections[C]);
 	}
 
 	// ---- small meta files (roles.json, scan.json): one object each, previous kept like a collection ----
@@ -126,7 +126,7 @@ export class ProjectStore {
 		const f = join(this.dir, `${name}.json`);
 		if (!existsSync(f)) return fallback;
 		try {
-			return JSON.parse(readFileSync(f, "utf8")) as T;
+			return upgradeWho(JSON.parse(readFileSync(f, "utf8")) as T);
 		} catch {
 			return fallback;
 		}
@@ -180,7 +180,7 @@ export class ProjectStore {
 				const raw = readFileSync(join(dir, n), "utf8").replace(/\r\n/g, "\n");
 				const m = /^---\n(.*)\n---\n([\s\S]*)$/.exec(raw);
 				if (!m) return null;
-				const fm = JSON.parse(m[1]) as Omit<Note, "body">;
+				const fm = upgradeWho(JSON.parse(m[1]) as Omit<Note, "body">);
 				return { ...fm, body: m[2].replace(/\n$/, "") } as Note;
 			})
 			.filter((n): n is Note => !!n && (!type || n.type === type))

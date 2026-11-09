@@ -82,7 +82,7 @@ test("bridge: ready, open through its importer, selection with GlobalIds, select
 		assert.equal(((await wait("opened")) as { name: string }).name, "two-walls.ifc");
 		assert.equal(opened, "two-walls.ifc");
 
-		// Boris clicks a wall in BimCraft → the app hears the element with its GlobalId
+		// the user clicks a wall in BimCraft → the app hears the element with its GlobalId
 		sel = [30];
 		const s = (await wait("selection")) as { items: { id: number; guid: string; cls: string; name: string }[] };
 		assert.deepEqual(s.items, [{ id: 30, guid: "0Wall0000000000000001", cls: "IfcWall", name: "Siena A" }]);
@@ -93,7 +93,7 @@ test("bridge: ready, open through its importer, selection with GlobalIds, select
 		const s2 = (await wait("selection")) as { items: { name: string }[] };
 		assert.equal(s2.items[0].name, "Siena B");
 
-		// a sketch is the selection with Boris's note, never written to the model
+		// a sketch is the selection with the user's note, never written to the model
 		ch.port1.postMessage({ pj: 1, type: "sketch", note: "pagarināt šo sienu līdz asij B" });
 		const k = (await wait("sketch")) as { items: { guid: string }[]; note: string };
 		assert.equal(k.note, "pagarināt šo sienu līdz asij B");

@@ -7,7 +7,7 @@ export interface Candidate {
 	page: number;
 	/** verbatim text of the page (whitespace as in the source) */
 	quote: string;
-	/** what the value means, for the agent and Boris */
+	/** what the value means, for the agent and the user */
 	note?: string;
 }
 

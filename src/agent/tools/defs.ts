@@ -18,7 +18,7 @@ export const focusTools: ToolDef[] = [
 	tool({
 		name: "get_focus",
 		level: "read",
-		description: "What Boris has selected now (Fokuss): sources, page regions, facts, requirements, findings, rooms, elements. Start from it.",
+		description: "What the user has selected now (Fokuss): sources, page regions, facts, requirements, findings, rooms, elements. Start from it.",
 		input: {},
 		run: (ctx) => focusText(readFocus(ctx)),
 	}),

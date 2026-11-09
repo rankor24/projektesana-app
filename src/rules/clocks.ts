@@ -15,7 +15,7 @@ export interface ClockItem {
 	extended: boolean;
 	receivedOn: string | null;
 	sourceId: string | null;
-	by: "boris" | "agent" | "app";
+	by: "user" | "agent" | "app";
 }
 
 export interface Clock extends ClockItem {

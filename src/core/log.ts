@@ -7,7 +7,7 @@ import { dirname } from "node:path";
 export interface LogEntry {
 	/** e.g. project.created, source.scanned, fact.confirmed, finding.overridden, agent.tool */
 	kind: string;
-	/** who acted: boris | agent | app */
+	/** who acted: user | agent | app */
 	by: string;
 	data?: Record<string, unknown>;
 }

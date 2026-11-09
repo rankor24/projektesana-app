@@ -16,7 +16,7 @@ const sample: Collections = {
 	requirements: [{ id: "r1", origin: "pu", citation: { kind: "document", sourceId: "s1", sha: "a".repeat(64), page: 2, quote: "2.1. Projektētājs izstrādā" }, text: "minimālais sastāvs", appliesTo: { stages: ["Skice"] }, checkId: null, status: "open", evidence: [], state: "proposed", by: "agent", at }],
 	findings: [{ id: "x1", checkId: "one-truth", requirementId: null, severity: "error", where: { sourceId: "s1", page: 1 }, message: "adrese atšķiras", key: "addr", state: "open", firstSeen: at, lastSeen: at }],
 	deliveries: [{ id: "d1", stage: "Skice", kind: "MBP", label: "MBP 270201", plannedDate: "2027-02-01", submittedDate: null, folder: null, items: [], checksRun: [] }],
-	pins: [{ id: "p1", target: { sourceId: "s1", page: 1, x: 0.5, y: 0.5 }, text: "pārbaudīt", comments: [], by: "boris", at, state: "open", findingId: null, requirementId: null }],
+	pins: [{ id: "p1", target: { sourceId: "s1", page: 1, x: 0.5, y: 0.5 }, text: "pārbaudīt", comments: [], by: "user", at, state: "open", findingId: null, requirementId: null }],
 	revisions: [{ id: "v1", at, trigger: "manualSave", ifc: null, sheets: [], roomTable: null, summary: "", diffFromPrev: null }],
 };
 
@@ -32,15 +32,15 @@ test("store round-trips every entity", () => {
 	for (const c of Object.keys(sample) as (keyof Collections)[]) s.write(c, sample[c] as never, { kind: `${c}.set`, by: "app" });
 	const again = ProjectStore.load(dir, "BD999");
 	for (const c of Object.keys(sample) as (keyof Collections)[]) assert.deepEqual(again.read(c), sample[c], c);
-	s.writeNote({ id: "n1", type: "decision", title: "Grupa", body: "3. grupa, jo publiska ēka > 1000 m²\n\notrā rinda", refs: ["f1"], by: "boris", at });
-	assert.deepEqual(again.notes(), [{ id: "n1", type: "decision", title: "Grupa", body: "3. grupa, jo publiska ēka > 1000 m²\n\notrā rinda", refs: ["f1"], by: "boris", at }]);
+	s.writeNote({ id: "n1", type: "decision", title: "Grupa", body: "3. grupa, jo publiska ēka > 1000 m²\n\notrā rinda", refs: ["f1"], by: "user", at });
+	assert.deepEqual(again.notes(), [{ id: "n1", type: "decision", title: "Grupa", body: "3. grupa, jo publiska ēka > 1000 m²\n\notrā rinda", refs: ["f1"], by: "user", at }]);
 });
 
 test("a write keeps the previous version and logs an event", () => {
 	const s = ProjectStore.open(tmp(), project(tmp()));
 	const first = s.write("facts", sample.facts, { kind: "fact.proposed", by: "agent" });
-	const confirmed: Fact[] = [{ ...sample.facts[0], state: "confirmed", by: "boris" }];
-	const second = s.write("facts", confirmed, { kind: "fact.confirmed", by: "boris" });
+	const confirmed: Fact[] = [{ ...sample.facts[0], state: "confirmed", by: "user" }];
+	const second = s.write("facts", confirmed, { kind: "fact.confirmed", by: "user" });
 	assert.equal(second.seq, first.seq + 1);
 	assert.deepEqual(s.versions("facts"), [second.seq, first.seq]);
 	assert.deepEqual(s.readVersion("facts", second.seq), sample.facts);
@@ -55,7 +55,7 @@ test("the store refuses to write when its data folder is inside the source root"
 });
 
 test("profile: confirmed beats proposed, rejected never counts", () => {
-	const f = (id: string, value: string, state: Fact["state"], t: string): Fact => ({ id, key: "profile.group", value, source: { kind: "boris", at: t }, state, by: "boris", at: t });
+	const f = (id: string, value: string, state: Fact["state"], t: string): Fact => ({ id, key: "profile.group", value, source: { kind: "user", at: t }, state, by: "user", at: t });
 	assert.equal(profileOf([f("a", "2", "confirmed", "2026-01-01"), f("b", "3", "proposed", "2026-02-01")]).group?.value, "2");
 	assert.equal(profileOf([f("a", "2", "rejected", "2026-03-01"), f("b", "3", "proposed", "2026-02-01")]).group?.value, "3");
 });

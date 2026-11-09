@@ -1,5 +1,5 @@
 // IFC preview: BimCraft in a frame (bimcraft://), driven through its bridge add-on. The model bytes go in as a message;
-// Boris's selection comes back and becomes Fokuss items (elements with GlobalId); the agent's highlight tool and the sketch
+// the user's selection comes back and becomes Fokuss items (elements with GlobalId); the agent's highlight tool and the sketch
 // capture use the same channel. Nothing BimCraft edits is saved anywhere by the app: changes go through Revit.
 import { useEffect, useRef, useState } from "react";
 import { elementFocus, isBimcraftMessage, sketchFocus, type BimcraftItem, type HostToBimcraft } from "../../shared/bimcraft-protocol";

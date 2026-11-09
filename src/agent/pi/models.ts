@@ -166,6 +166,11 @@ export function lookupPiModel(rt: PiRuntime, provider: string, modelId?: string)
 	return model;
 }
 
+/** Does the model take images? pi replaces images with "(image omitted)" for a model that does not, so the app asks first. */
+export function seesImages(model: Model<Api>): boolean {
+	return model.input.includes("image");
+}
+
 // ---- live lists ---------------------------------------------------------------------
 
 const NOT_CHAT = /(audio|realtime|transcribe|tts|image|embedding|moderation|whisper|dall-e|sora|speech|search-preview|computer-use)/i;

@@ -115,6 +115,7 @@ tr.click:hover td { background: var(--elev); }
 .empty { margin: auto; padding: 24px; text-align: center; color: var(--muted); }
 .empty-title { font-weight: 700; font-size: 14px; color: var(--dim); margin-bottom: 4px; }
 .err { margin: 8px; padding: 8px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); white-space: pre-wrap; }
+.retry { margin: 4px 8px; padding: 4px 10px; border-left: 2px solid var(--warn); color: var(--muted); font-size: 0.9em; }
 .crash { padding: 24px; }
 .crash pre { white-space: pre-wrap; color: var(--bad); }
 
@@ -173,3 +174,33 @@ button.small { font-size: 11.5px; padding: 2px 6px; }
 .viewer-bar { display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
 .viewer-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; background: var(--bg); position: relative; }
 .text-page { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 14px 18px; white-space: pre-wrap; margin-bottom: 12px; font-size: 12.5px; }
+
+/* chat attachments: the strip above the input (pasted screenshots, dropped or picked files) and the sent thumbnails */
+.agent-dock.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.attach-strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.attach { position: relative; display: flex; flex-direction: column; align-items: center; width: 84px; border: 1px solid var(--border); border-radius: 6px; background: var(--elev); padding: 3px; }
+.attach img { width: 76px; height: 56px; object-fit: cover; border-radius: 4px; display: block; }
+.attach-doc { width: 76px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: var(--elev2); color: var(--dim); font-weight: 700; font-size: 12px; }
+.attach-name { width: 100%; font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; margin-top: 2px; }
+.attach .x { position: absolute; top: 1px; right: 1px; border: none; border-radius: 999px; padding: 0 5px; line-height: 16px; background: var(--panel); color: var(--muted); }
+.attach .x:hover { color: var(--bad); }
+.attach-warn { color: var(--warn); }
+.msg-attach { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.msg-attach img { max-width: 160px; max-height: 110px; border-radius: 4px; display: block; }
+
+/* context meter: the bar is the model's window, the red mark is where compaction starts */
+.ctx { display: flex; flex-direction: column; gap: 3px; }
+.ctx-bar { position: relative; display: flex; height: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--elev); overflow: hidden; }
+.ctx-bar > div:not(.ctx-line) { height: 100%; }
+.ctx-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--bad); }
+.ctx-text { gap: 6px; }
+.ctx-text .warn, .draft-cost.warn, .attach-cost.warn { color: var(--warn); }
+.ctx-more table { border-collapse: collapse; margin: 4px 0; }
+.ctx-more td { padding: 1px 10px 1px 0; }
+.ctx-more td i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.ctx-more .num { text-align: right; font-variant-numeric: tabular-nums; }
+.attach-cost { font-size: 10.5px; color: var(--dim); white-space: nowrap; }
+.draft-cost { padding: 0 2px; }
+.compact-line { font-size: 12px; color: var(--dim); border-left: 2px solid var(--accent); padding-left: 8px; }
+.compact-line.failed { border-left-color: var(--warn); }
+.compact-line pre { white-space: pre-wrap; max-height: 260px; overflow: auto; background: var(--bg); padding: 6px; border-radius: 4px; }

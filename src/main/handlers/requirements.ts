@@ -1,5 +1,5 @@
-// Requirements and findings: list, Boris's decisions, override with reason, re-run.
-import { overrideFinding, reopenFinding } from "../../checks/run.js";
+// Requirements and findings: list, the user's decisions, override with reason, re-run.
+import { overrideFinding, removeFinding, reopenFinding } from "../../checks/run.js";
 import { newId } from "../../core/model.js";
 import { addPin, closePin, commentPin, reopenPin } from "../../core/pins.js";
 import type { Registry } from "../../core/registry.js";
@@ -10,9 +10,11 @@ export interface RequirementDeps {
 	registry: Registry;
 	engine: ProjectEngine;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
+	/** the user's name from the settings (undefined = not set) */
+	userName?: () => string | undefined;
 }
 
-type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.runAll" | "notes.list" | "notes.write" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
+type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.remove" | "findings.runAll" | "notes.list" | "notes.write" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
 
 export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["requirements", "findings"] });
@@ -27,7 +29,7 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 					if (!all.some((r) => r.id === reqId)) throw new Error(`Prasība ${reqId} nav atrasta.`);
 					return all.map((r) => (r.id === reqId ? { ...r, state } : r));
 				},
-				{ kind: `requirement.${state}`, by: "boris", data: { id: reqId } },
+				{ kind: `requirement.${state}`, by: "user", data: { id: reqId } },
 			);
 			await d.engine.afterChange(store, "requirements");
 			changed(id);
@@ -39,8 +41,12 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 			return store.read("requirements").length;
 		},
 		"findings.list": (id) => d.registry.store(id).read("findings"),
+		"findings.remove": (id, findingId) => {
+			removeFinding(d.registry.store(id), findingId, "user");
+			changed(id);
+		},
 		"findings.override": (id, findingId, reason) => {
-			overrideFinding(d.registry.store(id), findingId, reason, "boris");
+			overrideFinding(d.registry.store(id), findingId, reason, "user", d.userName?.());
 			changed(id);
 		},
 		"findings.reopen": (id, findingId) => {
@@ -54,17 +60,17 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 		},
 		"pins.list": (id) => d.registry.store(id).read("pins"),
 		"pins.add": (id, target, text) => {
-			const p = addPin(d.registry.store(id), target, text, "boris");
+			const p = addPin(d.registry.store(id), target, text, "user");
 			d.emit("data.changed", { projectId: id, what: ["pins"] });
 			return p;
 		},
 		"pins.comment": (id, pinId, text) => {
-			commentPin(d.registry.store(id), pinId, text, "boris");
+			commentPin(d.registry.store(id), pinId, text, "user");
 			d.emit("data.changed", { projectId: id, what: ["pins"] });
 		},
 		"pins.close": async (id, pinId) => {
 			const store = d.registry.store(id);
-			closePin(store, pinId, "boris");
+			closePin(store, pinId, "user");
 			await d.engine.afterChange(store, "pins");
 			d.emit("data.changed", { projectId: id, what: ["pins"] });
 		},
@@ -75,7 +81,7 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 		"notes.list": (id, type) => d.registry.store(id).notes(type),
 		"notes.write": (id, type, title, body) => {
 			if (title.trim().length < 3) throw new Error("Virsraksts ir pārāk īss.");
-			const note = { id: newId("n"), type, title: title.trim(), body, refs: [], by: "boris" as const, at: new Date().toISOString() };
+			const note = { id: newId("n"), type, title: title.trim(), body, refs: [], by: "user" as const, at: new Date().toISOString() };
 			d.registry.store(id).writeNote(note);
 			d.emit("data.changed", { projectId: id, what: ["notes"] });
 			return note;

@@ -1,4 +1,4 @@
-// 5.6 sketch: what Boris marked in BimCraft with his note reaches the agent as an instruction (elements by GlobalId),
+// 5.6 sketch: what the user marked in BimCraft with their note reaches the agent as an instruction (elements by GlobalId),
 // never as model data; the agent's draw_sketch only highlights on screen.
 import assert from "node:assert/strict";
 import { test } from "node:test";

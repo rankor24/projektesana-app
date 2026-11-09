@@ -82,7 +82,7 @@ function Compare({ projectId }: { projectId: string }) {
 	);
 }
 
-/** INV Area into the model: first the batch (which rooms, which values), then Boris writes it. One Revit call per room. */
+/** INV Area into the model: first the batch (which rooms, which values), then the user writes it. One Revit call per room. */
 function InvArea({ projectId, onErr }: { projectId: string; onErr: (e: string) => void }) {
 	const [plan, setPlan] = useState<InvAreaRow[] | null>(null);
 	const [busy, setBusy] = useState(false);

@@ -1,7 +1,7 @@
 // The open project's profile: one row per profile key. The value in force (confirmed, else the newest proposal) with its
-// source, page and quote; every other proposal for the key below it; Boris confirms, rejects, or writes the value himself.
+// source, page and quote; every other proposal for the key below it; the user confirms, rejects, or writes the value themself.
 import { useState } from "react";
-import { PROFILE_KEYS, profileOf, type Fact, type ProfileKey, type Source } from "../../core/model";
+import { PROFILE_KEYS, profileOf, USER_LABEL, type Fact, type ProfileKey, type Source } from "../../core/model";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { Badge, Err, useLoad } from "../ui";
@@ -43,7 +43,9 @@ export function Profile({ projectId }: { projectId: string }) {
 				{title(f.source.sourceId)}, lpp. {f.source.page}
 			</button>
 		) : (
-			<span className="dim small">Boris, {new Date(f.source.at).toLocaleDateString("lv-LV")}</span>
+			<span className="dim small">
+				{f.source.name || USER_LABEL}, {new Date(f.source.at).toLocaleDateString("lv-LV")}
+			</span>
 		);
 
 	return (
@@ -92,7 +94,7 @@ export function Profile({ projectId }: { projectId: string }) {
 									{edit?.key === key ? (
 										<div className="row">
 											<input autoFocus value={edit.value} onChange={(e) => setEdit({ key, value: e.target.value })} />
-											<button className="small primary" disabled={!edit.value.trim()} onClick={() => act(call("facts.setByBoris", projectId, k, edit.value)).then(() => setEdit(null))}>Saglabāt</button>
+											<button className="small primary" disabled={!edit.value.trim()} onClick={() => act(call("facts.setByUser", projectId, k, edit.value)).then(() => setEdit(null))}>Saglabāt</button>
 											<button className="small ghost" onClick={() => setEdit(null)}>Atcelt</button>
 										</div>
 									) : (
@@ -126,7 +128,7 @@ function OtherFacts({ facts, title, onDecide }: { facts: Fact[]; title: (id: str
 										{title(f.source.sourceId)}, lpp. {f.source.page}
 									</button>
 								) : (
-									"Boris"
+									f.source.name || USER_LABEL
 								)}
 							</td>
 							<td>

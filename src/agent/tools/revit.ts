@@ -1,20 +1,20 @@
 // The agent and Revit (task 6.3). The Revit tools themselves come from the Revit MCP server, gated by REVIT_LEVELS
-// (revit-levels.ts): read tools at once, every create / modify tool waits for Boris per batch, delete and code never.
-// Here: Boris's modelling rules as standing text, the skill tools, and the rule that a batch only runs on the project's
+// (revit-levels.ts): read tools at once, every create / modify tool waits for the user per batch, delete and code never.
+// Here: the user's modelling rules as standing text, the skill tools, and the rule that a batch only runs on the project's
 // working copy.
 import { z } from "zod";
 import { listSkills, readSkill } from "../skills.js";
 import { tool, type ToolDef } from "./tool.js";
 
-/** Boris's rules for modelling through the agent (design doc, work plan 6.3). */
+/** The user's rules for modelling through the agent (design doc, work plan 6.3). */
 export const REVIT_RULES = `Revit noteikumi:
 1. Viena darbība — viens īss izsaukums. Nekad garu kodu; send_code_to_revit un delete_element tev nav pieejami.
 2. Vispirms asis un līmeņi, tad sienas. Katra siena ir viena siena (viens elements no stūra līdz stūrim).
 3. Sienas sadala tikai ārējās un iekšējās sienas savienojumā. Izvirzījumiem (pilastri, nišas) lieto plānas sienas, nevis sienas sadalīšanu.
-4. Nekad nepārbūvē to, ko Boris ir izlabojis: pirms izmaiņām nolasi esošo (get_current_view_elements, get_selected_elements); ja elements ir, maini to tikai tad, ja Boris to lūdz.
-5. Izmaiņas notiek tikai darba kopijā (<nosaukums>_WORK.rvt projekta datu mapē); Boris apstiprina katru partiju.
+4. Nekad nepārbūvē to, ko lietotājs ir izlabojis: pirms izmaiņām nolasi esošo (get_current_view_elements, get_selected_elements); ja elements ir, maini to tikai tad, ja lietotājs to lūdz.
+5. Izmaiņas notiek tikai darba kopijā (<nosaukums>_WORK.rvt projekta datu mapē); lietotājs apstiprina katru partiju.
 6. Pēc katras partijas lietotne fiksē revīziju un palaiž telpu pārbaudi pret inventarizāciju; atradumus labo nākamajā partijā.
-7. Vienības: mm. Līmeņu augstumi no inventarizācijas vai Borisa; ja nav datu, jautā.`;
+7. Vienības: mm. Līmeņu augstumi no inventarizācijas vai lietotāja; ja nav datu, jautā.`;
 
 export const skillTools: ToolDef[] = [
 		tool({

@@ -1,4 +1,4 @@
-// Copies the Revit skills from Boris's Claude skills folder into resources/skills/ so the agent gets
+// Copies the Revit skills from the user's Claude skills folder into resources/skills/ so the agent gets
 // the same instructions Claude Code uses (the Konkursu App pattern). The skills folder stays the single
 // source of truth; this copy is build output and git-ignored. A missing skill is reported, never invented.
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";

@@ -54,14 +54,14 @@ test("4.1 planned dates from the BIP grafiks go to the deliveries of that kind; 
 	const dt = list.find((d) => d.kind === "DT")!;
 	assert.equal(dt.submittedDate, null);
 	assert.equal(dt.stage, "Detalizācijas");
-	// Boris's planned date stays after a re-read
-	const kept = mergeDeliveries(list.map((d) => (d.kind === "BP" ? { ...d, plannedDate: "2027-02-25", plannedFrom: "boris" as const } : d)), await readDeliveries(tree()), planned);
+	// the user's planned date stays after a re-read
+	const kept = mergeDeliveries(list.map((d) => (d.kind === "BP" ? { ...d, plannedDate: "2027-02-25", plannedFrom: "user" as const } : d)), await readDeliveries(tree()), planned);
 	assert.equal(kept.find((d) => d.kind === "BP")!.plannedDate, "2027-02-25");
 });
 
 test("4.2 a TN deadline across a holiday: 11 working days, 20 when extended; approvals 15", () => {
 	// requested Mon 2026-11-09; 18 Nov (Wed) is a holiday → 11 working days end on 2026-11-25
-	const c = clockOf({ id: "c1", kind: "tn", issuer: "Izdomātais tīkls", issuerKind: "network_owner", requestedOn: "2026-11-09", extended: false, receivedOn: null, sourceId: null, by: "boris" }, "2026-11-16");
+	const c = clockOf({ id: "c1", kind: "tn", issuer: "Izdomātais tīkls", issuerKind: "network_owner", requestedOn: "2026-11-09", extended: false, receivedOn: null, sourceId: null, by: "user" }, "2026-11-16");
 	assert.equal(c.due, "2026-11-25");
 	assert.equal(c.daysLeft, 6);
 	assert.equal(c.point, "MK 500 27.2");
@@ -71,21 +71,21 @@ test("4.2 a TN deadline across a holiday: 11 working days, 20 when extended; app
 	assert.equal(clockOf({ ...c, receivedOn: "2026-11-20" }, "2026-12-30").state, "saņemts");
 });
 
-test("4.3 the gate: prepare runs the checks; an open finding refuses 'sent'; after an override Boris can send", async () => {
+test("4.3 the gate: prepare runs the checks; an open finding refuses 'sent'; after an override the user can send", async () => {
 	registerAppChecks();
 	registerCheck({ id: "t-gate", title: "t", on: ["delivery"], run: ({ deliveryId }) => ({ results: [{ key: "x", severity: "error", message: "trūkst fasāžu", where: { deliveryId } }] }) });
 	try {
 		const store = ProjectStore.open(tmp(), { id: "BD999", name: "BD999", root: tmp(), createdAt: "2026-11-06T00:00:00Z" });
 		store.write("deliveries", mergeDeliveries([], await readDeliveries(tree()), []), { kind: "t", by: "app" });
 		const mbp = store.read("deliveries").find((d) => d.kind === "MBP")!;
-		assert.throws(() => markSent(store, mbp.id, "boris"), /Vispirms sagatavo/);
+		assert.throws(() => markSent(store, mbp.id, "user"), /Vispirms sagatavo/);
 		const r = await prepareDelivery(store, mbp.id, { dataDir: DATA, today: "2026-11-06" });
 		assert.ok(r.open >= 1);
-		assert.throws(() => markSent(store, mbp.id, "boris"), /nevar atzīmēt.*trūkst fasāžu/);
-		assert.throws(() => markSent(store, mbp.id, "agent"), /tikai Boris/);
+		assert.throws(() => markSent(store, mbp.id, "user"), /nevar atzīmēt.*trūkst fasāžu/);
+		assert.throws(() => markSent(store, mbp.id, "agent"), /tikai lietotājs/);
 		const { overrideFinding } = await import("../src/checks/run.ts");
 		for (const f of blocking(store, mbp.id)) overrideFinding(store, f.id, "Fasādes iesniegtas atsevišķi, ar pavadvēstuli.");
-		markSent(store, mbp.id, "boris");
+		markSent(store, mbp.id, "user");
 		assert.ok(store.read("deliveries").find((d) => d.id === mbp.id)!.sent);
 	} finally {
 		unregisterCheck("t-gate");

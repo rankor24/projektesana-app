@@ -1,21 +1,16 @@
 // Role of an input document = its office folder (design doc 2, office standard 00_Projekta mapju koks).
 // 1.1.1 … 1.1.7 are fixed; 1.1.8 and later are free folders whose role is proposed from the folder name and confirmed by
-// Boris once per project (remembered in roles.json of the project's data folder). No role is guessed from document text.
+// the user once per project (remembered in roles.json of the project's data folder). No role is guessed from document text.
 
 export const INPUTS_DIR = ["01_Projektesana", "1.1_Izejas dati"] as const;
 
-export const FIXED_ROLES: Record<string, string> = {
-	"1.1.1": "Iepirkums",
-	"1.1.2": "Īpašuma dokumenti",
-	"1.1.3": "Fotofiksācija",
-	"1.1.4": "PU",
-	"1.1.5": "Tehniskie noteikumi",
-	"1.1.6": "Topogrāfija",
-	"1.1.7": "Ģeoloģija",
-};
+import { FREE_ROLES } from "../shared/roles.js";
+export { DOC_ROLES, FIXED_ROLES, FREE_ROLES } from "../shared/roles.js";
 
-/** Roles a free folder can have. "Arhīvs" folders are not read: their files are counted, never listed one by one. */
-export const FREE_ROLES = ["TAA", "BIP / BIM prasības", "Grafiks", "Info no pasūtītāja", "Būvatļauja / nosacījumi", "Saskaņojumi", "Punktu mākonis", "Arhīvs", "Cits"] as const;
+/** The roles set on single documents (sourceId → role, from source-roles.json) over the folder roles of a scan. */
+export function applyDocRoles<S extends { id: string; role: string; roleFrom: string }>(sources: S[], byDoc: Record<string, string>): S[] {
+	return sources.map((s) => (byDoc[s.id] ? { ...s, role: byDoc[s.id], roleFrom: "document" } : s));
+}
 
 /** "1.1.03_FF" → "1.1.3"; "1.1.12_arhivs" → "1.1.12"; anything else → null. */
 export function folderKeyOf(name: string): string | null {

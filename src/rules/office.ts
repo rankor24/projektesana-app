@@ -1,5 +1,5 @@
 // Office rules: from the BŪVDIZAINS project folder standard. The standard is company-internal, so its text is never
-// shipped in this (public) repository: Boris sets the path of the PDF in Iestatījumi, the app reads it at run time, and
+// shipped in this (public) repository: the user sets the path of the PDF in Iestatījumi, the app reads it at run time, and
 // each rule finds its verbatim quote in that text by a start and an end phrase. Without the file, no office requirement
 // is created and the checks say so; nothing is quoted from memory.
 import type { Requirement } from "../core/model.js";

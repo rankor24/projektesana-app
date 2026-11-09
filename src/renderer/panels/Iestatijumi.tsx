@@ -36,6 +36,14 @@ export function Iestatijumi() {
 			{err && <div className="err">{err}</div>}
 			{settings.error ? <Err error={settings.error} /> : null}
 			{providers.error ? <Err error={providers.error} /> : null}
+			<div className="section-title">Lietotājs</div>
+			{s && (
+				<label className="row">
+					<span style={{ width: 150 }}>Vārds, uzvārds</span>
+					<input className="grow" defaultValue={s.userName} placeholder="nav norādīts — lēmumi tiek parakstīti kā “lietotājs”" onBlur={(e) => act(() => call("settings.set", { userName: e.target.value.trim() }))} />
+				</label>
+			)}
+			<div className="dim small">Vārds tiek ierakstīts pie taviem lēmumiem (pieņemti atradumi, paša ierakstītas vērtības), BCF komentāros un tiek pateikts aģentam. Jau pieņemtie lēmumi savu vārdu saglabā.</div>
 			<div className="section-title">Aģents</div>
 			{s && (
 				<div className="row">

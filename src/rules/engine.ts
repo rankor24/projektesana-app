@@ -29,7 +29,7 @@ export interface Answer<T> {
 	value: T;
 	/** ids of the rules this answer rests on */
 	because: string[];
-	/** what the code could not decide; non-empty means Boris must check */
+	/** what the code could not decide; non-empty means the user must check */
 	check: string[];
 }
 
@@ -61,7 +61,7 @@ export type Procedure = "pazinojums" | "paskaidrojuma_raksts" | "mbp_buvatlauja"
 
 /**
  * Which MK 529 §7 route applies. Only the cases whose conditions are unambiguous in the text are decided;
- * everything else falls to 7.3 and carries a `check` telling Boris which sub-point to look at.
+ * everything else falls to 7.3 and carries a `check` telling the user which sub-point to look at.
  */
 export function procedureOf(f: Facts): Answer<Procedure> {
 	const g = groupOf(f).value;

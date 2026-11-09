@@ -5,10 +5,15 @@ export type RunEvent =
 	| { type: "thinking"; text: string }
 	| { type: "turn"; n: number }
 	| { type: "tool"; name: string; detail?: string; id?: string }
-	| { type: "tool_result"; name: string; ok: boolean; detail?: string; id?: string; output?: string }
-	/** A `confirm` tool is waiting for Boris; `batch` names what will run. */
+	/** `chars` = the tool's whole answer (output is cut for display); it is what the answer costs the context. */
+	| { type: "tool_result"; name: string; ok: boolean; detail?: string; id?: string; output?: string; chars?: number }
+	/** The conversation is being summarized because it reached the model's limit; `after` is estimated. */
+	| { type: "compact"; phase: "start" | "done" | "failed"; before: number; after?: number; message?: string }
+	/** A `confirm` tool is waiting for the user; `batch` names what will run. */
 	| { type: "confirm"; id: string; tool: string; batch: string }
 	| { type: "done"; text: string }
+	/** A model turn failed on the wire (fetch failed, 429, 5xx…); the run waits `delayMs` and restarts it. Not the end of the run. */
+	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** Raw provider error, never rewritten. */
 	| { type: "error"; engine: "pi"; message: string };
 
@@ -28,9 +33,11 @@ export interface Settings {
 	revitNode: string | null;
 	/** the office standard (projekta mapju koks) PDF; its text gives the office rules their quotes. null = not set */
 	officeStandardPdf: string | null;
+	/** the person using the app: stamped on their decisions, shown in BCF comments, told to the agent. "" = not set */
+	userName: string;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "" };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

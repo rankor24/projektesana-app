@@ -14,7 +14,7 @@ export interface RevitLaunch {
 	serverJs: string;
 	/** node.exe for the server; null = Electron's own node (ELECTRON_RUN_AS_NODE) */
 	node: string | null;
-	/** where it was found: Boris's path in Iestatījumi, or the standard install in %LOCALAPPDATA%\Revit-MCP-Node */
+	/** where it was found: the user's path in Iestatījumi, or the standard install in %LOCALAPPDATA%\Revit-MCP-Node */
 	source?: "iestatījumi" | "automātiski";
 }
 

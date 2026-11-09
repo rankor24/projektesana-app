@@ -50,7 +50,7 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 			if (!g.ok) throw new Error(g.reason);
 			mkdirSync(join(store.dir, "exports"), { recursive: true });
 			writeFileSync(g.path, bytes);
-			store.log({ kind: "bcf.exported", by: "boris", data: { topics: pick.length } });
+			store.log({ kind: "bcf.exported", by: "user", data: { topics: pick.length } });
 			await d.openPath(join(store.dir, "exports"));
 			return g.path;
 		},
@@ -60,7 +60,7 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 			const models = await listModels(store.project.root);
 			const r = await readBcfFile(d.bimcraftApp, new Uint8Array(readFileSync(file)), models.map((m) => m.name));
 			const incoming = r.topics.map((t) => findingOfTopic(t));
-			store.update("findings", (all) => [...all.filter((f) => !incoming.some((x) => x.key === f.key)), ...incoming], { kind: "bcf.imported", by: "boris", data: { topics: incoming.length } });
+			store.update("findings", (all) => [...all.filter((f) => !incoming.some((x) => x.key === f.key)), ...incoming], { kind: "bcf.imported", by: "user", data: { topics: incoming.length } });
 			return { topics: incoming.length, byDiscipline: r.byDiscipline, notes: r.notes };
 		},
 		"sheets.bytes": (id, ref) => refBytes(d.registry.store(id), ref, /\.pdf$/i),

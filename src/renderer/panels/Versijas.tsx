@@ -83,7 +83,7 @@ export function Versijas() {
 	);
 }
 
-/** Revit: the working copy (the agent edits only it), exports of a view and of IFC, and a revision Boris fixes himself. */
+/** Revit: the working copy (the agent edits only it), exports of a view and of IFC, and a revision the user fixes themself. */
 function RevitSection({ projectId }: { projectId: string }) {
 	const status = useLoad(() => call("revit.status"), []);
 	const [views, setViews] = useState<{ id: string; name: string; type: string }[] | null>(null);
@@ -114,7 +114,7 @@ function RevitSection({ projectId }: { projectId: string }) {
 							Darba kopija
 						</button>
 						<button disabled={!!busy} onClick={() => run("IFC eksports", () => call("revit.exportIfc", projectId))}>IFC eksports</button>
-						<button disabled={!!busy} onClick={() => run("Revīzija", () => call("revisions.capture", projectId, "Borisa saglabāta revīzija", []).then((r) => `${r.id}${r.diffFromPrev ? ` +${r.diffFromPrev.added} −${r.diffFromPrev.removed} ~${r.diffFromPrev.changed}` : ""}`))}>
+						<button disabled={!!busy} onClick={() => run("Revīzija", () => call("revisions.capture", projectId, "Saglabāta ar roku", []).then((r) => `${r.id}${r.diffFromPrev ? ` +${r.diffFromPrev.added} −${r.diffFromPrev.removed} ~${r.diffFromPrev.changed}` : ""}`))}>
 							Fiksēt revīziju
 						</button>
 					</div>

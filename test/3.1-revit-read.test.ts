@@ -55,7 +55,7 @@ test("launch: settings first, else the installer's location; nothing found → n
 	assert.deepEqual(launchSpec({ serverJs: "s.js", node: "node.exe" }, "electron.exe"), { command: "node.exe", args: ["s.js"], env: {} });
 });
 
-test("the standard install is found automatically and says so; Boris's path wins and says so", async () => {
+test("the standard install is found automatically and says so; the user's path wins and says so", async () => {
 	const { mkdirSync, writeFileSync } = await import("node:fs");
 	const { join } = await import("node:path");
 	const local = tmp();

@@ -97,10 +97,13 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			await m.logoutProvider((await d.pi()).models, provider);
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
 		},
-		"agent.send": (projectId, text, focus) => d.session.send(projectId, text, focus),
+		"agent.send": (projectId, text, focus, attachments) => d.session.send(projectId, text, focus, attachments ?? []),
 		"agent.stop": () => d.session.stop(),
 		"agent.confirm": (id, allow) => d.session.confirm(id, allow),
 		"agent.history": (projectId) => d.session.history(projectId),
 		"agent.reset": (projectId) => d.session.reset(projectId),
+		"agent.context": (projectId, draft) => d.session.context(projectId, draft),
+		"agent.measureFile": (attachment) => d.session.measureFile(attachment),
+		"agent.compact": (projectId) => d.session.compactNow(projectId),
 	};
 }

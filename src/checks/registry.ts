@@ -1,9 +1,9 @@
-// Checks are code (design doc 6, rule: code raises findings, the agent proposes, Boris decides). Each check names the
-// events it runs on and returns its results; run.ts turns results into findings and keeps Boris's overrides.
+// Checks are code (design doc 6, rule: code raises findings, the agent proposes, the user decides). Each check names the
+// events it runs on and returns its results; run.ts turns results into findings and keeps the user's overrides.
 import type { Severity, Where } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
 
-/** What happened: a scan changed sources, Boris confirmed a fact, a delivery is being prepared, a pin was resolved, … */
+/** What happened: a scan changed sources, the user confirmed a fact, a delivery is being prepared, a pin was resolved, … */
 export type CheckEvent = "sources" | "facts" | "roles" | "requirements" | "delivery" | "pins" | "rooms" | "manual";
 
 export interface CheckContext {

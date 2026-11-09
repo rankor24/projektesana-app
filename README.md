@@ -10,7 +10,7 @@ Design workstation for SIA BŪVDIZAINS: one split view (2D/3D preview with annot
 ## Rule: no real data in this repository
 
 Tests run on invented fixtures under `test/fixtures/` (made-up names, numbers, addresses). Real projects are read only by the
-running app on Boris's PC, from the office folders, which are read-only to the app. Nothing from a real project — file, name,
+running app on the user's PC, from the office folders, which are read-only to the app. Nothing from a real project — file, name,
 address, cadastral number, screenshot, log — is ever committed, including in commit messages.
 
 ## Commands

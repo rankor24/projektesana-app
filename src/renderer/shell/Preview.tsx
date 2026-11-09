@@ -7,6 +7,7 @@ import { SourcePdf } from "../preview/SourcePdf";
 import { IfcView } from "../preview/IfcView";
 import { SheetCompare } from "../preview/SheetCompare";
 import { TextView } from "../preview/TextView";
+import { LawView } from "../preview/LawView";
 import { useUi } from "../state";
 import { Empty, useLoad } from "../ui";
 
@@ -18,6 +19,8 @@ export function sourceExt(s: Source): string {
 export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	const { projectId, preview } = useUi();
 	const sources = useLoad<Source[]>(() => (projectId ? call("sources.list", projectId) : Promise.resolve([])), [projectId]);
+	// the law library is global: its acts open without a project
+	if (preview?.kind === "law") return <section className="preview"><LawView key={preview.sourceId} sourceId={preview.sourceId} quote={preview.quote} /></section>;
 	if (!projectId) return <section className="preview"><Empty title="nav projekta">Atver vai pievieno projektu panelī Projekts.</Empty></section>;
 	if (!preview) return <section className="preview"><Empty title="nav avota">Izvēlies avotu panelī Avoti.</Empty></section>;
 	if (preview.kind === "ifc")

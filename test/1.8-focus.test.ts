@@ -1,4 +1,4 @@
-// 1.8 Fokuss serialisation: exactly what the agent receives when Boris selects a region, a text, a source.
+// 1.8 Fokuss serialisation: exactly what the agent receives when the user selects a region, a text, a source.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { focusText, isFocusItem } from "../src/agent/focus.ts";

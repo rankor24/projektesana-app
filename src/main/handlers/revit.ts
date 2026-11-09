@@ -32,7 +32,7 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 			await revitExport.exportPdf(d.revit, dir, file, [viewId]);
 			const out = join(dir, `${file}.pdf`);
 			if (!existsSync(out)) throw new Error(`Revit neizveidoja ${out}`);
-			d.registry.store(id).log({ kind: "revit.exported", by: "boris", data: { kind: "pdf", viewId } });
+			d.registry.store(id).log({ kind: "revit.exported", by: "user", data: { kind: "pdf", viewId } });
 			await d.openPath(out);
 			return out;
 		},
@@ -41,7 +41,7 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 			const file = `${id}_${stamp()}.ifc`;
 			await revitExport.exportIfc(d.revit, dir, file);
 			if (!existsSync(join(dir, file))) throw new Error(`Revit neizveidoja ${file}`);
-			d.registry.store(id).log({ kind: "revit.exported", by: "boris", data: { kind: "ifc" } });
+			d.registry.store(id).log({ kind: "revit.exported", by: "user", data: { kind: "ifc" } });
 			return join(dir, file);
 		},
 		"revit.workCopy": (id) => makeWorkCopy(d.registry.store(id), d.revit),
@@ -88,7 +88,7 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		"rooms.writeInvArea": async (id, items) => {
 			const store = d.registry.store(id);
 			const r = await writeInvArea(d.revit, items);
-			store.log({ kind: "revit.invArea.written", by: "boris", data: { written: r.written, noParam: r.noParam.length } });
+			store.log({ kind: "revit.invArea.written", by: "user", data: { written: r.written, noParam: r.noParam.length } });
 			return r;
 		},
 		"rooms.compare": async (id) => {

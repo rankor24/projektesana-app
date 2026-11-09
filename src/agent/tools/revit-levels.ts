@@ -1,5 +1,5 @@
 // Approval levels of the Revit MCP tools for the agent (work plan "Agent tools"; design doc 4.2).
-// Read tools run at once; every tool that creates or changes the model waits for Boris's confirmation per batch;
+// Read tools run at once; every tool that creates or changes the model waits for the user's confirmation per batch;
 // delete_element and send_code_to_revit are never offered (levels.ts ALWAYS_NEVER enforces that too).
 import type { Level } from "./levels.js";
 
@@ -17,7 +17,7 @@ export const REVIT_LEVELS: Record<string, Level> = {
 	ai_element_filter: "read",
 	query_stored_data: "read",
 	say_hello: "never",
-	// create and modify: Boris confirms each batch
+	// create and modify: the user confirms each batch
 	create_level: "confirm",
 	create_grid: "confirm",
 	create_line_based_element: "confirm",

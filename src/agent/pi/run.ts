@@ -4,12 +4,14 @@
 // new Agent({ initialState, streamFn, toolExecution }), agent.subscribe, finishTurn for a turn limit,
 // agent.abort on the caller's signal. Carried from projektesana-app v1. Changed for v2: the approval gate runs on pi's
 // beforeToolCall hook; the previous messages of the conversation are passed in and handed back, so a chat keeps its context.
+// A turn that fails on the wire is restarted with backoff (retry.ts) instead of ending the run.
 import { Agent, type AgentMessage, type BeforeToolCallContext, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, ImageContent, Model, RetryPolicy } from "@earendil-works/pi-ai";
 import type { RunEvent } from "../../shared/types.js";
 import { newPiState, piEvents } from "./events.js";
 import { connectMcpServers, type McpLaunchSpec } from "./mcp.js";
 import { effortFor, lookupPiModel, streamFn, type PiEffort, type PiRuntime } from "./models.js";
+import { RUN_RETRY, dropFailedTail, retryDelay, sleep, willRetry } from "./retry.js";
 
 export interface PiRunOptions {
 	runtime: PiRuntime;
@@ -19,6 +21,8 @@ export interface PiRunOptions {
 	/** A model already looked up; wins over provider and modelId. */
 	model?: Model<Api>;
 	prompt: string;
+	/** images that go with the prompt (pasted screenshots); the caller checks the model takes images */
+	images?: ImageContent[];
 	systemPrompt?: string;
 	/** server name → how to start it and which of its tools the model may use */
 	mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }>;
@@ -34,6 +38,8 @@ export interface PiRunOptions {
 	history?: AgentMessage[];
 	/** Receives the conversation after the run, for the next turn. */
 	onMessages?: (messages: AgentMessage[]) => void;
+	/** Restarts of a turn that failed on the wire (default RUN_RETRY: 4 restarts, 2–16 s apart). */
+	retry?: RetryPolicy;
 }
 
 export const DEFAULT_MAX_TURNS = 80;
@@ -85,7 +91,14 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 			}
 			return undefined;
 		};
+		// a turn that failed on the wire (fetch failed, 429, 5xx…) is held back instead of shown as the run's end:
+		// its message_end / turn_end / agent_end would tell the side panel the run is over
+		const policy = o.retry ?? RUN_RETRY;
+		let restarts = 0;
+		let held = null as AgentMessage | null;
 		agent.subscribe((ev) => {
+			if (ev.type === "message_end" && !o.signal.aborted && willRetry(ev.message, restarts + 1, policy)) held = ev.message;
+			if (held && (ev.type === "message_end" || ev.type === "turn_end" || ev.type === "agent_end")) return;
 			for (const r of piEvents(ev, st)) send(r);
 		});
 
@@ -94,7 +107,22 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 		if (o.signal.aborted) stop();
 		else o.signal.addEventListener("abort", stop, { once: true });
 		try {
-			await agent.prompt(o.prompt);
+			await agent.prompt(o.prompt, o.images?.length ? o.images : undefined);
+			// restart the failed turn from the same transcript: the user's prompt and every tool result so far stay
+			while (held) {
+				const failed = held as AssistantMessage;
+				held = null;
+				restarts++;
+				const delayMs = retryDelay(restarts, policy);
+				send({ type: "retry", attempt: restarts, of: policy.maxRetries, delayMs, message: failed.errorMessage || "error" });
+				if (!(await sleep(delayMs, o.signal))) {
+					st.errored = true;
+					send({ type: "error", engine: "pi", message: "aborted" });
+					break;
+				}
+				agent.state.messages = dropFailedTail(agent.state.messages);
+				await agent.continue();
+			}
 		} finally {
 			o.signal.removeEventListener("abort", stop);
 		}
@@ -102,7 +130,8 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 	} catch (e) {
 		if (!reported) send({ type: "error", engine: "pi", message: (e as Error).message });
 	} finally {
-		if (agent) o.onMessages?.([...agent.state.messages]);
+		// a failed last turn is not carried into the next message: it holds no answer, only an empty assistant turn
+		if (agent) o.onMessages?.(dropFailedTail(agent.state.messages));
 		await closeTools?.().catch(() => undefined);
 	}
 }

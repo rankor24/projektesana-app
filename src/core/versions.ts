@@ -54,7 +54,7 @@ export function versionsBetween(store: ProjectStore, from: string, to: string): 
 			open: r.ifc ? { ifc: `rev:${r.id}` } : undefined,
 		});
 	});
-	// the app's own data: what Boris and the agent decided, counted per day and kind
+	// the app's own data: what the user and the agent decided, counted per day and kind
 	const days = new Map<string, Map<string, number>>();
 	for (const e of store.events()) {
 		if (!inRange(e.at, from, to) || /^(sources\.|checks\.ran|requirements\.(refreshed|status)|deliveries\.read|test\.)/.test(e.kind)) continue;

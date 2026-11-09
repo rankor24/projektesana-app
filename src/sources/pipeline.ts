@@ -9,6 +9,7 @@ import { mergeSources } from "./dedupe.js";
 import { mergeDeliveries, plannedFromSchedule, readDeliveries } from "./deliveries.js";
 import { expandContainers } from "./edoc-sources.js";
 import { hashFiles } from "./hash.js";
+import { applyDocRoles } from "./roles.js";
 import { scanInputs, type ScanResult } from "./scan.js";
 import type { Extracted } from "./text/index.js";
 import { TEXT_FORMATS } from "./text/index.js";
@@ -64,7 +65,8 @@ export async function scanProject(store: ProjectStore, progress: (p: Omit<ScanPr
 	);
 	const merged = mergeSources(prev, hashed, scan.surveys, scan.folders);
 	keepBlobs(store, hashed);
-	let sources = await expandContainers(merged.sources, root);
+	// a role the user set on one document wins over its folder's role, scan after scan
+	let sources = applyDocRoles(await expandContainers(merged.sources, root), store.readMeta<Record<string, string>>("source-roles", {}));
 	store.write("sources", sources, { kind: "sources.scanned", by: "app", data: { added: merged.added.length, changed: merged.changed.length, gone: merged.gone.length } });
 
 	sources = await readAllText(store, sources, progress, hooks);

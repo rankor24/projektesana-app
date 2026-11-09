@@ -2,9 +2,9 @@
 //
 // Law: each rule of data/rules.json whose conditions hold for the profile becomes one row per required item, citing the
 // point with its version dates (citations.ts). A condition the profile does not know yet is NOT treated as met or unmet:
-// the row is kept with "attiecas, ja …" so Boris sees it (v1 silently matched unknown keys).
+// the row is kept with "attiecas, ja …" so the user sees it (v1 silently matched unknown keys).
 // Documents: numbered paragraphs of the PU / BIP / permit and the numbered conditions of each TN become proposed rows with
-// page and quote. Ids are stable, so a refresh keeps Boris's decisions, status and evidence.
+// page and quote. Ids are stable, so a refresh keeps the user's decisions, status and evidence.
 import { groupOf, type Facts, type Use, type Work } from "./engine.js";
 import { citationOf, snapshotOf } from "./citations.js";
 import type { DocStage, Rule } from "./rules.js";
@@ -135,7 +135,7 @@ export function documentRequirements(sources: Source[], textOf: (s: Source) => {
 	return out;
 }
 
-/** Merge a fresh derivation into the stored rows: decisions, status and evidence of known ids stay; agent and Boris rows stay. */
+/** Merge a fresh derivation into the stored rows: decisions, status and evidence of known ids stay; agent and user rows stay. */
 export function mergeRequirements(prev: Requirement[], fresh: Requirement[]): Requirement[] {
 	const byId = new Map(prev.map((r) => [r.id, r]));
 	const derived = new Set(fresh.map((r) => r.id));
@@ -148,12 +148,12 @@ export function mergeRequirements(prev: Requirement[], fresh: Requirement[]): Re
 				...f,
 				status: p.status === "justified" || p.status === "met" || p.status === "failed" ? p.status : f.status,
 				evidence: p.evidence.length ? p.evidence : f.evidence,
-				// Boris's decision on a document row stays; a law row follows the profile's state
+				// The user's decision on a document row stays; a law row follows the profile's state
 				state: f.origin === "law" ? f.state : p.state,
 				at: p.at,
 			});
 	}
-	// rows not derived by code (agent / Boris) are kept as they are; derived rows that no longer apply are dropped
+	// rows not derived by code (agent / user) are kept as they are; derived rows that no longer apply are dropped
 	for (const p of prev) if (!derived.has(p.id) && !p.id.startsWith("law:") && !p.id.startsWith("doc:")) out.push(p);
 	return out;
 }

@@ -1,5 +1,5 @@
 // The agent's requirement tools: list, add one with a verified citation (law point or document quote), and propose a
-// justification for a finding. All of these are proposals; Boris decides.
+// justification for a finding. All of these are proposals; the user decides.
 import { z } from "zod";
 import { verifyQuote } from "../../core/facts.js";
 import { newId, type Requirement } from "../../core/model.js";
@@ -30,7 +30,7 @@ export const requirementTools: ToolDef[] = [
 		name: "add_requirement",
 		level: "propose",
 		description:
-			"Propose a requirement. Citation: either ruleId (a law rule shipped with the app) or sourceId + page + verbatim quote from a project document. The code verifies the citation. Boris confirms.",
+			"Propose a requirement. Citation: either ruleId (a law rule shipped with the app) or sourceId + page + verbatim quote from a project document. The code verifies the citation. The user confirms.",
 		input: {
 			origin: z.enum(["law", "pu", "bip", "tn", "permit", "office"]),
 			text: z.string().min(5),
@@ -47,7 +47,7 @@ export const requirementTools: ToolDef[] = [
 			let citation: Requirement["citation"];
 			if (a.ruleId) {
 				const r = loadRules(ctx.dataDir).find((x) => x.id === a.ruleId);
-				if (!r) throw new Error(`Likuma noteikums ${a.ruleId} nav zināms. Meklē ar search_law; jaunu punktu pievieno Boris.`);
+				if (!r) throw new Error(`Likuma noteikums ${a.ruleId} nav zināms. Meklē ar search_law; jaunu punktu pievieno lietotājs.`);
 				const c = citationOf(r, snapshotOf(ctx.dataDir, r.actId), new Date().toISOString().slice(0, 10));
 				citation = { kind: "law", act: c.act, actId: r.actId, actVersionDate: c.actVersionDate, readOn: r.read_on, point: r.article, url: c.url, quote: r.quote };
 			} else {
@@ -58,13 +58,13 @@ export const requirementTools: ToolDef[] = [
 			}
 			const req: Requirement = { id: newId("req"), origin: a.origin, citation, text: a.text, appliesTo: { stages: a.stages, sections: a.sections, deliveries: a.deliveries }, checkId: null, status: "open", evidence: [], state: "proposed", by: "agent", at: new Date().toISOString() };
 			store.update("requirements", (all) => [...all, req], { kind: "requirement.proposed", by: "agent", data: { id: req.id } });
-			return { ok: true, requirement: req.id, note: "Priekšlikums; Boris to apstiprina panelī Prasības." };
+			return { ok: true, requirement: req.id, note: "Priekšlikums; lietotājs to apstiprina panelī Prasības." };
 		},
 	}),
 	tool({
 		name: "propose_justification",
 		level: "propose",
-		description: "For a finding of a check that does not fit this project's situation: propose a reason why it may stay. Boris decides; the check itself is never changed.",
+		description: "For a finding of a check that does not fit this project's situation: propose a reason why it may stay. The user decides; the check itself is never changed.",
 		input: { findingId: z.string(), reason: z.string().min(10) },
 		run: (ctx, { findingId, reason }) => {
 			const store = storeOf(ctx);
@@ -80,7 +80,7 @@ export const requirementTools: ToolDef[] = [
 				{ kind: "finding.justification_proposed", by: "agent", data: { findingId } },
 			);
 			if (!found) throw new Error(`Atradums ${findingId} nav atrasts.`);
-			return { ok: true, note: "Pamatojums nodots Borisam; atradums paliek atvērts, līdz viņš izlemj." };
+			return { ok: true, note: "Pamatojums nodots lietotājam; atradums paliek atvērts, līdz viņš izlemj." };
 		},
 	}),
 ];

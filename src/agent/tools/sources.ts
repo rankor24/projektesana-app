@@ -108,7 +108,7 @@ export const sourceTools: ToolDef[] = [
 	tool({
 		name: "search_law",
 		level: "read",
-		description: "Search the law library (likumi.lv acts shipped with the app: Būvniecības likums, MK 500, MK 529, LBN 202-18, LBN 200-21, holidays act; plus what Boris added). Returns verbatim paragraphs with URL and read date. Cite them; never paraphrase as law.",
+		description: "Search the law library (likumi.lv acts shipped with the app: Būvniecības likums, MK 500, MK 529, LBN 202-18, LBN 200-21, holidays act; plus what the user added). Returns verbatim paragraphs with URL and read date. Cite them; never paraphrase as law.",
 		input: { q: z.string(), limit: z.number().int().min(1).max(60).optional() },
 		run: (ctx, { q, limit }) => {
 			const hits = new Library(join(ctx.appDir, "library"), join(ctx.dataDir, "law-snapshots")).search(q, { limit: limit ?? 20 });
@@ -141,11 +141,11 @@ export const sourceTools: ToolDef[] = [
 		name: "set_fact",
 		level: "propose",
 		description:
-			"Propose a fact with its source: the source id, the page and a verbatim quote from that page (read_source). The code checks the quote; a quote not on that page is refused. Boris confirms. Keys: profile.workType|group|procedure|stagesInContract|sections|funding|use|totalAreaM2|floorsAbove|floorsBelow|address|cadastralNo, bim.bipPresent, bim.lodByStage, or a dotted key of your own (topo.approvedOn, tn.number, …).",
+			"Propose a fact with its source: the source id, the page and a verbatim quote from that page (read_source). The code checks the quote; a quote not on that page is refused. The user confirms. Keys: profile.workType|group|procedure|stagesInContract|sections|funding|use|totalAreaM2|floorsAbove|floorsBelow|address|cadastralNo, bim.bipPresent, bim.lodByStage, or a dotted key of your own (topo.approvedOn, tn.number, …).",
 		input: { key: z.string(), value: z.string(), sourceId: z.string(), page: z.number().int().min(1), quote: z.string() },
 		run: (ctx, a) => {
 			const f = proposeFact(storeOf(ctx), { key: a.key, value: a.value, source: { sourceId: a.sourceId, page: a.page, quote: a.quote }, by: "agent" });
-			return { ok: true, fact: f.id, state: f.state, note: "Priekšlikums. Boris to apstiprina panelī Projekts." };
+			return { ok: true, fact: f.id, state: f.state, note: "Priekšlikums. Lietotājs to apstiprina panelī Projekts." };
 		},
 	}),
 	tool({
@@ -161,7 +161,7 @@ export const sourceTools: ToolDef[] = [
 	tool({
 		name: "write_note",
 		level: "propose",
-		description: "Write to the project memory: a decision Boris made, an answer to a question, a learning, or a question for Boris. Short markdown; refs = ids it is about.",
+		description: "Write to the project memory: a decision the user made, an answer to a question, a learning, or a question for the user. Short markdown; refs = ids it is about.",
 		input: { type: z.enum(["decision", "answer", "learning", "question"]), title: z.string().min(3), body: z.string(), refs: z.array(z.string()).optional() },
 		run: (ctx, a) => {
 			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString() };

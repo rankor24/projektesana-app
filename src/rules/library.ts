@@ -1,4 +1,4 @@
-// Law library: acts and standards Boris adds by link or file, plus the built-in likumi.lv snapshots.
+// Law library: acts and standards the user adds by link or file, plus the built-in likumi.lv snapshots.
 // Lives in the app's user data (shared by all projects). Text is kept per paragraph so a search returns verbatim
 // paragraphs with source, URL and read date — the same citation discipline as the rules.
 //
@@ -87,7 +87,7 @@ export class Library {
 		writeFileSync(this.indexFile(), JSON.stringify(all, null, 1), "utf8");
 	}
 
-	/** Built-in snapshots first, then what Boris added (removed ones hidden). */
+	/** Built-in snapshots first, then what the user added (removed ones hidden). */
 	list(category?: Category): Source[] {
 		const builtin = BUILTIN.filter((b) => existsSync(join(this.snapshotDir, `${b.actId}.txt`))).map((b): Source => {
 			const text = readFileSync(join(this.snapshotDir, `${b.actId}.txt`), "utf8");
@@ -123,7 +123,7 @@ export class Library {
 		return this.add({ title: title?.trim() || titleOf(html) || url, category, kind: "url", url: url.trim(), file: null }, htmlToParagraphs(html));
 	}
 
-	/** A file Boris holds (LVS standards are paid PDFs). A copy is kept so the original can be moved or deleted. */
+	/** A file the user holds (LVS standards are paid PDFs). A copy is kept so the original can be moved or deleted. */
 	async addFile(abs: string, category: Category, title?: string): Promise<Source> {
 		const t = await extractText(abs);
 		if (t.state !== "ok") throw new Error(`No avota neizdevās nolasīt tekstu: ${t.reason ?? t.state}`);

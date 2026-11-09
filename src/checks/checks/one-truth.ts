@@ -2,9 +2,10 @@
 // - Address: every source that states the object's address says the same street and number (case, spacing, punctuation,
 //   post code and town ignored). A candidate without a house number is not an address ("… nav" in a form field).
 // - Cadastral designations and the total area: a project can have several land units and buildings, so they are NOT
-//   required to be equal. What the PU / tender (or Boris) states must be found in the property documents — a PU that
+//   required to be equal. What the PU / tender (or the user) states must be found in the property documents — a PU that
 //   names a designation or an area no property document has is the finding. (Found on a real project, 2026-11-06: the
 //   first version compared all designations and flagged a site with 18 buildings.)
+import { USER_LABEL } from "../../core/model.js";
 import type { CheckResult, Check } from "../registry.js";
 import type { ProjectStore } from "../../core/store.js";
 import { extractCadastral } from "../../sources/extract/cadastral.js";
@@ -19,6 +20,8 @@ const KEYS: Record<string, string> = {
 
 const STATED_BY = new Set(["PU", "Iepirkums", "Info no pasūtītāja"]);
 const PROPERTY = "Īpašuma dokumenti";
+/** the role of a value the user wrote themself (no document behind it) */
+const BY_USER = "Lietotājs";
 
 /** Street and number only: "…Testa iela 1, Izdomāti, LV-0000" → "testa iela 1". */
 export function normAddress(s: string): string {
@@ -68,7 +71,7 @@ export function valuesOf(store: ProjectStore): Map<string, Seen[]> {
 		if (f.state === "confirmed") {
 			const sid = "sourceId" in f.source ? f.source.sourceId : null;
 			const src = sid ? sources.find((x) => x.id === sid) : null;
-			add(f.key, { value: f.value, norm: normOf(f.key, f.value), sourceId: sid, title: src?.title ?? "Boris", page: "page" in f.source ? f.source.page : null, role: src?.role ?? "Boris" });
+			add(f.key, { value: f.value, norm: normOf(f.key, f.value), sourceId: sid, title: src?.title ?? ("name" in f.source && f.source.name ? f.source.name : USER_LABEL), page: "page" in f.source ? f.source.page : null, role: src?.role ?? BY_USER });
 		}
 	return out;
 }
@@ -83,6 +86,8 @@ export const oneTruthCheck: Check = {
 		const results: CheckResult[] = [];
 		const reqs = store.read("requirements");
 		const reqFor = (seen: Seen[]) => reqs.find((r) => r.origin !== "law" && seen.some((s) => r.citation.quote.includes(s.value)))?.id;
+		// values with nothing to compare against, gathered into ONE note: the values themselves, where each was read
+		const notCompared: { key: string; stated: Seen[] }[] = [];
 		for (const [key, seen] of valuesOf(store)) {
 			if (key === "profile.address") {
 				const distinct = [...new Set(seen.map((s) => s.norm))];
@@ -90,12 +95,11 @@ export const oneTruthCheck: Check = {
 				results.push({ key, severity: "error", message: `adrese atšķiras avotos: ${seen.map(where).join("; ")}`, where: { sourceId: seen[0].sourceId ?? undefined, page: seen[0].page ?? undefined }, requirementId: reqFor(seen) });
 				continue;
 			}
-			const stated = seen.filter((s) => STATED_BY.has(s.role) || s.role === "Boris");
+			const stated = seen.filter((s) => STATED_BY.has(s.role) || s.role === BY_USER);
 			const property = new Set(seen.filter((s) => s.role === PROPERTY).map((s) => s.norm));
 			if (!stated.length) continue;
 			if (!property.size) {
-				const n = new Set(stated.map((s) => s.norm)).size;
-				results.push({ key: `${key}:no-property`, severity: "info", message: `${KEYS[key]}: PU/Boris nosauc ${n}, bet avotos nav īpašuma dokumentu (lomā “${PROPERTY}”) — nav ar ko salīdzināt`, where: { sourceId: stated[0].sourceId ?? undefined, page: stated[0].page ?? undefined } });
+				notCompared.push({ key, stated });
 				continue;
 			}
 			for (const s of stated) {
@@ -103,6 +107,20 @@ export const oneTruthCheck: Check = {
 				results.push({ key: `${key}:${s.norm}`, severity: "error", message: `${KEYS[key]} ${where(s)} nav atrodams īpašuma dokumentos (tajos: ${[...property].slice(0, 6).join(", ")}${property.size > 6 ? " …" : ""})`, where: { sourceId: s.sourceId ?? undefined, page: s.page ?? undefined }, requirementId: reqFor([s]) });
 			}
 		}
+		if (notCompared.length) {
+			const anyProperty = store.read("sources").some((s) => s.role === PROPERTY);
+			const head = anyProperty ? `Īpašuma dokumentos šīs vērtības nav atrastas, tāpēc nav salīdzinātas` : `Nav neviena avota ar lomu “${PROPERTY}”, tāpēc šīs vērtības nav salīdzinātas (lomu dokumentam var iestatīt panelī Avoti)`;
+			const first = notCompared[0].stated[0];
+			results.push({ key: "not-compared", severity: "info", message: `${head}: ${notCompared.map(({ key, stated }) => `${KEYS[key]} — ${listValues(stated)}`).join("; ")}`, where: { sourceId: first.sourceId ?? undefined, page: first.page ?? undefined } });
+		}
 		return { results };
 	},
 };
+
+/** Each distinct value once, with where it was first read; at most 3, then how many more. */
+export function listValues(seen: Seen[], max = 3): string {
+	const byNorm = new Map<string, Seen>();
+	for (const s of seen) if (!byNorm.has(s.norm)) byNorm.set(s.norm, s);
+	const all = [...byNorm.values()];
+	return all.slice(0, max).map(where).join(", ") + (all.length > max ? ` un vēl ${all.length - max}` : "");
+}

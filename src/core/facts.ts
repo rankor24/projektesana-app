@@ -1,4 +1,4 @@
-// Facts: proposed by the agent or the code with a verified quote, or written by Boris; confirmed or rejected by Boris only.
+// Facts: proposed by the agent or the code with a verified quote, or written by the user; confirmed or rejected by the user only.
 // The quote is checked here, against the cached text of the exact page, whoever proposes it.
 import { quoteOnPage } from "../sources/extract/common.js";
 import { newId, type Fact, type FactSource, type Who } from "./model.js";
@@ -45,15 +45,15 @@ export function proposeFact(store: ProjectStore, f: ProposeInput, now = new Date
 	return fact;
 }
 
-/** Boris states a fact himself (no document says it): confirmed at once, source = Boris. */
-export function borisFact(store: ProjectStore, key: string, value: string, now = new Date()): Fact {
+/** The user states a fact (no document says it): confirmed at once; the source is the user, with their name if set. */
+export function userFact(store: ProjectStore, key: string, value: string, name?: string, now = new Date()): Fact {
 	if (!FACT_KEY.test(key)) throw new Error(`Nederīga fakta atslēga: ${key}`);
-	const fact: Fact = { id: newId("f"), key, value: value.trim(), source: { kind: "boris", at: now.toISOString() }, state: "confirmed", by: "boris", at: now.toISOString() };
-	store.update("facts", (all) => [...all, fact], { kind: "fact.boris", by: "boris", data: { id: fact.id, key } });
+	const fact: Fact = { id: newId("f"), key, value: value.trim(), source: { kind: "user", at: now.toISOString(), ...(name ? { name } : {}) }, state: "confirmed", by: "user", at: now.toISOString() };
+	store.update("facts", (all) => [...all, fact], { kind: "fact.user", by: "user", data: { id: fact.id, key } });
 	return fact;
 }
 
-/** Only Boris decides. Confirming one value of a key rejects the other proposed values of the same key. */
+/** Only the user decides. Confirming one value of a key rejects the other proposed values of the same key. */
 export function decideFact(store: ProjectStore, factId: string, state: "confirmed" | "rejected"): void {
 	store.update(
 		"facts",
@@ -66,6 +66,6 @@ export function decideFact(store: ProjectStore, factId: string, state: "confirme
 				return x;
 			});
 		},
-		{ kind: `fact.${state}`, by: "boris", data: { id: factId } },
+		{ kind: `fact.${state}`, by: "user", data: { id: factId } },
 	);
 }

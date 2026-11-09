@@ -6,7 +6,7 @@ import type { Registry } from "../../core/registry.js";
 import type { ProjectStore } from "../../core/store.js";
 import type { EventName, EventSpec, Handlers, ProjectRow, ScanSummaryRow } from "../../shared/api.js";
 import { scanProject, type PipelineHooks } from "../../sources/pipeline.js";
-import { FREE_ROLES } from "../../sources/roles.js";
+import { DOC_ROLES, FREE_ROLES } from "../../sources/roles.js";
 import { sourceBytes } from "../../sources/bytes.js";
 export { sourceBytes };
 
@@ -19,17 +19,19 @@ export interface ProjectDeps {
 	afterChange?: (store: ProjectStore, what: string) => void | Promise<void>;
 }
 
-type K = "projects.list" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
+type K = "projects.list" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.setRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
 
 export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 	const scanning = new Set<string>();
 	const row = (id: string): ProjectRow => {
 		const p = d.registry.get(id);
 		const store = d.registry.store(id);
-		const openFindings = store.read("findings").filter((f) => f.state === "open").length;
+		const open = store.read("findings").filter((f) => f.state === "open");
+		const openFindings = open.filter((f) => f.severity !== "info").length;
+		const openInfo = open.length - openFindings;
 		const deliveries = store.read("deliveries");
 		const lastSent = deliveries.filter((x) => x.submittedDate).sort((a, b) => (a.submittedDate! < b.submittedDate! ? 1 : -1))[0];
-		return { ...p, missing: !existsSync(p.root), stage: lastSent?.stage ?? null, openFindings };
+		return { ...p, missing: !existsSync(p.root), stage: lastSent?.stage ?? null, openFindings, openInfo };
 	};
 	return {
 		"projects.list": () => d.registry.list().map((p) => row(p.id)),
@@ -66,12 +68,32 @@ export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 			if (!(FREE_ROLES as readonly string[]).includes(role)) throw new Error(`Nezināma loma: ${role}`);
 			const store = d.registry.store(id);
 			const roles = store.readMeta<Record<string, string>>("roles", {});
-			store.writeMeta("roles", { ...roles, [folderKey]: role }, { kind: "role.confirmed", by: "boris", data: { folderKey, role } });
-			store.update("sources", (all) => all.map((s) => (s.folderKey === folderKey ? { ...s, role, roleFrom: "confirmed" as const } : s)), { kind: "sources.role", by: "boris", data: { folderKey, role } });
+			store.writeMeta("roles", { ...roles, [folderKey]: role }, { kind: "role.confirmed", by: "user", data: { folderKey, role } });
+			// a document with its own role keeps it
+			store.update("sources", (all) => all.map((s) => (s.folderKey === folderKey && s.roleFrom !== "document" ? { ...s, role, roleFrom: "confirmed" as const } : s)), { kind: "sources.role", by: "user", data: { folderKey, role } });
 			const summary = store.readMeta<ScanSummaryRow | null>("scan", null);
 			if (summary) store.writeMeta("scan", { ...summary, folders: summary.folders.map((f) => (f.folderKey === folderKey ? { ...f, role, roleFrom: "confirmed" } : f)) });
 			await d.afterChange?.(store, "roles");
 			d.emit("data.changed", { projectId: id, what: ["sources"] });
+		},
+		"sources.setRole": async (id, sourceId, role) => {
+			if (role !== null && !DOC_ROLES.includes(role)) throw new Error(`Nezināma loma: ${role}`);
+			const store = d.registry.store(id);
+			const src = store.read("sources").find((s) => s.id === sourceId);
+			if (!src) throw new Error(`Avots ${sourceId} nav atrasts.`);
+			const byDoc = { ...store.readMeta<Record<string, string>>("source-roles", {}) };
+			if (role) byDoc[sourceId] = role;
+			else delete byDoc[sourceId];
+			store.writeMeta("source-roles", byDoc, { kind: "source.role", by: "user", data: { sourceId, role } });
+			// back to the folder's role: the one the last scan gave the folder
+			const folder = store.readMeta<ScanSummaryRow | null>("scan", null)?.folders.find((f) => f.folderKey === src.folderKey);
+			store.update(
+				"sources",
+				(all) => all.map((s) => (s.id !== sourceId ? s : role ? { ...s, role, roleFrom: "document" as const } : { ...s, role: folder?.role ?? "Cits", roleFrom: folder?.roleFrom ?? ("unconfirmed" as const) })),
+				{ kind: "sources.role", by: "user", data: { sourceId, role } },
+			);
+			await d.afterChange?.(store, "roles");
+			d.emit("data.changed", { projectId: id, what: ["sources", "findings", "requirements"] });
 		},
 		"sources.list": (id) => d.registry.store(id).read("sources"),
 		"sources.text": (id, sourceId) => {

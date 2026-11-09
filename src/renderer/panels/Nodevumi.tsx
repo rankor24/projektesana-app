@@ -1,5 +1,5 @@
 // Nodevumi: deliveries read from 1.4_Nodevumi (and planned ones from the BIP grafiks or typed), each with its sheets;
-// "Sagatavot" runs the checks for the delivery; "Atzīmēt kā nosūtītu" is the gate: only with no open findings, only by Boris.
+// "Sagatavot" runs the checks for the delivery; "Atzīmēt kā nosūtītu" is the gate: only with no open findings, only by the user.
 // Below: the TN and approval clocks.
 import { useState } from "react";
 import { BIM_STAGES, type Delivery, type Finding } from "../../core/model";

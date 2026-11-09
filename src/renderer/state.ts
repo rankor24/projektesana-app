@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { FocusItem } from "../shared/api";
 
-export type PreviewTarget = { kind: "source"; sourceId: string; page?: number } | { kind: "ifc"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc" } | null;
+export type PreviewTarget = { kind: "source"; sourceId: string; page?: number } | { kind: "ifc"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc" } | { kind: "law"; sourceId: string; quote?: string } | null;
 
 interface UiState {
 	projectId: string | null;

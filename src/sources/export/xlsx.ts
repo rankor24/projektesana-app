@@ -1,5 +1,5 @@
 // A minimal, valid .xlsx writer (fflate, no native modules): named sheets of rows, numbers as numbers, a bold header row,
-// column widths. Enough for the room table and check sheets Boris opens in Excel.
+// column widths. Enough for the room table and check sheets the user opens in Excel.
 import { strToU8, zipSync } from "fflate";
 
 export type Cell = string | number | null;

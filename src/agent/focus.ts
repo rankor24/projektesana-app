@@ -1,4 +1,4 @@
-// The Fokuss: what Boris has selected in the panels and the preview, as the agent receives it.
+// The Fokuss: what the user has selected in the panels and the preview, as the agent receives it.
 // One serialisation for both places it is used: the header of every prompt and the get_focus tool.
 import type { FocusItem } from "../shared/api.js";
 

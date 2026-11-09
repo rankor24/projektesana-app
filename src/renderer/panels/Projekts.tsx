@@ -115,7 +115,15 @@ function ProjectList({ onOpen }: { onOpen: () => void }) {
 									<div className="dim small mono">{p.root}</div>
 								</td>
 								<td>{p.stage ?? <span className="dim">nav nodevumu</span>}</td>
-								<td>{p.openFindings ? <Badge tone="bad">{p.openFindings}</Badge> : <span className="dim">0</span>}</td>
+								<td>
+									{p.openFindings ? <Badge tone="bad">{p.openFindings}</Badge> : <span className="dim">0</span>}
+									{p.openInfo > 0 && (
+										<span className="dim small" title="Informācija: neaptur nodevumu">
+											{" "}
+											+{p.openInfo} info
+										</span>
+									)}
+								</td>
 								<td onClick={(e) => e.stopPropagation()}>
 									<div className="row">
 										<button disabled={p.missing} onClick={() => call("projects.scan", p.id).catch((e) => setErr(errText(e)))}>Nolasīt</button>

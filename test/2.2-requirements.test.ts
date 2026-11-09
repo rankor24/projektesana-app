@@ -10,7 +10,7 @@ import { FIX } from "./helpers.ts";
 
 const DATA = join(import.meta.dirname, "..", "data");
 const at = "2026-11-06T00:00:00.000Z";
-const fact = (key: string, value: string, state: Fact["state"] = "confirmed"): Fact => ({ id: `f_${key}_${value}`, key: `profile.${key}`, value, source: { kind: "boris", at }, state, by: "boris", at });
+const fact = (key: string, value: string, state: Fact["state"] = "confirmed"): Fact => ({ id: `f_${key}_${value}`, key: `profile.${key}`, value, source: { kind: "user", at }, state, by: "user", at });
 
 const PROFILE_G3 = [fact("workType", "new_build"), fact("use", "public"), fact("group", "3"), fact("funding", "pašvaldības budžets"), fact("stagesInContract", "BP")];
 
@@ -65,7 +65,7 @@ test("TN conditions become tn rows", () => {
 	]);
 });
 
-test("merge keeps Boris's decisions and the agent's own rows", () => {
+test("merge keeps the user's decisions and the agent's own rows", () => {
 	const pages = readFileSync(join(FIX, "docs", "pu.txt"), "utf8").split("\f");
 	const s: Source = { id: "s_pu", kind: "document", folderKey: "1.1.4", paths: ["pu.docx"], title: "PU", role: "PU", roleFrom: "folder", versions: [{ sha256: "c".repeat(64), size: 1, mtime: at, seenAt: at, textState: "ok" }], signers: [] };
 	const first = documentRequirements([s], () => ({ pages }));

@@ -34,7 +34,7 @@ export function ctxEnv(c: ToolCtx): Record<string, string> {
 }
 
 export function storeOf(c: ToolCtx): ProjectStore {
-	if (!c.projectId) throw new Error("nav projekta: Boris nav atvēris projektu.");
+	if (!c.projectId) throw new Error("nav projekta: lietotājs nav atvēris projektu.");
 	return ProjectStore.load(c.projectsDir, c.projectId);
 }
 

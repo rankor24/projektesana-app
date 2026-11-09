@@ -1,11 +1,11 @@
 # Projektēšanas App v2 — design decisions and facts
 
-Date: 2026-11-05, revised through the evening. Status: **the decisions here are Boris's; the work order is `v2-work-plan.md`.** This file holds what and why; the work plan holds what to do, in order.
+Date: 2026-11-05, revised through the evening. Status: **the decisions here are the user's; the work order is `v2-work-plan.md`.** This file holds what and why; the work plan holds what to do, in order.
 Language rule: English prose; Latvian for UI strings, domain terms and file names.
 
 ---
 
-## 0. Decisions Boris has made (2026-11-05)
+## 0. Decisions the user has made (2026-11-05)
 
 1. **Core = five steps**: Uzdevums, Izejas dati (with the existing-building model first), Skice, MBP and būvatļauja, Būvprojekts and ekspertīze. Iepirkums stays in the Konkursu App. Būvdarbi, nodošana and apsaimniekošana come later (parameters, BCF clash resolution, as-built checked against a laser scan). The three apps combine only when all three work.
 2. **Any project size**, from a skice finished in a day to a project that runs two years.
@@ -100,10 +100,10 @@ A one-day skice therefore shows one delivery on the timeline, a short requiremen
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Top bar: project and timeline.** Project switcher and profile; the BIM stages with their deliveries as dated chips, read from `1.4_Nodevumi`; TN and approval items with their clocks on the same line, because they sit between deliveries. **Mapping (Boris, 2026-11-05)**: `1.4.1_SKICE` and `1.4.2_MBP` belong to the BIM stage **Skice** (MBP is approximately the skiču stadija); `1.4.3_BP` spans **Tehniskais** to **Detalizācijas** (BP deliveries, DT deliveries); `Starpnodevums` and custom folders are deliveries inside whichever stage their date falls in; Koncept, Būvniecība and As-Built deliveries have no office folder yet and are entered by hand. Planned dates come from the BIP's schedule (grafiks) or a schedule Boris provides; the app does not read the contracts folder. A counter of open findings. The timeline is always there, whatever the stage; past deliveries stay as history, future ones as plan.
+- **Top bar: project and timeline.** Project switcher and profile; the BIM stages with their deliveries as dated chips, read from `1.4_Nodevumi`; TN and approval items with their clocks on the same line, because they sit between deliveries. **Mapping (the user, 2026-11-05)**: `1.4.1_SKICE` and `1.4.2_MBP` belong to the BIM stage **Skice** (MBP is approximately the skiču stadija); `1.4.3_BP` spans **Tehniskais** to **Detalizācijas** (BP deliveries, DT deliveries); `Starpnodevums` and custom folders are deliveries inside whichever stage their date falls in; Koncept, Būvniecība and As-Built deliveries have no office folder yet and are entered by hand. Planned dates come from the BIP's schedule (grafiks) or a schedule the user provides; the app does not read the contracts folder. A counter of open findings. The timeline is always there, whatever the stage; past deliveries stay as history, future ones as plan.
 - **Preview (left).** Sheets as PDF, the model as IFC, side by side when needed. Annotation: pins, comments, measure, compare two deliveries or two revisions. A finding from a check shows as a pin on the sheet or element it concerns. Clicking anything puts it in the agent's focus.
-- **Agent (right).** The agent sees the whole project and every panel. **Fokuss** shows what the user has selected: sheets, pins, rooms, requirement rows, documents, a panel. Focused items go first in the prompt. The agent answers with citations or says "dokumentos nav". It extracts, drafts, annotates, and **models in Revit**, which is the main goal. The pattern that keeps that safe is v1's and Konkursu App's: narrow tools, no fact without a quote that code checks, short single-action Revit calls, a working copy, and Boris's approval per sheet and per revision.
-- **The rule, in three verbs (Boris's question of 2026-11-05: "what if a code check fails because of a unique situation?").** **Code raises**: checks, citations, counts and clocks run deterministically and produce findings; a check never decides anything and never blocks by itself. **The agent proposes**: facts, requirements, drawings, Revit changes, and also *justifications* when a check fails for a real reason (on BD420 the inventory itself was wrong in three stairwells). **Boris decides**: approves, rejects, or overrides a finding with a recorded reason ("Inv. lietas kļūda", with date and author), which closes it without changing the check. No one of the three has the last word alone. How much the agent may do before asking is a **per-tool approval level** in Settings, not a rule in the code (section 4.2).
+- **Agent (right).** The agent sees the whole project and every panel. **Fokuss** shows what the user has selected: sheets, pins, rooms, requirement rows, documents, a panel. Focused items go first in the prompt. The agent answers with citations or says "dokumentos nav". It extracts, drafts, annotates, and **models in Revit**, which is the main goal. The pattern that keeps that safe is v1's and Konkursu App's: narrow tools, no fact without a quote that code checks, short single-action Revit calls, a working copy, and the user's approval per sheet and per revision.
+- **The rule, in three verbs (the user's question of 2026-11-05: "what if a code check fails because of a unique situation?").** **Code raises**: checks, citations, counts and clocks run deterministically and produce findings; a check never decides anything and never blocks by itself. **The agent proposes**: facts, requirements, drawings, Revit changes, and also *justifications* when a check fails for a real reason (on BD420 the inventory itself was wrong in three stairwells). **The user decides**: approves, rejects, or overrides a finding with a recorded reason ("Inv. lietas kļūda", with date and author), which closes it without changing the check. No one of the three has the last word alone. How much the agent may do before asking is a **per-tool approval level** in Settings, not a rule in the code (section 4.2).
 - **Panels (bottom).** Each owns one list. **They open as floating windows over the preview, as in BIM Crew, and never replace it.** The preview is the main view and stays visible while a panel is open, because a panel is read against the drawing: the Telpas table next to the plan, a Prasības row next to the sheet it concerns. A panel window can be moved, resized, docked to the left or right edge, and minimised back to the bottom bar; several can be open at once; each remembers its place per project. A row in a panel and an object in the preview select each other: clicking a room in Telpas highlights it on the plan and in the model, clicking a pin opens its requirement row.
 - **What the agent sees.** The agent has the context of **every panel, open or not**: each panel's list is a tool the agent can read at any time, so an unopened panel is not hidden from it. On top of that comes **Fokuss**: whatever the user has selected anywhere, in the preview (sheets, pins, rooms, elements) or in a panel (rows, documents, deliveries, a whole panel), goes first in the agent's prompt and is shown in the chat header so the user sees what the agent is looking at. The agent can also open and arrange panels itself, to show what it is talking about.
 
@@ -130,7 +130,7 @@ Saskaņojumi: not a panel. A TN or approval is an item on the timeline (who, req
   - its own DWG reader (`app/dwg/`) and PDF.js for sheets;
   - an **add-on API** (`addons/bimcraft-api.js`: model.read, selection, select, onChange, commands, panel sections). This is how the app and the agent drive the viewer: selection in the viewer becomes Fokuss; the agent selects, isolates and colours elements through it.
   - Licence: Apache-2.0 allows reuse in this app. The viewer is not given a name in the UI.
-- **BimCraft's editing tools are for showing, not for modelling.** Every change to the model happens in Revit through the Revit MCP. Boris uses the editing tools (walls, doors, windows, floors, rooms, dimensions, sections) to **draw what he wants**: a wall moved, a door added, a room split. That sketch is an instruction to the agent, read through the add-on API with its GlobalIds and positions, together with pins and comments. The agent carries it out in Revit; the next export replaces the sketch with the real model, and the compare view shows whether the result matches the sketch. The sketch is never saved as the model.
+- **BimCraft's editing tools are for showing, not for modelling.** Every change to the model happens in Revit through the Revit MCP. The user uses the editing tools (walls, doors, windows, floors, rooms, dimensions, sections) to **draw what they want**: a wall moved, a door added, a room split. That sketch is an instruction to the agent, read through the add-on API with its GlobalIds and positions, together with pins and comments. The agent carries it out in Revit; the next export replaces the sketch with the real model, and the compare view shows whether the result matches the sketch. The sketch is never saved as the model.
 - **BIM Crew** (`repos\BIM-AI-Crew`, branch `feat/agent-harness-v2`, commit `eb3edce` of 2026-11-05; the checked-out `main` holds only the early prototype). Compared on 2026-11-05 by reading the code:
 
 | Feature | BIM Crew | BimCraft | Take |
@@ -146,23 +146,23 @@ Saskaņojumi: not a panel. A TN or approval is an item on the timeline (who, req
 
   Summary: for the 3D viewer, model compare, BCF and checks, BimCraft is more complete and needs no Python. For page compare, versioning and the agent, BIM Crew has what BimCraft lacks.
 
-### 4.2 Per-tool approval levels (proposal; Boris changes them in Settings)
+### 4.2 Per-tool approval levels (proposal; the user changes them in Settings)
 
-Every agent tool has a level: **auto** (runs, result shown), **confirm** (runs after Boris clicks), **never** (not offered to the agent). Defaults below. A failed check never changes a level; it only produces a finding that Boris closes, overrides with a reason, or sends back to the agent.
+Every agent tool has a level: **auto** (runs, result shown), **confirm** (runs after the user clicks), **never** (not offered to the agent). Defaults below. A failed check never changes a level; it only produces a finding that the user closes, overrides with a reason, or sends back to the agent.
 
 | Tool group | Default | Examples |
 |---|---|---|
 | Read anything | auto | read a document, a panel's list, the model, the law library |
-| Propose | auto, as proposals | set a fact with a quote, add a requirement row, write an Atmiņa note, propose a justification for a failed check; each is marked "ierosināts" until Boris confirms |
+| Propose | auto, as proposals | set a fact with a quote, add a requirement row, write an Atmiņa note, propose a justification for a failed check; each is marked "ierosināts" until the user confirms |
 | Annotate and show | auto | add a pin or comment, open or arrange a panel, highlight elements, draw a sketch in the viewer |
 | Run checks, export | auto | run any check, export a room table, export PDF or IFC from Revit, save a working copy |
-| Revit: create and modify | confirm per batch | levels, grids, walls, doors, windows, rooms, dimensions, views, sheets; one batch becomes one revision Boris reviews |
-| Revit: delete | never | `delete_element`; deletion is done by Boris, or by the agent only after Boris marks the element in the viewer |
-| Decide | never | approve a sheet, close a finding, mark a delivery sent, confirm a fact: only Boris's click |
+| Revit: create and modify | confirm per batch | levels, grids, walls, doors, windows, rooms, dimensions, views, sheets; one batch becomes one revision the user reviews |
+| Revit: delete | never | `delete_element`; deletion is done by the user, or by the agent only after the user marks the element in the viewer |
+| Decide | never | approve a sheet, close a finding, mark a delivery sent, confirm a fact: only the user's click |
 
 ### 4.3 2D sheet comparison
 
-**Built in Projektēšanas App as part of v2 (Boris, 2026-11-05).** BIM Crew's `blueprint-diff` is not changed; it can adopt the v2 version later when the apps combine. v2 starts from BIM Crew's code (page pairing, pixel diff into change zones, AI description of zones, title-block reading) and improves it where it is weakest. Its diff compares pixels in a 40 px grid, so a moved sheet frame or a different export scale makes everything "changed", and it cannot say what changed, only where. It also sends the drawing to an outside image model to describe the zones. The improvements below compare sheets by what they are made of:
+**Built in Projektēšanas App as part of v2 (the user, 2026-11-05).** BIM Crew's `blueprint-diff` is not changed; it can adopt the v2 version later when the apps combine. v2 starts from BIM Crew's code (page pairing, pixel diff into change zones, AI description of zones, title-block reading) and improves it where it is weakest. Its diff compares pixels in a 40 px grid, so a moved sheet frame or a different export scale makes everything "changed", and it cannot say what changed, only where. It also sends the drawing to an outside image model to describe the zones. The improvements below compare sheets by what they are made of:
 
 1. **Same sheet, two deliveries or two revisions**, matched by sheet number.
 2. **Vector compare** when both are vector PDFs: the drawing content is read with PDF.js, aligned on the sheet frame, and every line, text and dimension is classed as added, removed or moved. Changed dimension values and room areas are listed as text, not just coloured ("telpa 1-7: 14,2 → 15,1 m²").
@@ -189,20 +189,20 @@ Yes, every change is versioned, without git in the project folders. The base is 
 
 In v1, Žurnāls is the append-only file `.bv/log.jsonl`: every file registered, every agent tool call, pin, approval and revision, with time and author. It is an **audit trail**: it answers "who did what, when" and nothing else. It is not knowledge.
 
-v2 keeps the audit trail but hides it (it stays for "kad un kas"). What Boris asked for is different and is a panel of its own, **Atmiņa**: the project's memory, readable and writable by the agent and by Boris.
+v2 keeps the audit trail but hides it (it stays for "kad un kas"). What the user asked for is different and is a panel of its own, **Atmiņa**: the project's memory, readable and writable by the agent and by the user.
 
 - **Decisions**: what the client chose and when (skice option, materials, scope), with the source message or protocol.
 - **Answers**: what the client, būvvalde or a network owner said to a question.
 - **Notes and learnings**: what the agent found out about this project (room naming conventions, inventory errors, tolerances agreed), kept so it never re-derives them.
 - **Open questions**: what is still unanswered, who owes the answer.
 
-Stored as markdown notes with front matter, one note per decision or topic, so they can live in or sync with Boris's Obsidian vault and are searchable by the agent. This is the "local knowledge vault" Boris described.
+Stored as markdown notes with front matter, one note per decision or topic, so they can live in or sync with the user's Obsidian vault and are searchable by the agent. This is the "local knowledge vault" the user described.
 
 ---
 
 ## 6. Checks: everywhere, on every action
 
-There is no review stage. Checks run when a file is read, a sheet is exported, a delivery is prepared, a requirement is added, a pin is resolved. A failed check is a finding: a requirement row with status "neizpildīts", a pin on the sheet or element, a number in the top bar. A delivery can be marked "nosūtīts" only when its findings are closed and Boris approves.
+There is no review stage. Checks run when a file is read, a sheet is exported, a delivery is prepared, a requirement is added, a pin is resolved. A failed check is a finding: a requirement row with status "neizpildīts", a pin on the sheet or element, a number in the top bar. A delivery can be marked "nosūtīts" only when its findings are closed and the user approves.
 
 What is checked, on every sheet and drawing, not per file:
 
@@ -235,28 +235,28 @@ v1's mechanism stays: a rule ships only if its quote is found in the saved likum
 2. **Old formats, my call**: `.doc` and `.xls` through the installed Word and Excel, `.msg` through the installed Outlook, all via one small helper the app calls once per file and caches. No conversion by hand. `.dwg` stays unread (it is geometry; the PDF of the same sheet is read instead).
 3. **Node.js**: installed 2026-11-05 (v26); the app typechecks, builds and runs its tests on this PC.
 4. **App data**: single-user, nothing shared. The app and its data stay on this PC in the app's own folder; one data folder per project, keyed by the BD code. Nothing is written into the project folders on the office drive. v1's `.bv` folder inside the project root goes.
-5. **Agent provider** (Boris, 2026-11-05): **ChatGPT / Codex subscription sign-in is the default**; each user sets their own default in Settings. v1's pi engine already supports it. Claude stays API-key only.
-6. **Revit** (Boris, 2026-11-05): **Revit 2026**, new projects start from the office template `R26_Jaunbūve template 2026.rte` (on this PC in Downloads today; the app keeps its own copy in a templates folder and shows the template's date).
-7. **Planned dates** (Boris, 2026-11-05): from the BIP's schedule (grafiks) or a schedule Boris provides. The app does not read the contracts folder.
-8. **Privacy** (Boris, 2026-11-05): the repo stays **public**. **No real data leaves to GitHub**: tests use invented names and invented documents that mirror the real structure (a made-up Kadastrālā lieta with made-up rooms, a made-up PU); acceptance on real projects happens only on this PC and is recorded in `docs/CHECKLIST.md` by result, not by content. Docs name projects by BD code only, no addresses, no client names, no office drive paths. This plan was scrubbed on 2026-11-05. Note: the v1 design spec and v1 tests already committed to the public repo contain a project address, a person's name and an old drive path; rewriting that history is Boris's call.
-9. **Revit export spike**: not now (Boris, 2026-11-05); it runs before step 6.
-10. **No mocks, no prototypes** (Boris, 2026-11-05): the one view is built as the real app from step 1, not drawn first. Tests use invented fixtures (point 8); nothing else is ever a stand-in.
-11. **New repository for v2** (Boris, 2026-11-05). The v1 GitHub repo only served to move files to this PC and may be deleted; v1 history is not carried over. v2 starts as a fresh local git repo; the v1 code worth keeping (section 10) is copied in, read and cleaned, not moved wholesale. The GitHub remote is created when Boris wants it, with the no-real-data rule from the first commit.
+5. **Agent provider** (the user, 2026-11-05): **ChatGPT / Codex subscription sign-in is the default**; each user sets their own default in Settings. v1's pi engine already supports it. Claude stays API-key only.
+6. **Revit** (the user, 2026-11-05): **Revit 2026**, new projects start from the office template `R26_Jaunbūve template 2026.rte` (on this PC in Downloads today; the app keeps its own copy in a templates folder and shows the template's date).
+7. **Planned dates** (the user, 2026-11-05): from the BIP's schedule (grafiks) or a schedule the user provides. The app does not read the contracts folder.
+8. **Privacy** (the user, 2026-11-05): the repo stays **public**. **No real data leaves to GitHub**: tests use invented names and invented documents that mirror the real structure (a made-up Kadastrālā lieta with made-up rooms, a made-up PU); acceptance on real projects happens only on this PC and is recorded in `docs/CHECKLIST.md` by result, not by content. Docs name projects by BD code only, no addresses, no client names, no office drive paths. This plan was scrubbed on 2026-11-05. Note: the v1 design spec and v1 tests already committed to the public repo contain a project address, a person's name and an old drive path; rewriting that history is the user's call.
+9. **Revit export spike**: not now (the user, 2026-11-05); it runs before step 6.
+10. **No mocks, no prototypes** (the user, 2026-11-05): the one view is built as the real app from step 1, not drawn first. Tests use invented fixtures (point 8); nothing else is ever a stand-in.
+11. **New repository for v2** (the user, 2026-11-05). The v1 GitHub repo only served to move files to this PC and may be deleted; v1 history is not carried over. v2 starts as a fresh local git repo; the v1 code worth keeping (section 10) is copied in, read and cleaned, not moved wholesale. The GitHub remote is created when the user wants it, with the no-real-data rule from the first commit.
 
 ---
 
 ## 9. Build steps and acceptance (real projects, no fakes)
 
-Each step is accepted by Boris on real project folders, read-only, on this PC. Each step gets its own new tests, which run on **invented fixtures** that mirror the real documents' structure (section 8 point 8); the fixtures are built from what the real documents taught us, never from their content. Anything that needs Revit or an AI model is checked live and the result recorded. No step starts before the previous one is accepted: v1 failed at step 1 and everything built on top of it was unverifiable.
+Each step is accepted by the user on real project folders, read-only, on this PC. Each step gets its own new tests, which run on **invented fixtures** that mirror the real documents' structure (section 8 point 8); the fixtures are built from what the real documents taught us, never from their content. Anything that needs Revit or an AI model is checked live and the result recorded. No step starts before the previous one is accepted: v1 failed at step 1 and everything built on top of it was unverifiable.
 
 | Step | Builds | Accepted when |
 |---|---|---|
 | 1 | **The one view**: top bar with project and timeline, PDF preview of the project's documents and sheets, agent chat with Fokuss, panels Projekts and **Avoti** (real reading: office folders, hashing in a worker, duplicates merged, `.edoc` with signers, OCR, old formats) | BD424 opens without freezing and shows photo surveys as surveys; BD427 shows Kadastrālā lieta and Pielikums Nr.1 as one document, the `.edoc` with its 8 signers, annex 3 read by OCR; the agent answers a question about the BD427 PU with a page citation |
-| 2 | **Prasības** with citations, and the checks of section 6 points 1, 2, 5, 6 running on every action | BD427: law rows by profile and PU rows from its docx, each with an exact citation Boris can open; a wrong address in a test copy is found |
+| 2 | **Prasības** with citations, and the checks of section 6 points 1, 2, 5, 6 running on every action | BD427: law rows by profile and PU rows from its docx, each with an exact citation the user can open; a wrong address in a test copy is found |
 | 3 | **Telpas** | BD420 against the live Revit model gives the same differences as the `INV DIFF` sheets made by hand on 2026-11-04 |
 | 4 | **Nodevumi** on the timeline, TN items with clocks, delivery checks | reference project B (MBP set): deliveries read from the folder, the three file-naming generations found |
 | 5 | **BimCraft embedded** as the 3D/2D preview: IFC, compare versions, BCF, clash; the **improved sheet comparison** (4.3: vector compare, aligned overlay, model-aware tracing), built here and not in BIM Crew; version timeline (4.4) | reference project A (BP set): model and sheets side by side; two exports compared by GlobalId; a sheet change traced to the wall that moved; a finding exported as BCF and opened in Solibri |
-| 6 | **Agent modelling from the app**, the main goal: existing building from the inventory first, then design changes; revisions as PDF and IFC, pins back to the agent, approval per sheet | BD427 live: the agent builds the existing-building model from the Kadastrālā lieta to the room-area tolerance, with grids first, one wall per wall, no rebuilds of what Boris has fixed |
+| 6 | **Agent modelling from the app**, the main goal: existing building from the inventory first, then design changes; revisions as PDF and IFC, pins back to the agent, approval per sheet | BD427 live: the agent builds the existing-building model from the Kadastrālā lieta to the room-area tolerance, with grids first, one wall per wall, no rebuilds of what the user has fixed |
 | later | Būvdarbi, nodošana, apsaimniekošana | — |
 
 ---
@@ -280,19 +280,19 @@ Honest answer to "do we have all we need to start building": **no.** The plan is
 |---|---|---|
 | M1 | **Data model**: Project, Source and its Versions, Fact (value + verbatim quote + page), Requirement, Finding, Delivery, Revision, Pin, Note. One short schema document | Every panel reads and writes these; without one definition each panel invents its own, which is how v1's "Faili šajā panelī" happened twice |
 | M2 | **The agent's tool list** for v2 and the Revit allow-list, plus how the `revit-modeling`, `revit-drafting` and `revit-dimensioning` skills get into the app (Konkursu App copies skills from `~/.claude/skills` at build time with `scripts/sync-skills.mjs`; same pattern here) | The agent's power is its tools; the skills built this week on reference projects A and B are its modelling knowledge and are not mentioned anywhere in v2 |
-| M3 | **Step 1 acceptance script**: the exact clicks on BD424 and BD427 and what each must show | "Accepted by Boris" needs a list, or it becomes "looks fine" |
-| M5 | **Geometry from the Kadastrālā lieta** (lines and points to CSV, done as scratch tools on BD427 this morning) belongs in step 3 as a feature, not a scratch script | Day one of an existing-building project is modelling it; until step 6 Boris models by hand and this is what speeds it up |
+| M3 | **Step 1 acceptance script**: the exact clicks on BD424 and BD427 and what each must show | "Accepted by the user" needs a list, or it becomes "looks fine" |
+| M5 | **Geometry from the Kadastrālā lieta** (lines and points to CSV, done as scratch tools on BD427 this morning) belongs in step 3 as a feature, not a scratch script | Day one of an existing-building project is modelling it; until step 6 the user models by hand and this is what speeds it up |
 
-### 11.2 Boris's answers (2026-11-05, evening)
+### 11.2 The user's answers (2026-11-05, evening)
 
 | # | Question | Answer | Where it landed |
 |---|---|---|---|
 | B1 | Stage mapping: office folders are `1.4.1_SKICE`, `1.4.2_MBP`, `1.4.3_BP` plus `Starpnodevums` (21 of 25 projects have the folder, 6 have files) | MBP ≈ BIM Skice; BP ≈ Tehniskais to Detalizācijas | section 4, top bar |
-| B2 | Planned dates, since most `1.4` folders are empty | From the BIP's grafiks, or Boris provides one; contracts folder not read | section 8 point 7 |
+| B2 | Planned dates, since most `1.4` folders are empty | From the BIP's grafiks, or the user provides one; contracts folder not read | section 8 point 7 |
 | B3 | Public repo, test data, names in docs | Keep public; invented names and invented data in tests; no real data to GitHub | section 8 point 8; this plan scrubbed |
 | B4 | Agent provider and key | Codex subscription sign-in is the default; each user sets their own | section 8 point 5 |
 | B5 | Revit version and template | Revit 2026, `R26_Jaunbūve template 2026.rte` | section 8 point 6 |
-| B6 | "Code owns the checks, the agent does the work, Boris decides" | Not sure: a code check can fail in a unique situation | rewritten as three verbs in section 4, with per-tool approval levels in 4.2 |
+| B6 | "Code owns the checks, the agent does the work, the user decides" | Not sure: a code check can fail in a unique situation | rewritten as three verbs in section 4, with per-tool approval levels in 4.2 |
 | B7 | Run the Revit export spike now | No | section 8 point 9 |
 
 ### 11.3 Spikes to run before their step

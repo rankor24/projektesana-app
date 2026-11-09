@@ -30,7 +30,7 @@ export interface FolderInfo {
 	folderKey: string;
 	name: string;
 	rel: string;
-	/** fixed folders: their role; free folders: Boris's confirmed role, or the proposal */
+	/** fixed folders: their role; free folders: the user's confirmed role, or the proposal */
 	role: string;
 	roleFrom: "folder" | "confirmed" | "unconfirmed";
 	files: number;
@@ -117,7 +117,7 @@ async function countFiles(p: string, depth = 0): Promise<{ n: number; images: nu
 }
 
 /**
- * @param confirmed Boris's confirmed roles of free folders (folderKey → role), from roles.json.
+ * @param confirmed the user's confirmed roles of free folders (folderKey → role), from roles.json.
  */
 export async function scanInputs(root: string, confirmed: Record<string, string> = {}, onFolder?: (rel: string) => void): Promise<ScanResult> {
 	const res: ScanResult = { inputsRel: null, files: [], surveys: [], folders: [], skipped: { archive: 0, junk: 0 }, problems: [] };

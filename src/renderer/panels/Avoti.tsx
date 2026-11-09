@@ -5,10 +5,12 @@ import { Fragment, useMemo, useState } from "react";
 import type { Source } from "../../core/model";
 import type { ScanSummaryRow } from "../../shared/api";
 import { sourceFocus } from "../../shared/focus-items";
+import { DOC_ROLES } from "../../shared/roles";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { RoleQuestions, ScanBar, useScanProgress } from "./Projekts";
+import { Normativi } from "./Normativi";
 
 const STATE: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "dim" | "info" }> = {
 	ok: { label: "teksts", tone: "ok" },
@@ -42,7 +44,13 @@ export function Avoti({ filter }: { filter?: string }) {
 		return [...byKey.entries()].sort((a, b) => keyNum(a[0]) - keyNum(b[0]));
 	}, [sources.data, q]);
 
-	if (!projectId) return <Empty title="nav projekta">Atver projektu panelī Projekts.</Empty>;
+	if (!projectId)
+		return (
+			<div className="pane fill">
+				<Normativi projectId={null} />
+				<Empty title="nav projekta">Atver projektu panelī Projekts.</Empty>
+			</div>
+		);
 
 	const folderName = (k: string) => summary.data?.folders.find((f) => f.folderKey === k)?.name ?? k;
 	const select = (s: Source) => {
@@ -64,6 +72,7 @@ export function Avoti({ filter }: { filter?: string }) {
 			{err && <div className="err">{err}</div>}
 			{progress && <ScanBar p={progress} />}
 			<RoleQuestions projectId={projectId} />
+			<Normativi projectId={projectId} />
 			{sources.error ? <Err error={sources.error} /> : null}
 			{sources.data && sources.data.length === 0 && !progress && <Empty title="run scan">Projekts vēl nav nolasīts.</Empty>}
 			{summary.data && summary.data.skipped.archive > 0 && <div className="dim small">Arhīva mapēs {summary.data.skipped.archive} faili netiek lasīti.</div>}
@@ -130,8 +139,30 @@ export function Avoti({ filter }: { filter?: string }) {
 															</>
 														)}
 													</td>
-													<td>
-														{s.role}
+													<td onClick={(e) => e.stopPropagation()}>
+														{s.kind === "document" ? (
+															<select
+																className="small"
+																value={s.role}
+																title={s.roleFrom === "document" ? "Loma iestatīta šim dokumentam (ne mapei)" : "Loma no mapes. Izvēlies citu, ja šis dokuments ir kas cits (piem., kadastra lieta PU mapē)"}
+																onChange={(e) => call("sources.setRole", projectId, s.id, e.target.value).then(() => sources.reload()).catch((x) => setErr(errText(x)))}
+															>
+																{(DOC_ROLES.includes(s.role) ? DOC_ROLES : [s.role, ...DOC_ROLES]).map((r) => (
+																	<option key={r}>{r}</option>
+																))}
+															</select>
+														) : (
+															s.role
+														)}
+														{s.roleFrom === "document" && (
+															<>
+																{" "}
+																<Badge tone="info" title="Loma iestatīta šim dokumentam">dokumentam</Badge>{" "}
+																<button className="ghost small" title="Atpakaļ uz mapes lomu" onClick={() => call("sources.setRole", projectId, s.id, null).then(() => sources.reload()).catch((x) => setErr(errText(x)))}>
+																	↺
+																</button>
+															</>
+														)}
 														{s.roleFrom === "unconfirmed" && (
 															<>
 																{" "}

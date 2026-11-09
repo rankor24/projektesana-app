@@ -1,4 +1,4 @@
-// Builders for Fokuss items, shared by the renderer (what Boris selects) and the tests (what the agent receives).
+// Builders for Fokuss items, shared by the renderer (what the user selects) and the tests (what the agent receives).
 import type { FocusItem } from "./api.js";
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;

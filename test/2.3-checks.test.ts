@@ -40,7 +40,7 @@ test("override closes the finding with a reason; the check still fails next run 
 		assert.equal(f.state, "open");
 		assert.equal(openFindings(s), 1);
 		assert.throws(() => overrideFinding(s, f.id, ""), /obligāts/);
-		assert.throws(() => overrideFinding(s, f.id, "aģents tā teica", "agent"), /tikai Boris/);
+		assert.throws(() => overrideFinding(s, f.id, "aģents tā teica", "agent"), /tikai lietotājs/);
 		overrideFinding(s, f.id, "Adrese mainīta ar domes lēmumu, abas pareizas.");
 		const again = await runChecks(s, "sources", { dataDir: DATA, today: "2026-11-06" });
 		assert.equal(again.results, 1, "the check still fails");

@@ -1,16 +1,16 @@
 # Projektēšanas App v2 — work order
 
-Date: 2026-11-05. Status: **for Boris's approval. Work starts at task 0.1 only after he approves this order.**
+Date: 2026-11-05. Status: **for the user's approval. Work starts at task 0.1 only after they approve this order.**
 Design decisions and facts: `v2-design.md`. This file is the sequence of work: what is built, in which files, how it is tested, what makes it done.
 
 ## Working rules
 
-1. **One task at a time, in this order.** A task is done when its tests pass, `npm run typecheck` and `npm run build` pass, and its "done when" line holds. A phase is done when Boris has accepted it on the real projects named, on this PC.
+1. **One task at a time, in this order.** A task is done when its tests pass, `npm run typecheck` and `npm run build` pass, and its "done when" line holds. A phase is done when the user has accepted it on the real projects named, on this PC.
 2. **Nothing is faked.** Tests run on invented fixtures under `test/fixtures/` that mirror real document structure (made-up names, numbers, addresses). Real projects are read only by the running app on this PC. No real data in the repo, ever.
 3. **Every v1 file that is carried over is read and cleaned first**, then copied into the new repo with its own new test. Nothing is moved wholesale.
 4. **The agent's tools are the only way the agent touches anything.** Every tool has an approval level (`v2-design.md` 4.2).
 5. **Revit calls are short, one action per call**, through the Revit MCP only.
-6. **Boris playtests. No browser automation, no UI test harness.** Verification is typecheck, tests, build, and his hands.
+6. **The user playtests. No browser automation, no UI test harness.** Verification is typecheck, tests, build, and their hands.
 7. **Commits**: one per task, message starts with the task number (`1.3 hashing worker`). No real data in commit messages either.
 
 ## Stack (fixed)
@@ -43,7 +43,7 @@ docs/           v2-design.md · v2-work-plan.md · CHECKLIST.md (status per task
 | Profile | facts keyed: workType, group, procedure, stagesInContract[], sections[] (from `1.2.xx` folders), funding, bim {bipPresent, lodByStage} | every value is a Fact |
 | Source | id, kind: law / document / photoSurvey, folderKey (1.1.1…), paths[] (duplicates share one Source), title, role, versions[], signers[], container (for files inside an `.edoc`) | role from folder; confirmed once for `1.1.8+` |
 | Version | sha256, size, mtime, seenAt, textState: ok / ocr / empty / unsupported / error, textCache, pages | content-addressed |
-| Fact | id, key, value, source: {sourceId, sha, page, quote} or {kind: boris, at}, state: proposed / confirmed / rejected, by, at | quote verified by code against the text cache |
+| Fact | id, key, value, source: {sourceId, sha, page, quote} or {kind: user, at}, state: proposed / confirmed / rejected, by, at | quote verified by code against the text cache |
 | Requirement | id, origin: law / pu / bip / tn / permit / office, citation (law: act, actVersionDate, readOn, point, url; document: sourceId, page, quote), text, appliesTo {stages[], deliveries[], sections[], sheets[]}, checkId, status: open / met / failed / justified, evidence[] | |
 | Finding | id, checkId, requirementId, severity, where {sourceId / sheet / elementGuid / roomNo}, message, state: open / closed / overridden, decision {by, at, reason} | override keeps the check unchanged |
 | Delivery | id, stage (BIM), kind: SKICE / MBP / BP / DT / STARP / custom, plannedDate, submittedDate, folder, items[] {sheetNo, title, file, sha}, checksRun[] | read from `1.4`, planned from BIP grafiks |
@@ -81,7 +81,7 @@ Goal: an empty app that opens, with the carried-over core and the data model in 
 | 0.4 | Electron shell: window, preload, typed IPC; renderer with top bar, preview area, agent dock, bottom panel bar, window layer. `FloatingWindow.tsx` and `WindowLayer.tsx` read from BIM Crew branch `feat/floating-workspace-ui`, adapted. Empty states: `nav projekta`, `nav avota`, `nav savienojuma` | `src/main/{main,ipc,preload}.ts`, `src/renderer/App.tsx`, `src/renderer/shell/*` | IPC contract test (every channel has a handler and a type) | shell opens; a panel window opens, moves, docks, minimises; nothing in it yet |
 | 0.5 | Agent harness: pi runtime with Codex sign-in, settings with encrypted keys, tools MCP server with the approval-level registry (empty tool set except `get_focus`), `scripts/sync-skills.mjs` | `src/agent/*`, `src/main/settings.ts` | approval registry: a `never` tool is not offered; a `confirm` tool waits; sign-in state reported as `nav pieslēgts` | a chat turn with no tools answers through Codex; Fokuss header shows "nekas" |
 
-Boris accepts phase 0 when: the shell opens, a chat answers, nothing pretends to work.
+The user accepts phase 0 when: the shell opens, a chat answers, nothing pretends to work.
 
 ## Phase 1 — Projekts and Avoti (sources read correctly)
 
@@ -95,13 +95,13 @@ Goal: open a real office project and see every input document right. This is whe
 | 1.4 | `.edoc`: open the zip, list inner files as Sources with `container`, read signers from `META-INF/edoc-signatures-*.xml` (name, time) | `src/sources/text/edoc.ts` | fixture `.edoc` with 2 inner files and 3 signature XMLs: 2 Sources, 3 signers | an `.edoc` shows its inner documents and who signed |
 | 1.5 | OCR: image-only PDF pages rendered in an offscreen BrowserWindow with pdfjs, OCR'd with tesseract.js `lav` in a worker; text cached per sha; state `ocr`; a page with nothing readable marked, never silently empty | `src/sources/text/ocr.ts`, `src/main/offscreen.ts` | fixture PDF made from rendered Latvian text with diacritics: OCR output contains the known words with ā, č, ē, ģ, ī, ķ, ļ, ņ, š, ū, ž | the real scanned annex reads in Latvian |
 | 1.6 | Old formats through the installed Office: `.doc`, `.xls`, `.msg` via one PowerShell COM helper, called once per sha, cached; skipped with state `unsupported` and a reason when Office is absent | `src/sources/text/office-com.ts`, `resources/office-text.ps1` | helper contract test (arguments, JSON output); live test skipped when Word is absent | an old `.doc` PU is readable |
-| 1.7 | Avoti panel: one list grouped by office folder; per row: title, role, versions, duplicate paths, signers, text state, pages; surveys as surveys; row ↔ preview selection | `src/renderer/panels/Avoti.tsx` | — (UI; Boris) | the only file list in the app |
+| 1.7 | Avoti panel: one list grouped by office folder; per row: title, role, versions, duplicate paths, signers, text state, pages; surveys as surveys; row ↔ preview selection | `src/renderer/panels/Avoti.tsx` | — (UI; the user) | the only file list in the app |
 | 1.8 | PDF preview: pdfjs view of any source, page navigation, text layer, selection → Fokuss | `src/renderer/preview/PdfView.tsx`, `src/agent/focus.ts` | focus serialisation test (what the agent receives) | clicking a page region focuses it; Fokuss header updates |
 | 1.9 | Agent read tools and extraction: `list_sources`, `read_source`, `search_sources`, `set_fact` with code-verified quotes; extraction prompts per role (PU → profile facts and requirement rows; cadastral → kadastra apzīmējums, area, owner; topo → author, date, validity; TAA → findings per element; TN → issuer, number, date, validity, conditions) | `src/agent/tools/sources.ts`, `src/sources/extract/*.ts` | `set_fact` refuses a quote not in the text; accepts one that is; each extractor on its fixture yields the known values | the agent answers "kāds ir kadastra apzīmējums?" with page and quote |
 | 1.10 | Room table from the Kadastrālā / Inventarizācijas lieta: table rows (floor, number, name, area) from the text layer or OCR; export to Excel | `src/sources/extract/kl.ts`, `src/sources/export/xlsx.ts` | fixture KL PDF with a 3-floor table: 100 % rows, areas to one decimal | the table equals the one made by hand on a real project |
 | 1.11 | Projekts panel: profile facts with sources and confirm/reject; timeline skeleton with the six BIM stages and the folder mapping (`SKICE`, `MBP` → Skice; `BP` → Tehniskais to Detalizācijas) | `src/renderer/panels/Projekts.tsx`, `src/renderer/shell/Timeline.tsx` | mapping test | profile shows with citations; timeline shows stages |
 
-Boris accepts phase 1 on: a project with 1 600 photos (opens without freezing, surveys as surveys); the project with the signed `.edoc`, the duplicate PDF and the scanned annex (one merged document, signers listed, annex in Latvian); the project whose room table was made by hand this week (equal table); the agent answering one PU question with a citation.
+The user accepts phase 1 on: a project with 1 600 photos (opens without freezing, surveys as surveys); the project with the signed `.edoc`, the duplicate PDF and the scanned annex (one merged document, signers listed, annex in Latvian); the project whose room table was made by hand this week (equal table); the agent answering one PU question with a citation.
 
 ## Phase 2 — Prasības and checks
 
@@ -113,7 +113,7 @@ Boris accepts phase 1 on: a project with 1 600 photos (opens without freezing, s
 | 2.4 | First checks: completeness per delivery (MBP per MK 529 26; BP per 71/72, 73, 74, 74.1, 75.1, 76–80 by profile); one truth (address, cadastral number, areas across sources); citation still valid; deliverable file names (sheet number, title, no diacritics, `YYMMDD` folder) | `src/checks/checks/*.ts` | fixtures with one wrong address, one missing MBP item, one file with diacritics: three findings, each naming its requirement | a wrong address in a project is found |
 | 2.5 | Prasības panel: rows, filter by stage / section / origin / status, citation link, evidence, findings view; `propose_justification` tool | `src/renderer/panels/Prasibas.tsx` | — | the one requirements list |
 
-Boris accepts phase 2 on: law rows by profile with exact citations for a real project; PU rows from its docx; a wrong address planted in a local copy found.
+The user accepts phase 2 on: law rows by profile with exact citations for a real project; PU rows from its docx; a wrong address planted in a local copy found.
 
 ## Phase 3 — Telpas (existing building)
 
@@ -125,7 +125,7 @@ Boris accepts phase 2 on: law rows by profile with exact citations for a real pr
 | 3.4 | Geometry from a vector Kadastrālā lieta: lines and points per floor to CSV, shown as an overlay in the PDF preview | `src/sources/extract/kl-geometry.ts` | fixture vector PDF: known segment count and coordinates | the overlay matches the plan |
 | 3.5 | PU room programme vs model rooms | `src/checks/checks/programme.ts` | fixture programme vs rooms | findings per missing or oversized room |
 
-Boris accepts phase 3 on the project modelled by hand this week, against the live model.
+The user accepts phase 3 on the project modelled by hand this week, against the live model.
 
 ## Phase 4 — Nodevumi and timeline
 
@@ -133,9 +133,9 @@ Boris accepts phase 3 on the project modelled by hand this week, against the liv
 |---|---|---|---|---|
 | 4.1 | Read `1.4_Nodevumi`: folders to deliveries with stage mapping, date from folder name, items from files; planned dates from the BIP grafiks (xlsx/docx table) or typed | `src/sources/deliveries.ts` | fixture `1.4` tree with SKICE, MBP, BP, Starpnodevums: stages and dates right | timeline chips are real |
 | 4.2 | TN and approval items with clocks (11 / 20 and 15 / 20 working days, holidays) on the timeline | `src/rules/workdays.ts`, `src/renderer/shell/Timeline.tsx` | deadline across a holiday | a TN shows days left |
-| 4.3 | Delivery gate: a delivery can be marked sent only with no open findings and Boris's click; checks run on "prepare delivery" | `src/checks/run.ts`, `src/renderer/panels/Nodevumi.tsx` | gate refuses with an open finding | the Nodevumi panel |
+| 4.3 | Delivery gate: a delivery can be marked sent only with no open findings and the user's click; checks run on "prepare delivery" | `src/checks/run.ts`, `src/renderer/panels/Nodevumi.tsx` | gate refuses with an open finding | the Nodevumi panel |
 
-Boris accepts phase 4 on a project with real deliveries in `1.4`.
+The user accepts phase 4 on a project with real deliveries in `1.4`.
 
 ## Phase 5 — Viewer, compare, versions
 
@@ -146,9 +146,9 @@ Boris accepts phase 4 on a project with real deliveries in `1.4`.
 | 5.3 | BCF: read and write (`bcf.js`) with viewpoints; a finding becomes a BCF topic; BIM Crew's discipline sorting on top | `src/checks/bcf.ts` | fixture BCF round-trip | a finding opens in Solibri |
 | 5.4 | Sheet comparison: BIM Crew `blueprint-diff` pairing and pixel overlay ported, alignment on the sheet frame added; vector compare from the pdfjs operator list (lines, texts, dimensions: added / removed / moved; dimension values listed); model-aware tracing through recorded view geometry | `src/renderer/preview/SheetCompare.tsx`, `src/sources/sheets/vector-diff.ts` | two fixture PDFs with one moved wall and one changed dimension: both found and named | a difference becomes a pin or a finding |
 | 5.5 | Version timeline: sources, deliveries, revisions and app data between two dates in one list, each linked to its compare view | `src/renderer/panels/Versions.tsx` | — | "kas mainījās starp" works |
-| 5.6 | `draw_sketch`: Boris draws with BimCraft's tools; the sketch (elements, GlobalIds, positions) is captured as an instruction to the agent, never saved as the model | `src/agent/tools/viewer.ts` | sketch serialisation | a sketch appears in the agent's Fokuss |
+| 5.6 | `draw_sketch`: the user draws with BimCraft's tools; the sketch (elements, GlobalIds, positions) is captured as an instruction to the agent, never saved as the model | `src/agent/tools/viewer.ts` | sketch serialisation | a sketch appears in the agent's Fokuss |
 
-Boris accepts phase 5 on the reference BP set with its 16 models.
+The user accepts phase 5 on the reference BP set with its 16 models.
 
 ## Phase 6 — Agent modelling (the main goal)
 
@@ -156,11 +156,11 @@ Boris accepts phase 5 on the reference BP set with its 16 models.
 |---|---|---|---|---|
 | 6.1 | Revit export spike, now: PDF of a view, IFC with office settings, save a working copy, read view geometry, each as one short call; then named commands | `src/revit/exports.ts` | parsers on recorded replies | a view exports from the app |
 | 6.2 | Working copy and revisions: `_WORK` copy, capture after each batch (IFC, sheets, room table, summary, diff), v1 `loop/revision.ts` read and cleaned | `src/revit/revision.ts` | revision diff on two recorded exports | a revision appears after a batch |
-| 6.3 | Agent Revit tools at `confirm per batch`; skills bundled and offered per task; the rules as system text: grids first, one wall per wall, split walls only at the exterior–interior junction, thin walls for protrusions, never rebuild what Boris fixed, one action one call | `src/agent/tools/revit.ts`, `src/agent/skills.ts` | allow-list test; a `never` tool is not offered | the agent creates a level only after Boris confirms the batch |
-| 6.4 | Pins and sketches as tasks: open pins go first in the prompt; `resolve_pin` by the agent, closing by Boris | `src/agent/tools/pins.ts` | prompt order test | a pin becomes a change |
+| 6.3 | Agent Revit tools at `confirm per batch`; skills bundled and offered per task; the rules as system text: grids first, one wall per wall, split walls only at the exterior–interior junction, thin walls for protrusions, never rebuild what the user fixed, one action one call | `src/agent/tools/revit.ts`, `src/agent/skills.ts` | allow-list test; a `never` tool is not offered | the agent creates a level only after the user confirms the batch |
+| 6.4 | Pins and sketches as tasks: open pins go first in the prompt; `resolve_pin` by the agent, closing by the user | `src/agent/tools/pins.ts` | prompt order test | a pin becomes a change |
 | 6.5 | Existing building from the inventory: levels, grids, walls, openings, rooms to the area tolerance, checked by 3.2 after each batch | prompts and skills | — (live) | the model passes the room check |
 
-Boris accepts phase 6 live on an existing-building project, against the rules in 6.3.
+The user accepts phase 6 live on an existing-building project, against the rules in 6.3.
 
 ## Later (after phase 6)
 
@@ -172,4 +172,4 @@ Būvdarbi, nodošana, apsaimniekošana: parameters, BCF clash resolution, as-bui
 |---|---|---|
 | tesseract.js Latvian on the real scanned annex | task 1.5, first thing | it is inside the task |
 | BimCraft inside Electron (ES modules, wasm, workers under Vite) | before 5.1 | nothing earlier needs it |
-| Revit exports through short MCP calls | task 6.1 (Boris: not now) | phases 1–5 read Revit only in 3.1 |
+| Revit exports through short MCP calls | task 6.1 (the user: not now) | phases 1–5 read Revit only in 3.1 |

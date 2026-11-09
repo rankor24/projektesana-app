@@ -10,7 +10,7 @@ export const checkTools: ToolDef[] = [
 	tool({
 		name: "list_findings",
 		level: "read",
-		description: "Findings of the code checks: id, check, severity, message, where, the requirement it concerns, state (open / overridden with Boris's reason / closed), and any justification proposed.",
+		description: "Findings of the code checks: id, check, severity, message, where, the requirement it concerns, state (open / overridden with the user's reason / closed), and any justification proposed.",
 		input: { state: z.enum(["open", "overridden", "closed"]).optional(), checkId: z.string().optional() },
 		run: (ctx, f) => {
 			const rows = storeOf(ctx)

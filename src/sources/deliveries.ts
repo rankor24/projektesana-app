@@ -1,7 +1,7 @@
 // Deliveries (task 4.1): read from 01_Projektesana\1.4_Nodevumi\<KIND>\<YYMMDD>\… (the office standard: only what was
 // submitted, dated the day of submission, files "<sheet no>_<title>"). Each date folder is one delivery; a kind folder
 // with files and no date folder is one delivery without a date (the filenames check flags it).
-// Planned dates come from the BIP grafiks (a table row naming the kind and a date) or are typed by Boris.
+// Planned dates come from the BIP grafiks (a table row naming the kind and a date) or are typed by the user.
 import { readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { dateInName, dateOfFolder, deliveryKindOf, stageOfDelivery } from "../core/stages.js";
@@ -106,7 +106,7 @@ export function plannedFromSchedule(pages: string[]): { kind: DeliveryKind; date
 	return out;
 }
 
-/** Fresh read merged with what is stored: Boris's planned dates, check runs and "sent" stay; planned-only rows stay until a
+/** Fresh read merged with what is stored: the user's planned dates, check runs and "sent" stay; planned-only rows stay until a
  *  real delivery of that kind exists, which then takes over the planned date. */
 export function mergeDeliveries(prev: Delivery[], read: Omit<Delivery, "stage">[], planned: { kind: DeliveryKind; date: string }[]): Delivery[] {
 	const byId = new Map(prev.map((d) => [d.id, d]));
@@ -123,13 +123,13 @@ export function mergeDeliveries(prev: Delivery[], read: Omit<Delivery, "stage">[
 			target.plannedFrom = "bip";
 			continue;
 		}
-		// a real delivery of this kind already carries a planned date (Boris's or the grafiks'): nothing more to add
+		// a real delivery of this kind already carries a planned date (the user's or the grafiks'): nothing more to add
 		if (realOfKind.length) continue;
 		const id = `plan_${pl.kind}_${pl.date}`;
 		const p = byId.get(id);
 		plannedRows.push({ id, kind: pl.kind, label: `${pl.kind} (plānots)`, plannedDate: p?.plannedDate ?? pl.date, plannedFrom: p?.plannedFrom ?? "bip", submittedDate: null, folder: null, items: [], checksRun: p?.checksRun ?? [] });
 	}
-	// planned rows Boris typed himself stay
-	for (const p of prev) if (p.id.startsWith("plan_") && p.plannedFrom === "boris" && !plannedRows.some((x) => x.id === p.id)) plannedRows.push(p);
+	// planned rows the user typed themself stay
+	for (const p of prev) if (p.id.startsWith("plan_") && p.plannedFrom === "user" && !plannedRows.some((x) => x.id === p.id)) plannedRows.push(p);
 	return withStages([...real, ...plannedRows]);
 }

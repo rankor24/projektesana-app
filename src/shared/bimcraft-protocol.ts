@@ -29,7 +29,7 @@ export function elementFocus(it: BimcraftItem, model: string) {
 	return { kind: "element" as const, id: it.guid ?? String(it.id), label: `${it.cls?.replace(/^IFC/, "Ifc") ?? "elements"} ${it.name ?? ""}`.trim(), data: { guid: it.guid, expressId: it.id, cls: it.cls, name: it.name, model } };
 }
 
-/** A sketch as the agent receives it: the elements Boris marked, with his note — an instruction, never the model. */
+/** A sketch as the agent receives it: the elements the user marked, with their note — an instruction, never the model. */
 export function sketchFocus(items: BimcraftItem[], note: string, model: string) {
 	return { kind: "sketch" as const, id: `sketch:${Date.now().toString(36)}`, label: `skice: ${items.length} elementi${note ? ` — ${note.slice(0, 40)}` : ""}`, data: { model, note, elements: items.map((i) => ({ guid: i.guid, cls: i.cls, name: i.name })) } };
 }

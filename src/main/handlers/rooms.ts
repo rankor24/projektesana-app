@@ -55,7 +55,7 @@ export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 			if (!g.ok) throw new Error(g.reason);
 			mkdirSync(dir, { recursive: true });
 			writeFileSync(g.path, buf);
-			store.log({ kind: "rooms.exported", by: "boris", data: { sourceId, rows: t.rows.length } });
+			store.log({ kind: "rooms.exported", by: "user", data: { sourceId, rows: t.rows.length } });
 			await d.openPath(g.path);
 			return g.path;
 		},

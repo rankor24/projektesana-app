@@ -1,4 +1,4 @@
-// Office delivery folders ↔ BIM stages of the timeline (design doc 0, Boris's answer 1: MBP is approximately the BIM
+// Office delivery folders ↔ BIM stages of the timeline (design doc 0, the user's answer 1: MBP is approximately the BIM
 // Skiču stadija; BP is approximately Tehniskais projekts to Detalizācijas). Pure: the renderer uses it too.
 //
 // Real 1.4_Nodevumi folders (read on this PC, 2026-11-06) are looser than the standard: "1.4.1_Skices", "1.4.2_MBP",

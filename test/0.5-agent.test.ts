@@ -28,7 +28,7 @@ test("gate: a never tool is blocked even if a model names it", async () => {
 	assert.equal(await g.before(call(msg("get_focus"), "get_focus")), undefined);
 });
 
-test("gate: a confirm tool waits for Boris, once per batch", async () => {
+test("gate: a confirm tool waits for the user, once per batch", async () => {
 	const asked: ConfirmRequest[] = [];
 	let release!: (ok: boolean) => void;
 	const g = new Gate(levelOf, (r) => {

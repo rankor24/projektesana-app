@@ -33,7 +33,7 @@ test("guard: a data folder placed inside the source root is still not writable",
 
 test("log: appends with rising seq and keeps every line", () => {
 	const f = join(tmp(), "log.jsonl");
-	const a = appendLog(f, { kind: "project.created", by: "boris" });
+	const a = appendLog(f, { kind: "project.created", by: "user" });
 	const b = appendLog(f, { kind: "source.scanned", by: "app", data: { n: 3 } });
 	assert.equal(a.seq, 1);
 	assert.equal(b.seq, 2);

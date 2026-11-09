@@ -57,7 +57,7 @@ export function App() {
 	}, [projectId, tick]);
 	return (
 		<div className="app">
-			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} />
+			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} openInfo={row?.openInfo ?? 0} />
 			<Timeline />
 			<main className={`split ${docked ? "with-dock" : ""}`}>
 				<Preview />

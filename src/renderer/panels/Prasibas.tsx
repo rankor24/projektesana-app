@@ -1,9 +1,9 @@
 // Prasības: the one requirements list (law by profile, PU, BIP, TN, permit, office) and the findings of the checks.
 // Every row shows its citation; law points open on likumi.lv, document quotes open the page in the preview.
-// Findings: Boris overrides with a reason (the check is not changed), accepts the agent's proposed justification, reopens,
+// Findings: the user overrides with a reason (the check is not changed), accepts the agent's proposed justification, reopens,
 // or sends the finding to the agent's Fokuss.
 import { useMemo, useState } from "react";
-import { BIM_STAGES, type Finding, type Requirement, type Source } from "../../core/model";
+import { BIM_STAGES, USER_LABEL, type Finding, type Requirement, type Source } from "../../core/model";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
@@ -238,7 +238,7 @@ function Findings({ projectId }: { projectId: string }) {
 					{f.requirementId && <div className="small dim">prasība: {f.requirementId}</div>}
 					{f.decision && (
 						<div className="small">
-							Boris {new Date(f.decision.at).toLocaleDateString("lv-LV")}: <i>{f.decision.reason}</i>
+							{f.decision.name || USER_LABEL} {new Date(f.decision.at).toLocaleDateString("lv-LV")}: <i>{f.decision.reason}</i>
 						</div>
 					)}
 					{f.proposal && f.state === "open" && (
@@ -247,7 +247,19 @@ function Findings({ projectId }: { projectId: string }) {
 							<button className="small" onClick={() => act(call("findings.override", projectId, f.id, f.proposal!.reason))}>Pieņemt šo pamatojumu</button>
 						</div>
 					)}
-					{f.state === "open" ? (
+					{(f.severity === "info" || f.checkId === "bcf" || f.state === "closed") && (
+						<div className="row">
+							<span className="grow small dim">{f.severity === "info" && f.state === "open" ? "Informācija: neaptur nodevumu." : ""}</span>
+							<button
+								className="small ghost"
+								title={f.severity === "info" && f.state === "open" ? "Noņem šo piezīmi. Tā pati neparādīsies atkal; ja vērtības mainās, parādīsies jauna." : "Noņem no saraksta (žurnālā paliek)."}
+								onClick={() => confirm(`Noņemt atradumu?\n\n${f.message.slice(0, 200)}`) && act(call("findings.remove", projectId, f.id))}
+							>
+								Noņemt
+							</button>
+						</div>
+					)}
+					{f.state === "open" && f.severity === "info" ? null : f.state === "open" ? (
 						<div className="row">
 							<input className="grow" placeholder="Pamatojums, kāpēc šī situācija ir pieļaujama (obligāts)" value={reason[f.id] ?? ""} onChange={(e) => setReason({ ...reason, [f.id]: e.target.value })} />
 							<button disabled={(reason[f.id] ?? "").trim().length < 5} onClick={() => act(call("findings.override", projectId, f.id, reason[f.id]))}>Pieņemt ar pamatojumu</button>

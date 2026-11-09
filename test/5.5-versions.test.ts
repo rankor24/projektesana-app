@@ -26,7 +26,7 @@ test("between two dates: a source's second version with its compare, a delivery 
 		],
 		{ kind: "t", by: "app" },
 	);
-	s.log({ kind: "fact.confirmed", by: "boris" });
+	s.log({ kind: "fact.confirmed", by: "user" });
 	const rows = versionsBetween(s, "2026-10-01", new Date().toISOString().slice(0, 10));
 	const src = rows.find((r) => r.kind === "source")!;
 	assert.equal(src.label, "PU — versija 2");

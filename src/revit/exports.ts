@@ -1,6 +1,6 @@
 // Named Revit commands the app runs itself (task 6.1): list views, read a view's geometry, export a view or sheets to PDF,
 // export IFC, save a working copy. Each is one short snippet, one action per call, through send_code_to_revit — which the
-// agent may never call (levels.ts); these run only on Boris's click or after a batch he confirmed.
+// agent may never call (levels.ts); these run only on the user's click or after a batch they confirmed.
 //
 // Found live on 2026-11-06: send_code_to_revit once answered with another snippet's result (the shared add-in port served
 // a call from elsewhere). So every snippet here returns { nonce, value } with a nonce made for that call, and a reply with

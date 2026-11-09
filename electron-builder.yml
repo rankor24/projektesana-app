@@ -2,6 +2,9 @@ appId: lv.buvdizains.projektesana
 productName: Projektesana
 directories:
   output: release
+# Electron runtime from the installed npm package (version pinned in package.json, checked by npm install), so
+# packaging is offline and never fetches the runtime or its checksum list from GitHub.
+electronDist: node_modules/electron/dist
 files:
   - dist/**
   - package.json
@@ -22,7 +25,7 @@ asarUnpack:
 win:
   target:
     - nsis
-# Setup: per-user install (no admin), Boris picks the folder; the app data in %APPDATA%\Projektesana stays on uninstall.
+# Setup: per-user install (no admin), the user picks the folder; the app data in %APPDATA%\Projektesana stays on uninstall.
 nsis:
   oneClick: false
   perMachine: false

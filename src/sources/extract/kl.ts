@@ -19,7 +19,7 @@ export interface RoomTable {
 	rows: RoomRow[];
 	/** "Kopā …" lines: floor → stated total */
 	totals: { floor: string; area: number; page: number }[];
-	/** rows that looked like room rows but did not parse, for Boris to see */
+	/** rows that looked like room rows but did not parse, for the user to see */
 	unread: { page: number; line: string }[];
 }
 

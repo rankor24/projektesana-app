@@ -86,7 +86,7 @@ try {
 } catch {
 	Out-Result @{ ok = $false; reason = $_.Exception.Message }
 } finally {
-	# Outlook is left running: quitting it would close Boris's own mailbox window
+	# Outlook is left running: quitting it would close the user's own mailbox window
 	if ($app -ne $null) { try { $app.Quit() } catch {} ; [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app) }
 	[GC]::Collect()
 }

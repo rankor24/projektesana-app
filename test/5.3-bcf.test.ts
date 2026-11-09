@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { disciplinesOf, findingOfTopic, findingsToBcf, readBcfFile, stableGuid } from "../src/checks/bcf.ts";
+import { disciplinesOf, findingOfTopic, findingsToBcf, readBcfFile, stableGuid, topicOf } from "../src/checks/bcf.ts";
 import type { Finding, Requirement } from "../src/core/model.ts";
 
 const APP = join(process.env.BIMCRAFT_SOURCE ?? join(import.meta.dirname, "..", "..", "getcadcraft", "bimcraft"), "app");
@@ -16,6 +16,13 @@ test("BIM Crew discipline pairs", () => {
 	assert.equal(disciplinesOf("bez koda", "").label, "unknown");
 });
 
+test("a decision without a stamped name is signed lietotājs, never the name set today", () => {
+	const f: Finding = { id: "x9", checkId: "rooms", requirementId: null, severity: "error", where: {}, message: "m", key: "k9", state: "overridden", decision: { by: "user", at, reason: "pieņemts" }, firstSeen: at, lastSeen: at };
+	const t = topicOf(f, undefined);
+	assert.equal(t.comments[0].author, "lietotājs");
+	assert.equal(t.description, "m\nlietotājs (2026-11-06): pieņemts");
+});
+
 test("stable GUIDs: the same finding is the same topic in every export", () => {
 	assert.equal(stableGuid("x1"), stableGuid("x1"));
 	assert.notEqual(stableGuid("x1"), stableGuid("x2"));
@@ -26,7 +33,7 @@ test("round trip: finding → BCF 2.1 → topic with its requirement, decision a
 	const req: Requirement = { id: "law:mbp-facades:0", origin: "law", citation: { kind: "law", act: "MK 529", actId: "269164", actVersionDate: "2026-01-01", readOn: "2026-11-03", point: "26.4.2. apakšpunkts", url: "https://likumi.lv/ta/id/269164#p26.4.2", quote: "26.4.2. ēkas fasādes ar augstuma atzīmēm;" }, text: "Fasādes ar augstuma atzīmēm", appliesTo: {}, checkId: "completeness", status: "failed", evidence: [], state: "confirmed", by: "app", at };
 	const findings: Finding[] = [
 		{ id: "x1", checkId: "completeness", requirementId: req.id, severity: "error", where: { deliveryId: "d1" }, message: "MBP 261005: nav atrasts “Fasādes ar augstuma atzīmēm”", key: "k1", state: "open", firstSeen: at, lastSeen: at },
-		{ id: "x2", checkId: "rooms", requirementId: null, severity: "error", where: { roomNo: "202", elementGuid: "0Wall0000000000000002" }, message: "Telpa 202: platība atšķiras", key: "k2", state: "overridden", decision: { by: "boris", at, reason: "Mērīts pa apdari, pieņemts." }, firstSeen: at, lastSeen: at },
+		{ id: "x2", checkId: "rooms", requirementId: null, severity: "error", where: { roomNo: "202", elementGuid: "0Wall0000000000000002" }, message: "Telpa 202: platība atšķiras", key: "k2", state: "overridden", decision: { by: "user", name: "Jānis Testa", at, reason: "Mērīts pa apdari, pieņemts." }, firstSeen: at, lastSeen: at },
 	];
 	const bytes = await findingsToBcf(APP, findings, [req], { name: "BD999-AR.ifc" });
 	const back = await readBcfFile(APP, bytes, ["BD999-AR.ifc"]);
@@ -39,6 +46,8 @@ test("round trip: finding → BCF 2.1 → topic with its requirement, decision a
 	assert.equal(t2.status, "Closed");
 	assert.deepEqual(t2.viewpoints[0].selection, ["0Wall0000000000000002"]);
 	assert.equal(t2.comments[0].text, "Mērīts pa apdari, pieņemts.");
+	assert.equal(t2.comments[0].author, "Jānis Testa", "the comment is signed by whoever accepted the finding");
+	assert.ok(t2.description.includes("Jānis Testa (2026-11-06): Mērīts pa apdari"), t2.description);
 	assert.equal(t1.discipline, "AR vs AR");
 	// and in again as a finding
 	const f = findingOfTopic(t2);

@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Finding, Requirement } from "../core/model.js";
+import { USER_LABEL, type Finding, type Requirement } from "../core/model.js";
 
 export interface BcfTopic {
 	guid: string;
@@ -62,7 +62,7 @@ const STATUS: Record<Finding["state"], string> = { open: "Open", overridden: "Cl
 
 export function topicOf(f: Finding, req: Requirement | undefined, author = "Projektesana App"): BcfTopic {
 	const cite = req ? (req.citation.kind === "law" ? `${req.citation.act} ${req.citation.point} (${req.citation.url})` : req.citation.kind === "office" ? `biroja standarts, lpp. ${req.citation.page}` : `avots ${req.citation.sourceId}, lpp. ${req.citation.page}`) : "";
-	const description = [f.message, req ? `Prasība: ${req.text}` : "", cite ? `Avots: ${cite}` : "", f.where.roomNo ? `Telpa: ${f.where.roomNo}` : "", f.decision ? `Boris (${f.decision.at.slice(0, 10)}): ${f.decision.reason}` : ""].filter(Boolean).join("\n");
+	const description = [f.message, req ? `Prasība: ${req.text}` : "", cite ? `Avots: ${cite}` : "", f.where.roomNo ? `Telpa: ${f.where.roomNo}` : "", f.decision ? `${f.decision.name || USER_LABEL} (${f.decision.at.slice(0, 10)}): ${f.decision.reason}` : ""].filter(Boolean).join("\n");
 	const g = stableGuid(f.id);
 	return {
 		guid: g,
@@ -73,7 +73,7 @@ export function topicOf(f: Finding, req: Requirement | undefined, author = "Proj
 		created: f.firstSeen,
 		modified: f.lastSeen,
 		description,
-		comments: f.decision ? [{ guid: stableGuid(`${f.id}:decision`), date: f.decision.at, author: "Boris", text: f.decision.reason }] : [],
+		comments: f.decision ? [{ guid: stableGuid(`${f.id}:decision`), date: f.decision.at, author: f.decision.name || USER_LABEL, text: f.decision.reason }] : [],
 		viewpoints: f.where.elementGuid ? [{ guid: stableGuid(`${f.id}:vp`), camera: null, selection: [f.where.elementGuid], visibility: { defaultVisible: true, exceptions: [] }, clipping: [], snapshot: null }] : [],
 	};
 }
@@ -97,7 +97,7 @@ export async function readBcfFile(appDir: string, bytes: Uint8Array, ifcFiles: s
 	return { topics, notes: r.notes, byDiscipline };
 }
 
-/** A BCF topic as a finding of the "bcf" check (no code check re-runs it, so it stays until Boris decides). */
+/** A BCF topic as a finding of the "bcf" check (no code check re-runs it, so it stays until the user decides). */
 export function findingOfTopic(t: ImportedTopic, now = new Date().toISOString()): Finding {
 	const closed = /closed|resolved|done/i.test(t.status ?? "");
 	return {

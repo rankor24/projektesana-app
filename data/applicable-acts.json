@@ -1,0 +1,344 @@
+{
+	"about": "Kuri normatīvi attiecas uz projektu pēc APSTIPRINĀTIEM profila faktiem (workType, use, group, stagesInContract). Katrai rindai — akta paša teksta citāts, kas to pamato. Sastādīts ar roku, nevis modeļa minēts. Citāti nokopēti no likumi.lv teksta; lietotnē tos pārbauda pret bibliotēkā saglabāto tekstu.",
+	"readOn": "2026-11-09",
+	"notRead": "Nav vēl izvērtēti: TIAN (pašvaldības saistošie noteikumi), LBN 003-19 Būvklimatoloģija, LBN 231-15 apkure un ventilācija, inženiersistēmu LBN (221-15, 222-15, 223-15, 241-15, 262-15) un pilns LVS saraksts (www.lvs.lv piemērojamie standarti).",
+	"conditions": {
+		"work": "profile.workType",
+		"use": "profile.use",
+		"group": "profile.group",
+		"stages": "profile.stagesInContract"
+	},
+	"rows": [
+		{
+			"id": "buvniecibas-likums",
+			"title": "Būvniecības likums",
+			"category": "likums",
+			"source": {
+				"kind": "likumi",
+				"actId": "258572"
+			},
+			"when": {},
+			"why": {
+				"act": "Būvniecības likums",
+				"actId": "258572",
+				"point": "3. pants",
+				"url": "https://likumi.lv/ta/id/258572",
+				"quote": "Likumu piemēro jaunu būvju būvniecībai, kā arī esošu būvju pārbūvei, atjaunošanai, restaurācijai, nojaukšanai, novietošanai, lietošanas veida maiņai bez pārbūves un konservācijai."
+			}
+		},
+		{
+			"id": "mk-500",
+			"title": "MK 500 Vispārīgie būvnoteikumi",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "269069"
+			},
+			"when": {},
+			"why": {
+				"act": "MK 500",
+				"actId": "269069",
+				"point": "1.1. apakšpunkts",
+				"url": "https://likumi.lv/ta/id/269069",
+				"quote": "1.1. būvju iedalījumu grupās atkarībā no būvniecības sarežģītības pakāpes un iespējamās ietekmes uz cilvēku dzīvību, veselību un vidi;"
+			}
+		},
+		{
+			"id": "mk-529",
+			"title": "MK 529 Ēku būvnoteikumi",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "269164"
+			},
+			"when": {},
+			"why": {
+				"act": "MK 529",
+				"actId": "269164",
+				"point": "2. punkts",
+				"url": "https://likumi.lv/ta/id/269164",
+				"quote": "2. Noteikumi attiecas uz visu veidu ēkām, izņemot vispārīgajos būvnoteikumos minēto gadījumu."
+			}
+		},
+		{
+			"id": "lbn-202-18",
+			"title": "LBN 202-18 Būvniecības ieceres dokumentācijas noformēšana (MK 545)",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "301303"
+			},
+			"when": {},
+			"why": {
+				"act": "LBN 202-18",
+				"actId": "301303",
+				"point": "būvnormatīva 1. punkts",
+				"url": "https://likumi.lv/ta/id/301303",
+				"quote": "1. Būvnormatīvs nosaka prasības būvniecības ieceres dokumentācijas teksta un grafisko dokumentu, tai skaitā rasējumu, noformēšanai."
+			}
+		},
+		{
+			"id": "lbn-200-21",
+			"title": "LBN 200-21 Būvju vispārīgo prasību būvnormatīvs (MK 693) — arī vides pieejamība (3. nodaļa)",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "326992"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 200-21",
+				"actId": "326992",
+				"point": "1. punkts",
+				"url": "https://likumi.lv/ta/id/326992",
+				"quote": "1. Būvju vispārīgo prasību būvnormatīvs LBN 200-21 (turpmāk – būvnormatīvs) nosaka prasības, kādas ievēro, projektējot ēkas, transporta būves, stadionus, arēnas, brīvdabas estrādes un citas brīvdabas izklaides būves, kā arī prasības to novietošanai, jaunai būvniecībai, atjaunošanai, pārbūvei un restaurācijai."
+			},
+			"caveat": "Aizstāj LBN 208-15 \"Publiskas būves\" un LBN 211-15 \"Dzīvojamās ēkas\" (LBN 200-21 174. punkts) — tie vairs nav spēkā."
+		},
+		{
+			"id": "lbn-201-15",
+			"title": "LBN 201-15 Būvju ugunsdrošība (MK 333)",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "275006"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 201-15",
+				"actId": "275006",
+				"point": "būvnormatīva 1. punkts",
+				"url": "https://likumi.lv/ta/id/275006",
+				"quote": "1. Būvnormatīvs nosaka minimālās ugunsdrošības prasības. Būvnormatīva prasības attiecas uz šā būvnormatīva 5.punktā minētajām būvēm. Šo būvju projektēšanā piemēro standartus, kuru sarakstu tīmekļa vietnē www.lvs.lv ir publicējusi nacionālā standartizācijas institūcija."
+			},
+			"caveat": "Būves lietošanas veidu (I–VII) nosaka pēc būvnormatīva 5. punkta."
+		},
+		{
+			"id": "lbn-016-15",
+			"title": "LBN 016-15 Būvakustika (MK 312)",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "274976"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				],
+				"use": [
+					"residential_1_2",
+					"residential_other",
+					"public"
+				]
+			},
+			"why": {
+				"act": "LBN 016-15",
+				"actId": "274976",
+				"point": "būvnormatīva 3. punkts",
+				"url": "https://likumi.lv/ta/id/274976",
+				"quote": "3. Būvnormatīva prasības attiecināmas uz publiskām un dzīvojamām ēkām. Būvnormatīva prasības ir obligātas visām juridiskajām un fiziskajām personām."
+			}
+		},
+		{
+			"id": "lbn-002-19",
+			"title": "LBN 002-19 Ēku norobežojošo konstrukciju siltumtehnika (MK 280)",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "307966"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 002-19",
+				"actId": "307966",
+				"point": "būvnormatīva 1.1. apakšpunkts",
+				"url": "https://likumi.lv/ta/id/307966",
+				"quote": "1.1. ēku ārējo norobežojošo konstrukciju būves elementu un to savienojumu energoefektivitātes projektēšanas kārtību jaunbūvējamām, pārbūvējamām un atjaunojamām apkurināmām ēkām, kā arī esošajās ēkās ierīkojamām jaunām apkurināmām telpām, kurās apkures sezonā tiek uzturēta temperatūra 8 °C un augstāka;"
+			},
+			"caveat": "Tikai apkurināmām ēkām (apkures sezonā ≥ 8 °C); nepiemēro Ēku energoefektivitātes likuma 3. panta 2. daļas 2. punkta ēkām."
+		},
+		{
+			"id": "eku-energoefektivitates-likums",
+			"title": "Ēku energoefektivitātes likums",
+			"category": "likums",
+			"source": {
+				"kind": "likumi",
+				"actId": "253635"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "Ēku energoefektivitātes likums",
+				"actId": "253635",
+				"point": "3. panta 1.1 daļa",
+				"url": "https://likumi.lv/ta/id/253635",
+				"quote": "(11) Projektējamu, pārbūvējamu vai atjaunojamu ēku minimālās energoefektivitātes prasības nosaka būvniecības jomu regulējoši normatīvie akti, ņemot vērā šajā likumā noteiktos izņēmumus un prasības augstas efektivitātes sistēmu izmantošanai."
+			},
+			"caveat": "Izņēmumi — 3. panta 2. daļa (piem., brīvi stāvošas ēkas līdz 50 m², kultūras pieminekļi)."
+		},
+		{
+			"id": "mk-222",
+			"title": "MK 222 Ēku energoefektivitātes aprēķina metodes un ēku energosertifikācijas noteikumi",
+			"category": "mk",
+			"source": {
+				"kind": "likumi",
+				"actId": "322436"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 002-19",
+				"actId": "307966",
+				"point": "būvnormatīva 8. punkts",
+				"url": "https://likumi.lv/ta/id/307966",
+				"quote": "8. Jaunbūvējamo ēku energoefektivitāte atbilst šā būvnormatīva pielikuma 1. tabulā norādītajām robežvērtībām. Enerģijas patēriņa aprēķins veicams saskaņā ar Ministru kabineta noteikumiem par ēku energoefektivitātes aprēķina metodi."
+			}
+		},
+		{
+			"id": "lvs-en-13501-2",
+			"title": "LVS EN 13501-2 Būvizstrādājumu ugunsizturības klasifikācija",
+			"category": "lvs",
+			"source": {
+				"kind": "paid",
+				"ref": "LVS EN 13501-2",
+				"catalogue": "https://www.lvs.lv/lv/products/index?ProductsSearch%5Bproduct_number%5D=LVS+EN+13501-2"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 201-15",
+				"actId": "275006",
+				"point": "būvnormatīva 16. punkts",
+				"url": "https://likumi.lv/ta/id/275006",
+				"quote": "16. Ugunsdrošo stiklu ugunsizturību nosaka atbilstoši standartam LVS EN 15998:2020 \"Būvstikls. Drošība ugunsgrēka gadījumā, ugunsizturība. Stikla testēšanas metodika klasifikācijas nolūkā\" un klasificē atbilstoši standartam LVS EN 13501-2:2016 \"Būvizstrādājumu un būvelementu klasifikācija pēc to ugunsizturības. 2. daļa: Klasifikācija, lietojot ugunsizturības testu datus, izņemot ventilācijas sistēmām paredzētos izstrādājumus\"."
+			}
+		},
+		{
+			"id": "lvs-en-iso-6946",
+			"title": "LVS EN ISO 6946 Siltumpretestība un siltumcaurlaidība",
+			"category": "lvs",
+			"source": {
+				"kind": "paid",
+				"ref": "LVS EN ISO 6946",
+				"catalogue": "https://www.lvs.lv/lv/products/index?ProductsSearch%5Bproduct_number%5D=LVS+EN+ISO+6946"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 002-19",
+				"actId": "307966",
+				"point": "būvnormatīva 14.1. apakšpunkts",
+				"url": "https://likumi.lv/ta/id/307966",
+				"quote": "14.1. sienām, jumtiem un grīdām, kas ir saskarē ar āra gaisu, – saskaņā ar standartu LVS EN ISO 6946:2017 \"Būvdetaļas un būvelementi. Siltumpretestība un siltumcaurlaidība. Aprēķinu metodes (ISO 6946:2017)\";"
+			}
+		},
+		{
+			"id": "lvs-en-iso-13370",
+			"title": "LVS EN ISO 13370 Siltuma zudumi caur zemi",
+			"category": "lvs",
+			"source": {
+				"kind": "paid",
+				"ref": "LVS EN ISO 13370",
+				"catalogue": "https://www.lvs.lv/lv/products/index?ProductsSearch%5Bproduct_number%5D=LVS+EN+ISO+13370"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 002-19",
+				"actId": "307966",
+				"point": "būvnormatīva 14.2. apakšpunkts",
+				"url": "https://likumi.lv/ta/id/307966",
+				"quote": "14.2. grīdām, kam nav saskares ar āra gaisu, − saskaņā ar standartu LVS EN ISO 13370:2017 \"Ēku siltumtehniskās īpašības. Siltuma zudumi caur zemi. Aprēķina metodes (ISO 13370:2017)\";"
+			}
+		},
+		{
+			"id": "lvs-en-iso-13788",
+			"title": "LVS EN ISO 13788 Higrosiltuma īpašības, kondensāts",
+			"category": "lvs",
+			"source": {
+				"kind": "paid",
+				"ref": "LVS EN ISO 13788",
+				"catalogue": "https://www.lvs.lv/lv/products/index?ProductsSearch%5Bproduct_number%5D=LVS+EN+ISO+13788"
+			},
+			"when": {
+				"work": [
+					"new_build",
+					"reconstruction",
+					"simple_reconstruction",
+					"renovation",
+					"simplified_renovation"
+				]
+			},
+			"why": {
+				"act": "LBN 002-19",
+				"actId": "307966",
+				"point": "būvnormatīva 14.5. apakšpunkts",
+				"url": "https://likumi.lv/ta/id/307966",
+				"quote": "14.5. punktveida termiskajiem tiltiem χk, ja tie rada kondensāta risku, – novērtējot kā papildu vājinājumu konstrukcijās. Nepieciešamie aprēķini un robežvērtības noteiktas saskaņā ar LVS EN ISO 13788:2013 \"Ēku būvmateriālu un būvelementu higrosiltumtehniskās īpašības. Iekšējās virsmas temperatūra kritiskā virsmas mitruma un iekšējās kondensācijas novēršanai. Aprēķina metodes (ISO 13788:2012)\"."
+			}
+		}
+	]
+}

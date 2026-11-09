@@ -1,4 +1,4 @@
-// Atmiņa: the project memory (replaces v1's Žurnāls). Decisions, answers, learnings and open questions, written by Boris
+// Atmiņa: the project memory (replaces v1's Žurnāls). Decisions, answers, learnings and open questions, written by the user
 // or by the agent (write_note), one markdown file per note. The agent reads them with read_notes.
 import { useState } from "react";
 import type { Note, NoteType } from "../../core/model";

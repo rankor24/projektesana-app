@@ -1,7 +1,31 @@
 // The data model: the shapes every panel, check and agent tool uses (work plan, "Data model").
 // Plain types and a few pure helpers, no I/O, so the renderer imports the same file.
 
-export type Who = "boris" | "agent" | "app";
+/** Who did it: "user" is the person at the app (the one who decides), "agent" the AI, "app" the code itself.
+ *  The person's name is not part of the role: it comes from the settings and is stamped where a decision is shown
+ *  with attribution (Decision.name, a fact the user wrote). */
+export type Who = "user" | "agent" | "app";
+
+/** Shown where a decision has no stamped name (data written before names were kept, or no name in the settings). */
+export const USER_LABEL = "lietotājs";
+
+/** Data written before 2026-11-09 calls the user "boris". Mapped on read, in place, on freshly parsed JSON; the files on
+ *  disk are not rewritten (the log is append-only, and each collection moves to "user" the next time it is written).
+ *  Only the fields that hold an actor are touched: `by`, `plannedFrom`, and the `kind` of a user-written fact source. */
+export function upgradeWho<T>(v: T): T {
+	if (Array.isArray(v)) {
+		for (const x of v) upgradeWho(x);
+		return v;
+	}
+	if (v && typeof v === "object") {
+		const o = v as Record<string, unknown>;
+		for (const k of Object.keys(o)) {
+			if (o[k] === "boris" && (k === "by" || k === "plannedFrom" || k === "kind")) o[k] = "user";
+			else if (o[k] && typeof o[k] === "object") upgradeWho(o[k]);
+		}
+	}
+	return v;
+}
 
 /** BIM stages of the timeline (design doc 0). */
 export const BIM_STAGES = ["Koncept", "Skice", "Tehniskais", "Detalizācijas", "Būvniecība", "As-Built"] as const;
@@ -51,8 +75,9 @@ export interface Source {
 	paths: string[];
 	title: string;
 	role: string;
-	/** role came from the fixed folder map, from a remembered confirmation, or still needs Boris */
-	roleFrom: "folder" | "confirmed" | "unconfirmed";
+	/** role came from the fixed folder map, from a remembered confirmation, or still needs the user */
+	/** "document": the user set the role on this one document (Avoti); it wins over the folder's role */
+	roleFrom: "folder" | "confirmed" | "unconfirmed" | "document";
 	versions: Version[];
 	signers: Signer[];
 	/** for a file inside an .edoc: the container's relative path and the inner name */
@@ -65,7 +90,7 @@ export interface Source {
 
 export type FactState = "proposed" | "confirmed" | "rejected";
 
-export type FactSource = { sourceId: string; sha: string; page: number; quote: string } | { kind: "boris"; at: string };
+export type FactSource = { sourceId: string; sha: string; page: number; quote: string } | { kind: "user"; at: string; name?: string };
 
 export interface Fact {
 	id: string;
@@ -101,7 +126,7 @@ export type RequirementOrigin = "law" | "pu" | "bip" | "tn" | "permit" | "office
 export type Citation =
 	| { kind: "law"; act: string; actId: string; actVersionDate: string | null; readOn: string; point: string; url: string; quote: string }
 	| { kind: "document"; sourceId: string; sha: string; page: number; quote: string }
-	/** the office standard document, read at run time from the file Boris set (never shipped: it is company-internal) */
+	/** the office standard document, read at run time from the file the user set (never shipped: it is company-internal) */
 	| { kind: "office"; file: string; page: number; quote: string };
 
 export interface AppliesTo {
@@ -141,6 +166,8 @@ export interface Where {
 
 export interface Decision {
 	by: Who;
+	/** the user's name from the settings when the decision was made (absent in older data) */
+	name?: string;
 	at: string;
 	reason: string;
 }
@@ -156,7 +183,7 @@ export interface Finding {
 	key: string;
 	state: "open" | "closed" | "overridden";
 	decision?: Decision;
-	/** an agent's proposed justification, waiting for Boris */
+	/** an agent's proposed justification, waiting for the user */
 	proposal?: { reason: string; at: string };
 	firstSeen: string;
 	lastSeen: string;
@@ -180,12 +207,12 @@ export interface Delivery {
 	kind: DeliveryKind;
 	label: string;
 	plannedDate: string | null;
-	plannedFrom?: "bip" | "boris";
+	plannedFrom?: "bip" | "user";
 	submittedDate: string | null;
 	folder: string | null;
 	items: DeliveryItem[];
 	checksRun: { at: string; open: number }[];
-	sent?: { at: string; by: "boris" };
+	sent?: { at: string; by: "user" };
 }
 
 export interface Revision {
@@ -208,7 +235,7 @@ export interface Pin {
 	comments: { by: Who; at: string; text: string }[];
 	by: Who;
 	at: string;
-	/** open → resolved (agent says done) → closed (Boris) */
+	/** open → resolved (agent says done) → closed (the user) */
 	state: "open" | "resolved" | "closed";
 	findingId: string | null;
 	requirementId: string | null;

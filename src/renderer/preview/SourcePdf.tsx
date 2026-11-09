@@ -1,4 +1,4 @@
-// A project source in the PDF view, with its overlays: the plan geometry read from a vector inventory (3.4) and Boris's
+// A project source in the PDF view, with its overlays: the plan geometry read from a vector inventory (3.4) and the user's
 // pins (6.4). The overlay draws in page fractions, so it stays on the plan at any zoom.
 import { useState } from "react";
 import type { Pin } from "../../core/model";

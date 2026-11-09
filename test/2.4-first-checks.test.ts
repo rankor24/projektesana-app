@@ -27,7 +27,7 @@ function project(): ProjectStore {
 	s.write("sources", [src("s_pu", "PU", "PU", "1".repeat(64)), src("s_kl", "Īpašuma dokumenti", "Kadastrala lieta", "2".repeat(64))], { kind: "t", by: "app" });
 	s.writeText("1".repeat(64), { state: "ok", pages: ["PROJEKTĒŠANAS UZDEVUMS\n1.1. Objekta adrese: Testa iela 1, Izdomāti, LV-0000\n1.2. Būvniecības veids – jauna būvniecība."] });
 	s.writeText("2".repeat(64), { state: "ok", pages: ["KADASTRĀLĀS UZMĒRĪŠANAS LIETA\nAdrese: Testa iela 3, Izdomāti\nKopējā platība: 120,0 m2"] });
-	const f = (key: string, value: string): Fact => ({ id: `f_${key}`, key: `profile.${key}`, value, source: { kind: "boris", at }, state: "confirmed", by: "boris", at });
+	const f = (key: string, value: string): Fact => ({ id: `f_${key}`, key: `profile.${key}`, value, source: { kind: "user", at }, state: "confirmed", by: "user", at });
 	s.write("facts", [f("workType", "new_build"), f("use", "public"), f("group", "2"), f("stagesInContract", "MBP")], { kind: "t", by: "app" });
 	const d: Delivery = {
 		id: "d_mbp",
@@ -117,6 +117,7 @@ test("one truth: designations the PU states with no property documents to check 
 	s.write("sources", [{ id: "pu", kind: "document", folderKey: "1.1.2", paths: ["pu.pdf"], title: "pu", role: "PU", roleFrom: "folder", versions: [{ sha256: "c".repeat(64), size: 1, mtime: at, seenAt: at, textState: "ok", pages: 1 }], signers: [] }], { kind: "t", by: "app" });
 	s.writeText("c".repeat(64), { state: "ok", pages: ["Būves kadastra apzīmējums 0000 000 0000 001\nBūves kadastra apzīmējums 0000 000 0000 002"] });
 	const r = await oneTruthCheck.run({ store: s, dataDir: DATA, today: "2026-11-06" });
-	assert.deepEqual(r.results.map((x) => [x.key, x.severity]), [["cadastral.building:no-property", "info"]]);
-	assert.match(r.results[0].message, /nosauc 2, bet avotos nav īpašuma dokumentu/);
+	assert.deepEqual(r.results.map((x) => [x.key, x.severity]), [["not-compared", "info"]]);
+	assert.match(r.results[0].message, /^Nav neviena avota ar lomu “Īpašuma dokumenti”/);
+	assert.ok(r.results[0].message.endsWith("būves kadastra apzīmējums — “0000 000 0000 001” (pu, lpp. 1), “0000 000 0000 002” (pu, lpp. 1)"), r.results[0].message);
 });

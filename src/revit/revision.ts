@@ -1,5 +1,5 @@
 // Working copy and revisions (task 6.2). Read and cleaned from v1 src/main/loop/revision.ts: the agent edits a working copy
-// (<name>_WORK.rvt in the project's data folder, never the office file); after each batch Boris confirmed, a revision is
+// (<name>_WORK.rvt in the project's data folder, never the office file); after each batch the user confirmed, a revision is
 // captured: IFC, the room table, optional sheets PDF, a summary and the diff from the previous revision (BimCraft's
 // compareModels by GlobalId). Changed from v1: data folder instead of .bv in the project, nonce on every Revit call,
 // BimCraft's IFC diff instead of v1's line diff, revision ids from the stored list.
@@ -27,7 +27,7 @@ export function isWorkCopy(store: ProjectStore, docPath: string): boolean {
 	return !!docPath && /_WORK\.rvt$/i.test(docPath) && norm(docPath).startsWith(norm(workDir(store)));
 }
 
-/** Saves the open document as the working copy in the data folder (Boris's click). The office file stays as it was. */
+/** Saves the open document as the working copy in the data folder (the user's click). The office file stays as it was. */
 export async function makeWorkCopy(store: ProjectStore, revit: RevitCaller): Promise<string> {
 	const doc = await revitExport.docInfo(revit);
 	if (isWorkCopy(store, doc.path)) return doc.path;
@@ -35,7 +35,7 @@ export async function makeWorkCopy(store: ProjectStore, revit: RevitCaller): Pro
 	const target = join(workDir(store), workName(doc.title));
 	if (existsSync(target)) throw new Error(`Darba kopija jau ir: ${target}. Atver to Revit un turpini tajā.`);
 	const path = await revitExport.saveAsWork(revit, target);
-	store.log({ kind: "revit.workCopy", by: "boris", data: { from: doc.title, to: target } });
+	store.log({ kind: "revit.workCopy", by: "user", data: { from: doc.title, to: target } });
 	return path;
 }
 
@@ -48,7 +48,7 @@ export interface CaptureOptions {
 	bimcraftApp: string;
 }
 
-/** Exports everything Boris reviews; throws on the first failure, nothing half-written is stored as a revision. */
+/** Exports everything the user reviews; throws on the first failure, nothing half-written is stored as a revision. */
 export async function captureRevision(store: ProjectStore, revit: RevitCaller, o: CaptureOptions): Promise<Revision> {
 	const doc = await revitExport.docInfo(revit);
 	if (!isWorkCopy(store, doc.path)) throw new Error(`Aktīvais Revit dokuments nav šī projekta darba kopija (${doc.title}). Revīziju nefiksē.`);
