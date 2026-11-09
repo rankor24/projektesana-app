@@ -120,6 +120,8 @@ tr.click:hover td { background: var(--elev); }
 
 .pane { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .pane.fill { flex: 1; overflow: auto; }
+/* a scrolling pane scrolls; its blocks never shrink below their content (else they draw over the next one) */
+.pane.fill > * { flex-shrink: 0; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .grow { flex: 1; }
 .dim { color: var(--muted); }

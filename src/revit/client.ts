@@ -14,6 +14,8 @@ export interface RevitLaunch {
 	serverJs: string;
 	/** node.exe for the server; null = Electron's own node (ELECTRON_RUN_AS_NODE) */
 	node: string | null;
+	/** where it was found: Boris's path in Iestatījumi, or the standard install in %LOCALAPPDATA%\Revit-MCP-Node */
+	source?: "iestatījumi" | "automātiski";
 }
 
 /** The installer's standard location (Revit-MCP-Node in the user's local app data). */
@@ -22,11 +24,11 @@ export function defaultRevitLaunch(localAppData = process.env.LOCALAPPDATA ?? ""
 	const serverJs = join(base, "node-server", "build", "index.js");
 	if (!localAppData || !existsSync(serverJs)) return null;
 	const node = join(base, "node-runtime", "node.exe");
-	return { serverJs, node: existsSync(node) ? node : null };
+	return { serverJs, node: existsSync(node) ? node : null, source: "automātiski" };
 }
 
 export function resolveRevitLaunch(settings: { revitServerJs: string | null; revitNode: string | null }): RevitLaunch | null {
-	if (settings.revitServerJs) return existsSync(settings.revitServerJs) ? { serverJs: settings.revitServerJs, node: settings.revitNode && existsSync(settings.revitNode) ? settings.revitNode : null } : null;
+	if (settings.revitServerJs) return existsSync(settings.revitServerJs) ? { serverJs: settings.revitServerJs, node: settings.revitNode && existsSync(settings.revitNode) ? settings.revitNode : null, source: "iestatījumi" } : null;
 	return defaultRevitLaunch();
 }
 
@@ -46,6 +48,11 @@ export class RevitClient implements RevitCaller {
 
 	configured(): boolean {
 		return this.launch() !== null;
+	}
+
+	/** the server this client starts, for Iestatījumi to show (null = not found) */
+	where(): RevitLaunch | null {
+		return this.launch();
 	}
 
 	private connect(): Promise<Client> {

@@ -90,6 +90,8 @@ export interface RevitStatusRow {
 	activeView: string | null;
 	version: string | null;
 	message?: string;
+	/** the MCP server the app starts, and how it was found */
+	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" } | null;
 }
 
 export interface RevitRoomRow {

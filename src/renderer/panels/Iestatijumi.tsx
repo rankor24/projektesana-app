@@ -13,6 +13,7 @@ export function Iestatijumi() {
 	const [answer, setAnswer] = useState("");
 	const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
 	const [err, setErr] = useState<string | null>(null);
+	const [rv, setRv] = useState(0);
 
 	useEffect(() => on("agent.login", (n) => setNotice(n)), []);
 
@@ -143,17 +144,18 @@ export function Iestatijumi() {
 				</div>
 			)}
 			<div className="section-title">Revit MCP</div>
+			<RevitServer version={rv} />
 			{s && (
-				<div className="pane" style={{ padding: 0 }}>
+				<>
 					<label className="row">
-						<span style={{ width: 150 }}>Servera index.js</span>
-						<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder="nav konfigurēts" onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }))} />
+						<span style={{ width: 150 }}>Cits index.js</span>
+						<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder="tukšs = standarta instalācija (%LOCALAPPDATA%\Revit-MCP-Node)" onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
 					</label>
 					<label className="row">
-						<span style={{ width: 150 }}>node.exe (neobligāts)</span>
-						<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder="Electron node" onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }))} />
+						<span style={{ width: 150 }}>Cits node.exe</span>
+						<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder="tukšs = servera node-runtime vai Electron node" onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
 					</label>
-				</div>
+				</>
 			)}
 			<div className="section-title">Biroja standarts</div>
 			{s && (
@@ -178,6 +180,31 @@ export function Iestatijumi() {
 					))}
 				</div>
 			)}
+		</div>
+	);
+}
+
+/** What the app actually starts for Revit: the server it found and how, and whether a Revit session answers. */
+function RevitServer({ version }: { version: number }) {
+	const st = useLoad(() => call("revit.status"), [version]);
+	const r = st.data;
+	if (st.error) return <Err error={st.error} />;
+	if (!r) return <div className="dim small">pārbauda…</div>;
+	return (
+		<div className="small">
+			<div className="row">
+				<Badge tone={r.state === "savienots" ? "ok" : r.state === "nav konfigurēts" ? "bad" : "warn"}>{r.state}</Badge>
+				{r.document && <span>{r.document}{r.version ? ` · Revit ${r.version}` : ""}</span>}
+				<button className="small ghost" onClick={st.reload}>pārbaudīt</button>
+			</div>
+			{r.server && (
+				<div className="dim mono">
+					{r.server.source === "automātiski" ? "atrasts automātiski: " : "no Iestatījumiem: "}
+					{r.server.serverJs}
+					{r.server.node ? ` · ${r.server.node}` : " · Electron node"}
+				</div>
+			)}
+			{r.message && <div className="dim">{r.message}</div>}
 		</div>
 	);
 }

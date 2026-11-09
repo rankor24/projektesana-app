@@ -54,3 +54,19 @@ test("launch: settings first, else the installer's location; nothing found → n
 	assert.deepEqual(launchSpec({ serverJs: "s.js", node: null }, "electron.exe"), { command: "electron.exe", args: ["s.js"], env: { ELECTRON_RUN_AS_NODE: "1" } });
 	assert.deepEqual(launchSpec({ serverJs: "s.js", node: "node.exe" }, "electron.exe"), { command: "node.exe", args: ["s.js"], env: {} });
 });
+
+test("the standard install is found automatically and says so; Boris's path wins and says so", async () => {
+	const { mkdirSync, writeFileSync } = await import("node:fs");
+	const { join } = await import("node:path");
+	const local = tmp();
+	mkdirSync(join(local, "Revit-MCP-Node", "node-server", "build"), { recursive: true });
+	mkdirSync(join(local, "Revit-MCP-Node", "node-runtime"), { recursive: true });
+	writeFileSync(join(local, "Revit-MCP-Node", "node-server", "build", "index.js"), "");
+	writeFileSync(join(local, "Revit-MCP-Node", "node-runtime", "node.exe"), "");
+	const auto = defaultRevitLaunch(local)!;
+	assert.equal(auto.source, "automātiski");
+	assert.ok(auto.node?.endsWith("node.exe"));
+	const own = resolveRevitLaunch({ revitServerJs: auto.serverJs, revitNode: null })!;
+	assert.equal(own.source, "iestatījumi");
+	assert.equal(own.node, null);
+});

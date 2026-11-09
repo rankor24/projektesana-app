@@ -64,14 +64,16 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 			return new Uint8Array(readFileSync(g.path));
 		},
 		"revit.status": async () => {
-			if (!d.revit.configured()) return { state: "nav konfigurēts", document: null, activeView: null, version: null, message: "Revit MCP serveris nav atrasts (Iestatījumi → Revit MCP)." };
+			const w = d.revit.where();
+			if (!w) return { state: "nav konfigurēts", document: null, activeView: null, version: null, server: null, message: "Revit MCP serveris nav atrasts: ne Iestatījumos norādītajā ceļā, ne standarta instalācijā %LOCALAPPDATA%\\Revit-MCP-Node." };
+			const server = { serverJs: w.serverJs, node: w.node, source: w.source ?? "iestatījumi" } as const;
 			try {
 				const r = await revitRead.instances(d.revit);
 				const i = r.instances.find((x) => x.pid === r.selectedPid) ?? r.instances[0];
-				if (!i) return { state: "nav savienojuma", document: null, activeView: null, version: null, message: "Neviena Revit sesija ar ieslēgtu MCP." };
-				return { state: "savienots", document: i.document, activeView: i.activeView, version: i.version };
+				if (!i) return { state: "nav savienojuma", document: null, activeView: null, version: null, server, message: "Serveris atrasts, bet neviena Revit sesija ar ieslēgtu MCP (lentē: MCP ON)." };
+				return { state: "savienots", document: i.document, activeView: i.activeView, version: i.version, server };
 			} catch (e) {
-				return { state: "nav savienojuma", document: null, activeView: null, version: null, message: (e as Error).message };
+				return { state: "nav savienojuma", document: null, activeView: null, version: null, server, message: (e as Error).message };
 			}
 		},
 		"revit.rooms": async () => (await revitRead.rooms(d.revit)).map((r) => ({ id: r.id, uniqueId: r.uniqueId, number: r.number, name: r.name, level: r.level, areaM2: r.areaM2, phase: r.phase })),
