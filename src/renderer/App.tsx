@@ -4,6 +4,7 @@ import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
 import { PanelBar } from "./shell/PanelBar";
+import { StatusStrip } from "./shell/StatusStrip";
 import { Preview } from "./shell/Preview";
 import { Timeline } from "./shell/Timeline";
 import { TopBar } from "./shell/TopBar";
@@ -75,6 +76,7 @@ export function App() {
 				)}
 				<AgentDock />
 			</main>
+			<StatusStrip />
 			<PanelBar />
 			<WindowLayer render={(id, filter) => <Panel id={id} filter={filter} />} />
 		</div>

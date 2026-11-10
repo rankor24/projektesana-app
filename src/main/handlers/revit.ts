@@ -1,5 +1,5 @@
 // Revit read state for the panels: connection status and the open model's rooms.
-import type { RevitClient } from "../../revit/client.js";
+import { defaultServerJs, type RevitClient } from "../../revit/client.js";
 import { revitRead, revitSelect, writeInvArea } from "../../revit/commands.js";
 import type { Registry } from "../../core/registry.js";
 import { compareRooms, normNo } from "../../checks/checks/rooms.js";
@@ -65,7 +65,7 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		},
 		"revit.status": async () => {
 			const w = d.revit.where();
-			if (!w) return { state: "nav konfigurēts", document: null, activeView: null, version: null, server: null, message: "Revit MCP serveris nav atrasts: ne Iestatījumos norādītajā ceļā, ne standarta instalācijā %LOCALAPPDATA%\\Revit-MCP-Node." };
+			if (!w) return { state: "nav konfigurēts", document: null, activeView: null, version: null, server: null, message: `Revit MCP serveris nav atrasts: ne Iestatījumos norādītajā ceļā, ne standarta instalācijā (pārbaudīts: ${defaultServerJs()}).` };
 			const server = { serverJs: w.serverJs, node: w.node, source: w.source ?? "iestatījumi" } as const;
 			try {
 				const r = await revitRead.instances(d.revit);

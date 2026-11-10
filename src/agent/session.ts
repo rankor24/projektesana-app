@@ -72,6 +72,7 @@ export class AgentSession {
 	/** compactions per conversation since the app started */
 	private compactions = new Map<string, number>();
 	private running: { id: string; abort: AbortController } | null = null;
+	private runDone: Promise<unknown> | null = null;
 	private confirms = new Map<string, (ok: boolean) => void>();
 	private n = 0;
 
@@ -148,7 +149,7 @@ export class AgentSession {
 		}
 		const abort = new AbortController();
 		this.running = { id: runId, abort };
-		void this.run(runId, projectId, text, focus, files, abort.signal).finally(() => {
+		this.runDone = this.run(runId, projectId, text, focus, files, abort.signal).finally(() => {
 			this.running = null;
 			for (const [, r] of this.confirms) r(false);
 			this.confirms.clear();
@@ -158,6 +159,12 @@ export class AgentSession {
 
 	stop() {
 		this.running?.abort.abort();
+	}
+
+	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */
+	async shutdown(): Promise<void> {
+		this.stop();
+		await this.runDone?.catch(() => undefined);
 	}
 
 	confirm(id: string, allow: boolean) {

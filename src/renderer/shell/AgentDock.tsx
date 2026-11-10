@@ -1,6 +1,11 @@
 // The agent dock: right half of the split view. Fokuss header, the conversation, the input.
 // Events stream from main (agent.event); a `confirm` event shows the batch with Atļaut / Noraidīt.
-import { useEffect, useRef, useState, type DragEvent } from "react";
+// What the agent does between the question and the answer (thinking, tool calls, sources, facts) is the run card,
+// drawn from the activity feed (main/activity.ts), not from the raw events.
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { groupRuns, isRunning } from "../../shared/activity";
+import { useActivity } from "../activity";
+import { RunCard } from "./RunCard";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
 import { fmtTokens } from "../../shared/tokens";
 import type { RunEvent } from "../../shared/types";
@@ -23,7 +28,8 @@ function runUi(u: UiInstruction | null) {
 type Line =
 	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
 	| { kind: "assistant"; text: string; thinking?: string }
-	| { kind: "tool"; id: string; name: string; detail?: string; ok?: boolean; output?: string; chars?: number }
+	/** the run card of one run: its steps come from the activity feed */
+	| { kind: "run"; runId: string }
 	| { kind: "compact"; phase: "start" | "done" | "failed" | "past"; text: string; summary?: string }
 	| { kind: "confirm"; id: string; tool: string; batch: string; answered?: boolean; allow?: boolean }
 	| { kind: "error"; text: string }
@@ -46,6 +52,11 @@ export function AgentDock() {
 	const [reading, setReading] = useState(0);
 	const [dragging, setDragging] = useState(false);
 	const [compacting, setCompacting] = useState(false);
+	const acts = useActivity();
+	const runs = useMemo(() => new Map(groupRuns(acts).map((g) => [g.run, g.lines])), [acts]);
+	// the project whose history is on screen, and whether a send is under way (a run then belongs to that send)
+	const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
+	const sending = useRef(false);
 
 	// the text is measured a moment after typing stops, not on every key
 	const [typed, setTyped] = useState("");
@@ -93,23 +104,35 @@ export function AgentDock() {
 	// conversation of the open project
 	useEffect(() => {
 		let live = true;
-		call("agent.history", projectId).then(
-			(h) =>
-				live &&
-				setLines(
-					h.map((m): Line =>
-						m.kind === "compaction"
-							? { kind: "compact", phase: "past", text: `Saruna saspiesta: ${fmtTokens(m.tokens?.before ?? 0)} → ${fmtTokens(m.tokens?.after ?? 0)} tokeni`, summary: m.text }
-							: m.role === "user"
-								? { kind: "user", text: m.text, attachments: m.attachments }
-								: { kind: "assistant", text: m.text },
-					),
+		call("agent.history", projectId).then((h) => {
+			if (!live) return;
+			setLines(
+				h.map((m): Line =>
+					m.kind === "compaction"
+						? { kind: "compact", phase: "past", text: `Saruna saspiesta: ${fmtTokens(m.tokens?.before ?? 0)} → ${fmtTokens(m.tokens?.after ?? 0)} tokeni`, summary: m.text }
+						: m.role === "user"
+							? { kind: "user", text: m.text, attachments: m.attachments }
+							: { kind: "assistant", text: m.text },
 				),
-		);
+			);
+			setLoadedFor(projectId);
+		});
 		return () => {
 			live = false;
 		};
 	}, [projectId]);
+
+	// a run of this project that is still going (the window reloaded, or the project was opened again mid-run):
+	// show its card and follow its events, so the answer arrives and Apturēt works
+	useEffect(() => {
+		if (loadedFor !== projectId || runRef.current || sending.current) return;
+		const going = [...runs].find(([, ls]) => ls[0].who === "agent" && ls[0].project === projectId && isRunning(ls));
+		if (!going) return;
+		const [id] = going;
+		runRef.current = id;
+		setRunId(id);
+		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, { kind: "run", runId: id }]));
+	}, [runs, loadedFor, projectId]);
 
 	useEffect(
 		() =>
@@ -136,6 +159,7 @@ export function AgentDock() {
 		setErr(null);
 		const t = text;
 		const files = pending;
+		sending.current = true;
 		try {
 			const r = await call(
 				"agent.send",
@@ -147,12 +171,14 @@ export function AgentDock() {
 			runRef.current = r.runId;
 			setRunId(r.runId);
 			const refs: ChatAttachmentRef[] = files.map((f) => ({ name: f.name, kind: f.kind, thumb: f.thumb }));
-			setLines((ls) => [...ls, { kind: "user", text: t, attachments: refs.length ? refs : undefined }]);
+			setLines((ls) => [...ls, { kind: "user", text: t, attachments: refs.length ? refs : undefined }, { kind: "run", runId: r.runId }]);
 			setText("");
 			setPending([]);
 		} catch (e) {
 			// refused (a file the model cannot take, the agent busy): text and files stay so nothing is lost
 			setErr(errText(e));
+		} finally {
+			sending.current = false;
 		}
 	};
 
@@ -193,6 +219,7 @@ export function AgentDock() {
 				})()
 			: null;
 	const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
+	const lastRun = [...lines].reverse().find((l): l is Extract<Line, { kind: "run" }> => l.kind === "run")?.runId ?? null;
 	return (
 		<aside
 			className={`agent-dock ${dragging ? "dropping" : ""}`}
@@ -249,10 +276,17 @@ export function AgentDock() {
 			</div>
 			<div className="chat">
 				{lines.length === 0 && <div className="dim small chat-empty">{projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
-				{lines.map((l, i) => (
-					<ChatLine key={i} line={l} onAnswer={answer} />
-				))}
-				{runId && <div className="dim small">strādā…</div>}
+				{lines.map((l, i) =>
+					l.kind === "run" ? (
+						runs.get(l.runId) ? (
+							<RunCard key={l.runId} lines={runs.get(l.runId)!} latest={l.runId === lastRun} />
+						) : (
+							<div key={l.runId} className="dim small">strādā…</div>
+						)
+					) : (
+						<ChatLine key={i} line={l} onAnswer={answer} />
+					),
+				)}
 				<div ref={endRef} />
 			</div>
 			{err && <div className="err">{err}</div>}
@@ -335,12 +369,10 @@ function apply(ls: Line[], e: RunEvent): Line[] {
 			if (last?.kind === "assistant") return [...ls.slice(0, -1), { ...last, text: last.text + e.text }];
 			return [...ls, { kind: "assistant", text: e.text }];
 		case "thinking":
-			if (last?.kind === "assistant") return [...ls.slice(0, -1), { ...last, thinking: (last.thinking ?? "") + e.text }];
-			return [...ls, { kind: "assistant", text: "", thinking: e.text }];
 		case "tool":
-			return [...ls, { kind: "tool", id: e.id ?? "", name: e.name, detail: e.detail }];
 		case "tool_result":
-			return ls.map((l) => (l.kind === "tool" && l.id === e.id ? { ...l, ok: e.ok, output: e.output, chars: e.chars } : l));
+			// shown in the run card, from the activity feed
+			return ls;
 		case "compact": {
 			// one line per compaction: "start" opens it, "done" / "failed" replace it
 			const line: Line =
@@ -401,17 +433,7 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 				{l.text}
 			</div>
 		);
-	if (l.kind === "tool")
-		return (
-			<details className={`tool ${l.ok === false ? "bad" : ""}`}>
-				<summary>
-					{l.ok === undefined ? "…" : l.ok ? "✓" : "✗"} {l.name}
-					{l.chars ? <span className="dim" title="Cik konteksta aizņem šī rīka atbilde (aptuveni)"> · ≈{fmtTokens(Math.ceil(l.chars / 3.5))}</span> : null}
-				</summary>
-				{l.detail && <pre>{l.detail}</pre>}
-				{l.output && <pre>{l.output}</pre>}
-			</details>
-		);
+	if (l.kind === "run") return null;
 	if (l.kind === "compact")
 		return (
 			<details className={`compact-line ${l.phase}`}>

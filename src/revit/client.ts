@@ -2,6 +2,7 @@
 // Carried from v1 src/main/revit/client.ts; changed: the server's own node runtime can be used (the installer puts one
 // next to the server), the connection is kept and re-opened when it drops, and every call has a timeout.
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -18,10 +19,20 @@ export interface RevitLaunch {
 	source?: "iestatījumi" | "automātiski";
 }
 
+/** %LOCALAPPDATA%; when a launcher dropped it from the environment, the same folder under the user's home. */
+export function localAppDataDir(): string {
+	return process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+}
+
+/** Where the installer puts the server's entry file (the path the "not found" message names). */
+export function defaultServerJs(localAppData = localAppDataDir()): string {
+	return join(localAppData, "Revit-MCP-Node", "node-server", "build", "index.js");
+}
+
 /** The installer's standard location (Revit-MCP-Node in the user's local app data). */
-export function defaultRevitLaunch(localAppData = process.env.LOCALAPPDATA ?? ""): RevitLaunch | null {
+export function defaultRevitLaunch(localAppData = localAppDataDir()): RevitLaunch | null {
 	const base = join(localAppData, "Revit-MCP-Node");
-	const serverJs = join(base, "node-server", "build", "index.js");
+	const serverJs = defaultServerJs(localAppData);
 	if (!localAppData || !existsSync(serverJs)) return null;
 	const node = join(base, "node-runtime", "node.exe");
 	return { serverJs, node: existsSync(node) ? node : null, source: "automātiski" };

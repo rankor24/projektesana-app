@@ -1,5 +1,6 @@
 // App, settings, dialog and agent handlers (sign-in, chat, confirmations).
 import type { AgentSession } from "../../agent/session.js";
+import type { ActivityLog } from "../activity.js";
 import type { PiRuntime } from "../../agent/pi/index.js";
 import type { EventName, EventSpec, Handlers, ProviderRow } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
@@ -10,6 +11,8 @@ export interface CoreDeps {
 	/** data folder shipped with the app (rules.json, law snapshots) */
 	dataDir: string;
 	session: AgentSession;
+	/** what the agent is doing, in readable lines; absent in tests that do not look at it */
+	activity?: ActivityLog;
 	pi: () => Promise<PiRuntime>;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	pickFolder(title: string): Promise<string | null>;
@@ -18,7 +21,7 @@ export interface CoreDeps {
 	openUrl(url: string): void;
 }
 
-type K = "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}`;
+type K = "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -97,9 +100,24 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			await m.logoutProvider((await d.pi()).models, provider);
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
 		},
-		"agent.send": (projectId, text, focus, attachments) => d.session.send(projectId, text, focus, attachments ?? []),
+		"agent.send": async (projectId, text, focus, attachments) => {
+			// the activity log titles the run with what was asked; the run's first event may come before send returns
+			d.activity?.begin(projectId, text);
+			try {
+				const r = await d.session.send(projectId, text, focus, attachments ?? []);
+				d.activity?.bind(r.runId);
+				return r;
+			} catch (e) {
+				d.activity?.cancel();
+				throw e;
+			}
+		},
 		"agent.stop": () => d.session.stop(),
-		"agent.confirm": (id, allow) => d.session.confirm(id, allow),
+		"agent.confirm": (id, allow) => {
+			d.session.confirm(id, allow);
+			d.activity?.confirmed(id, allow);
+		},
+		"activity.recent": () => d.activity?.recent() ?? [],
 		"agent.history": (projectId) => d.session.history(projectId),
 		"agent.reset": (projectId) => d.session.reset(projectId),
 		"agent.context": (projectId, draft) => d.session.context(projectId, draft),

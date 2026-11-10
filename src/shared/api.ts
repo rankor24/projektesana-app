@@ -3,6 +3,7 @@
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
+import type { Activity } from "./activity.js";
 
 
 export interface AppInfo {
@@ -291,6 +292,8 @@ export interface ApiSpec {
 	"agent.measureFile": (attachment: ChatAttachment) => FileCost;
 	/** Summarizes the older part of the conversation now (the same compaction that starts by itself at the limit). */
 	"agent.compact": (projectId: string | null) => { before: number; after: number };
+	/** The activity lines main still keeps (all projects, oldest first), for a window that opened or reloaded mid-run. */
+	"activity.recent": () => Activity[];
 	"projects.list": () => ProjectRow[];
 	"projects.add": (root: string) => ProjectRow;
 	"projects.forget": (id: string) => void;
@@ -394,6 +397,7 @@ export const API_NAMES = [
 	"agent.context",
 	"agent.measureFile",
 	"agent.compact",
+	"activity.recent",
 	"projects.list",
 	"projects.add",
 	"projects.forget",
@@ -478,9 +482,11 @@ export interface EventSpec {
 	"agent.event": { runId: string; event: RunEvent };
 	"agent.login": LoginNotice;
 	"scan.progress": ScanProgress;
+	/** What the agent or the folder scan is doing, as a line a person reads (shared/activity.ts). */
+	activity: Activity;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "scan.progress"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "scan.progress", "activity"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

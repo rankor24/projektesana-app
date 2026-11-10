@@ -3,17 +3,22 @@
 import { app, BrowserWindow, dialog, net, protocol, safeStorage, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { BIMCRAFT_SCHEME, bimcraftResponse, bimcraftSite } from "./bimcraft-protocol.js";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { userInfo } from "node:os";
 import { join } from "node:path";
 import { EVENT_NAMES, type EventName, type EventSpec } from "../shared/api.js";
 import type { PiRuntime } from "../agent/pi/index.js";
 import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
+import { ActivityLog } from "./activity.js";
+import { TASKS } from "../agent/tasks.js";
+import { makeLevelOf } from "../agent/tools/levels.js";
+import { appLevels } from "../agent/tools/defs.js";
 import { AppSettings } from "./settings.js";
 import { Registry } from "../core/registry.js";
 import { ProjectEngine } from "./engine.js";
-import { RevitClient, launchSpec, resolveRevitLaunch } from "../revit/client.js";
+import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch } from "../revit/client.js";
 import { revitRead } from "../revit/commands.js";
 import { revitExport } from "../revit/exports.js";
 import { captureRevision, isWorkCopy } from "../revit/revision.js";
@@ -56,8 +61,18 @@ const openUrl = (url: string) => {
 
 const events = new Set<string>(EVENT_NAMES);
 const emit = <E extends EventName>(event: E, payload: EventSpec[E]) => {
+	// the folder scan also shows in the activity feed, beside the agent's runs
+	if (event === "scan.progress") activity.scan(payload as EventSpec["scan.progress"]);
 	if (events.has(event)) win?.webContents.send(`ev:${event}`, payload);
 };
+
+// What the agent and the folder scan are doing, as lines a person reads: the dock's run card and the status strip.
+const activity = new ActivityLog({
+	send: (a) => emit("activity", a),
+	sources: (projectId) => registry.store(projectId).read("sources"),
+	levelOf: makeLevelOf(appLevels(), REVIT_LEVELS),
+	templates: TASKS,
+});
 
 // pi loads on first use (about 1.4 s to import), so the window opens at once.
 let piRuntime: Promise<PiRuntime> | null = null;
@@ -100,7 +115,10 @@ const session = new AgentSession({
 	},
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
-	emit: (runId, event) => emit("agent.event", { runId, event }),
+	emit: (runId, event) => {
+		activity.event(runId, event);
+		emit("agent.event", { runId, event });
+	},
 });
 
 const registry = new Registry(settings.registryFile(), settings.projectsDir());
@@ -109,6 +127,12 @@ const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
 const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
 const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.execPath);
+{
+	// one line per start: what this process sees when it looks for the Revit MCP server
+	const s = settings.get();
+	const l = resolveRevitLaunch(s);
+	log(`revit lookup: user=${userInfo().username} LOCALAPPDATA=${process.env.LOCALAPPDATA ?? "(unset)"} checked=${defaultServerJs()} exists=${existsSync(defaultServerJs())} settingsJs=${s.revitServerJs ?? "-"} -> ${l ? `${l.source} ${l.serverJs}` : "nav atrasts"}`);
+}
 const engine = new ProjectEngine({
 	dataDir,
 	officeStandardPdf: () => settings.get().officeStandardPdf,
@@ -125,6 +149,7 @@ const handlers = createHandlers({
 	settings,
 	dataDir,
 	session,
+	activity,
 	pi,
 	emit,
 	pickFolder: async (title) => {
@@ -151,6 +176,8 @@ function createWindow(): void {
 		webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
 	});
 	win.setMenuBarVisibility(false);
+	// the main window is the app: closing it quits, even while a hidden helper window is still open
+	win.on("closed", () => app.quit());
 	const wc = win.webContents;
 	wc.setWindowOpenHandler(({ url }) => {
 		openUrl(url);
@@ -196,5 +223,23 @@ app.whenReady().then(() => {
 		return new Response(res.body, { status: 200, headers: r.headers });
 	});
 	createWindow();
+});
+// Quitting must end every process the app started. Closing the window alone does not: the hidden page-renderer window
+// keeps "window-all-closed" from firing, and the Revit MCP server and the agent's tool servers are separate processes
+// that Windows leaves running when their parent exits. So the first quit is held, everything is closed (at most 4 s),
+// then the app exits.
+let closing = false;
+async function shutdown(): Promise<void> {
+	pageRenderer.close();
+	const closeAll = Promise.allSettled([session.shutdown(), revit.close(), ocr.close()]);
+	await Promise.race([closeAll, new Promise((r) => setTimeout(r, 4000))]);
+}
+app.on("before-quit", (e) => {
+	if (closing) return;
+	closing = true;
+	e.preventDefault();
+	shutdown()
+		.catch((err) => log(`shutdown: ${(err as Error).stack ?? err}`))
+		.finally(() => app.exit(0));
 });
 app.on("window-all-closed", () => app.quit());
