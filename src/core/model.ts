@@ -213,6 +213,20 @@ export interface Delivery {
 	items: DeliveryItem[];
 	checksRun: { at: string; open: number }[];
 	sent?: { at: string; by: "user" };
+	/** A delivery being made in the app (work plan 7.1): its items are the files in the staging folder (absolute paths in the
+	 *  app's data folder) until the user copies it into 1.4_Nodevumi; then the real folder's delivery takes this id and keeps
+	 *  this field, so checks, findings and history stay with it. */
+	draft?: DeliveryDraft;
+}
+
+export interface DeliveryDraft {
+	/** absolute: <data>\nodevumi\<KIND>\<YYMMDD> */
+	stagingDir: string;
+	startedAt: string;
+	/** the delivery date the folder is named after (ISO) */
+	date: string;
+	/** folder relative to the project root, set by the copy (7.6) */
+	copiedTo: string | null;
 }
 
 export interface Revision {

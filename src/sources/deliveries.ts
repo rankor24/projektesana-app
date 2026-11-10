@@ -106,16 +106,24 @@ export function plannedFromSchedule(pages: string[]): { kind: DeliveryKind; date
 	return out;
 }
 
+const sameFolder = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.replace(/[\\/]+/g, "/").toLowerCase() === b.replace(/[\\/]+/g, "/").toLowerCase();
+
 /** Fresh read merged with what is stored: the user's planned dates, check runs and "sent" stay; planned-only rows stay until a
- *  real delivery of that kind exists, which then takes over the planned date. */
+ *  real delivery of that kind exists, which then takes over the planned date. Drafts (7.1) stay as they are; a draft the user
+ *  copied into 1.4 gives its id, checks, "sent" and draft record to the real folder's delivery, and its own row goes. */
 export function mergeDeliveries(prev: Delivery[], read: Omit<Delivery, "stage">[], planned: { kind: DeliveryKind; date: string }[]): Delivery[] {
 	const byId = new Map(prev.map((d) => [d.id, d]));
+	const drafts = prev.filter((d) => d.draft);
 	const real = read.map((d) => {
-		const p = byId.get(d.id);
-		return { ...d, plannedDate: p?.plannedDate ?? null, plannedFrom: p?.plannedFrom, checksRun: p?.checksRun ?? [], sent: p?.sent };
+		const from = drafts.find((x) => sameFolder(x.draft!.copiedTo, d.folder));
+		const p = from ?? byId.get(d.id);
+		return { ...d, id: from ? from.id : d.id, ...(from ? { label: d.label, draft: from.draft } : {}), plannedDate: p?.plannedDate ?? null, plannedFrom: p?.plannedFrom, checksRun: p?.checksRun ?? [], sent: p?.sent };
 	});
+	const joined = new Set(real.filter((r) => r.draft).map((r) => r.id));
+	const openDrafts = drafts.filter((x) => !joined.has(x.id));
 	const plannedRows: Omit<Delivery, "stage">[] = [];
 	for (const pl of planned) {
+		if (openDrafts.some((x) => x.kind === pl.kind)) continue;
 		const realOfKind = real.filter((r) => r.kind === pl.kind);
 		const target = realOfKind.find((r) => !r.plannedDate);
 		if (target) {
@@ -130,6 +138,6 @@ export function mergeDeliveries(prev: Delivery[], read: Omit<Delivery, "stage">[
 		plannedRows.push({ id, kind: pl.kind, label: `${pl.kind} (plānots)`, plannedDate: p?.plannedDate ?? pl.date, plannedFrom: p?.plannedFrom ?? "bip", submittedDate: null, folder: null, items: [], checksRun: p?.checksRun ?? [] });
 	}
 	// planned rows the user typed themself stay
-	for (const p of prev) if (p.id.startsWith("plan_") && p.plannedFrom === "user" && !plannedRows.some((x) => x.id === p.id)) plannedRows.push(p);
-	return withStages([...real, ...plannedRows]);
+	for (const p of prev) if (p.id.startsWith("plan_") && p.plannedFrom === "user" && !plannedRows.some((x) => x.id === p.id) && !openDrafts.some((x) => x.kind === p.kind)) plannedRows.push(p);
+	return withStages([...real, ...openDrafts, ...plannedRows]);
 }

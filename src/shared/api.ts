@@ -314,6 +314,8 @@ export interface ApiSpec {
 	"deliveries.markSent": (id: string, deliveryId: string) => void;
 	"deliveries.setPlanned": (id: string, deliveryId: string, date: string | null) => void;
 	"deliveries.addPlanned": (id: string, kind: string, date: string) => void;
+	/** "Nodot projektu": a draft delivery of this kind for this date (ISO), with its staging folder (7.1). */
+	"deliveries.start": (id: string, kind: string, date: string) => Delivery;
 	"timeline.clocks": (id: string) => ClockRow[];
 	"clocks.add": (id: string, c: { kind: "tn" | "approval"; issuer: string; issuerKind: "state_municipal" | "network_owner"; requestedOn: string }) => void;
 	"clocks.update": (id: string, clockId: string, patch: { receivedOn?: string | null; extended?: boolean }) => void;
@@ -417,6 +419,7 @@ export const API_NAMES = [
 	"deliveries.markSent",
 	"deliveries.setPlanned",
 	"deliveries.addPlanned",
+	"deliveries.start",
 	"timeline.clocks",
 	"clocks.add",
 	"clocks.update",

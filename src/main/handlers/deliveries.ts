@@ -4,6 +4,7 @@ import { newId, type DeliveryKind } from "../../core/model.js";
 import type { Registry } from "../../core/registry.js";
 import { clockOf, type ClockItem } from "../../rules/clocks.js";
 import { withStages } from "../../sources/deliveries.js";
+import { startDraft } from "../../sources/staging.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 
 export interface DeliveryDeps {
@@ -12,7 +13,7 @@ export interface DeliveryDeps {
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 }
 
-type K = "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
+type K = "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -20,6 +21,11 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["deliveries", "findings"] });
 	return {
+		"deliveries.start": (id, kind, date) => {
+			const row = startDraft(d.registry.store(id), kind, date, "user");
+			changed(id);
+			return row;
+		},
 		"deliveries.prepare": async (id, deliveryId) => {
 			const r = await prepareDelivery(d.registry.store(id), deliveryId, { dataDir: d.dataDir, today: today() });
 			changed(id);
