@@ -4,23 +4,78 @@ import { newId, type DeliveryKind } from "../../core/model.js";
 import type { Registry } from "../../core/registry.js";
 import { clockOf, type ClockItem } from "../../rules/clocks.js";
 import { withStages } from "../../sources/deliveries.js";
-import { startDraft } from "../../sources/staging.js";
+import { draftOf, stageFile, startDraft, unstageFile } from "../../sources/staging.js";
+import { checklistOf, type SheetRow } from "../../checks/checklist.js";
+import { revitExport } from "../../revit/exports.js";
+import { stageRevitIfc, stageRevitSheets } from "../../revit/stage.js";
+import type { RevitClient } from "../../revit/client.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 
 export interface DeliveryDeps {
 	registry: Registry;
 	dataDir: string;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
+	revit: RevitClient;
+	openPath(p: string): Promise<string>;
 }
 
-type K = "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
+type K = "deliveries.checklist" | "deliveries.stageSheets" | "deliveries.stageIfc" | "deliveries.stageFile" | "deliveries.unstage" | "deliveries.openStaging" | "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The model's sheets for the checklist, or why not: a page load does not wait the 120 s a Revit call may take. */
+async function sheetsOrNote(revit: RevitClient, ms = 8000): Promise<{ sheets: SheetRow[] | null; note: string | null }> {
+	if (!revit.where()) return { sheets: null, note: "Revit MCP nav konfigurēts" };
+	let timer: NodeJS.Timeout | undefined;
+	try {
+		const sheets = await Promise.race([revitExport.listSheets(revit), new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Revit neatbild")), ms)))]);
+		return { sheets, note: null };
+	} catch (e) {
+		return { sheets: null, note: (e as Error).message.split("\n")[0].slice(0, 160) };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["deliveries", "findings"] });
+	const progress = (id: string, run: string, done: number, total: number, current: string) =>
+		d.emit("activity", { run, project: id, who: "app", at: new Date().toISOString(), kind: done >= total ? "done" : "note", text: done >= total ? `Lapas eksportētas: ${total}` : `Eksportē lapas: ${done + 1} no ${total} — ${current}`, step: "sheets", progress: { done, total } });
 	return {
+		"deliveries.checklist": async (id, deliveryId, withRevit) => {
+			const store = d.registry.store(id);
+			const r = withRevit ? await sheetsOrNote(d.revit) : { sheets: null, note: "lapu saraksts no Revit nav prasīts" };
+			return { rows: checklistOf(store, deliveryId, { today: today(), sheets: r.sheets, revitNote: r.note }), revitNote: r.note };
+		},
+		"deliveries.stageSheets": async (id, deliveryId, opts) => {
+			const run = `sheets-${Date.now().toString(36)}`;
+			try {
+				return await stageRevitSheets(d.registry.store(id), d.revit, deliveryId, { ...opts, onProgress: (n, t, c) => progress(id, run, n, t, c) }, "user");
+			} finally {
+				changed(id);
+			}
+		},
+		"deliveries.stageIfc": async (id, deliveryId, opts) => {
+			try {
+				return await stageRevitIfc(d.registry.store(id), d.revit, deliveryId, opts, "user");
+			} finally {
+				changed(id);
+			}
+		},
+		"deliveries.stageFile": (id, deliveryId, from, name) => {
+			const r = stageFile(d.registry.store(id), deliveryId, from, name, "user");
+			changed(id);
+			return r;
+		},
+		"deliveries.unstage": (id, deliveryId, name) => {
+			unstageFile(d.registry.store(id), deliveryId, name, "user");
+			changed(id);
+		},
+		"deliveries.openStaging": async (id, deliveryId) => {
+			const err = await d.openPath(draftOf(d.registry.store(id), deliveryId).draft.stagingDir);
+			if (err) throw new Error(err);
+		},
 		"deliveries.start": (id, kind, date) => {
 			const row = startDraft(d.registry.store(id), kind, date, "user");
 			changed(id);

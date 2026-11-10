@@ -4,6 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
+import type { ChecklistRow, StageSheetsResult } from "./nodevums.js";
 
 
 export interface AppInfo {
@@ -316,6 +317,15 @@ export interface ApiSpec {
 	"deliveries.addPlanned": (id: string, kind: string, date: string) => void;
 	/** "Nodot projektu": a draft delivery of this kind for this date (ISO), with its staging folder (7.1). */
 	"deliveries.start": (id: string, kind: string, date: string) => Delivery;
+	/** The draft's checklist (7.2); withRevit compares the staged sheets with the open model (answers within a few seconds or says why not). */
+	"deliveries.checklist": (id: string, deliveryId: string, withRevit: boolean) => { rows: ChecklistRow[]; revitNote: string | null };
+	/** Revit sheets → one PDF each into the draft's staging folder (7.3); all, or the listed sheet numbers. */
+	"deliveries.stageSheets": (id: string, deliveryId: string, opts: { numbers?: string[]; replace?: boolean }) => StageSheetsResult;
+	"deliveries.stageIfc": (id: string, deliveryId: string, opts: { part?: string; replace?: boolean }) => { file: string };
+	/** A file the project has (a source, an export) copied into staging under a name. */
+	"deliveries.stageFile": (id: string, deliveryId: string, from: string, name?: string) => { file: string };
+	"deliveries.unstage": (id: string, deliveryId: string, name: string) => void;
+	"deliveries.openStaging": (id: string, deliveryId: string) => void;
 	"timeline.clocks": (id: string) => ClockRow[];
 	"clocks.add": (id: string, c: { kind: "tn" | "approval"; issuer: string; issuerKind: "state_municipal" | "network_owner"; requestedOn: string }) => void;
 	"clocks.update": (id: string, clockId: string, patch: { receivedOn?: string | null; extended?: boolean }) => void;
@@ -420,6 +430,12 @@ export const API_NAMES = [
 	"deliveries.setPlanned",
 	"deliveries.addPlanned",
 	"deliveries.start",
+	"deliveries.checklist",
+	"deliveries.stageSheets",
+	"deliveries.stageIfc",
+	"deliveries.stageFile",
+	"deliveries.unstage",
+	"deliveries.openStaging",
 	"timeline.clocks",
 	"clocks.add",
 	"clocks.update",

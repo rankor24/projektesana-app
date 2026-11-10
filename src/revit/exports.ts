@@ -38,6 +38,11 @@ return new { title = document.Title, path = document.PathName, version = documen
 	viewGeometry: `var v = (View)document.GetElement(new ElementId(long.Parse((string)parameters[0])));
 var vp = v as ViewPlan; double ft = 304.8; var cb = v.CropBox; var t = cb.Transform;
 return new { id = v.Id.ToString(), name = v.Name, type = v.ViewType.ToString(), scale = v.Scale, cropActive = v.CropBoxActive, level = (vp != null && vp.GenLevel != null) ? vp.GenLevel.Name : null, elevMm = (vp != null && vp.GenLevel != null) ? (double?)(vp.GenLevel.Elevation * ft) : null, min = new[] { cb.Min.X * ft, cb.Min.Y * ft }, max = new[] { cb.Max.X * ft, cb.Max.Y * ft }, origin = new[] { t.Origin.X * ft, t.Origin.Y * ft, t.Origin.Z * ft }, right = new[] { t.BasisX.X, t.BasisX.Y, t.BasisX.Z }, up = new[] { t.BasisY.X, t.BasisY.Y, t.BasisY.Z } };`,
+	// the model's sheets (7.3): number, name, current revision; placeholders left out
+	listSheets: `return new FilteredElementCollector(document).OfClass(typeof(ViewSheet)).Cast<ViewSheet>()
+  .Where(s => !s.IsPlaceholder && !s.IsTemplate)
+  .Select(s => { var p = s.get_Parameter(BuiltInParameter.SHEET_CURRENT_REVISION); return new { id = s.Id.ToString(), number = s.SheetNumber, name = s.Name, revision = p != null ? p.AsString() : null }; })
+  .OrderBy(x => x.number).ToList();`,
 	// parameters: [folder, fileName, viewId[,viewId…] comma-separated]; crop boundaries stay visible (the overlay measures them)
 	exportPdf: `var o = new PDFExportOptions { FileName = (string)parameters[1], Combine = true, HideCropBoundaries = false };
 var ids = ((string)parameters[2]).Split(',').Select(s => new ElementId(long.Parse(s))).ToList();
@@ -58,6 +63,13 @@ export interface ViewRow {
 	type: string;
 }
 
+export interface SheetInfo {
+	id: string;
+	number: string;
+	name: string;
+	revision: string | null;
+}
+
 export interface ViewGeometry {
 	id: string;
 	name: string;
@@ -76,6 +88,11 @@ export interface ViewGeometry {
 export const revitExport = {
 	docInfo: async (r: RevitCaller) => (await runSnippet(r, EXPORT_SNIPPETS.docInfo)) as { title: string; path: string; version: string; view: string; viewId: string },
 	listViews: async (r: RevitCaller) => (await runSnippet(r, EXPORT_SNIPPETS.listViews)) as ViewRow[],
+	listSheets: async (r: RevitCaller) => {
+		const v = await runSnippet(r, EXPORT_SNIPPETS.listSheets);
+		if (!Array.isArray(v)) throw new Error("Revit lapu saraksts nav saraksts.");
+		return v.map((s: { id?: unknown; number?: unknown; name?: unknown; revision?: unknown }) => ({ id: String(s.id ?? ""), number: String(s.number ?? ""), name: String(s.name ?? ""), revision: s.revision == null || s.revision === "" ? null : String(s.revision) })) as SheetInfo[];
+	},
 	viewGeometry: async (r: RevitCaller, viewId: string) => (await runSnippet(r, EXPORT_SNIPPETS.viewGeometry, [viewId])) as ViewGeometry,
 	/** transactionMode none: an export does not change the model */
 	exportPdf: async (r: RevitCaller, folder: string, fileName: string, viewIds: string[]) => (await runSnippet(r, EXPORT_SNIPPETS.exportPdf, [folder, fileName, viewIds.join(",")])) as boolean,

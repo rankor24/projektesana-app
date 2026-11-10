@@ -9,33 +9,9 @@ import type { Delivery, Finding, Requirement } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
 import { clockOf, type ClockItem } from "../rules/clocks.js";
 import { covering } from "./checks/completeness.js";
+import type { ChecklistRow, RowStatus, SheetRow } from "../shared/nodevums.js";
 
-export type ChecklistGroup = "Lapas" | "Modelis" | "Likums" | "Saskaņojumi";
-/** trūkst = still to make; gatavs = in the staged set; pamatots = the user accepted a reason; pārbaudi = a person must look;
- *  neobligāts = not required for this kind */
-export type RowStatus = "trūkst" | "gatavs" | "pamatots" | "pārbaudi" | "neobligāts";
-/** what makes the row done: the page offers the matching button, the agent the matching tool */
-export type RowAction = "revit_sheets" | "revit_ifc" | "file" | "justify" | "clock" | "requirements";
-
-export interface ChecklistRow {
-	id: string;
-	group: ChecklistGroup;
-	label: string;
-	status: RowStatus;
-	action: RowAction;
-	/** law act and point, e.g. "MK 529 26.3" */
-	citation?: string;
-	requirementId?: string;
-	/** staged files that meet the row (names) */
-	files: string[];
-	detail?: string;
-}
-
-export interface SheetRow {
-	id: string;
-	number: string;
-	name: string;
-}
+export type { ChecklistGroup, ChecklistRow, RowAction, RowStatus, SheetRow } from "../shared/nodevums.js";
 
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[_\s]+/g, " ").trim();
 const normNo = (s: string) => s.toUpperCase().replace(/[\s_]+/g, "-");
