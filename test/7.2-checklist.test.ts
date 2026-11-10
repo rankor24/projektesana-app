@@ -81,6 +81,11 @@ test("7.2 sheets against the model: all matched → done; another name → look;
 	rows = checklistOf(store, d.id, { today: "2026-11-10", sheets: sheets.slice(0, 2) });
 	assert.match(rows.find((r) => r.id === "sheets")!.detail!, /nav modelī: AR-4_Griezums 1-1\.pdf/);
 	assert.deepEqual(checklistSummary(rows).gatavs >= 2, true);
+	// a staged TN document named like a sheet is not "not in the model": its prefix is not one the model's sheets use
+	put("TN-1_Izdomatais tikls.pdf");
+	refreshDraft(store, d.id, "user");
+	rows = checklistOf(store, d.id, { today: "2026-11-10", sheets });
+	assert.equal(rows.find((r) => r.id === "sheets")!.status, "gatavs");
 });
 
 test("7.2 a justified requirement and a received TN count as done; no law requirements loaded says so", () => {

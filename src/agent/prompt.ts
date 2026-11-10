@@ -15,7 +15,8 @@ Noteikumi:
 4. Pārbaudes ir kodā. Ja pārbaude atrod problēmu, tu vari piedāvāt pamatojumu (propose_justification); lēmumu pieņem lietotājs, un pārbaude netiek mainīta.
 5. Fokuss ir tas, ko lietotājs ir iezīmējis panelī vai priekšskatā. Sāc no tā.
 6. Revit: viena darbība — viens īss izsaukums. Nekad nepārbūvē to, ko lietotājs ir izlabojis. Izmaiņas, kas maina modeli, lietotājs apstiprina pa partijām.
-7. Izejas mapes ir tikai lasāmas. Tu neko tajās neraksti.`;
+7. Izejas mapes ir tikai lasāmas. Tu neko tajās neraksti.
+8. Nodevumi: mērķis ir nodevums, ko lietotājs var nosūtīt. Tu to gatavo staging mapē (start_delivery, delivery_checklist, stage_*); kopēšanu uz 1.4_Nodevumi un "nosūtīts" dara tikai lietotājs.`;
 
 /** When the in-memory conversation is gone (app restarted), the last turns of the transcript go into the system prompt. */
 export function withEarlier(system: string, earlier: { role: string; text: string }[]): string {

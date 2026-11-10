@@ -58,12 +58,12 @@ Storage: `<appData>\Projektesana\projects\<BD>\` with `project.json`, `sources.j
 
 | Level | Tools |
 |---|---|
-| auto, read | `list_sources`, `read_source(id, pages)`, `search_sources(q)`, `search_law(q)`, `get_profile`, `list_requirements(filter)`, `list_findings(filter)`, `list_rooms`, `list_deliveries`, `read_notes`, `get_focus`, `read_skill(name, path)` |
+| auto, read | `list_sources`, `read_source(id, pages)`, `search_sources(q)`, `search_law(q)`, `get_profile`, `list_requirements(filter)`, `list_findings(filter)`, `list_rooms`, `list_deliveries`, `delivery_checklist` (phase 7), `read_notes`, `get_focus`, `read_skill(name, path)` |
 | auto, as proposal | `set_fact(key, value, source{quote})`, `add_requirement(origin, citation, text, appliesTo)`, `propose_justification(findingId, reason)`, `write_note(type, title, body)` |
 | auto, annotate | `add_pin(target, text)`, `add_comment(pinId, text)`, `open_panel(name, filter)`, `highlight(ids)`, `draw_sketch(...)` (phase 5) |
-| auto, run | `run_check(checkId)`, `export_room_table()`, `revit_export_pdf / revit_export_ifc / revit_save_copy / revit_view_geometry` (phase 6) |
-| confirm per batch | Revit create and modify: the v1 allow-list (`create_level`, `create_grid`, `create_line_based_element`, `create_surface_based_element`, `create_point_based_element`, `create_room`, `tag_all_rooms`, `tag_all_walls`, `create_dimensions`, `operate_element`, `color_elements`, read tools) plus the named commands of phase 6 (views, sheets) |
-| never | `delete_element`, `send_code_to_revit`, any approve / close / mark-sent, any write to a source file |
+| auto, run | `run_check(checkId)`, `export_room_table()`, `revit_export_pdf / revit_export_ifc / revit_save_copy / revit_view_geometry` (phase 6), `stage_revit_sheets / stage_ifc / stage_source_file` (phase 7: into the draft's staging folder only) |
+| confirm per batch | Revit create and modify: the v1 allow-list (`create_level`, `create_grid`, `create_line_based_element`, `create_surface_based_element`, `create_point_based_element`, `create_room`, `tag_all_rooms`, `tag_all_walls`, `create_dimensions`, `operate_element`, `color_elements`, read tools) plus the named commands of phase 6 (views, sheets); `start_delivery`, `unstage_file` (phase 7) |
+| never | `delete_element`, `send_code_to_revit`, any approve / close / mark-sent, the copy into `1.4_Nodevumi`, any write to a source file |
 
 Skills: `scripts/sync-skills.mjs` copies `revit-modeling`, `revit-drafting`, `revit-dimensioning`, `revit-api`, `revit-room-dimension-chains`, `revit-ifc-export-classes`, `revit-shared-coordinates-z`, `ifc-property-set-txt` from `~/.claude/skills` into `resources/skills/` at build time (the Konkursu App pattern). The agent gets each skill's `SKILL.md` as instructions for the matching task and reads snippets through `read_skill`.
 

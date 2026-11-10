@@ -14,7 +14,8 @@ import { storeOf, type ToolCtx } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
 let client: RevitClient | null = null;
-function revit(): RevitClient {
+/** The tools server's own Revit client (one per process), shared by the Revit command and delivery tools. */
+export function revit(): RevitClient {
 	const serverJs = process.env.PROJEKTESANA_REVIT_JS || null;
 	const node = process.env.PROJEKTESANA_REVIT_NODE || null;
 	client ??= new RevitClient(() => resolveRevitLaunch({ revitServerJs: serverJs, revitNode: node }), process.execPath);

@@ -28,9 +28,18 @@ export const TASKS: TaskTemplate[] = [
 		].join("\n"),
 	},
 	{
-		id: "check-delivery",
-		label: "Pārbaudīt nodevumu",
-		text: "Paskaties nodevumus (list_deliveries). Palaid run_check completeness un filenames, izskaidro katru atradumu ar prasības citātu un piedāvā, kas jālabo; ja situācija ir pamatota, piedāvā pamatojumu ar propose_justification.",
+		id: "deliver",
+		label: "Nodot projektu",
+		text: [
+			"Mērķis: nodevums, ko lietotājs var nosūtīt. Strādā kopā ar lietotāju, soli pa solim.",
+			"1. list_deliveries. Ja nav gatavojama nodevuma (draft), pajautā veidu (SKICE / MBP / BP / DT / STARP) un nodevuma datumu, tad start_delivery.",
+			"2. delivery_checklist: pārskati rindas pa grupām un pasaki, kas trūkst, ar likuma punktu.",
+			"3. Lapas: stage_revit_sheets (visas vai lietotāja norādītās). Ja Revit neatbild, pasaki to un turpini ar pārējo.",
+			"4. Modelis: stage_ifc, ja nodevumam vajag IFC (MBP, BP, DT).",
+			"5. Pārējais: faili, kas projektā jau ir (TN, saskaņojumi, topogrāfija) — stage_source_file ar nosaukumu <lapas nr>_<nosaukums>; nosaukumu saki lietotājam.",
+			"6. Atkal delivery_checklist. Katru rindu, kas joprojām trūkst: izskaidro ar citātu; ja tā šim objektam neattiecas, piedāvā pamatojumu (propose_justification pēc tam, kad lietotājs ir nospiedis Sagatavot un atradums ir redzams).",
+			"7. Beigās: kas ir gatavs, kas nav, un ka nākamie soļi ir lietotāja klikšķi — Sagatavot (pārbaudes), Kopēt uz 1.4_Nodevumi, Atzīmēt kā nosūtītu. Tos tu nedari.",
+		].join("\n"),
 	},
 	{
 		id: "pins",

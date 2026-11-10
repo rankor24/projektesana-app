@@ -19,7 +19,11 @@ const IFC_KINDS = new Set(["MBP", "BP", "DT"]);
 
 /** Staged sheets against the model's sheets: by number; same number with another name is "renamed". */
 export function compareSheets(d: Delivery, sheets: SheetRow[]): { matched: string[]; missing: SheetRow[]; extra: string[]; renamed: { number: string; staged: string; model: string }[] } {
-	const staged = d.items.filter((i) => i.sheetNo && /\.pdf$/i.test(i.file));
+	// a staged PDF is a sheet of this model only when its number prefix is one the model's sheets use ("AR", "BK"): a TN or an
+	// approval named "TN-1_…" is a document of the delivery, not a missing sheet
+	const prefix = (no: string) => /^[A-Z]+/.exec(normNo(no))?.[0] ?? "";
+	const prefixes = new Set(sheets.map((s) => prefix(s.number)));
+	const staged = d.items.filter((i) => i.sheetNo && /\.pdf$/i.test(i.file) && prefixes.has(prefix(i.sheetNo)));
 	const byNo = new Map(sheets.map((s) => [normNo(s.number), s]));
 	const matched: string[] = [];
 	const extra: string[] = [];

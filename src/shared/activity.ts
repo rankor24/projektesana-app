@@ -109,6 +109,12 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	revit_set_view_scale: { words: "Maina skata mērogu", kind: "revit" },
 	revit_create_elevations: { words: "Veido fasādes", kind: "revit" },
 	revit_create_sheet: { words: "Veido lapu", kind: "revit" },
+	start_delivery: { words: "Sāk nodevumu", kind: "write" },
+	delivery_checklist: { words: "Skatās nodevuma sastāvu", kind: "read" },
+	stage_revit_sheets: { words: "Eksportē lapas nodevumam", kind: "revit" },
+	stage_ifc: { words: "Eksportē IFC nodevumam", kind: "revit" },
+	stage_source_file: { words: "Pievieno failu nodevumam", kind: "write" },
+	unstage_file: { words: "Izņem failu no nodevuma", kind: "write" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {

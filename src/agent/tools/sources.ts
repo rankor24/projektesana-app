@@ -175,11 +175,11 @@ export const projectTools: ToolDef[] = [
 	tool({
 		name: "list_deliveries",
 		level: "read",
-		description: "The deliveries read from 1.4_Nodevumi (and planned ones): kind, BIM stage, dates, sheets, whether checked and sent.",
+		description: "The deliveries read from 1.4_Nodevumi, planned ones, and those being made in the app (draft: true, see delivery_checklist): kind, BIM stage, dates, sheets, whether checked and sent.",
 		input: {},
 		run: (ctx) => {
 			const d = storeOf(ctx).read("deliveries");
-			return d.length ? d.map((x) => ({ id: x.id, kind: x.kind, stage: x.stage, label: x.label, submitted: x.submittedDate, planned: x.plannedDate, sent: !!x.sent, sheets: x.items.map((i) => `${i.sheetNo ?? "?"} ${i.title}`), lastCheck: x.checksRun[x.checksRun.length - 1] ?? null })) : "no data: nodevumu nav.";
+			return d.length ? d.map((x) => ({ id: x.id, kind: x.kind, stage: x.stage, label: x.label, submitted: x.submittedDate, planned: x.plannedDate, sent: !!x.sent, draft: x.draft ? { stagingDir: x.draft.stagingDir, copiedTo: x.draft.copiedTo } : undefined, sheets: x.items.map((i) => `${i.sheetNo ?? "?"} ${i.title}`), lastCheck: x.checksRun[x.checksRun.length - 1] ?? null })) : "no data: nodevumu nav.";
 		},
 	}),
 	tool({
