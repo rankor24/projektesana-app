@@ -47,6 +47,11 @@ const LIVE: Record<string, string> = {
 	"6.3": "a confirmed batch needs the sign-in and a working copy open in Revit",
 	"6.4": "a pin becoming a change needs the sign-in",
 	"6.5": "modelling an existing building is the live acceptance of phase 6",
+	"7.3": "the sheet export from the open model (one PDF per sheet, Revit's own file names) needs Revit; tested against the recorded reply shape only",
+	"7.4": "the IFC export into staging needs Revit",
+	"7.5": "the agent filling a draft needs the sign-in",
+	"7.6": "the copy into a real project's 1.4_Nodevumi is the user's click; tested on an invented tree only",
+	"7.7": "the page itself is the user's playtest",
 };
 
 /** Done-when lines checked on a real project on the user's PC (read-only, counts only — no project data in the repo). */
