@@ -66,7 +66,7 @@ export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 			}
 		},
 		"deliveries.stageFile": (id, deliveryId, from, name) => {
-			const r = stageFile(d.registry.store(id), deliveryId, from, name, "user");
+			const r = stageFile(d.registry.store(id), deliveryId, from, name, "user", true);
 			changed(id);
 			return r;
 		},

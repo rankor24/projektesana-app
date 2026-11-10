@@ -4,7 +4,7 @@
 // Everything here writes inside the data folder only (checkWrite); the copy into the office folder is deliver-copy.ts.
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { checkRead, checkWrite, isInside } from "../core/guard.js";
 import type { Delivery, DeliveryItem, DeliveryKind, Who } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
@@ -126,11 +126,12 @@ export function stagedPath(store: ProjectStore, d: { draft: NonNullable<Delivery
 	return p;
 }
 
-/** Copies a file the project already has (a source, an export) into staging under the given name. Never overwrites. */
-export function stageFile(store: ProjectStore, deliveryId: string, from: string, name: string | undefined, by: Who): { file: string } {
+/** Copies a file the project already has (a source, an export) into staging under the given name. Never overwrites.
+ *  pickedByUser: a file the user chose in the file dialog may come from anywhere (it is only read); the agent's tool never sets it. */
+export function stageFile(store: ProjectStore, deliveryId: string, from: string, name: string | undefined, by: Who, pickedByUser = false): { file: string } {
 	const d = draftOf(store, deliveryId);
 	if (d.sent || d.draft.copiedTo) throw new Error(`${d.label} jau ir nokopēts uz 1.4 — staging vairs nemaina.`);
-	const r = checkRead(store.guard, from);
+	const r = pickedByUser && by === "user" && isAbsolute(from) ? { ok: true as const, path: resolve(from) } : checkRead(store.guard, from);
 	if (!r.ok) throw new Error(r.reason);
 	if (!existsSync(r.path) || !statSync(r.path).isFile()) throw new Error(`Fails nav atrasts: ${r.path}`);
 	const target = stagedPath(store, d, name ?? basename(r.path));
