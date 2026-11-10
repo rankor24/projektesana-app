@@ -162,7 +162,37 @@ The user accepts phase 5 on the reference BP set with its 16 models.
 
 The user accepts phase 6 live on an existing-building project, against the rules in 6.3.
 
-## Later (after phase 6)
+## Phase 7 — Nodot projektu (the agent builds the delivery with the user)
+
+Date: 2026-11-10. Status: **for the user's approval.**
+Why: phase 4 made Nodevumi a mirror of `1.4_Nodevumi`: a delivery exists only after its folder does, so a project with nothing delivered shows "no data", and the agent can list deliveries but cannot make one. Phase 7 turns it around: the user starts "Nodot projektu" (kind + date), the app builds the checklist of what this delivery must contain, the agent produces the files with the user into a staging folder in the app's data folder, the checks run on the staged set, the user copies it into `1.4_Nodevumi\<KIND>\<YYMMDD>` with one confirmed click, then marks it sent (the 4.3 gate, unchanged).
+
+The user's answers (2026-11-10): staging on C: plus a confirmed "Kopēt uz 1.4_Nodevumi" button; first version produces **Revit sheets → PDF** and **IFC**; office forms (01–06, 13) come later as docx filled through Word plus PDF.
+
+Rules that hold for every task:
+- A draft is a `Delivery` like any other (timeline chip, checks, gate), so nothing downstream learns a second shape. Its `items` are the staged files; `completeness` and `filenames` run on them unchanged.
+- Staging is `<data>\nodevumi\<KIND>\<YYMMDD>\`: the same layout as the office folder, so what is checked is what gets copied.
+- The office folder is written in exactly one place (7.6), on the user's click only; the agent has no tool for it and none for "nosūtīts".
+- Revit: one sheet per call, nonce per call (as `exports.ts`); exports do not change the model.
+
+| Task | Build | Files | Tests | Done when |
+|---|---|---|---|---|
+| 7.1 | Draft delivery: `Delivery.draft = { stagingDir, startedAt, copiedTo: string \| null }`; `deliveries.start(kind, date)` creates `draft_<KIND>_<YYMMDD>` and its staging folder; `mergeDeliveries` keeps drafts across a rescan and, once a real folder equals `copiedTo`, the real delivery takes over the draft's checks and history and the draft row goes | `src/core/model.ts`, `src/sources/deliveries.ts`, `src/main/handlers/deliveries.ts`, `src/shared/api.ts` | rescan keeps a draft; a copied draft joins its real folder; one draft per kind+date | an empty project shows a started MBP on the timeline |
+| 7.2 | Checklist of the draft, derived (never stored): law rows for the kind (the `requirements` that `completeness` reads, status from `covering()` on the staged items, or "pamatots" from a justification); "Lapas no Revit" (staged sheets vs the model's sheet list: missing / extra / renamed); "IFC modelis"; "Saskaņojumi" = the TN and approval clocks (received or not, days left) | `src/checks/checklist.ts` | invented MBP requirement set: staged `A-3_Fasades.pdf` closes the fasādes row, nothing else; an open TN shows as not done | the checklist of a fresh MBP lists what MK 529 26 asks, all "trūkst" |
+| 7.3 | Revit sheets → PDF into staging, one call per sheet: `listSheets` snippet (id, number, name, current revision); file `<number>_<name>.pdf`, diacritics folded, `/\\:*?` removed; Revit's own PDF name checked after export; progress per sheet; a failed sheet stops and says which | `src/revit/exports.ts`, `src/revit/sheet-names.ts` | name builder (diacritics, slashes, duplicates); parse a recorded `listSheets` reply; nonce mismatch refused | sheets of the open model land in staging and the "Lapas" row turns done |
+| 7.4 | IFC into staging (office IFC settings as `exportIfc`), named per the user's answer to open question 1 | `src/revit/exports.ts` | file name builder | the "IFC modelis" row turns done |
+| 7.5 | Agent: tools `start_delivery` (confirm), `delivery_checklist` (read), `stage_revit_sheets` (run; all or listed sheet numbers), `stage_ifc` (run), `stage_source_file` (run; copies a file from the project's sources into staging under a name the user confirms), `unstage_file` (confirm); task template "Nodot projektu" replaces "Pārbaudīt nodevumu": checklist first, then produce, then explain each open row with its citation and propose a justification where it does not apply; system prompt line: the goal on this panel is a delivery the user can send | `src/agent/tools/deliveries.ts`, `src/agent/tools/defs.ts`, `src/agent/tasks.ts`, `src/agent/prompt.ts`, `src/shared/activity.ts` | levels table: no copy / sent tool offered; `stage_*` refuse without a draft | asked "nodosim MBP", the agent starts the draft after the user confirms and fills it |
+| 7.6 | Copy to `1.4_Nodevumi`: main process only, user click only, after a "Sagatavot" run with no blocking findings. Target = the existing kind folder found by `findDeliveriesDir` + new `YYMMDD`; refuses if the kind folder is missing (no new folders in `01_Projektesana` except the dated delivery folder the standard asks for), if `YYMMDD` exists, or if any path leaves that folder; copies, compares hashes, rescans. The guard gets one function `checkDeliveryWrite` for exactly this path; `checkWrite` is unchanged | `src/core/guard.ts`, `src/sources/deliver-copy.ts`, `src/main/handlers/deliveries.ts` | fixture tree: copy lands and hashes match; second copy refused; missing kind folder refused; `..` in a name refused; with open errors refused | the staged MBP appears in `1.4` and the timeline chip turns from draft to real |
+| 7.7 | Nodevumi page rebuilt: empty project → one "Nodot projektu" (kind, date) action; the active draft on top: checklist by group, each row with its status, citation and action (Eksportēt no Revit / Pievienot failu / Pamatot / "Uzdot aģentam" puts the row in Fokuss); staged files with "Atvērt mapi"; the three steps Sagatavot → Kopēt uz 1.4 (dialog shows the exact target path) → Atzīmēt kā nosūtītu; past deliveries from `1.4` below, collapsed; the TN form moves into the "Saskaņojumi" group | `src/renderer/panels/Nodevumi.tsx` | — (the user playtests) | the user takes a real project from nothing to a copied MBP on this page |
+
+The user accepts phase 7 on a real project with the open model: a draft MBP from start to the copy in `1.4`.
+
+Later in this phase line: office forms 01–04, 06, 13 filled through Word COM from the project's facts (docx + PDF), each a checklist row.
+
+Open questions for the user:
+1. IFC file name inside the delivery (the office rule names sheets `<lapas nr>_<nosaukums>`; an IFC has no sheet number). Proposal: `<BD code>_<daļa>_<YYMMDD>.ifc`, e.g. `BD427_AR_261110.ifc`.
+
+## Later (after phase 7)
 
 Būvdarbi, nodošana, apsaimniekošana: parameters, BCF clash resolution, as-built against a laser scan. Combining the three apps once all three work.
 
