@@ -89,6 +89,18 @@ export interface ChatEntry {
 	tokens?: { before: number; after: number };
 }
 
+/** One chat of a project, for the selector. */
+export interface ChatSessionRow {
+	id: string;
+	/** the first line of the first question */
+	title: string;
+	/** first and last line's time (ISO) */
+	started: string;
+	at: string;
+	/** questions and answers in the transcript */
+	messages: number;
+}
+
 export interface ProviderRow {
 	id: string;
 	label: string;
@@ -288,7 +300,11 @@ export interface ApiSpec {
 	"agent.stop": () => void;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
-	"agent.reset": (projectId: string | null) => void;
+	/** The project's chats, newest first, and the one open. */
+	"agent.sessions": (projectId: string | null) => { active: string | null; list: ChatSessionRow[] };
+	/** Starts a new chat; the earlier ones stay in the selector. */
+	"agent.newSession": (projectId: string | null) => { sessionId: string };
+	"agent.openSession": (projectId: string | null, sessionId: string) => void;
 	"agent.context": (projectId: string | null, draft?: { text: string; focus: FocusItem[] }) => ContextInfo;
 	"agent.measureFile": (attachment: ChatAttachment) => FileCost;
 	/** Summarizes the older part of the conversation now (the same compaction that starts by itself at the limit). */
@@ -409,7 +425,9 @@ export const API_NAMES = [
 	"agent.stop",
 	"agent.confirm",
 	"agent.history",
-	"agent.reset",
+	"agent.sessions",
+	"agent.newSession",
+	"agent.openSession",
 	"agent.context",
 	"agent.measureFile",
 	"agent.compact",

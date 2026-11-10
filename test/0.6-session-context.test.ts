@@ -49,8 +49,10 @@ function setup(runAgent?: Run, complete?: Complete) {
 		runAgent,
 	});
 	const key = () => `${DEFAULT_SETTINGS.provider}/${DEFAULT_SETTINGS.model}`;
-	const seed = (messages: AgentMessage[]) => (s as unknown as { conversations: Map<string, unknown> }).conversations.set("_", { key: key(), messages, lastAdded: null });
-	const stored = () => ((s as unknown as { conversations: Map<string, { messages: AgentMessage[] }> }).conversations.get("_") as { messages: AgentMessage[] }).messages;
+	// the in-memory conversation of the open chat of "no project"
+	const inner = s as unknown as { conversations: Map<string, { messages: AgentMessage[] }>; convKey: (p: string | null) => string };
+	const seed = (messages: AgentMessage[]) => inner.conversations.set(inner.convKey(null), { key: key(), messages, lastAdded: null } as never);
+	const stored = () => inner.conversations.get(inner.convKey(null))!.messages;
 	return { s, dir, rt, events, finished, asked, seed, stored };
 }
 

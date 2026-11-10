@@ -57,6 +57,10 @@ export function AgentDock() {
 	// the project whose history is on screen, and whether a send is under way (a run then belongs to that send)
 	const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
 	const sending = useRef(false);
+	// goes up when another chat is opened or a new one started: the history, the list and the meter load again
+	const [chat, setChat] = useState(0);
+	// runId in the deps: a new chat gets its title in the list once its first run starts, its count once it ends
+	const sessions = useLoad(() => call("agent.sessions", projectId), [projectId, chat, runId]);
 
 	// the text is measured a moment after typing stops, not on every key
 	const [typed, setTyped] = useState("");
@@ -64,7 +68,7 @@ export function AgentDock() {
 		const t = setTimeout(() => setTyped(text), 400);
 		return () => clearTimeout(t);
 	}, [text]);
-	const ctx = useLoad<ContextInfo>(() => call("agent.context", projectId, { text: typed, focus }), [projectId, typed, focus]);
+	const ctx = useLoad<ContextInfo>(() => call("agent.context", projectId, { text: typed, focus }), [projectId, typed, focus, chat]);
 
 	// the limits of the chosen model, read by the paste handler below
 	const limitsRef = useRef<AgentStatus["imageLimits"]>(null);
@@ -101,7 +105,7 @@ export function AgentDock() {
 		return () => document.removeEventListener("paste", onPaste);
 	}, []);
 
-	// conversation of the open project
+	// the open chat of the open project
 	useEffect(() => {
 		let live = true;
 		call("agent.history", projectId).then((h) => {
@@ -120,7 +124,21 @@ export function AgentDock() {
 		return () => {
 			live = false;
 		};
-	}, [projectId]);
+	}, [projectId, chat]);
+
+	/** Opens an earlier chat (id) or starts a new one (null). Main refuses while a run is going. */
+	const switchChat = async (sessionId: string | null) => {
+		if (runId) return;
+		setErr(null);
+		try {
+			if (sessionId) await call("agent.openSession", projectId, sessionId);
+			else await call("agent.newSession", projectId);
+			setLines([]);
+			setChat((n) => n + 1);
+		} catch (e) {
+			setErr(errText(e));
+		}
+	};
 
 	// a run of this project that is still going (the window reloaded, or the project was opened again mid-run):
 	// show its card and follow its events, so the answer arrives and Apturēt works
@@ -251,9 +269,26 @@ export function AgentDock() {
 						<span className="dim small">…</span>
 					)}
 					<span className="badge dim" title="Revit MCP">Revit: {st?.revit ?? "…"}</span>
-					<span className="grow" />
-					<button className="ghost small" title="Sākt jaunu sarunu (pieraksts paliek)" onClick={() => call("agent.reset", projectId).then(() => setLines([]))}>
-						jauna saruna
+				</div>
+				<div className="row chat-pick">
+					<span className="dim small">Saruna:</span>
+					<select
+						className="grow small"
+						value={sessions.data?.active ?? ""}
+						disabled={!!runId || !sessions.data?.list.length}
+						title={runId ? "Aģents strādā — pārslēgt var pēc atbildes" : "Iepriekšējās sarunas par šo projektu"}
+						onChange={(e) => void switchChat(e.target.value)}
+					>
+						{!sessions.data?.list.length && <option value="">(vēl nav sarunu)</option>}
+						{sessions.data?.list.map((s) => (
+							<option key={s.id} value={s.id}>
+								{s.title} · {when(s.at)}
+								{s.messages ? ` · ${s.messages}` : ""}
+							</option>
+						))}
+					</select>
+					<button className="ghost small" disabled={!!runId} title="Sākt jaunu sarunu (iepriekšējās paliek sarakstā)" onClick={() => void switchChat(null)}>
+						+ jauna saruna
 					</button>
 				</div>
 				<div className="focus-head">
@@ -360,6 +395,12 @@ export function AgentDock() {
 			</div>
 		</aside>
 	);
+}
+
+/** "09.11. 10:24" for the chat selector. */
+function when(iso: string): string {
+	const d = new Date(iso);
+	return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("lv", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function apply(ls: Line[], e: RunEvent): Line[] {

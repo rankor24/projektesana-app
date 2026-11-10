@@ -2,10 +2,10 @@
 // No Electron imports: the runtime, the settings and the event sink are injected.
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { isContextOverflow, normalizeContext, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import type { AgentStatus, ChatAttachment, ChatAttachmentRef, ChatEntry, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
+import type { AgentStatus, ChatAttachment, ChatAttachmentRef, ChatEntry, ChatSessionRow, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
 import { measureAttachment, prepareAttachments, type PreparedAttachments } from "./attachments.js";
 import { compactMessages, type Complete } from "./compact.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, imageLimits, pruneImages, trimToolResults } from "./context.js";
@@ -67,10 +67,39 @@ interface Conversation {
 	lastAdded: number | null;
 }
 
+/** The lines of one transcript; a torn line (the app stopped mid-write) is skipped. */
+function readEntries(file: string): ChatEntry[] {
+	const out: ChatEntry[] = [];
+	for (const line of readFileSync(file, "utf8").split("\n")) {
+		if (!line.trim()) continue;
+		try {
+			out.push(JSON.parse(line));
+		} catch {
+			// skipped
+		}
+	}
+	return out;
+}
+
+/** A session id names its transcript file: letters and digits only, so it can never walk out of the chat folder. */
+const SESSION_ID = /^[a-z0-9]{1,40}$/;
+
+/** "Ievads par telpām…": the first line of the first question, short enough for the selector. */
+function titleOf(entries: ChatEntry[]): string {
+	const first = entries.find((e) => e.role === "user" && e.kind !== "compaction");
+	if (!first) return "(tukša saruna)";
+	const line = first.text.trim().split("\n")[0].trim();
+	if (line) return line.length > 60 ? `${line.slice(0, 59)}…` : line;
+	return first.attachments?.length ? `[${first.attachments.map((a) => a.name).join(", ")}]` : "(tukša saruna)";
+}
+
 export class AgentSession {
+	/** keyed by `${project}/${session}`: every chat of every project keeps its own in-memory context */
 	private conversations = new Map<string, Conversation>();
 	/** compactions per conversation since the app started */
 	private compactions = new Map<string, number>();
+	/** the chat each project has open; not set = the newest one on disk */
+	private active = new Map<string, string>();
 	private running: { id: string; abort: AbortController } | null = null;
 	private runDone: Promise<unknown> | null = null;
 	private confirms = new Map<string, (ok: boolean) => void>();
@@ -101,29 +130,97 @@ export class AgentSession {
 		}
 	}
 
-	private chatFile(projectId: string | null) {
-		mkdirSync(this.d.chatDir, { recursive: true });
-		return join(this.d.chatDir, `${projectId ?? "_"}.jsonl`);
-	}
-
-	history(projectId: string | null): ChatEntry[] {
-		const f = this.chatFile(projectId);
-		if (!existsSync(f)) return [];
-		const out: ChatEntry[] = [];
-		for (const line of readFileSync(f, "utf8").split("\n")) {
-			if (!line.trim()) continue;
-			try {
-				out.push(JSON.parse(line));
-			} catch {
-				// a torn line is skipped
-			}
+	/**
+	 * The project's chat folder: chat/<project>/<session>.jsonl. A transcript from before sessions existed
+	 * (chat/<project>.jsonl, every chat in one file) is moved in as one session, named by when it began. Moved, not copied:
+	 * the lines are the same bytes, and there is never a second copy to drift.
+	 */
+	private sessionDir(projectId: string | null): string {
+		const id = projectId ?? "_";
+		const dir = join(this.d.chatDir, id);
+		mkdirSync(dir, { recursive: true });
+		const legacy = join(this.d.chatDir, `${id}.jsonl`);
+		if (existsSync(legacy)) {
+			const first = readEntries(legacy)[0];
+			const t = first ? Date.parse(first.at) : NaN;
+			const sid = `s${(Number.isFinite(t) ? t : statSync(legacy).mtimeMs).toString(36).replace(".", "")}`;
+			const target = join(dir, `${sid}.jsonl`);
+			if (!existsSync(target)) renameSync(legacy, target);
 		}
-		return out;
+		return dir;
 	}
 
-	private remember(projectId: string | null, role: "user" | "assistant", text: string, attachments?: ChatAttachmentRef[]) {
+	private newSessionId(): string {
+		return `s${Date.now().toString(36)}${(++this.n).toString(36)}`;
+	}
+
+	/** The chat the project has open: the one picked, else the newest on disk, else a fresh one (its file appears with the first message). */
+	activeSession(projectId: string | null): string {
+		const id = projectId ?? "_";
+		let sid = this.active.get(id);
+		if (!sid) {
+			sid = this.sessions(projectId).list[0]?.id ?? this.newSessionId();
+			this.active.set(id, sid);
+		}
+		return sid;
+	}
+
+	private chatFile(projectId: string | null, sessionId = this.activeSession(projectId)) {
+		return join(this.sessionDir(projectId), `${sessionId}.jsonl`);
+	}
+
+	private convKey(projectId: string | null, sessionId = this.activeSession(projectId)) {
+		return `${projectId ?? "_"}/${sessionId}`;
+	}
+
+	/** Every chat of the project, newest activity first, and the one open now (listed even before its first message). */
+	sessions(projectId: string | null): { active: string | null; list: ChatSessionRow[] } {
+		const dir = this.sessionDir(projectId);
+		const list: ChatSessionRow[] = [];
+		for (const name of readdirSync(dir)) {
+			if (!name.endsWith(".jsonl")) continue;
+			const sid = name.slice(0, -".jsonl".length);
+			if (!SESSION_ID.test(sid)) continue;
+			const f = join(dir, name);
+			const entries = readEntries(f);
+			if (!entries.length) continue;
+			list.push({
+				id: sid,
+				title: titleOf(entries),
+				started: entries[0].at,
+				at: entries[entries.length - 1].at || statSync(f).mtime.toISOString(),
+				messages: entries.filter((e) => e.kind !== "compaction").length,
+			});
+		}
+		list.sort((a, b) => b.at.localeCompare(a.at));
+		const active = this.active.get(projectId ?? "_") ?? null;
+		if (active && !list.some((r) => r.id === active)) list.unshift({ id: active, title: "(jauna saruna)", started: new Date().toISOString(), at: new Date().toISOString(), messages: 0 });
+		return { active: active ?? list[0]?.id ?? null, list };
+	}
+
+	/** Starts a new chat for the project. The old ones stay on disk and in the selector. */
+	newSession(projectId: string | null): { sessionId: string } {
+		if (this.running) throw new Error("Aģents strādā. Aptur vai pagaidi, tad sāc jaunu sarunu.");
+		const sid = this.newSessionId();
+		this.active.set(projectId ?? "_", sid);
+		return { sessionId: sid };
+	}
+
+	/** Opens an earlier chat. Its context comes back from memory while the app runs, after a restart from its transcript. */
+	openSession(projectId: string | null, sessionId: string): void {
+		if (this.running) throw new Error("Aģents strādā. Aptur vai pagaidi, tad pārslēdz sarunu.");
+		if (!SESSION_ID.test(sessionId) || !existsSync(join(this.sessionDir(projectId), `${sessionId}.jsonl`))) throw new Error(`Saruna nav atrasta: ${sessionId}`);
+		this.active.set(projectId ?? "_", sessionId);
+	}
+
+	history(projectId: string | null, sessionId?: string): ChatEntry[] {
+		const f = this.chatFile(projectId, sessionId);
+		return existsSync(f) ? readEntries(f) : [];
+	}
+
+	private remember(projectId: string | null, sessionId: string, role: "user" | "assistant", text: string, attachments?: ChatAttachmentRef[]) {
 		const entry: ChatEntry = { role, text, at: new Date().toISOString(), ...(attachments?.length ? { attachments } : {}) };
-		if (text.trim() || attachments?.length) appendFileSync(this.chatFile(projectId), JSON.stringify(entry) + "\n", "utf8");
+		if (text.trim() || attachments?.length) appendFileSync(this.chatFile(projectId, sessionId), JSON.stringify(entry) + "\n", "utf8");
 	}
 
 	/** Starts a run; events arrive through `emit`. Refuses while another run is going. Attachments are read and checked
@@ -132,11 +229,13 @@ export class AgentSession {
 		if (this.running) throw new Error("Aģents jau strādā. Aptur vai pagaidi.");
 		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
 		const runId = `r${Date.now().toString(36)}${++this.n}`;
+		// the run belongs to the chat open now: it writes there even if the user switches while it starts
+		const sessionId = this.activeSession(projectId);
 		let files: PreparedAttachments = { images: [], text: "", refs: [] };
 		if (attachments.length) {
 			const s = this.d.settings();
 			const model = await this.modelOf(s);
-			const conv = this.conversations.get(projectId ?? "_");
+			const conv = this.conversations.get(this.convKey(projectId, sessionId));
 			files = await prepareAttachments(attachments, {
 				seesImages: model ? seesImages(model) : true,
 				model: s.model || model?.id || "(noklusējums)",
@@ -149,7 +248,7 @@ export class AgentSession {
 		}
 		const abort = new AbortController();
 		this.running = { id: runId, abort };
-		this.runDone = this.run(runId, projectId, text, focus, files, abort.signal).finally(() => {
+		this.runDone = this.run(runId, projectId, sessionId, text, focus, files, abort.signal).finally(() => {
 			this.running = null;
 			for (const [, r] of this.confirms) r(false);
 			this.confirms.clear();
@@ -203,10 +302,10 @@ export class AgentSession {
 		};
 	}
 
-	private rememberCompaction(projectId: string | null, summary: string, before: number, after: number) {
+	private rememberCompaction(projectId: string | null, sessionId: string, summary: string, before: number, after: number) {
 		const entry: ChatEntry = { role: "assistant", kind: "compaction", text: summary, at: new Date().toISOString(), tokens: { before, after } };
-		appendFileSync(this.chatFile(projectId), JSON.stringify(entry) + "\n", "utf8");
-		const id = projectId ?? "_";
+		appendFileSync(this.chatFile(projectId, sessionId), JSON.stringify(entry) + "\n", "utf8");
+		const id = this.convKey(projectId, sessionId);
 		this.compactions.set(id, (this.compactions.get(id) ?? 0) + 1);
 	}
 
@@ -214,7 +313,7 @@ export class AgentSession {
 	 * Summarizes the older part of `history`. Returns the new messages, or null when nothing could be done (the reason goes
 	 * out as a `compact` failed event): the run then goes on with what it has, never stops on a failed summary.
 	 */
-	private async compactHistory(o: { projectId: string | null; rt: PiRuntime; model: Model<Api>; history: AgentMessage[]; signal: AbortSignal; emit?: (e: RunEvent) => void; keepRecent: number }): Promise<AgentMessage[] | null> {
+	private async compactHistory(o: { projectId: string | null; sessionId: string; rt: PiRuntime; model: Model<Api>; history: AgentMessage[]; signal: AbortSignal; emit?: (e: RunEvent) => void; keepRecent: number }): Promise<AgentMessage[] | null> {
 		const before = estimateContext(o.history).tokens;
 		o.emit?.({ type: "compact", phase: "start", before });
 		try {
@@ -223,7 +322,7 @@ export class AgentSession {
 				o.emit?.({ type: "compact", phase: "failed", before, message: "Nav ko saspiest: sarunā ir tikai viens posms, vai viss ietilpst nesenajā daļā." });
 				return null;
 			}
-			this.rememberCompaction(o.projectId, c.summary, before, c.tokensAfter);
+			this.rememberCompaction(o.projectId, o.sessionId, c.summary, before, c.tokensAfter);
 			o.emit?.({ type: "compact", phase: "done", before, after: c.tokensAfter });
 			return c.messages;
 		} catch (e) {
@@ -233,8 +332,8 @@ export class AgentSession {
 	}
 
 	/** The newest compaction summary in the transcript and the lines after it, for a conversation that is not in memory (restart, model change). */
-	private transcriptSeed(projectId: string | null): { summary: string | null; earlier: { role: string; text: string }[] } {
-		const all = this.history(projectId);
+	private transcriptSeed(projectId: string | null, sessionId: string): { summary: string | null; earlier: { role: string; text: string }[] } {
+		const all = this.history(projectId, sessionId);
 		const ci = all.map((e) => e.kind).lastIndexOf("compaction");
 		const tail = all.slice(ci + 1).slice(-11, -1);
 		return {
@@ -243,7 +342,7 @@ export class AgentSession {
 		};
 	}
 
-	private async run(runId: string, projectId: string | null, text: string, focus: FocusItem[], files: PreparedAttachments, signal: AbortSignal) {
+	private async run(runId: string, projectId: string | null, sessionId: string, text: string, focus: FocusItem[], files: PreparedAttachments, signal: AbortSignal) {
 		const emit = (e: RunEvent) => this.d.emit(runId, e);
 		let answer = "";
 		let confirmedBatches = 0;
@@ -252,7 +351,7 @@ export class AgentSession {
 			const runDir = join(this.d.runsDir, runId);
 			mkdirSync(runDir, { recursive: true });
 			writeFileSync(join(runDir, "focus.json"), JSON.stringify(focus), "utf8");
-			this.remember(projectId, "user", text, files.refs);
+			this.remember(projectId, sessionId, "user", text, files.refs);
 
 			const env = ctxEnv({ ...this.d.ctx, projectId, runDir });
 			const appTools = allTools().map((t) => t.name);
@@ -283,7 +382,7 @@ export class AgentSession {
 			});
 
 			const key = `${s.provider}/${s.model}`;
-			const id = projectId ?? "_";
+			const id = this.convKey(projectId, sessionId);
 			const conv = this.conversations.get(id);
 			const rt = await this.d.runtime();
 			const model = lookupPiModel(rt, s.provider, s.model);
@@ -295,11 +394,11 @@ export class AgentSession {
 			let history = conv && conv.key === key ? this.shrink(conv.messages) : [];
 			// 2. at the line (80% of the window, at most 200K) the older conversation becomes a summary, before the request is made
 			if (history.length && estimateContext(history).tokens + promptTokens > compactLine(model.contextWindow)) {
-				history = (await this.compactHistory({ projectId, rt, model, history, signal, emit, keepRecent })) ?? history;
+				history = (await this.compactHistory({ projectId, sessionId, rt, model, history, signal, emit, keepRecent })) ?? history;
 			}
 
 			const standing = this.standing(s);
-			const seed = this.transcriptSeed(projectId);
+			const seed = this.transcriptSeed(projectId, sessionId);
 			const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
 			// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
 			const st = { toolsRan: false, overflowed: null as string | null, retried: false };
@@ -337,14 +436,14 @@ export class AgentSession {
 			if (st.overflowed && !st.toolsRan && !st.retried && !signal.aborted) {
 				// the model refused the request for its size, although the estimate said it fits: summarize harder and ask again, once
 				st.retried = true;
-				const smaller = history.length ? await this.compactHistory({ projectId, rt, model, history, signal, emit, keepRecent: Math.floor(keepRecent / 2) }) : null;
+				const smaller = history.length ? await this.compactHistory({ projectId, sessionId, rt, model, history, signal, emit, keepRecent: Math.floor(keepRecent / 2) }) : null;
 				if (smaller) await attempt(smaller);
 				else emit({ type: "error", engine: "pi", message: `${st.overflowed}\n\nKonteksts ir pilns, un to nevarēja saspiest. Sāc jaunu sarunu vai pievieno mazāk.` });
 			}
 		} catch (e) {
 			emit({ type: "error", engine: "pi", message: (e as Error).message });
 		} finally {
-			this.remember(projectId, "assistant", answer);
+			this.remember(projectId, sessionId, "assistant", answer);
 		}
 		// after a batch the user confirmed: the app captures a revision and runs the room check (6.2, 6.5)
 		if (confirmedBatches > 0 && projectId && this.d.afterBatch) {
@@ -367,17 +466,11 @@ export class AgentSession {
 		}
 	}
 
-	/** Forgets the in-memory conversation (new topic, or the model changed). The transcript stays. */
-	reset(projectId: string | null) {
-		this.conversations.delete(projectId ?? "_");
-		this.compactions.delete(projectId ?? "_");
-	}
-
 	/** What the next request carries, where the limits are, and what the message being typed would add. */
 	async context(projectId: string | null, draft?: { text: string; focus: FocusItem[] }): Promise<ContextInfo> {
 		const s = this.d.settings();
 		const model = lookupPiModel(await this.d.runtime(), s.provider, s.model);
-		const id = projectId ?? "_";
+		const id = this.convKey(projectId);
 		const conv = this.conversations.get(id);
 		const live = conv && conv.key === `${s.provider}/${s.model}` && conv.messages.length > 0 ? conv : null;
 		const est = live ? estimateContext(live.messages) : null;
@@ -407,7 +500,8 @@ export class AgentSession {
 	async compactNow(projectId: string | null): Promise<{ before: number; after: number }> {
 		if (this.running) throw new Error("Aģents strādā. Aptur vai pagaidi.");
 		const s = this.d.settings();
-		const id = projectId ?? "_";
+		const sessionId = this.activeSession(projectId);
+		const id = this.convKey(projectId, sessionId);
 		const conv = this.conversations.get(id);
 		if (!conv || conv.key !== `${s.provider}/${s.model}` || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();
@@ -419,7 +513,7 @@ export class AgentSession {
 			const before = estimateContext(conv.messages).tokens;
 			const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal: abort.signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });
 			if (!c) throw new Error(`Nav ko saspiest: sarunā ir tikai viens posms, vai viss (${before} tokeni) ietilpst nesenajā daļā.`);
-			this.rememberCompaction(projectId, c.summary, before, c.tokensAfter);
+			this.rememberCompaction(projectId, sessionId, c.summary, before, c.tokensAfter);
 			this.conversations.set(id, { key: conv.key, messages: c.messages, lastAdded: null });
 			return { before, after: c.tokensAfter };
 		} finally {
