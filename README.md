@@ -19,7 +19,7 @@ First run: Iestatījumi → Claude API key (Console key, stored encrypted) or Co
 
 ## Revit has not been run yet
 
-Everything that touches Revit was written from the add-in source and the Revit API and tested against a fake Revit (`test/helpers.ts`). Run the spike first, with a model open: see `spike/README.md`.
+Everything that touches Revit was written from the add-in source and the Revit API. It has never run against a real Revit; the tests that used a fake Revit were deleted on 2026-11-05. Run the spike first, with a model open: see `spike/README.md`.
 
 ## Layout
 

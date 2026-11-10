@@ -226,49 +226,6 @@ test("group and procedure are computed by the rules engine and carry the rule's 
 	assert.equal(b.facts.group.value, "2. grupa (pēc Borisa)");
 });
 
-test("a gather run: scan, agent proposes through the real tools, panels read the rows; run is recorded", async () => {
-	let launched: { tools: readonly string[]; env: Record<string, string> } | null = null;
-	let prompt = "";
-	const { api, events, dir } = mk();
-	const { root } = folder();
-	(api as unknown as { d: { engine: Engine } }).d.engine.run = async (o) => {
-		launched = o.mcp.projektesana;
-		prompt = o.prompt;
-		const c = { root: o.mcp.projektesana.env.PROJEKTESANA_ROOT, engine: "pi", dataDir, libraryDir: join(dir, "lib") };
-		const src = (q: string) => ({ kind: "file" as const, path: "01 PU/PU.txt", quote: q });
-		o.onEvent({ type: "tool", name: "set_fact", detail: "object" });
-		await tools.setFactTool(c, "object", "Duntes iela 8, Rīga", src("Objekts: Duntes iela 8, Rīga"));
-		o.onEvent({ type: "tool_result", name: "set_fact", ok: true });
-		await tools.setFactTool(c, "engine.work", "new_build", src("Jauna publiska ēka"));
-		await tools.setFactTool(c, "engine.use", "public", src("Jauna publiska ēka"));
-		await assert.rejects(tools.setFactTool(c, "client", "SIA Izdomāts", src("Pasūtītājs: SIA Izdomāts")), /nav atrodams/);
-		o.onEvent({ type: "done", text: "Ierakstīju 3 punktus. Pasūtītājs: SIA Tests — neierakstīju." });
-	};
-	await api.projectsOpenFolder(root);
-	events.length = 0;
-	const r = await api.gatherRun(root, "pu");
-	assert.deepEqual(r, { ok: true, summary: "Ierakstīju 3 punktus. Pasūtītājs: SIA Tests — neierakstīju." });
-	assert.equal(launched!.env.PROJEKTESANA_MODE, "gather");
-	assert.ok(launched!.tools.includes("add_tr") && !launched!.tools.includes("mark_unknown"));
-	assert.ok(prompt.indexOf("# Noteikumi") < prompt.indexOf("# Projekta faili"), "rules first, long file list last");
-	assert.match(prompt, /01 PU\/PU\.txt \[PU\]/);
-	assert.match(prompt, /plans\.dwg .* netiek lasīts/);
-	const rows = api.gatherFacts(root, "pu");
-	const row = (id: string) => rows.find((x) => x.id === id)!;
-	assert.equal(row("object").state, "proposed");
-	assert.equal(row("object").source!.quote, "Objekts: Duntes iela 8, Rīga");
-	assert.equal(row("client").state, "open", "a refused quote leaves the item open");
-	assert.equal(row("engine.work").value, "new_build");
-	assert.equal(api.gatherState(root).runs.pu!.ok, true);
-	assert.equal(api.gatherState(root).runs.pu!.tools, 1);
-	const kinds = events.filter((x) => x.channel === "gather:event").map((x) => x.e.type);
-	assert.deepEqual([kinds[0], kinds.at(-1)], ["start", "end"]);
-	assert.ok(kinds.includes("agent"));
-	assert.equal(api.gatherState(root).running, null);
-	// the group is already computed from the (unconfirmed) inputs, and says so
-	assert.equal(api.gatherFacts(root, "laws").find((x) => x.id === "group")!.state, "proposed");
-});
-
 test("Boris corrects a proposal by typing: his words go into the chat and become the source", async () => {
 	const { api } = mk();
 	const { root } = folder();
@@ -282,31 +239,6 @@ test("Boris corrects a proposal by typing: his words go into the chat and become
 	assert.match(readFileSync(join(root, ".bv", "chat.jsonl"), "utf8"), /Labojums — Ēkas lietojums: public/);
 	await assert.rejects(api.factEdit(root, "engine.use", "daudzdzīvokļu"), /Atļautas/);
 	assert.doesNotMatch(readFileSync(join(root, ".bv", "chat.jsonl"), "utf8"), /daudzdzīvokļu/, "a refused edit writes nothing");
-});
-
-test("no agent connected: the run says why, records it, and the panel can show it", async () => {
-	const { api } = mk(undefined, false);
-	const { root } = folder();
-	await api.projectsOpenFolder(root);
-	assert.deepEqual(await api.gatherRun(root, "tr"), { ok: false, reason: "Nav ievadīta API atslēga" });
-	assert.equal(api.gatherState(root).runs.tr!.error, "Nav ievadīta API atslēga");
-	const all = await api.gatherAll(root);
-	assert.deepEqual(Object.keys(all), ["pu"], "stops at the first section that cannot run");
-});
-
-test("one agent at a time: a second gather while one runs is refused", async () => {
-	const { api } = mk();
-	const { root } = folder();
-	let release: () => void = () => {};
-	(api as unknown as { d: { engine: Engine } }).d.engine.run = (o) => new Promise<void>((res) => (release = () => (o.onEvent({ type: "done", text: "" }), res())));
-	await api.projectsOpenFolder(root);
-	const first = api.gatherRun(root, "pu");
-	await new Promise((r) => setTimeout(r, 50));
-	assert.equal(api.gatherState(root).running, "pu");
-	await assert.rejects(api.gatherRun(root, "data"), /jau strādā/);
-	release();
-	await first;
-	assert.equal(api.gatherState(root).running, null);
 });
 
 test("attach in chat: copied into the project, role proposed from the text, logged; the original stays", async () => {

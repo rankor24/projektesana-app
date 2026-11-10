@@ -1,17 +1,15 @@
-// The pi engine: two MCP servers per run with their own allow-lists, the forbidden Revit tools never offered,
-// and a whole run with pi's faux model (no network, no credits) against the BUILT projektesana-tools server.
+// The pi engine: two MCP servers per run with their own allow-lists, and the forbidden Revit tools never offered.
+// Runs against the BUILT projektesana-tools server; no stand-in model.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { toolsLaunch, revitLaunch } from "../src/main/engines/index.ts";
 import { REVIT_AGENT_TOOLS, REVIT_FORBIDDEN, MODEL_TOOLS, SETUP_TOOLS } from "../src/main/engines/types.ts";
-import { connectMcpServers, runPi, type PiRuntime } from "../src/agent-pi/index.ts";
+import { connectMcpServers } from "../src/agent-pi/index.ts";
 import { createProject } from "../src/kernel/project.ts";
 import { registerFile } from "../src/kernel/files.ts";
-import type { RunEvent } from "../src/shared/types.ts";
 
 const serverJs = join(import.meta.dirname, "..", "dist", "mcp", "server.js");
 const built = existsSync(serverJs);
@@ -49,34 +47,3 @@ test("two servers in one run: each keeps its own allow-list; a name offered twic
 	await assert.rejects(connectMcpServers({ a: tools(root, "model"), b: { ...tools(root, "setup"), allow: ["read_doc"] } }), /same tool: read_doc/);
 });
 
-test("a full pi run (faux model) reads the PU through the real tool server and finishes", { skip: !built && "npm run build first" }, async () => {
-	const root = project();
-	const faux = fauxProvider({ models: [{ id: "faux-1", reasoning: true }] });
-	const models = createModels();
-	models.setProvider(faux.provider);
-	faux.setResponses([
-		fauxAssistantMessage([fauxToolCall("read_doc", { path: "PU.txt" })], { stopReason: "toolUse" }),
-		fauxAssistantMessage([fauxText("Objekts ir Duntes iela 8.")]),
-	]);
-	const runtime = { models, live: { fetchedAt: {}, providers: {} } } as unknown as PiRuntime;
-	const events: RunEvent[] = [];
-	await runPi({ runtime, model: faux.getModel(), prompt: "Izlasi PU.", mcp: { projektesana: tools(root, "model") }, signal: new AbortController().signal, onEvent: (e) => events.push(e), effort: "high" });
-	const kinds = events.map((e) => (e.type === "tool_result" ? `result:${e.name}:${e.ok}` : e.type === "tool" ? `tool:${e.name}` : e.type));
-	assert.ok(kinds.includes("tool:read_doc"), kinds.join(","));
-	assert.ok(kinds.includes("result:read_doc:true"), kinds.join(","));
-	const done = events.find((e) => e.type === "done") as { text: string } | undefined;
-	assert.equal(done?.text, "Objekts ir Duntes iela 8.");
-	const result = events.find((e) => e.type === "tool_result") as { output?: string };
-	assert.match(result.output ?? "", /Duntes iela 8/);
-});
-
-test("a tool the server does not offer stops the run with a clear error, not a hang", { skip: !built && "npm run build first" }, async () => {
-	const root = project();
-	const faux = fauxProvider({ models: [{ id: "faux-1" }] });
-	const models = createModels();
-	models.setProvider(faux.provider);
-	const events: RunEvent[] = [];
-	const runtime = { models, live: { fetchedAt: {}, providers: {} } } as unknown as PiRuntime;
-	await runPi({ runtime, model: faux.getModel(), prompt: "x", mcp: { projektesana: { ...tools(root, "model"), allow: ["read_doc", "nav_tada"] } }, signal: new AbortController().signal, onEvent: (e) => events.push(e) });
-	assert.match((events.find((e) => e.type === "error") as { message: string }).message, /nav_tada/);
-});

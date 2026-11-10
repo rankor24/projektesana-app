@@ -2,7 +2,7 @@
 
 **Status: NOT RUN.** No Revit instance was connected when this was built (`list_revit_instances` → count 0). Everything the app does with Revit
 (`src/main/revit/commands.ts`) is written from the add-in source (`ExecuteCodeEventHandler.cs`: `Execute(Document document, object[] parameters)`,
-result serialised as JSON) and the Revit API, and is tested only against a fake Revit (`test/helpers.ts`).
+result serialised as JSON) and the Revit API. It has no tests: the fake-Revit tests were deleted on 2026-11-05.
 
 ## Run it (Boris)
 

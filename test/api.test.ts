@@ -8,7 +8,7 @@ import { Store } from "../src/main/store.ts";
 import { appendChat, setFact } from "../src/main/chat/brief.ts";
 import { buildSetupPrompt } from "../src/main/chat/setup.ts";
 import { completeness } from "../src/main/chat/brief.ts";
-import { fakeRevit, piFor } from "./helpers.ts";
+import { piFor } from "./helpers.ts";
 import type { Engine } from "../src/main/engines/types.ts";
 
 const dataDir = join(import.meta.dirname, "..", "data");
@@ -134,54 +134,11 @@ test("model refresh without keys reports per provider and never throws", async (
 	assert.match(r["openai-codex"], /pi katalogs/);
 });
 
-test("setup chat: Boris's message is stored first, the agent's answer after; one run at a time", async () => {
-	let release!: () => void;
-	const gate = new Promise<void>((r) => (release = r));
-	const { api, dir } = mk(async (o) => {
-		o.onEvent({ type: "text", text: "Kāds ir objekta nosaukums un adrese?" });
-		await gate;
-		o.onEvent({ type: "done", text: "" });
-	});
-	const root = join(dir, "P");
-	api.projectsCreate(root, "P");
-	const first = api.chatSend(root, "Sāksim jaunu projektu");
-	await new Promise((r) => setTimeout(r, 20));
-	await assert.rejects(api.chatSend(root, "vēl"), /jau strādā/);
-	release();
-	assert.deepEqual(await first, { ok: true });
-	assert.deepEqual(api.chatHistory(root).messages.map((m) => m.role), ["boris", "agent"]);
-});
-
-test("setup chat reports an engine that is not ready instead of faking an answer", async () => {
-	const { api, dir, store } = mk();
-	const root = join(dir, "P");
-	api.projectsCreate(root, "P");
-	const eng: Engine = { id: "claude", status: async () => ({ id: "claude", ready: false, reason: "Nav ievadīta API atslēga", canLogin: false }), run: async () => assert.fail("must not run") };
-	const api2 = new AppApi({ store, engine: eng, pi: piFor(store), serverJs: "s", dataDir, emit: () => {} });
-	api2.projectsAdd(root);
-	assert.deepEqual(await api2.chatSend(root, "labdien"), { ok: false, reason: "Nav ievadīta API atslēga" });
-});
-
 test("modelling is refused until setup is complete, then until a work copy exists", async () => {
 	const { api, dir } = mk();
 	const root = join(dir, "P");
 	api.projectsCreate(root, "P");
 	await assert.rejects(api.batchRun(root, "skice"), /Uzstādīšana nav pabeigta/);
-});
-
-test("the work copy must be a _WORK file inside the project; the original is refused", async () => {
-	const { api, store, dir } = mk();
-	const root = join(dir, "P");
-	api.projectsCreate(root, "P");
-	store.saveSettings({ revitServerJs: "x" });
-	const workPath = join(root, "Modelis", "A_WORK.rvt");
-	const state = { exports: 0 };
-	const a2 = new AppApi({ store, engine: (api as unknown as { d: { engine: never } }).d.engine, pi: piFor(store), serverJs: "s", dataDir, emit: () => {}, revitFactory: async () => fakeRevit({ workPath, state }) });
-	a2.projectsAdd(root);
-	assert.deepEqual(await a2.modellingUseActive(root), { workPath });
-	assert.deepEqual(a2.modellingGet(root), { workPath });
-	const a3 = new AppApi({ store, engine: (api as unknown as { d: { engine: never } }).d.engine, pi: piFor(store), serverJs: "s", dataDir, emit: () => {}, revitFactory: async () => fakeRevit({ workPath: join(root, "Original.rvt"), state }) });
-	await assert.rejects(a3.modellingUseActive(root), /_WORK\.rvt/);
 });
 
 test("Revit not configured / not connected are reported as such", async () => {

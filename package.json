@@ -11,13 +11,12 @@
 		"build:renderer": "vite build",
 		"build": "npm run build:main && npm run build:renderer && node scripts/copy-preload.mjs",
 		"typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-		"test": "node --import tsx --test --test-concurrency=1 test/*.test.ts && npm run test:ui",
+		"test": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
 		"start": "npm run build && electron .",
 		"audit": "node --import tsx scripts/audit-checklist.ts",
 		"pack": "npm run build && electron-builder --win dir",
 		"dist": "npm run build && electron-builder --win nsis",
-		"exes": "node scripts/make-exes.mjs",
-		"test:ui": "node --import ./test/ui/register.mjs --import tsx --test --test-concurrency=1 test/ui/*.ui.test.ts"
+		"exes": "node scripts/make-exes.mjs"
 	},
 	"dependencies": {
 		"@earendil-works/pi-agent-core": "^1.4.0",

@@ -9,7 +9,7 @@ const rows = readFileSync(join(root, "docs", "CHECKLIST.md"), "utf8")
 	.filter((l) => /^\| [A-Z]\w* \|/.test(l))
 	.map((l) => l.split("|").map((c) => c.trim()).slice(1, -1));
 
-const STATUS = /^(done|done, not run live|partial|not done|later|waiting Boris)$/;
+const STATUS = /^(done|done, not run live|not verified|partial|not done|later|waiting Boris)$/;
 const problems: string[] = [];
 const counts: Record<string, number> = {};
 for (const [id, spec, req, status, evidence] of rows) {
