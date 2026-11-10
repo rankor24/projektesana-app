@@ -4,7 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
-import type { ChecklistRow, StageSheetsResult } from "./nodevums.js";
+import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 
 
 export interface AppInfo {
@@ -326,6 +326,10 @@ export interface ApiSpec {
 	"deliveries.stageFile": (id: string, deliveryId: string, from: string, name?: string) => { file: string };
 	"deliveries.unstage": (id: string, deliveryId: string, name: string) => void;
 	"deliveries.openStaging": (id: string, deliveryId: string) => void;
+	/** Where "Kopēt uz 1.4_Nodevumi" would write and what stops it now (7.6). */
+	"deliveries.copyPlan": (id: string, deliveryId: string) => CopyPlan;
+	/** The user's click: copies the staged set into 1.4_Nodevumi<kind><YYMMDD>, then re-reads the deliveries. */
+	"deliveries.copy": (id: string, deliveryId: string) => { target: string; files: number };
 	"timeline.clocks": (id: string) => ClockRow[];
 	"clocks.add": (id: string, c: { kind: "tn" | "approval"; issuer: string; issuerKind: "state_municipal" | "network_owner"; requestedOn: string }) => void;
 	"clocks.update": (id: string, clockId: string, patch: { receivedOn?: string | null; extended?: boolean }) => void;
@@ -436,6 +440,8 @@ export const API_NAMES = [
 	"deliveries.stageFile",
 	"deliveries.unstage",
 	"deliveries.openStaging",
+	"deliveries.copyPlan",
+	"deliveries.copy",
 	"timeline.clocks",
 	"clocks.add",
 	"clocks.update",

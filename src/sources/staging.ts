@@ -2,6 +2,7 @@
 // 1.4_Nodevumi\<KIND>\<YYMMDD>\, so the set that is checked is the set that gets copied. A draft is a Delivery like any other
 // (timeline chip, checks, gate); its items are the staged files with absolute paths in the app's data folder.
 // Everything here writes inside the data folder only (checkWrite); the copy into the office folder is deliver-copy.ts.
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { checkRead, checkWrite, isInside } from "../core/guard.js";
@@ -35,6 +36,17 @@ export function stagedItems(dir: string): DeliveryItem[] {
 	};
 	walk(dir, 0);
 	return out.sort((a, b) => a.localeCompare(b, "lv", { numeric: true })).map(itemOf);
+}
+
+/** Fingerprint of a staging folder: every file's path, size and time. Any change to the set changes it. */
+export function stagingFingerprint(dir: string): string {
+	const h = createHash("sha256");
+	for (const i of stagedItems(dir)) {
+		const s = statSync(i.file);
+		h.update(`${i.file}|${s.size}|${s.mtimeMs}
+`);
+	}
+	return h.digest("hex").slice(0, 16);
 }
 
 export function draftOf(store: ProjectStore, deliveryId: string): Delivery & { draft: NonNullable<Delivery["draft"]> } {

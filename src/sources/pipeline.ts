@@ -72,12 +72,7 @@ export async function scanProject(store: ProjectStore, progress: (p: Omit<ScanPr
 	sources = await readAllText(store, sources, progress, hooks);
 	store.write("sources", sources, { kind: "sources.text", by: "app" });
 
-	// deliveries from 1.4_Nodevumi; planned dates from the BIP grafiks / schedule sources
-	const planned = sources
-		.filter((s) => s.kind === "document" && (s.role === "Grafiks" || s.role === "BIP / BIM prasības"))
-		.flatMap((s) => plannedFromSchedule(store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "")?.pages ?? []));
-	const deliveries = mergeDeliveries(store.read("deliveries"), await readDeliveries(root), planned);
-	if (JSON.stringify(deliveries) !== JSON.stringify(store.read("deliveries"))) store.write("deliveries", deliveries, { kind: "deliveries.read", by: "app", data: { count: deliveries.length } });
+	await refreshDeliveries(store, root, sources);
 
 	const summary: ScanSummary = {
 		at: new Date().toISOString(),
@@ -187,4 +182,14 @@ function keepBlobs(store: ProjectStore, files: { abs: string; rel: string; size:
 			}
 		}
 	}
+}
+
+/** Deliveries from 1.4_Nodevumi merged with what is stored (drafts, the user's dates, checks, sent); planned dates from the BIP
+ *  grafiks / schedule sources. Used by the scan and after the copy into 1.4 (7.6). */
+export async function refreshDeliveries(store: ProjectStore, root: string, sources: Source[] = store.read("sources")): Promise<void> {
+	const planned = sources
+		.filter((s) => s.kind === "document" && (s.role === "Grafiks" || s.role === "BIP / BIM prasības"))
+		.flatMap((s) => plannedFromSchedule(store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "")?.pages ?? []));
+	const deliveries = mergeDeliveries(store.read("deliveries"), await readDeliveries(root), planned);
+	if (JSON.stringify(deliveries) !== JSON.stringify(store.read("deliveries"))) store.write("deliveries", deliveries, { kind: "deliveries.read", by: "app", data: { count: deliveries.length } });
 }

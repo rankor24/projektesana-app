@@ -211,7 +211,8 @@ export interface Delivery {
 	submittedDate: string | null;
 	folder: string | null;
 	items: DeliveryItem[];
-	checksRun: { at: string; open: number }[];
+	/** set = fingerprint of a draft's staged files when the check ran (7.6: the copy needs the set that was checked) */
+	checksRun: { at: string; open: number; set?: string }[];
 	sent?: { at: string; by: "user" };
 	/** A delivery being made in the app (work plan 7.1): its items are the files in the staging folder (absolute paths in the
 	 *  app's data folder) until the user copies it into 1.4_Nodevumi; then the real folder's delivery takes this id and keeps

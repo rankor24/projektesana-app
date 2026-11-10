@@ -9,6 +9,8 @@ import { checklistOf, type SheetRow } from "../../checks/checklist.js";
 import { revitExport } from "../../revit/exports.js";
 import { stageRevitIfc, stageRevitSheets } from "../../revit/stage.js";
 import type { RevitClient } from "../../revit/client.js";
+import { copyDelivery, copyPlan } from "../../sources/deliver-copy.js";
+import { refreshDeliveries } from "../../sources/pipeline.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 
 export interface DeliveryDeps {
@@ -19,7 +21,7 @@ export interface DeliveryDeps {
 	openPath(p: string): Promise<string>;
 }
 
-type K = "deliveries.checklist" | "deliveries.stageSheets" | "deliveries.stageIfc" | "deliveries.stageFile" | "deliveries.unstage" | "deliveries.openStaging" | "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
+type K = "deliveries.copyPlan" | "deliveries.copy" | "deliveries.checklist" | "deliveries.stageSheets" | "deliveries.stageIfc" | "deliveries.stageFile" | "deliveries.unstage" | "deliveries.openStaging" | "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -75,6 +77,17 @@ export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 		"deliveries.openStaging": async (id, deliveryId) => {
 			const err = await d.openPath(draftOf(d.registry.store(id), deliveryId).draft.stagingDir);
 			if (err) throw new Error(err);
+		},
+		"deliveries.copyPlan": (id, deliveryId) => copyPlan(d.registry.store(id), deliveryId),
+		"deliveries.copy": async (id, deliveryId) => {
+			const store = d.registry.store(id);
+			try {
+				const r = await copyDelivery(store, deliveryId, "user");
+				await refreshDeliveries(store, store.project.root);
+				return r;
+			} finally {
+				changed(id);
+			}
 		},
 		"deliveries.start": (id, kind, date) => {
 			const row = startDraft(d.registry.store(id), kind, date, "user");
