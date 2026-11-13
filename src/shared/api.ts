@@ -372,6 +372,8 @@ export interface ApiSpec {
 	"findings.remove": (id: string, findingId: string) => void;
 	"findings.runAll": (id: string) => number;
 	"bcf.export": (id: string, findingIds: string[] | null) => string;
+	/** the project's pins on model elements as a BCF file (task 8.2); → the file */
+	"bcf.exportPins": (id: string) => string;
 	"bcf.import": (id: string, file: string) => { topics: number; byDiscipline: Record<string, number>; notes: string[] };
 	"pins.list": (id: string) => Pin[];
 	"pins.add": (id: string, target: PinTarget, text: string) => Pin;
@@ -484,6 +486,7 @@ export const API_NAMES = [
 	"findings.remove",
 	"findings.runAll",
 	"bcf.export",
+	"bcf.exportPins",
 	"bcf.import",
 	"pins.list",
 	"pins.add",

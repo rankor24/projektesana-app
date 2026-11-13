@@ -241,7 +241,24 @@ export interface Revision {
 	diffFromPrev: { added: number; removed: number; changed: number } | null;
 }
 
-export type PinTarget = { sheet?: string; sourceId?: string; page?: number; x: number; y: number; viewId?: string } | { elementGuid: string };
+/** The 3D camera of a pin in BimCraft's viewer space (three.js, Y up), so a click on the pin flies back to the same view. */
+export interface PinCamera {
+	position: [number, number, number];
+	target: [number, number, number];
+	fov: number;
+}
+
+/** The same view in IFC coordinates (metres, Z up) as a BCF perspective camera, for the pin's BCF topic. */
+export interface PinViewpoint {
+	kind: "perspective";
+	viewPoint: [number, number, number];
+	direction: [number, number, number];
+	up: [number, number, number];
+	fov: number;
+}
+
+/** A pin on a page (fractions of the page) or on a model element: its GlobalId, the model it was placed in, the view. */
+export type PinTarget = { sheet?: string; sourceId?: string; page?: number; x: number; y: number; viewId?: string } | { elementGuid: string; model?: string; camera?: PinCamera; viewpoint?: PinViewpoint };
 
 export interface Pin {
 	id: string;

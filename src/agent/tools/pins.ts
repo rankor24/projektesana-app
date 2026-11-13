@@ -10,7 +10,7 @@ import { tool, type ToolDef } from "./tool.js";
 export function pinsText(pins: Pin[]): string {
 	const tasks = pinsAsTasks(pins);
 	if (!tasks.length) return "";
-	const where = (p: Pin) => ("elementGuid" in p.target ? `elements ${p.target.elementGuid}` : `${p.target.sourceId ?? p.target.sheet ?? "lapa"}${p.target.page ? `, lpp. ${p.target.page}` : ""}`);
+	const where = (p: Pin) => ("elementGuid" in p.target ? `elements ${p.target.elementGuid}${p.target.model ? ` modelī ${p.target.model}` : ""}` : `${p.target.sourceId ?? p.target.sheet ?? "lapa"}${p.target.page ? `, lpp. ${p.target.page}` : ""}`);
 	const lines = tasks.map((p, i) => `${i + 1}. [${p.id}] ${p.state === "open" ? "ATVĒRTA" : "gaida lietotāju"} — ${p.text} (${where(p)})${p.comments.length ? ` · pēdējais: ${p.comments[p.comments.length - 1].text}` : ""}`);
 	return `Lietotāja piezīmes (uzdevumi; atvērtās vispirms):\n${lines.join("\n")}`;
 }
@@ -30,9 +30,9 @@ export const pinTools: ToolDef[] = [
 		name: "add_pin",
 		level: "annotate",
 		description: "Put a pin on a source page (page fractions 0–1 from top-left) or on a model element (GlobalId), to point the user at something.",
-		input: { text: z.string().min(3), sourceId: z.string().optional(), page: z.number().int().min(1).optional(), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), elementGuid: z.string().optional() },
+		input: { text: z.string().min(3), sourceId: z.string().optional(), page: z.number().int().min(1).optional(), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), elementGuid: z.string().optional(), model: z.string().optional() },
 		run: (ctx, a) => {
-			const target = a.elementGuid ? { elementGuid: a.elementGuid } : { sourceId: a.sourceId, page: a.page, x: a.x ?? 0.5, y: a.y ?? 0.5 };
+			const target = a.elementGuid ? { elementGuid: a.elementGuid, ...(a.model ? { model: a.model } : {}) } : { sourceId: a.sourceId, page: a.page, x: a.x ?? 0.5, y: a.y ?? 0.5 };
 			return { ok: true, pin: addPin(storeOf(ctx), target, a.text, "agent").id };
 		},
 	}),

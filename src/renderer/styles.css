@@ -269,3 +269,19 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .strip-run.failed .strip-now { color: var(--bad); }
 .strip-bar { width: 90px; height: 4px; border-radius: 2px; background: var(--elev2); overflow: hidden; flex: none; }
 .strip-bar > span { display: block; height: 100%; background: var(--info); }
+
+/* annotation view (8.2): the pins of the open file beside the viewer, numbered, open first */
+.pin-dot.active { box-shadow: 0 0 0 3px var(--accent); }
+.pin-panel { width: 250px; flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--panel); }
+.pin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.pin-list { flex: 1; min-height: 0; overflow: auto; }
+.pin-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12.5px; }
+.pin-row:hover { background: var(--elev2); }
+.pin-row.active { background: var(--elev2); box-shadow: inset 3px 0 0 var(--accent); }
+.pin-row.closed { opacity: 0.6; }
+.pin-n { flex: none; width: 20px; height: 20px; border-radius: 50%; background: #d9482b; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.pin-n.resolved { background: #c58a00; }
+.pin-n.closed { background: var(--muted); }
+.pin-body { min-width: 0; flex: 1; }
+.pin-actions { display: flex; gap: 6px; margin-top: 4px; }
+.pin-foot { padding: 6px 10px; border-top: 1px solid var(--border); }

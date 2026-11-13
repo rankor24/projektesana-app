@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { USER_LABEL, type Finding, type Requirement } from "../core/model.js";
+import { USER_LABEL, type Finding, type Pin, type Requirement } from "../core/model.js";
 
 export interface BcfTopic {
 	guid: string;
@@ -76,6 +76,30 @@ export function topicOf(f: Finding, req: Requirement | undefined, author = "Proj
 		comments: f.decision ? [{ guid: stableGuid(`${f.id}:decision`), date: f.decision.at, author: f.decision.name || USER_LABEL, text: f.decision.reason }] : [],
 		viewpoints: f.where.elementGuid ? [{ guid: stableGuid(`${f.id}:vp`), camera: null, selection: [f.where.elementGuid], visibility: { defaultVisible: true, exceptions: [] }, clipping: [], snapshot: null }] : [],
 	};
+}
+
+const PIN_STATUS: Record<Pin["state"], string> = { open: "Open", resolved: "Resolved", closed: "Closed" };
+
+/** A pin on a model element as a BCF topic: its text, its comments, and the view it was placed in (camera in IFC space). */
+export function pinTopic(p: Pin, author = "Projektesana App"): BcfTopic {
+	const el = "elementGuid" in p.target ? p.target : null;
+	return {
+		guid: stableGuid(`pin:${p.id}`),
+		title: p.text.slice(0, 120),
+		status: PIN_STATUS[p.state],
+		type: "Issue",
+		author: p.by === "agent" ? "Aģents" : author,
+		created: p.at,
+		description: [p.text, el?.model ? `Modelis: ${el.model}` : ""].filter(Boolean).join("\n"),
+		comments: p.comments.map((c, i) => ({ guid: stableGuid(`pin:${p.id}:c${i}`), date: c.at, author: c.by === "agent" ? "Aģents" : USER_LABEL, text: c.text })),
+		viewpoints: el ? [{ guid: stableGuid(`pin:${p.id}:vp`), camera: el.viewpoint ?? null, selection: [el.elementGuid], visibility: { defaultVisible: true, exceptions: [] }, clipping: [], snapshot: null }] : [],
+	};
+}
+
+/** Only pins on model elements go to BCF; a pin on a PDF page has no place in a model. */
+export async function pinsToBcf(appDir: string, pins: Pin[], file: { name: string } | null = null): Promise<Uint8Array> {
+	const m = await bcfOf(appDir);
+	return m.writeBcf({ topics: pins.filter((p) => "elementGuid" in p.target).map((p) => pinTopic(p)), file });
 }
 
 export async function findingsToBcf(appDir: string, findings: Finding[], reqs: Requirement[], file: { name: string } | null = null): Promise<Uint8Array> {

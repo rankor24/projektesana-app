@@ -26,14 +26,14 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	if (preview.kind === "ifc")
 		return (
 			<section className="preview">
-				<IfcView key={preview.path} name={preview.label} load={() => (preview.path.startsWith("rev:") ? call("revisions.ifc", projectId, preview.path.slice(4)) : call("models.bytes", projectId, preview.path))} />
+				<IfcView projectId={projectId} key={preview.path} name={preview.label} load={() => (preview.path.startsWith("rev:") ? call("revisions.ifc", projectId, preview.path.slice(4)) : call("models.bytes", projectId, preview.path))} />
 			</section>
 		);
 	const modelLoad = (ref: string) => () => (ref.startsWith("rev:") ? call("revisions.ifc", projectId, ref.slice(4)) : call("models.bytes", projectId, ref));
 	if (preview.kind === "compare" && preview.mode === "ifc")
 		return (
 			<section className="preview">
-				<IfcView key={`${preview.a}|${preview.b}`} name={preview.aLabel} load={modelLoad(preview.a)} compareWith={{ name: preview.bLabel, load: modelLoad(preview.b) }} />
+				<IfcView projectId={projectId} key={`${preview.a}|${preview.b}`} name={preview.aLabel} load={modelLoad(preview.a)} compareWith={{ name: preview.bLabel, load: modelLoad(preview.b) }} />
 			</section>
 		);
 	if (preview.kind === "compare" && preview.mode === "sheet")
@@ -50,7 +50,7 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	if (ext === ".ifc")
 		return (
 			<section className="preview">
-				<IfcView key={s.id} name={s.title} load={() => call("models.bytes", projectId, `src:${s.id}`)} />
+				<IfcView projectId={projectId} key={s.id} name={s.title} load={() => call("models.bytes", projectId, `src:${s.id}`)} />
 			</section>
 		);
 	return (

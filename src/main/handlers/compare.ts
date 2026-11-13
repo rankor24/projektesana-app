@@ -8,7 +8,7 @@ import type { ProjectStore } from "../../core/store.js";
 import type { Handlers } from "../../shared/api.js";
 import { sourceBytes } from "../../sources/bytes.js";
 import { versionsBetween } from "../../core/versions.js";
-import { findingOfTopic, findingsToBcf, readBcfFile } from "../../checks/bcf.js";
+import { findingOfTopic, findingsToBcf, pinsToBcf, readBcfFile } from "../../checks/bcf.js";
 import { checkWrite } from "../../core/guard.js";
 import { listModels } from "../../sources/models.js";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -16,7 +16,7 @@ import { diffIfc } from "../../sources/ifc-diff.js";
 import { bimcraftStatus } from "../bimcraft-status.js";
 import { pairPages, diffPages, readSheet, whereOnA } from "../../sources/sheets/vector-diff.js";
 
-type K = "sheets.bytes" | "sheets.diff" | "models.diff" | "versions.between" | "bcf.export" | "bcf.import" | "bimcraft.status";
+type K = "sheets.bytes" | "sheets.diff" | "models.diff" | "versions.between" | "bcf.export" | "bcf.exportPins" | "bcf.import" | "bimcraft.status";
 
 export function refBytes(store: ProjectStore, ref: string, ext: RegExp): Uint8Array {
 	if (ref.startsWith("src:")) return sourceBytes(store, ref.slice(4));
@@ -52,6 +52,20 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 			mkdirSync(join(store.dir, "exports"), { recursive: true });
 			writeFileSync(g.path, bytes);
 			store.log({ kind: "bcf.exported", by: "user", data: { topics: pick.length } });
+			await d.openPath(join(store.dir, "exports"));
+			return g.path;
+		},
+		"bcf.exportPins": async (id) => {
+			const store = d.registry.store(id);
+			const pins = store.read("pins").filter((p) => "elementGuid" in p.target);
+			if (!pins.length) throw new Error("Nav piezīmju uz modeļa elementiem.");
+			const bytes = await pinsToBcf(d.bimcraftApp, pins, null);
+			const file = join(store.dir, "exports", `${id}_piezimes_${new Date().toISOString().slice(0, 10)}.bcf`);
+			const g = checkWrite(store.guard, file);
+			if (!g.ok) throw new Error(g.reason);
+			mkdirSync(join(store.dir, "exports"), { recursive: true });
+			writeFileSync(g.path, bytes);
+			store.log({ kind: "bcf.pinsExported", by: "user", data: { topics: pins.length } });
 			await d.openPath(join(store.dir, "exports"));
 			return g.path;
 		},
