@@ -280,6 +280,18 @@ The user accepts phase 9 in two parts: 9.0–9.5 by working a day on a real proj
 
 Open questions (from the board, not blocking 9.0–9.7): Sessions — one list per project or across all; Grafiks — also a Gantt by stage; Atmiņa — edit a note in the viewer or in place; first run — a wizard or chat-led; Iestatījumi — a modal.
 
+## Phase 10 — Foundations: agent threads, locks, coordinator
+
+Why: every agent gets stored conversations ("threads") of its own, a lock per run and one coordinator that decides who runs. Plan: `docs/agent-sessions-plan.md`. Nothing changes for the user until the later phases.
+
+| Task | Build | Files | Tests | Done when |
+|---|---|---|---|---|
+| 10.1 | **Thread store.** `ThreadStore`: threads and their transcripts on disk, one folder per thread; the lead's open thread takes today's single chat once. | `src/shared/thread-types.ts`, `src/core/threads.ts`, `test/10.1-threads.test.ts` | create / get / list round trip; transcript keeps every field; `lead()` copies the legacy chat once; a torn last line and a stray temp file lose nothing | the user notices no change |
+| 10.2 | **Who wrote it.** Every write is logged with the agent and the thread that made it. | `src/core/scope.ts`, `src/core/store.ts`, `src/core/model.ts`, `src/agent/tools/context.ts`, `src/agent/tools/server.ts`, `test/10.2-attribution.test.ts` | agent and thread on log lines and notes | the user notices no change |
+| 10.3 | **Locks for every run.** `LockRegistry`: locks per project, one Revit, the batch hold. | `src/agent/locks.ts`, `test/10.3-lock-registry.test.ts` | lock, release and hold rules | the user notices no change |
+| 10.4 | **Thread runner.** One run of one thread, taken out of `AgentSession.run`. | `src/agent/thread-runner.ts`, `src/agent/session.ts`, `test/10.4-thread-runner.test.ts` | a scripted run; `0.5`, `0.6`, `8.15` pass unchanged | the user notices no change |
+| 10.5 | **Coordinator with a cap of one.** The run table and the queue, with events that carry thread, agent and project. | `src/agent/coordinator.ts`, `src/agent/session.ts`, `src/shared/api.ts`, `src/main/main.ts`, `src/main/activity.ts`, `src/shared/activity.ts`, `test/10.5-coordinator.test.ts` | one run at a time, queue order, event envelope | the user notices no change |
+
 ## Later (after phase 8)
 
 From BIM Crew, picked "later" on 2026-11-12: **meeting notes** (audio → transcript → Atmiņa decisions, requirements and tasks; BIM Crew `meetings/transcription.ts`, `core/meeting_notes.py`; needs a local whisper) and the **scheduler** (scheduled agent runs: law re-read, TN clock reminders; `server/src/scheduler.ts`, `scheduled-runner.ts`).
