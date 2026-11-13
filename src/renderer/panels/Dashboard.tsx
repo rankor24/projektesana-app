@@ -2,7 +2,7 @@
 // across all projects, worst first; below, one card per project: stage, next delivery, open findings, closest clock, last
 // scan. Every number comes from the project's own stores through projects.summaries — nothing is kept twice.
 import type { ProjectRow } from "../../shared/api";
-import type { ProjectSummary } from "../../core/summary-types";
+import type { AttentionItem, ProjectSummary } from "../../core/summary-types";
 import { attentionAcross } from "../../shared/dashboard";
 import { ui } from "../state";
 import { Badge } from "../ui";
@@ -13,7 +13,7 @@ const when = (days: number) => (days < 0 ? `kavējas ${-days} d.` : days === 0 ?
 export function Dashboard({ projects, summaries, projectId, onOpen, onScan, onForget }: { projects: ProjectRow[]; summaries: ProjectSummary[]; projectId: string | null; onOpen: (id: string) => void; onScan: (id: string) => void; onForget: (id: string) => void }) {
 	const sum = new Map(summaries.map((s) => [s.id, s]));
 	const attention = attentionAcross(summaries);
-	const go = (pid: string, panel: "prasibas" | "nodevumi" | "projekts", filter?: string) => {
+	const go = (pid: string, panel: AttentionItem["open"]["panel"], filter?: string) => {
 		ui.setProject(pid);
 		windows.open(panel, filter);
 	};

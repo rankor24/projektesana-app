@@ -6,6 +6,7 @@
 // - requirements a check covers get status failed / met (justified rows keep their status).
 import { newId, USER_LABEL, type Finding, type Requirement, type Who } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
+import { appendHistory, pointOf } from "../core/history.js";
 import { checksFor, getCheck, type CheckContext, type CheckEvent, type CheckResult } from "./registry.js";
 
 export interface RunSummary {
@@ -86,6 +87,8 @@ export async function runChecks(store: ProjectStore, event: CheckEvent, opts: Om
 		});
 		if (JSON.stringify(upd) !== JSON.stringify(reqs)) store.write("requirements", upd, { kind: "requirements.status", by: "app", data: { met: met.size, failed: failedReq.size } });
 	}
+	// one line per run that ran something: the history of open findings for Pārskats
+	if (ran.length) appendHistory(store, pointOf(next, now));
 	return { ran, results: produced.size, open: next.filter((f) => f.state === "open").length, failedChecks, skipped };
 }
 

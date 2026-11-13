@@ -3,7 +3,7 @@
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
 import type { BimStage, Delivery, Fact, Finding, Markup, Note, NoteType, Pin, PinIntent, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
 import type { GrafikItem } from "./calendar.js";
-import type { ProjectSummary } from "../core/summary-types.js";
+import type { ProjectDashboard, ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
 import type { UndoRow } from "../core/undo-types.js";
 import type { TraceView } from "./trace-types.js";
@@ -399,6 +399,8 @@ export interface ApiSpec {
 	"projects.list": () => ProjectRow[];
 	/** the dashboard: per project the stage, next delivery, open findings, closest clock, last scan and why it needs attention (task 8.4) */
 	"projects.summaries": () => ProjectSummary[];
+	/** the open project's own page (task 9.6): tiles, stage timeline, Jāizdara, Fakti, recent changes, folders, findings history */
+	"projects.dashboard": (id: string) => ProjectDashboard;
 	"projects.add": (root: string) => ProjectRow;
 	"projects.forget": (id: string) => void;
 	"projects.scan": (id: string) => void;
@@ -575,6 +577,7 @@ export const API_NAMES = [
 	"activity.recent",
 	"projects.list",
 	"projects.summaries",
+	"projects.dashboard",
 	"projects.add",
 	"projects.forget",
 	"projects.scan",

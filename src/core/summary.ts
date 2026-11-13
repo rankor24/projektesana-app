@@ -3,8 +3,12 @@
 // first; `attentionAcross` merges those lists over all projects for the top of the dashboard.
 import { clockOf, type Clock, type ClockItem } from "../rules/clocks.js";
 import type { BimStage, Delivery, Finding } from "./model.js";
-import type { AttentionItem, ProjectSummary } from "./summary-types.js";
+import type { AttentionItem, ProjectDashboard, ProjectSummary } from "./summary-types.js";
 import type { ProjectStore } from "./store.js";
+import { readHistory } from "./history.js";
+import { versionsBetween } from "./versions.js";
+import { buildDashboard } from "../shared/dashboard.js";
+import { STAGES_OF } from "./stages.js";
 
 const DAY = 86_400_000;
 /** Calendar days from a to b (ISO dates); negative when b is before a. */
@@ -60,3 +64,29 @@ export function projectSummary(store: ProjectStore, today: string, missing = fal
 
 export { attentionAcross } from "../shared/dashboard.js";
 export type { AttentionItem, Level, ProjectSummary } from "./summary-types.js";
+
+/** The project's own page (task 9.6): every number from the stores, `today` fixes the dates (and the 30 days of changes). */
+export function projectDashboard(store: ProjectStore, today: string, missing = false): ProjectDashboard {
+	const summary = projectSummary(store, today, missing);
+	const facts = store.read("facts");
+	const scan = store.readMeta<{ at: string; folders?: { folderKey: string; name: string; files: number }[] } | null>("scan", null);
+	const contract = new Set<BimStage>(facts.filter((f) => f.key === "profile.stagesInContract" && f.state !== "rejected").flatMap((f) => STAGES_OF[(f.value as keyof typeof STAGES_OF) ?? "custom"] ?? []));
+	return buildDashboard({
+		id: store.project.id,
+		name: store.project.name,
+		today,
+		missing,
+		summary,
+		deliveries: store.read("deliveries"),
+		findings: store.read("findings"),
+		clocks: store.readMeta<ClockItem[]>("clocks", []).map((c) => clockOf(c, today)),
+		facts,
+		folders: (scan?.folders ?? []).map((f) => ({ key: f.folderKey, name: f.name, files: f.files })),
+		versions: versionsBetween(store, shiftDay(today, -30), today),
+		history: readHistory(store),
+		hasCoordinationReference: !!store.readMeta<unknown>("coordination", null),
+		stagesInContract: [...contract],
+	});
+}
+
+const shiftDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);

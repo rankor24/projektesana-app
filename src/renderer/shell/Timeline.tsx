@@ -1,47 +1,40 @@
-// Timeline strip under the top bar: the six BIM stages, the stages in the contract (from the profile), and the
-// deliveries (4.1) and clocks (4.2) when they exist. BP spans Tehniskais to Detalizācijas (design doc, answer 1).
-import { BIM_STAGES, type BimStage, type Delivery, type Fact } from "../../core/model";
-import { STAGES_OF } from "../../core/stages";
-import type { ClockRow } from "../../shared/api";
-import { call } from "../bridge";
-import { useUi } from "../state";
-import { useLoad } from "../ui";
+// The stage timeline (task 9.6; it used to be a strip under the top bar): the six BIM stages, the stages in the contract
+// marked, deliveries as marks and the TN / approval clocks as bars on one date axis, late ones red, today a line. The data is
+// shared/dashboard.ts stageTimeline (the same stores as Nodevumi and Grafiks, never a copy). A click on a mark or a bar opens
+// Nodevumi; a click on the title opens Grafiks.
+import type { StageTimeline } from "../../core/summary-types";
 import { windows } from "../windows";
 
-export function Timeline() {
-	const { projectId } = useUi();
-	const facts = useLoad<Fact[]>(() => (projectId ? call("facts.list", projectId) : Promise.resolve([])), [projectId]);
-	const deliveries = useLoad<Delivery[]>(() => (projectId ? call("deliveries.list", projectId) : Promise.resolve([])), [projectId]);
-	const clocks = useLoad<ClockRow[]>(() => (projectId ? call("timeline.clocks", projectId) : Promise.resolve([])), [projectId]);
-	const stagesInContract = new Set(
-		(facts.data ?? [])
-			.filter((f) => f.key === "profile.stagesInContract" && f.state !== "rejected")
-			.flatMap((f) => STAGES_OF[(f.value as keyof typeof STAGES_OF) ?? "custom"] ?? []),
-	);
-	const sent = (deliveries.data ?? []).filter((d) => d.submittedDate || d.sent);
-	const current: BimStage | null = sent.length ? sent.sort((a, b) => ((a.submittedDate ?? "") < (b.submittedDate ?? "") ? 1 : -1))[0].stage : null;
+export function Timeline({ t }: { t: StageTimeline }) {
 	return (
-		<div className="timeline">
-			{BIM_STAGES.map((s) => (
-				<div key={s} className={`stage ${current === s ? "current" : ""}`} style={stagesInContract.has(s) ? { borderColor: "var(--border-strong)" } : { opacity: projectId && stagesInContract.size ? 0.55 : 1 }}>
-					<span className="stage-name">{s}</span>
-					{(deliveries.data ?? [])
-						.filter((d) => d.stage === s)
-						.map((d) => (
-							<button key={d.id} className="chip" title={`${d.label}${d.plannedDate ? ` · plānots ${d.plannedDate}` : ""}${d.submittedDate ? ` · iesniegts ${d.submittedDate}` : ""}`} onClick={() => windows.open("nodevumi", d.id)}>
-								{d.kind}
-								{d.submittedDate ? ` ${d.submittedDate.slice(2).replace(/-/g, "")}` : d.plannedDate ? ` ⏱ ${d.plannedDate.slice(5)}` : ""}
+		<div className="stl">
+			<div className="stl-head">
+				<button className="ghost small" onClick={() => windows.go("grafiks")} title="Atvērt Grafiku">
+					<b>Stadijas</b>
+				</button>
+				<span className="dim small">
+					{t.from} → {t.to}
+				</span>
+			</div>
+			{t.stages.map((s) => (
+				<div key={s.stage} className={`stl-row ${s.current ? "current" : ""}`} style={s.inContract ? undefined : { opacity: 0.6 }}>
+					<div className="stl-name" title={s.inContract ? "stadija ir līgumā" : ""}>
+						{s.stage}
+						{s.current && <span className="chip"> tagad</span>}
+					</div>
+					<div className="stl-track">
+						<div className="stl-today" style={{ left: `${t.todayPos}%` }} title={`šodien ${t.today}`} />
+						{s.bars.map((b) => (
+							<button key={b.id} className={`stl-bar ${b.late ? "late" : ""} ${b.done ? "done" : ""}`} style={{ left: `${Math.min(b.fromPos, b.toPos)}%`, width: `${Math.max(1.5, Math.abs(b.toPos - b.fromPos))}%` }} title={`${b.label}: ${b.from} → ${b.to}${b.late ? " (kavē)" : ""}`} onClick={() => windows.go("nodevumi")}>
+								<span>{b.label}</span>
 							</button>
 						))}
-					{s === "Skice" &&
-						(clocks.data ?? [])
-							.filter((c) => c.state !== "saņemts")
-							.map((c) => (
-								<button key={c.id} className={`chip ${c.state === "kavē" ? "bad" : ""}`} title={`${c.label} · pieprasīts ${c.requestedOn} · termiņš ${c.due} (${c.point})
-${c.caveat}`} onClick={() => windows.open("nodevumi")}>
-									⏱ {c.issuer.slice(0, 14)} {c.daysLeft >= 0 ? `${c.daysLeft} d.d.` : `kavē ${-c.daysLeft}`}
-								</button>
-							))}
+						{s.marks.map((m) => (
+							<button key={m.id} className={`stl-mark ${m.late ? "late" : ""} ${m.sent ? "sent" : ""}`} style={{ left: `${m.pos}%` }} title={`${m.label} · ${m.date}${m.sent ? " · nosūtīts" : m.late ? " · kavējas" : " · plānots"}`} onClick={() => windows.go("nodevumi", m.id)}>
+								{m.kind}
+							</button>
+						))}
+					</div>
 				</div>
 			))}
 		</div>
