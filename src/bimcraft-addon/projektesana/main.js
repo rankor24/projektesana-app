@@ -11,11 +11,19 @@
  *                    markers { markers }        draw the app's pins as numbered dots on their elements (replaces; [] clears)
  *                    fly { camera | guid }      move the camera to a pin's saved view, or frame the element
  *                    capture                    answer with the selection, the camera and the BCF viewpoint (a new pin's place)
+ *                    props { id | guid }        answer with the element's attributes and property sets (the viewer's Properties window)
+ *                    tree                       answer with the spatial structure: project, site, building, storeys, their elements
+ *                    meta                       answer with the model's schema, project and the file header
+ *                    watch { on }               post the camera whenever the user moves it (a linked second view follows)
  *   BimCraft → app   ready { api }              the bridge is active
  *                    opened { name }            a model is open
  *                    selection { items }        what the user selected: [{ id, guid, cls, name }] (≤ 50)
  *                    sketch { items }           the sketch as an instruction (never written to the model)
  *                    captured { items, camera, viewpoint }   selection + camera (viewer space) + BCF camera (IFC space, metres)
+ *                    properties { item }        answer to props
+ *                    tree { nodes }             answer to tree
+ *                    meta { info }              answer to meta
+ *                    camera { camera }          the camera moved (only while watched)
  *                    marker { id }              the user clicked a pin's dot
  *                    markers { drawn, asked }   how many pins found their element
  *                    error { message }
@@ -63,6 +71,85 @@ export function flyCamera(v, c) {
   v.controls.update?.();
   v.render?.();
   return true;
+}
+
+// ---- what the viewer's side panels read (9.3): BimCraft's IFC engine through the read-only model writer, no parsing here ----
+
+const sv = (v) => (v === null || v === undefined ? null : typeof v === 'object' && 'value' in v ? (v.value === '' ? null : v.value) : v);
+const idsOf = (w, name) => {
+  const code = w.W && w.W[name];
+  if (code === undefined) return [];
+  const v = w.api.GetLineIDsWithType(w.mid, code);
+  const out = [];
+  for (let i = 0; i < v.size(); i++) out.push(v.get(i));
+  return out;
+};
+const clsOf = (w, id) => {
+  try {
+    const line = w.api.GetLine(w.mid, id, false);
+    if (line && line.constructor && /^Ifc/.test(line.constructor.name)) return line.constructor.name;
+  } catch (e) { /* fall through */ }
+  try { return String(w.api.GetNameFromTypeCode(w.api.GetLineType(w.mid, id))).replace(/^IFC/, 'Ifc'); } catch (e) { return 'Unknown'; }
+};
+const lineOf = (w, id) => { try { return w.api.GetLine(w.mid, id, false) || {}; } catch (e) { return {}; } };
+const MAX_ELEMENTS = 300;
+
+/** An element's properties reduced to what a panel shows: every value as text. */
+export function slimProps(p) {
+  return {
+    id: Number(p.id), guid: p.guid ?? null, cls: p.cls ?? null, name: p.name ?? null, objectType: p.objectType ?? null, tag: p.tag ?? null,
+    description: p.description ?? null, typeName: p.typeName ?? null,
+    sets: (p.sets || []).map((s) => ({ name: String(s.name), ...(s.fromType ? { fromType: true } : {}), rows: (s.rows || []).map((r) => ({ name: String(r.name), value: r.value === null || r.value === undefined ? '' : String(r.value) })) })),
+  };
+}
+
+/** The spatial structure: IfcProject → site → building → storey (IfcRelAggregates), the elements each holds (IfcRelContainedInSpatialStructure). */
+export function treeOf(w) {
+  const kids = new Map();
+  for (const rid of idsOf(w, 'IFCRELAGGREGATES')) {
+    const r = lineOf(w, rid);
+    const parent = r.RelatingObject && r.RelatingObject.value;
+    if (parent === undefined) continue;
+    kids.set(parent, [...(kids.get(parent) || []), ...(r.RelatedObjects || []).map((h) => h.value)]);
+  }
+  const held = new Map();
+  for (const rid of idsOf(w, 'IFCRELCONTAINEDINSPATIALSTRUCTURE')) {
+    const r = lineOf(w, rid);
+    const parent = r.RelatingStructure && r.RelatingStructure.value;
+    if (parent === undefined) continue;
+    held.set(parent, [...(held.get(parent) || []), ...(r.RelatedElements || []).map((h) => h.value)]);
+  }
+  const seen = new Set();
+  const node = (id) => {
+    seen.add(id);
+    const l = lineOf(w, id);
+    const n = { id, cls: clsOf(w, id), name: sv(l.Name), guid: sv(l.GlobalId), children: (kids.get(id) || []).filter((c) => !seen.has(c)).map(node) };
+    const els = held.get(id);
+    if (els) {
+      n.elementCount = els.length;
+      n.elements = els.slice(0, MAX_ELEMENTS).map((e) => { const x = lineOf(w, e); return { id: e, cls: clsOf(w, e), name: sv(x.Name), guid: sv(x.GlobalId) }; });
+    }
+    return n;
+  };
+  return idsOf(w, 'IFCPROJECT').map(node);
+}
+
+/** The schema, the project and the FILE_NAME header: what the IFC metadata window shows. */
+export function metaOf(w) {
+  const info = { schema: null, project: { name: null, longName: null, phase: null }, header: { timestamp: null, author: null, application: null }, elements: 0, storeys: idsOf(w, 'IFCBUILDINGSTOREY').length };
+  try { info.schema = String(w.api.GetModelSchema(w.mid)); } catch (e) { /* unknown */ }
+  const proj = idsOf(w, 'IFCPROJECT')[0];
+  if (proj !== undefined) { const p = lineOf(w, proj); info.project = { name: sv(p.Name), longName: sv(p.LongName), phase: sv(p.Phase) }; }
+  try {
+    const h = w.api.GetHeaderLine(w.mid, w.W.FILE_NAME);
+    const a = h && h.arguments;
+    if (a) {
+      const flat = (v) => (Array.isArray(v) ? v.map(sv).filter(Boolean).join(', ') || null : sv(v));
+      info.header = { timestamp: sv(a[1]), author: flat(a[2]), application: [sv(a[4]), sv(a[5])].filter(Boolean).join(', ') || null };
+    }
+  } catch (e) { /* the header is optional */ }
+  for (const rid of idsOf(w, 'IFCRELCONTAINEDINSPATIALSTRUCTURE')) info.elements += (lineOf(w, rid).RelatedElements || []).length;
+  return info;
 }
 
 export function activate(api) {
@@ -150,6 +237,27 @@ export function activate(api) {
   };
   api.onDeactivate?.(() => { clearDots(); detach?.(); });
 
+  // ---- the camera, posted while the host watches it (a linked second view follows); a move the host made is not echoed ----
+  let watching = null;   // { v, fn }
+  let quietUntil = 0;
+  const watchCamera = (on) => {
+    if (watching) { watching.v.controls?.removeEventListener?.('change', watching.fn); watching = null; }
+    if (!on) return;
+    const v = viewerOf();
+    if (!v) throw new Error('no 3D view yet');
+    let t = 0;
+    const fn = () => {
+      const now = Date.now();
+      if (now < quietUntil || now - t < 120) return;
+      t = now;
+      const camera = cameraOf(v);
+      if (camera) post('camera', { camera });
+    };
+    v.controls?.addEventListener?.('change', fn);
+    watching = { v, fn };
+  };
+  api.onDeactivate?.(() => watchCamera(false));
+
   let last = '';
   const poll = async () => {
     try {
@@ -207,6 +315,7 @@ export function activate(api) {
         const v = viewerOf();
         if (!v) throw new Error('no 3D view yet');
         if (m.camera) {
+          quietUntil = Date.now() + 250;
           if (!flyCamera(v, m.camera)) throw new Error('the pin has no usable camera');
         } else if (m.guid) {
           const key = keyOfGuid(m.guid);
@@ -219,6 +328,22 @@ export function activate(api) {
         let vp = null;
         try { vp = viewpointOf(globalThis.bimcraftIssues?.capture?.()); } catch (e) { vp = null; }
         post('captured', { items: await describe(api.model.selection()), camera: cameraOf(v), viewpoint: vp });
+      } else if (m.type === 'props') {
+        if (!api.model.current()) throw new Error('no model is open');
+        let id = Number.isInteger(m.id) && m.id > 0 ? m.id : null;
+        if (id === null && typeof m.guid === 'string' && m.guid) id = api.model.read((w) => w.byGuid(m.guid));
+        if (id === null && !(typeof m.guid === 'string' && m.guid) && !Number.isInteger(m.id)) throw new Error('props: an id or a guid is needed');
+        const p = id === null || id === undefined ? null : await api.model.properties(id);
+        if (!p) throw new Error('the element is not in this model');
+        post('properties', { item: slimProps(p) });
+      } else if (m.type === 'tree') {
+        if (!api.model.current()) throw new Error('no model is open');
+        post('tree', { nodes: api.model.read((w) => treeOf(w)) });
+      } else if (m.type === 'meta') {
+        if (!api.model.current()) throw new Error('no model is open');
+        post('meta', { info: api.model.read((w) => metaOf(w)) });
+      } else if (m.type === 'watch') {
+        watchCamera(m.on === true);
       } else if (m.type === 'sketch') {
         const sel = api.model.selection();
         post('sketch', { items: await describe(sel), note: String(m.note || '') });

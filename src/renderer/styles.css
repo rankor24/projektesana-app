@@ -408,3 +408,22 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .run-undo { padding: 4px 10px; border-top: 1px solid var(--border); }
 .undo-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .undo-row.done { opacity: 0.55; }
+
+.viewer { min-width: 0; }
+.viewer-top { display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
+.viewer-panes { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+.viewer-panes.row { flex-direction: row; }
+.viewer-panes.col { flex-direction: column; }
+.viewer-pane { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; border: 1px solid transparent; }
+.viewer-panes.row .viewer-pane + .viewer-pane { border-left: 1px solid var(--border); }
+.viewer-panes.col .viewer-pane + .viewer-pane { border-top: 1px solid var(--border); }
+.viewer-pane.focused { border-color: var(--focus); }
+.viewer-tabs { display: flex; gap: 1px; min-height: 28px; background: var(--elev); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.viewer-tab { display: flex; align-items: center; gap: 4px; padding: 0 8px; cursor: pointer; color: var(--dim); white-space: nowrap; border-bottom: 2px solid transparent; max-width: 260px; }
+.viewer-tab span { overflow: hidden; text-overflow: ellipsis; }
+.viewer-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.viewer-tab .x { padding: 0 4px; background: transparent; border-color: transparent; }
+.viewer-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.tree-row { display: flex; align-items: center; gap: 4px; padding: 1px 4px; white-space: nowrap; }
+.tree-row.click { cursor: pointer; }
+.tree-row.click:hover { background: var(--elev); }

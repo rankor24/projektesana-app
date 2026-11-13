@@ -7,7 +7,8 @@ import { AgentDock } from "./shell/AgentDock";
 import { Rail } from "./shell/Rail";
 import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
-import { Preview } from "./shell/Preview";
+import { Viewer } from "./shell/Preview";
+import { ViewerPanel } from "./preview/ViewerPanels";
 import { TopBar } from "./shell/TopBar";
 import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
@@ -34,6 +35,7 @@ import { CHAT } from "../shared/layout";
 function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === CHAT) return <AgentDock />;
 	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
+	if (id.startsWith("viewer.")) return <ViewerPanel id={id} />;
 	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
 }
 
@@ -108,7 +110,7 @@ export function App() {
 									<Panel id={fullPage as PanelId} filter={canvasFilter} />
 								</div>
 							)}
-							{(!fullPage || preview) && <Preview />}
+							{(!fullPage || preview) && <Viewer />}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

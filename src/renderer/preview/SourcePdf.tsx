@@ -1,22 +1,27 @@
 // A project source in the PDF view, with its overlays: the plan geometry read from a vector inventory (3.4) and the user's
 // pins (6.4, 8.2). The overlay draws in page fractions, so it stays on the plan at any zoom. Pins are made with the note
 // field in the toolbar (Electron has no window.prompt): write the note, press Piezīme, click the page.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Pin } from "../../core/model";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
+import { viewer } from "../viewer-store";
 import { PdfView } from "./PdfView";
 import { PinPanel, useFilePins } from "./Annotate";
 
 type Geo = Awaited<ReturnType<typeof call<"rooms.geometry">>>;
 
-export function SourcePdf({ projectId, sourceId, title, page }: { projectId: string; sourceId: string; title: string; page?: number }) {
+export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, focused = true }: { projectId: string; sourceId: string; title: string; page?: number; paneIndex?: number; focused?: boolean }) {
 	const [geo, setGeo] = useState<Geo | null>(null);
 	const [geoOn, setGeoOn] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [note, setNote] = useState("");
 	const [active, setActive] = useState<string | null>(null);
 	const [jump, setJump] = useState<number | undefined>(page);
+	// a linked split turns this page when the other one turns
+	useEffect(() => {
+		if (page) setJump(page);
+	}, [page]);
 	const belongs = useCallback((p: Pin) => "sourceId" in p.target && p.target.sourceId === sourceId, [sourceId]);
 	const pins = useFilePins(projectId, belongs);
 	const toggleGeo = async () => {
@@ -46,7 +51,10 @@ export function SourcePdf({ projectId, sourceId, title, page }: { projectId: str
 						sourceId={sourceId}
 						title={title}
 						initialPage={jump}
-						onPage={(pg) => ui.setView({ page: pg })}
+						onPage={(pg) => {
+							if (focused) ui.setView({ page: pg });
+							viewer.pageChanged(paneIndex, sourceId, pg);
+						}}
 						sketchNote={note}
 						onSketchSent={() => setNote("")}
 						toolbar={

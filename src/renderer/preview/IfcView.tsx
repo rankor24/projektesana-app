@@ -6,10 +6,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Pin, PinTarget } from "../../core/model";
 import { elementFocus, isBimcraftMessage, sketchFocus, type BimcraftItem, type HostToBimcraft, type PinMarker } from "../../shared/bimcraft-protocol";
+import { followerOf } from "../../shared/viewer";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { Badge } from "../ui";
-import { PinPanel, useFilePins } from "./Annotate";
+import { cameraBus, viewer, viewerInfo, useViewer } from "../viewer-store";
+import { useFilePins } from "./Annotate";
 
 type Cmd = Exclude<HostToBimcraft, { type: "open" }>;
 const listeners = new Set<(c: Cmd) => void>();
@@ -18,7 +20,12 @@ export const bimcraft = { send: (c: Cmd) => listeners.forEach((l) => l(c)) };
 
 type Captured = Extract<import("../../shared/bimcraft-protocol").BimcraftToHost, { type: "captured" }>;
 
-export function IfcView({ projectId, load, name, compareWith }: { projectId: string; load: () => Promise<Uint8Array>; name: string; compareWith?: { name: string; load: () => Promise<Uint8Array> } }) {
+export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, focused = true }: { projectId: string; load: () => Promise<Uint8Array>; name: string; compareWith?: { name: string; load: () => Promise<Uint8Array> }; paneIndex?: number; focused?: boolean }) {
+	// only the focused pane answers the chat, the toolbar and the side panels; both panes feed a linked camera
+	const focusedRef = useRef(focused);
+	focusedRef.current = focused;
+	const vs = useViewer();
+	const camLinked = vs.panes.length === 2 && vs.linkedCamera;
 	const [cmp, setCmp] = useState<{ added: number; removed: number; changed: number; same: number } | null>(null);
 	const frame = useRef<HTMLIFrameElement>(null);
 	const [state, setState] = useState<"loading" | "ready" | "open" | "error">("loading");
@@ -36,6 +43,36 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 	markersRef.current = markers;
 
 	const post = (m: HostToBimcraft) => frame.current?.contentWindow?.postMessage(m, "*");
+	/** The side panels read the focused model: its tree and metadata now, the element's properties as it is selected. */
+	const publishInfo = () => {
+		viewerInfo.reset(name);
+		post({ pj: 1, type: "tree" });
+		post({ pj: 1, type: "meta" });
+		const first = ui.get().view.selection[0];
+		if (first?.guid) post({ pj: 1, type: "props", guid: first.guid });
+	};
+	// the pane that is focused again tells the panels about its model
+	useEffect(() => {
+		if (focused && state === "open" && !compareWith) publishInfo();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [focused, state]);
+	// a linked split: this view posts its camera and the other one follows it
+	useEffect(() => {
+		if (state !== "open" || compareWith) return;
+		post({ pj: 1, type: "watch", on: camLinked });
+		return () => post({ pj: 1, type: "watch", on: false });
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [camLinked, state]);
+	useEffect(
+		() => {
+			const off = cameraBus.on((from, camera) => {
+				if (followerOf(viewer.get(), from, "camera") === paneIndex) post({ pj: 1, type: "fly", camera });
+			});
+			return () => void off();
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[paneIndex],
+	);
 
 	useEffect(() => {
 		const onMsg = (e: MessageEvent) => {
@@ -49,6 +86,7 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 					.catch((err) => (setState("error"), setMsg(errText(err))));
 			} else if (m.type === "opened") {
 				setState("open");
+				if (focusedRef.current && !compareWith) publishInfo();
 				if (!compareWith) post({ pj: 1, type: "markers", markers: markersRef.current });
 				// elements a traced sheet change named: selected as soon as the model is open
 				const want = ui.get().highlight;
@@ -58,8 +96,20 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 				}
 			} else if (m.type === "selection") {
 				setSel(m.items);
-				ui.setView({ selection: m.items.map((i) => ({ guid: i.guid, cls: i.cls, name: i.name })) });
+				if (focusedRef.current) {
+					ui.setView({ selection: m.items.map((i) => ({ guid: i.guid, cls: i.cls, name: i.name })) });
+					if (m.items[0]) post({ pj: 1, type: "props", id: m.items[0].id });
+					else viewerInfo.set({ props: null });
+				}
 				for (const it of m.items.slice(0, 10)) ui.focusAdd(elementFocus(it, name));
+			} else if (m.type === "properties") {
+				if (focusedRef.current) viewerInfo.set({ props: m.item, error: null });
+			} else if (m.type === "tree") {
+				if (focusedRef.current) viewerInfo.set({ tree: m.nodes });
+			} else if (m.type === "meta") {
+				if (focusedRef.current) viewerInfo.set({ meta: m.info });
+			} else if (m.type === "camera") {
+				cameraBus.emit(paneIndex, m.camera);
 			} else if (m.type === "compared") {
 				setState("open");
 				setCmp(m);
@@ -75,10 +125,13 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 				if (p) ui.focusAdd({ kind: "pin", id: p.id, label: p.text.slice(0, 50), data: { state: p.state, target: p.target } });
 			} else if (m.type === "markers") {
 				if (m.drawn < m.asked) setMsg(`${m.asked - m.drawn} piezīmju elementu šajā modelī nav (cita versija?)`);
-			} else if (m.type === "error") setMsg(m.message);
+			} else if (m.type === "error") {
+				setMsg(m.message);
+				if (focusedRef.current) viewerInfo.set({ error: m.message });
+			}
 		};
 		window.addEventListener("message", onMsg);
-		const l = (c: Cmd) => post(c);
+		const l = (c: Cmd) => focusedRef.current && post(c);
 		listeners.add(l);
 		return () => {
 			window.removeEventListener("message", onMsg);
@@ -143,23 +196,6 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 			{msg && <div className="dim small" style={{ padding: "2px 10px" }}>{msg}</div>}
 			<div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 				<iframe ref={frame} title="BimCraft" src="bimcraft://app/" style={{ flex: 1, minWidth: 0, border: "none", background: "#fff" }} />
-				{!compareWith && (
-					<PinPanel
-						projectId={projectId}
-						items={pins.items}
-						activeId={active}
-						onSelect={select}
-						onChanged={pins.reload}
-						onError={setMsg}
-						footer={
-							<div className="pin-foot">
-								<button className="small" disabled={pins.items.length === 0} title="Piezīmes uz elementiem kā BCF fails (Solibri, Navisworks, BimCraft)" onClick={exportBcf}>
-									Piezīmes → BCF
-								</button>
-							</div>
-						}
-					/>
-				)}
 			</div>
 		</div>
 	);

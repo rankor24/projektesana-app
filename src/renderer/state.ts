@@ -69,10 +69,21 @@ function set(patch: Partial<UiState>) {
 
 export const ui = {
 	get: () => state,
-	setProject: (projectId: string | null) => set({ projectId, preview: null, focus: [], view: NO_VIEW }),
+	setProject: (projectId: string | null) => {
+		showHook?.(null);
+		set({ projectId, preview: null, focus: [], view: NO_VIEW });
+	},
+	/** Opens a file in the viewer (a tab; the same file again brings its tab forward). The viewer mirrors it back as `preview`. */
 	show: (preview: PreviewTarget) => {
 		remember(state.projectId, preview);
-		set({ preview });
+		if (showHook) showHook(preview);
+		else set({ preview });
+	},
+	/** The viewer's active tab became this (shell/viewer-store.ts); no tab → null. */
+	mirrorPreview: (preview: PreviewTarget) => set({ preview }),
+	/** The viewer registers how a file is opened (so state.ts does not import the viewer). */
+	onShow: (fn: ((p: PreviewTarget) => void) | null) => {
+		showHook = fn;
 	},
 	recent: (projectId: string | null): RecentTarget[] => (projectId ? readRecent()[projectId] ?? [] : []),
 	draft: (text: string | null) => set({ draft: text }),
@@ -99,6 +110,7 @@ export const ui = {
 		}),
 };
 const viewWaiters: (() => void)[] = [];
+let showHook: ((p: PreviewTarget) => void) | null = null;
 export type { PinCamera };
 
 const subscribe = (l: () => void) => {
