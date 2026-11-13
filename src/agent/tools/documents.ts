@@ -62,7 +62,7 @@ export const documentTools: ToolDef[] = [
 		name: "docx_apply",
 		level: "run",
 		description:
-			"Edit a .docx through Word keeping its formatting, as one all-or-nothing batch (a failed op saves nothing and is named). Ops: replace, insert_after, append_text, set_cell, add_row, delete_row, delete_paragraph; indexes from docx_outline. Result goes to the delivery's staging: out = new name, or omit out to edit the staged file itself (a copy is kept for undo). A sourceId is never changed (out required). dryRun checks and saves nothing. Needs Word.",
+			"Edit a .docx through Word, formatting kept, all-or-nothing (a failed op saves nothing). Ops: replace, insert_after, append_text, set_cell, add_row, delete_row, delete_paragraph; indexes from docx_outline. Result goes to the delivery's staging: out = new name; no out = edit the staged file (copy kept for undo); a sourceId needs out. dryRun saves nothing. Needs Word.",
 		input: {
 			staged: z.string().optional().describe("a file in the delivery's staging folder"),
 			sourceId: z.string().optional().describe("a source of the project (copied, never changed)"),

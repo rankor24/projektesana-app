@@ -7,6 +7,8 @@ import { fmtTokens, usageText } from "../../shared/tokens";
 import type { UndoRow } from "../../core/undo-types";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
+import { runViewerAction } from "../run-ui";
+import { viewerChips } from "../../shared/ui-instruction";
 import { useLoad } from "../ui";
 
 const ICON: Record<ActKind | "thinking" | "note" | "confirm" | "error", string> = {
@@ -221,6 +223,7 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				</details>
 			)}
 			{summary && <Chips s={summary} />}
+			<ViewerChips lines={lines} />
 			<div
 				className="run-steps"
 				ref={box}
@@ -239,5 +242,22 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				{changed ? `${running ? "Līdz šim: " : "Izmaiņas: "}${changed}` : running ? "Projektā vēl nekas nav mainīts" : "Projektā nekas netika mainīts"}
 			</div>
 		</details>
+	);
+}
+
+/** What the agent did to the viewer in this run, as chips: press one to do it again ("↪ #1 · Izolēt 3 elementus"). */
+function ViewerChips({ lines }: { lines: Activity[] }) {
+	const chips = viewerChips(lines);
+	const [err, setErr] = useState<string | null>(null);
+	if (!chips.length) return null;
+	return (
+		<div className="run-chips">
+			{chips.map((c) => (
+				<button key={c.n} className="chip" title="Atkārtot šo darbību skatā (modelis netiek mainīts)" onClick={() => runViewerAction(c.action).then((p) => setErr(p))}>
+					↪ #{c.n} · {c.label}
+				</button>
+			))}
+			{err && <span className="err small">{err}</span>}
+		</div>
 	);
 }

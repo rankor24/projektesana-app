@@ -15,6 +15,8 @@
  *                    tree                       answer with the spatial structure: project, site, building, storeys, their elements
  *                    meta                       answer with the model's schema, project and the file header
  *                    watch { on }               post the camera whenever the user moves it (a linked second view follows)
+ *                    isolate { guids, ghost }   show only these elements (the viewer's own visibility); no guids = show all
+ *                    colour { property, guids } paint by a property / attribute value (the viewer's own colouring), with a legend
  *   BimCraft → app   ready { api }              the bridge is active
  *                    opened { name }            a model is open
  *                    selection { items }        what the user selected: [{ id, guid, cls, name }] (≤ 50)
@@ -24,6 +26,8 @@
  *                    tree { nodes }             answer to tree
  *                    meta { info }              answer to meta
  *                    camera { camera }          the camera moved (only while watched)
+ *                    viewed { action, found, asked }   isolate / show all / colour cleared
+ *                    coloured { property, legend, total, painted, partial }   the painting, one legend row per value
  *                    marker { id }              the user clicked a pin's dot
  *                    markers { drawn, asked }   how many pins found their element
  *                    error { message }
@@ -152,6 +156,30 @@ export function metaOf(w) {
   return info;
 }
 
+// ---- what the agent asks of the view (9.5): BimCraft's own visibility and colouring, nothing written to the model ----
+
+export const COLOUR_PALETTE = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
+export const NO_VALUE_COLOUR = '#c8c8c8';
+const MAX_COLOURED = 3000;
+const ATTRS = { cls: 'cls', klase: 'cls', class: 'cls', name: 'name', nosaukums: 'name', objecttype: 'objectType', typename: 'typeName', tag: 'tag', description: 'description' };
+
+/** The value of a property for one element: an attribute by name, or a property-set row ("Pset.Name" or just "Name"). */
+export function valueOfProperty(p, property) {
+  const want = String(property).trim().toLowerCase();
+  const attr = ATTRS[want];
+  if (attr) return p[attr] === null || p[attr] === undefined || p[attr] === '' ? null : String(p[attr]);
+  const dot = want.indexOf('.');
+  const setWant = dot > 0 ? want.slice(0, dot) : null;
+  const rowWant = dot > 0 ? want.slice(dot + 1) : want;
+  for (const s of p.sets || []) {
+    if (setWant && String(s.name).toLowerCase() !== setWant) continue;
+    for (const r of s.rows || []) {
+      if (String(r.name).toLowerCase() === rowWant && r.value !== null && r.value !== undefined && String(r.value) !== '') return String(r.value);
+    }
+  }
+  return null;
+}
+
 export function activate(api) {
   const port = globalThis.__pjPort || defaultPort();
   if (!port) return;   // BimCraft on its own: the bridge has nobody to talk to
@@ -258,6 +286,54 @@ export function activate(api) {
   };
   api.onDeactivate?.(() => watchCamera(false));
 
+  // ---- visibility and colour: the viewer's own (vis.isolate / showAll, setColors), as the Show menu and Color by use them ----
+  const keysOf = (guids) => api.model.read((w) => (guids || []).map((g) => w.byGuid(String(g))).filter((x) => x !== null && x !== undefined));
+  const showAll = (v) => { v.vis.showAll(); v.applyVisibility?.(); };
+  const isolate = (m) => {
+    const v = viewerOf();
+    if (!v || !v.vis) throw new Error('no 3D view yet');
+    const asked = Array.isArray(m.guids) ? m.guids.length : 0;
+    if (asked === 0) { showAll(v); post('viewed', { action: 'show_all', found: 0, asked: 0 }); return; }
+    const keys = keysOf(m.guids);
+    if (keys.length === 0) throw new Error('none of the elements is in this model');
+    v.vis.isolate(keys, { ghost: m.ghost === true });
+    v.applyVisibility?.();
+    post('viewed', { action: 'isolate', found: keys.length, asked });
+  };
+  const colour = async (m) => {
+    const v = viewerOf();
+    if (!v || typeof v.setColors !== 'function') throw new Error('no 3D view yet');
+    const property = String(m.property || '').trim();
+    if (!property) { v.setColors(null); post('viewed', { action: 'uncolour', found: 0, asked: 0 }); return; }
+    // the elements: the asked ones, else everything the spatial structure holds
+    const ids = Array.isArray(m.guids) && m.guids.length ? keysOf(m.guids) : api.model.read((w) => treeOf(w).flatMap(function all(n) { return [...(n.elements || []).map((e) => e.id), ...n.children.flatMap(all)]; }));
+    const partial = ids.length > MAX_COLOURED;
+    const groups = new Map();   // value → keys
+    for (const id of ids.slice(0, MAX_COLOURED)) {
+      const p = await api.model.properties(id);
+      if (!p) continue;
+      const value = valueOfProperty(p, property);
+      const k = value === null ? '' : value;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(id);
+    }
+    const order = [...groups.entries()].filter(([k]) => k !== '').sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    const map = new Map();
+    const legend = [];
+    order.forEach(([value, keys], i) => {
+      const color = COLOUR_PALETTE[i % COLOUR_PALETTE.length];
+      for (const k of keys) map.set(k, color);
+      legend.push({ value, color, count: keys.length });
+    });
+    const none = groups.get('') || [];
+    if (none.length) {
+      for (const k of none) map.set(k, NO_VALUE_COLOUR);
+      legend.push({ value: '', color: NO_VALUE_COLOUR, count: none.length });
+    }
+    v.setColors(map.size ? map : null);
+    post('coloured', { property, legend, total: Math.min(ids.length, MAX_COLOURED), painted: map.size, partial });
+  };
+
   let last = '';
   const poll = async () => {
     try {
@@ -344,6 +420,12 @@ export function activate(api) {
         post('meta', { info: api.model.read((w) => metaOf(w)) });
       } else if (m.type === 'watch') {
         watchCamera(m.on === true);
+      } else if (m.type === 'isolate') {
+        if (!api.model.current()) throw new Error('no model is open');
+        isolate(m);
+      } else if (m.type === 'colour') {
+        if (!api.model.current()) throw new Error('no model is open');
+        await colour(m);
       } else if (m.type === 'sketch') {
         const sel = api.model.selection();
         post('sketch', { items: await describe(sel), note: String(m.note || '') });

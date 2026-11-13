@@ -21,6 +21,10 @@ export type HostToBimcraft =
 	| { pj: 1; type: "meta" }
 	/** post the camera whenever the user moves it: the second view of a linked split follows */
 	| { pj: 1; type: "watch"; on: boolean }
+	/** show only these elements (ghost: the rest dimmed); no guids = show everything (the agent's viewer_isolate) */
+	| { pj: 1; type: "isolate"; guids: string[]; ghost?: boolean }
+	/** paint the elements by the value of a property or attribute, with a legend; no property clears (viewer_colour) */
+	| { pj: 1; type: "colour"; property: string; guids?: string[] }
 	| { pj: 1; type: "compare"; a: { name: string; bytes: Uint8Array }; b: { name: string; bytes: Uint8Array } };
 
 /** A pin drawn in 3D: a numbered dot at the element it is placed on. */
@@ -89,12 +93,16 @@ export type BimcraftToHost =
 	| { pj: 1; type: "meta"; info: IfcMeta }
 	/** the camera moved (only while the host watches it) */
 	| { pj: 1; type: "camera"; camera: PinCamera }
+	/** isolate / show all done: how many of the asked elements were in the model */
+	| { pj: 1; type: "viewed"; action: "isolate" | "show_all" | "uncolour"; found: number; asked: number }
+	/** the model painted by a property: one row per value, with its colour and how many elements */
+	| { pj: 1; type: "coloured"; property: string; legend: { value: string; color: string; count: number }[]; total: number; painted: number; partial: boolean }
 	/** how many of the asked markers found their element */
 	| { pj: 1; type: "markers"; drawn: number; asked: number }
 	| { pj: 1; type: "compared"; added: number; removed: number; changed: number; same: number; changes: { guid: string; props: string[]; moved: number; reshaped: boolean }[] }
 	| { pj: 1; type: "error"; message: string };
 
-const TO_HOST = ["ready", "opened", "selection", "highlighted", "sketch", "captured", "marker", "markers", "compared", "properties", "tree", "meta", "camera", "error"];
+const TO_HOST = ["ready", "opened", "selection", "highlighted", "sketch", "captured", "marker", "markers", "compared", "properties", "tree", "meta", "camera", "viewed", "coloured", "error"];
 
 export function isBimcraftMessage(x: unknown): x is BimcraftToHost {
 	const m = x as { pj?: unknown; type?: unknown };
@@ -118,6 +126,8 @@ export function checkHostMessage(m: HostToBimcraft): string | null {
 		const guidOk = typeof m.guid === "string" && m.guid.length > 0;
 		return idOk || guidOk ? null : "props needs an element id or a GlobalId";
 	}
+	if (m.type === "isolate") return Array.isArray(m.guids) && m.guids.length <= 500 && m.guids.every((g) => typeof g === "string" && g) ? null : "isolate needs a list of up to 500 GlobalIds";
+	if (m.type === "colour") return typeof m.property === "string" && m.property.length <= 80 && (m.guids === undefined || (Array.isArray(m.guids) && m.guids.length > 0 && m.guids.length <= 500)) ? null : "colour needs a property name (up to 80 characters) and, if given, 1 to 500 GlobalIds";
 	if (m.type === "watch") return typeof m.on === "boolean" ? null : "watch needs on: true or false";
 	return null;
 }

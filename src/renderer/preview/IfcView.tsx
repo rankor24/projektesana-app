@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Markup, Pin, PinTarget } from "../../core/model";
 import { MarkupDraw, MarkupShapes, MarkupTools } from "./Markup";
-import { elementFocus, isBimcraftMessage, sketchFocus, type BimcraftItem, type HostToBimcraft, type PinMarker } from "../../shared/bimcraft-protocol";
+import { elementFocus, isBimcraftMessage, sketchFocus, type BimcraftItem, type BimcraftToHost, type HostToBimcraft, type PinMarker } from "../../shared/bimcraft-protocol";
 import { followerOf } from "../../shared/viewer";
 import { pinFocus } from "../../shared/pins-view";
 import { call, errText } from "../bridge";
@@ -39,6 +39,8 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 	// marks drawn over the view, kept with the next pin and the camera it was drawn from
 	const [shape, setShape] = useState<Markup["shape"] | null>(null);
 	const [marks, setMarks] = useState<Markup[]>([]);
+	// the legend of a colouring the agent (or the user) asked for
+	const [legend, setLegend] = useState<Extract<BimcraftToHost, { type: "coloured" }> | null>(null);
 
 	// pins on elements of THIS model; one the agent made without naming a model shows wherever its element is found
 	const belongs = useCallback((p: Pin) => "elementGuid" in p.target && (p.target.model === undefined || p.target.model === name), [name]);
@@ -113,6 +115,12 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 				if (focusedRef.current) viewerInfo.set({ tree: m.nodes });
 			} else if (m.type === "meta") {
 				if (focusedRef.current) viewerInfo.set({ meta: m.info });
+			} else if (m.type === "viewed") {
+				setMsg(m.action === "isolate" ? `izolēti ${m.found} no ${m.asked}` : m.action === "show_all" ? "rādīts viss modelis" : "krāsas noņemtas");
+				if (m.action === "uncolour") setLegend(null);
+			} else if (m.type === "coloured") {
+				setLegend(m);
+				setMsg(`krāsots pēc ${m.property}: ${m.painted} no ${m.total}${m.partial ? " (tikai sākums)" : ""}`);
 			} else if (m.type === "camera") {
 				cameraBus.emit(paneIndex, m.camera);
 			} else if (m.type === "compared") {
@@ -203,6 +211,20 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 			<div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 				<div style={{ position: "relative", display: "flex", flex: 1, minWidth: 0 }}>
 					<iframe ref={frame} title="BimCraft" src="bimcraft://app/" style={{ flex: 1, minWidth: 0, border: "none", background: "#fff" }} />
+					{legend && (
+						<div className="legend">
+							<div className="row">
+								<b className="small">{legend.property}</b>
+								<span className="grow" />
+								<button className="x" title="Noņemt krāsas" onClick={() => post({ pj: 1, type: "colour", property: "" })}>×</button>
+							</div>
+							{legend.legend.map((l) => (
+								<div key={l.value || "—"} className="legend-row small">
+									<span className="legend-sw" style={{ background: l.color }} /> {l.value || <span className="dim">nav vērtības</span>} <span className="dim">· {l.count}</span>
+								</div>
+							))}
+						</div>
+					)}
 					{!compareWith && <MarkupShapes marks={marks} />}
 					{!compareWith && shape && <MarkupDraw shape={shape} onDone={(m) => setMarks((x) => [...x, m])} />}
 				</div>

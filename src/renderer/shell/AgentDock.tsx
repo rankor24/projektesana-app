@@ -16,16 +16,9 @@ import { call, errText, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { useLoad } from "../ui";
 import { windows, type PanelId } from "../windows";
-import { readUi, type UiInstruction } from "../../shared/ui-instruction";
+import { readUi } from "../../shared/ui-instruction";
+import { runUi } from "../run-ui";
 import { bimcraft } from "../preview/IfcView";
-
-/** Carries out what an agent tool asked the window to do. */
-function runUi(u: UiInstruction | null) {
-	if (!u) return;
-	if (u.open_panel) windows.open(u.open_panel.name as PanelId, u.open_panel.filter);
-	if (u.show_source) ui.show({ kind: "source", sourceId: u.show_source.sourceId, page: u.show_source.page });
-	if (u.highlight) bimcraft.send({ pj: 1, type: "highlight", guids: u.highlight.guids });
-}
 
 type Line =
 	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
