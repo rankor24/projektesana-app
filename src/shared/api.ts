@@ -1,7 +1,8 @@
 // The IPC contract: every method the renderer may call and every event main may send, with their types.
 // main/api.ts must implement exactly API_NAMES (checked by test/0.4-ipc.test.ts); the preload exposes one invoke and one on.
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
-import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
+import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
+import type { GrafikItem } from "./calendar.js";
 import type { ProjectSummary } from "../core/summary-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
@@ -430,6 +431,13 @@ export interface ApiSpec {
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
 	"bimcraft.status": () => BimcraftStatusRow;
+	/** the project's tasks (not the agent's task templates, which are tasks.list) */
+	"todos.list": (id: string) => Task[];
+	"todos.add": (id: string, input: { title: string; due?: string | null; refs?: Task["refs"]; note?: string }) => Task;
+	"todos.update": (id: string, taskId: string, patch: { title?: string; due?: string | null; note?: string; state?: Task["state"] }) => Task;
+	"todos.remove": (id: string, taskId: string) => void;
+	/** what falls on each day from `from` to `to`: planned and sent deliveries, clock ends, tasks; of one project or of all */
+	"grafiks.items": (scope: "project" | "all", projectId: string | null, from: string, to: string) => GrafikItem[];
 	"files.roots": (id: string) => FileRoot[];
 	"files.list": (id: string, root: FileRoot["key"], rel: string) => FileList;
 	"files.search": (id: string, root: FileRoot["key"], q: string) => FileList;
@@ -550,6 +558,11 @@ export const API_NAMES = [
 	"sheets.diff",
 	"models.diff",
 	"bimcraft.status",
+	"todos.list",
+	"todos.add",
+	"todos.update",
+	"todos.remove",
+	"grafiks.items",
 	"files.roots",
 	"files.list",
 	"files.search",

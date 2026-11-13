@@ -15,6 +15,8 @@ import { Iestatijumi } from "./panels/Iestatijumi";
 import { Projekts } from "./panels/Projekts";
 import { Avoti } from "./panels/Avoti";
 import { Faili } from "./panels/Faili";
+import { Grafiks } from "./panels/Grafiks";
+import { CommandPalette } from "./shell/CommandPalette";
 import { Telpas } from "./panels/Telpas";
 import { Prasibas } from "./panels/Prasibas";
 import { Atmina } from "./panels/Atmina";
@@ -26,6 +28,7 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
 	if (id === "projekts") return <Projekts />;
 	if (id === "faili") return <Faili />;
+	if (id === "grafiks") return <Grafiks />;
 	if (id === "avoti") return <Avoti filter={filter} />;
 	if (id === "telpas") return <Telpas />;
 	if (id === "prasibas") return <Prasibas filter={filter} />;
@@ -81,6 +84,7 @@ export function App() {
 			<StatusStrip />
 			<PanelBar />
 			<WindowLayer render={(id, filter) => <Panel id={id} filter={filter} />} />
+			<CommandPalette />
 		</div>
 	);
 }

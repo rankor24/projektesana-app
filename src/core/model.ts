@@ -294,6 +294,21 @@ export interface Event {
 }
 
 /** The JSON collections of a project's data folder. */
+/** A thing the user or the agent wants done in a project (task 8.5). The agent only proposes one; the user accepts it (open),
+ *  finishes it (done) or drops it. It may point at the finding, pin or delivery it came from. */
+export interface Task {
+	id: string;
+	title: string;
+	/** ISO date or null */
+	due: string | null;
+	state: "proposed" | "open" | "done";
+	refs: { findingId?: string; pinId?: string; deliveryId?: string };
+	note?: string;
+	by: Who;
+	at: string;
+	doneAt?: string;
+}
+
 export interface Collections {
 	sources: Source[];
 	facts: Fact[];
@@ -302,10 +317,11 @@ export interface Collections {
 	deliveries: Delivery[];
 	pins: Pin[];
 	revisions: Revision[];
+	tasks: Task[];
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTIONS: CollectionName[] = ["sources", "facts", "requirements", "findings", "deliveries", "pins", "revisions"];
+export const COLLECTIONS: CollectionName[] = ["sources", "facts", "requirements", "findings", "deliveries", "pins", "revisions", "tasks"];
 
 /** BD code from an office folder name: "BD427-2026_Pilseta_Iela 9" → "BD427"; a prefix such as "AU_" (autoruzraudzība)
  *  before the code is allowed. */

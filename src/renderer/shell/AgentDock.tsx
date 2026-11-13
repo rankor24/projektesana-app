@@ -60,6 +60,14 @@ export function AgentDock() {
 
 	// the text is measured a moment after typing stops, not on every key
 	const [typed, setTyped] = useState("");
+	// a task template chosen in the command palette lands in the message box, ready to send or edit
+	const { draft } = useUi();
+	useEffect(() => {
+		if (draft === null) return;
+		setText(draft);
+		ui.draft(null);
+		inputRef.current?.focus();
+	}, [draft]);
 	useEffect(() => {
 		const t = setTimeout(() => setTyped(text), 400);
 		return () => clearTimeout(t);

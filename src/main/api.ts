@@ -12,6 +12,7 @@ import { deliveryHandlers } from "./handlers/deliveries.js";
 import { compareHandlers } from "./handlers/compare.js";
 import { libraryHandlers, type LibraryDeps } from "./handlers/library.js";
 import { fileHandlers } from "./handlers/files.js";
+import { todoHandlers } from "./handlers/todos.js";
 import type { RevitClient } from "../revit/client.js";
 
 export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string } & Pick<LibraryDeps, "fetchPage">;
@@ -20,5 +21,5 @@ export function createHandlers(d: AppDeps): Handlers {
 	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);
 	const userName = () => d.settings.get().userName.trim() || undefined;
 	const e = { ...d, afterChange, userName };
-	return { ...coreHandlers(d), ...projectHandlers(e), ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d) };
+	return { ...coreHandlers(d), ...projectHandlers(e), ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d) };
 }

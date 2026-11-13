@@ -1,7 +1,7 @@
 // Bottom bar: one button per panel; a click opens, focuses or minimises its floating window.
 import { PANEL_TITLE, useWindows, windows, type PanelId } from "../windows";
 
-const BAR: PanelId[] = ["projekts", "faili", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas"];
+const BAR: PanelId[] = ["projekts", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas"];
 
 export function PanelBar() {
 	const s = useWindows();

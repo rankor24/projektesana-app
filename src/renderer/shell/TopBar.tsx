@@ -16,6 +16,7 @@ export function TopBar({ projectLabel, openFindings, openInfo = 0 }: { projectLa
 					{openFindings === null ? "atradumi: no data" : `atradumi: ${openFindings}${openInfo ? ` (+${openInfo} info)` : ""}`}
 				</button>
 			)}
+			<span className="dim small" title="Ātrā meklēšana: paneļi, projekti, avoti, aģenta uzdevumi">Ctrl+K</span>
 			<button className="ghost" onClick={() => windows.open("iestatijumi")}>
 				Iestatījumi
 			</button>
