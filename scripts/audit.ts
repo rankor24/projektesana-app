@@ -111,6 +111,9 @@ for (const line of plan.split("\n")) {
 		continue;
 	}
 	const [, id, build, filesCol, testsCol] = m;
+	// an unescaped | inside a cell shifts the columns: the files of 8.14 were once read from its build text and never checked
+	const borders = line.split(/(?<!\\)\|/).length - 1;
+	if (borders !== 6) problems.push(`${id}: plan row has ${borders - 1} cells, not 5 (escape a | inside a cell as \\|)`);
 	const files = [...filesCol.matchAll(/`([^`]+)`/g)].flatMap((x) => x[1].split(/,\s+(?![^{]*\})/)).flatMap((x) => expand(x.trim())).filter((x) => /^(src|scripts|resources|test|docs)\//.test(x) || /\.(ts|tsx|mjs|ps1)$/.test(x));
 	const fileNotes = files.map((f) => {
 		const full = f.includes("/") ? f : null;
