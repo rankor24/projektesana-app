@@ -69,6 +69,18 @@ const LIVE: Record<string, string> = {
 	"8.13": "Word ran on invented documents only; the agent drafting a paskaidrojuma raksts needs the sign-in",
 	"8.14": "a real atzinums' layout is not verified (invented reviews only); the tab is the user's playtest",
 	"8.15": "lanes against a real model need the sign-in (scripted loops only); the Aģenti page is the user's playtest",
+	"9.0": "dragging, docking and tab drops are pointer work no test makes: the user's playtest (docks Prasības bottom, drops Avoti on it, restarts)",
+	"9.1": "the rail and every page opening from it is the user's playtest",
+	"9.2": "the plan block and the Auto / Manual toggle on screen, and the agent working from the user's edited list, need the sign-in and the user's eyes",
+	"9.3": "split views and the side windows over BimCraft's real WebGL view are the user's playtest (the tests run its engine, not its canvas)",
+	"9.4": "drawing marks over a PDF page and a 3D view, and the agent acting on a comment, need the user's hand and the sign-in",
+	"9.5": "the agent isolating and colouring walls in the live BimCraft view needs the sign-in and the user's eyes",
+	"9.6": "Pārskats on a real project (and its history after two real check runs) is the user's playtest",
+	"9.7": "the quote marked on a real scanned or digital PDF page, and the review walk, are the user's playtest",
+	"9.8": "several real IFC files in BimCraft's WebGL scene: the Models panel was faked (its scene needs a browser); the user's playtest",
+	"9.9": "side by side models with the camera linked, and the sheet compare in the page, are the user's playtest",
+	"9.10": "the tile plan stands in for a floor plan until room boundaries are read; the user decides if that is enough",
+	"9.11": "a second real monitor and the Electron windows are the user's playtest",
 };
 
 /** Done-when lines checked on a real project on the user's PC (read-only, counts only — no project data in the repo). */

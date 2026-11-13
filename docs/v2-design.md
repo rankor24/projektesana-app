@@ -110,6 +110,7 @@ A one-day skice therefore shows one delivery on the timeline, a short requiremen
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **Superseded in part by decisions 15–21 (phase 9, 2026-11-13):** the shell is now a left rail of pages, the chat always on, one viewer that splits, and every panel a window that floats or docks to any of the four sides; the bottom bar and the timeline strip are gone (the stage timeline lives in Pārskats). The descriptions below are the history of how the layout was first drawn.
 - **Top bar: project and timeline.** Project switcher and profile; the BIM stages with their deliveries as dated chips, read from `1.4_Nodevumi`; TN and approval items with their clocks on the same line, because they sit between deliveries. **Mapping (the user, 2026-11-05)**: `1.4.1_SKICE` and `1.4.2_MBP` belong to the BIM stage **Skice** (MBP is approximately the skiču stadija); `1.4.3_BP` spans **Tehniskais** to **Detalizācijas** (BP deliveries, DT deliveries); `Starpnodevums` and custom folders are deliveries inside whichever stage their date falls in; Koncept, Būvniecība and As-Built deliveries have no office folder yet and are entered by hand. Planned dates come from the BIP's schedule (grafiks) or a schedule the user provides; the app does not read the contracts folder. A counter of open findings. The timeline is always there, whatever the stage; past deliveries stay as history, future ones as plan.
 - **Preview (left).** Sheets as PDF, the model as IFC, side by side when needed. Annotation: pins, comments, measure, compare two deliveries or two revisions. A finding from a check shows as a pin on the sheet or element it concerns. Clicking anything puts it in the agent's focus.
 - **Agent (right).** The agent sees the whole project and every panel. **Fokuss** shows what the user has selected: sheets, pins, rooms, requirement rows, documents, a panel. Focused items go first in the prompt. The agent answers with citations or says "dokumentos nav". It extracts, drafts, annotates, and **models in Revit**, which is the main goal. The pattern that keeps that safe is v1's and Konkursu App's: narrow tools, no fact without a quote that code checks, short single-action Revit calls, a working copy, and the user's approval per sheet and per revision.
@@ -162,9 +163,9 @@ Every agent tool has a level: **auto** (runs, result shown), **confirm** (runs a
 
 | Tool group | Default | Examples |
 |---|---|---|
-| Read anything | auto | read a document, a panel's list, the model, the law library |
+| Read anything | auto | read a document, a panel's list, the model, the law library; `update_plan` (the order of work above the chat input: it changes no project data, only the plan the user sees, edits and overrides) |
 | Propose | auto, as proposals | set a fact with a quote, add a requirement row, write an Atmiņa note, propose a justification for a failed check; each is marked "ierosināts" until the user confirms |
-| Annotate and show | auto | add a pin or comment, open or arrange a panel, highlight elements, draw a sketch in the viewer |
+| Annotate and show | auto | add a pin or comment, open or arrange a panel, highlight elements, draw a sketch in the viewer; fly the 3D camera, select, isolate, colour by a property, split the viewer (view only: no store is written) |
 | Run checks, export | auto | run any check, export a room table, export PDF or IFC from Revit, save a working copy |
 | Revit: create and modify | confirm per batch | levels, grids, walls, doors, windows, rooms, dimensions, views, sheets; one batch becomes one revision the user reviews |
 | Revit: delete | never | `delete_element`; deletion is done by the user, or by the agent only after the user marks the element in the viewer |
