@@ -292,6 +292,19 @@ Why: every agent gets stored conversations ("threads") of its own, a lock per ru
 | 10.4 | **Thread runner.** One run of one thread, taken out of `AgentSession.run`. | `src/agent/thread-runner.ts`, `src/agent/session.ts`, `test/10.4-thread-runner.test.ts` | a scripted run; `0.5`, `0.6`, `8.15` pass unchanged | the user notices no change |
 | 10.5 | **Coordinator with a cap of one.** The run table and the queue, with events that carry thread, agent and project. | `src/agent/coordinator.ts`, `src/agent/session.ts`, `src/shared/api.ts`, `src/main/main.ts`, `src/main/activity.ts`, `src/shared/activity.ts`, `test/10.5-coordinator.test.ts` | one run at a time, queue order, event envelope | the user notices no change |
 
+## Phase 11 — Several threads and runs
+
+Why: the user co-works with two specialists at once, each in its own conversation, and stops one without the other. Plan: `docs/agent-sessions-plan.md`.
+
+| Task | Build | Files | Tests | Done when |
+|---|---|---|---|---|
+| 11.1 | **The queue (pure).** `pickNext` and load / save of the queue file. | `src/core/queue.ts`, `test/11.1-queue.test.ts` | FIFO, skips, cap, pause, damaged file | tests pass |
+| 11.2 | **Runs side by side.** The coordinator runs up to the cap at once; Stop for all and for one. | `src/agent/coordinator.ts`, `test/11.2-parallel.test.ts` | cap, queue, refused second start, stop one / all, pause | tests pass |
+| 11.3 | **After a restart nothing runs by itself.** Found runs become `interrupted`, the queue loads paused. | `src/agent/coordinator.ts`, `src/core/threads.ts`, `test/11.3-restart.test.ts` | interrupted and queued counts, resume, discard, torn queue file | tests pass |
+| 11.4 | **Talk to any agent.** Thread handlers and `@` mentions. | `src/main/handlers/threads.ts`, `src/shared/mention.ts`, `src/shared/api.ts`, `src/main/api.ts`, `src/agent/thread-runner.ts`, `src/agent/session.ts`, `test/11.4-threads-api.test.ts` | `parseMention`, open / send / closed thread, specialist tools | tests pass |
+| 11.5 | **Gaida tevi.** One list of what waits for the user, across projects. | `src/shared/waiting.ts`, `src/shared/thread-types.ts`, `src/agent/coordinator.ts`, `src/main/handlers/threads.ts`, `src/shared/api.ts`, `test/11.5-waiting.test.ts` | order of kinds, two projects, answered confirmation leaves | tests pass |
+| 11.6 | **Minimum UI for threads.** Thread list, lanes, Gaida tevi block, Stop. | `src/renderer/shell/ThreadList.tsx`, `Lane.tsx`, `Waiting.tsx`, `src/renderer/shell/AgentDock.tsx`, `src/renderer/state.ts`, `src/renderer/styles.css` | none (components); `parseMention` and `waitingItems` already tested | the user opens a thread with a specialist, writes to it while the lead works on something else, confirms a batch from Gaida tevi, and stops one of the two |
+
 ## Later (after phase 8)
 
 From BIM Crew, picked "later" on 2026-11-12: **meeting notes** (audio → transcript → Atmiņa decisions, requirements and tasks; BIM Crew `meetings/transcription.ts`, `core/meeting_notes.py`; needs a local whisper) and the **scheduler** (scheduled agent runs: law re-read, TN clock reminders; `server/src/scheduler.ts`, `scheduled-runner.ts`).
