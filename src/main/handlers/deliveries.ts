@@ -11,6 +11,8 @@ import { stageRevitIfc, stageRevitSheets } from "../../revit/stage.js";
 import type { RevitClient } from "../../revit/client.js";
 import { copyDelivery, copyPlan } from "../../sources/deliver-copy.js";
 import { refreshDeliveries } from "../../sources/pipeline.js";
+import { runChecks } from "../../checks/run.js";
+import { renamePlan, renameStaged, undoRenameBatch } from "../../sources/staging-rename.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 
 export interface DeliveryDeps {
@@ -21,7 +23,7 @@ export interface DeliveryDeps {
 	openPath(p: string): Promise<string>;
 }
 
-type K = "deliveries.copyPlan" | "deliveries.copy" | "deliveries.checklist" | "deliveries.stageSheets" | "deliveries.stageIfc" | "deliveries.stageFile" | "deliveries.unstage" | "deliveries.openStaging" | "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
+type K = "deliveries.copyPlan" | "deliveries.copy" | "deliveries.checklist" | "deliveries.stageSheets" | "deliveries.stageIfc" | "deliveries.stageFile" | "deliveries.unstage" | "deliveries.renamePlan" | "deliveries.renameApply" | "deliveries.renameUndo" | "deliveries.openStaging" | "deliveries.start" | "deliveries.prepare" | "deliveries.markSent" | "deliveries.setPlanned" | "deliveries.addPlanned" | "timeline.clocks" | "clocks.add" | "clocks.update";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -73,6 +75,22 @@ export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 		"deliveries.unstage": (id, deliveryId, name) => {
 			unstageFile(d.registry.store(id), deliveryId, name, "user");
 			changed(id);
+		},
+		"deliveries.renamePlan": (id, deliveryId, mode, revision) => renamePlan(d.registry.store(id), deliveryId, mode, revision),
+		"deliveries.renameApply": async (id, deliveryId, pairs) => {
+			const store = d.registry.store(id);
+			const r = renameStaged(store, deliveryId, pairs, "user");
+			// the names are what the filenames check reads: say at once whether they are right now
+			if (r.applied) await runChecks(store, "delivery", { dataDir: d.dataDir, today: today(), deliveryId, only: ["filenames"] }).catch(() => undefined);
+			changed(id);
+			return r;
+		},
+		"deliveries.renameUndo": async (id, deliveryId, batch) => {
+			const store = d.registry.store(id);
+			const r = undoRenameBatch(store, deliveryId, batch);
+			if (r.reverted) await runChecks(store, "delivery", { dataDir: d.dataDir, today: today(), deliveryId, only: ["filenames"] }).catch(() => undefined);
+			changed(id);
+			return r;
 		},
 		"deliveries.openStaging": async (id, deliveryId) => {
 			const err = await d.openPath(draftOf(d.registry.store(id), deliveryId).draft.stagingDir);

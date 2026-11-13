@@ -6,6 +6,7 @@ import { useState } from "react";
 import { BIM_STAGES, type Delivery, type Finding } from "../../core/model";
 import type { ClockRow } from "../../shared/api";
 import type { ChecklistGroup, ChecklistRow, CopyPlan, RowStatus } from "../../shared/nodevums";
+import { validName, type RenameMode, type RenameResult, type RenameRow } from "../../shared/rename";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { windows } from "../windows";
@@ -271,6 +272,7 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 					</button>
 				)}
 			</div>
+			{!copied && d.items.length > 0 && <RenamePanel projectId={projectId} deliveryId={d.id} busy={!!busy} run={run} />}
 			{d.items.length === 0 ? (
 				<span className="dim small">Vēl nav failu. Eksportē lapas no Revit vai pievieno failu; aģentam — uzdevums “Nodot projektu”.</span>
 			) : (
@@ -298,6 +300,118 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 					</tbody>
 				</table>
 			)}
+		</div>
+	);
+}
+
+type RunFn = (label: string, fn: () => Promise<unknown>, done?: (r: unknown) => string | null) => Promise<void>;
+const RENAME_TONE = { same: "dim", rename: "ok", input: "warn", conflict: "bad" } as const;
+const RENAME_LABEL = { same: "kārtībā", rename: "pārdēvēs", input: "jānorāda", conflict: "konflikts" } as const;
+
+/** Pārdēvēt (8.12): the plan first (old → new), the user fixes what could not be decided, then Piemērot; Atsaukt takes the batch back. */
+function RenamePanel({ projectId, deliveryId, busy, run }: { projectId: string; deliveryId: string; busy: boolean; run: RunFn }) {
+	const [open, setOpen] = useState(false);
+	const [mode, setMode] = useState<RenameMode>("office");
+	const [revision, setRevision] = useState("01");
+	const [typed, setTyped] = useState<Record<string, string>>({});
+	const [batch, setBatch] = useState<string | null>(null);
+	const plan = useLoad<RenameRow[]>(() => (open ? call("deliveries.renamePlan", projectId, deliveryId, mode, revision) : Promise.resolve([])), [projectId, deliveryId, open, mode, revision]);
+	const rows = plan.data ?? [];
+	const needsName = (r: RenameRow) => r.status === "input" || r.status === "conflict";
+	// what each row will really become: the typed name wins for rows that needed one
+	const target = (r: RenameRow) => (needsName(r) ? (typed[r.file] ?? "").trim() : r.to ?? "");
+	const problem = (r: RenameRow): string | null => {
+		if (!needsName(r)) return null;
+		const t = target(r);
+		return t ? validName(t) : null; // empty = left alone
+	};
+	const pairs = rows.filter((r) => r.status === "rename" || (needsName(r) && target(r) && !problem(r))).map((r) => ({ file: r.file, to: target(r) }));
+	const bad = rows.some((r) => problem(r));
+	const close = () => {
+		setOpen(false);
+		setTyped({});
+	};
+	const undo = () =>
+		run("Atsauc", () => call("deliveries.renameUndo", projectId, deliveryId, batch!), (r) => {
+			const x = r as { reverted: number; errors: string[] };
+			setBatch(null);
+			return `Atsaukti ${x.reverted}${x.errors.length ? `; ${x.errors.join("; ")}` : ""}`;
+		});
+	if (!open)
+		return (
+			<div style={{ margin: "6px 0" }}>
+				<button className="small ghost" disabled={busy} onClick={() => setOpen(true)} title="Nosaukumi pēc biroja kārtības vai BIS augšupielādei">
+					Pārdēvēt
+				</button>
+				{batch && (
+					<button className="small ghost" style={{ marginLeft: 8 }} disabled={busy} onClick={undo}>
+						Atsaukt pēdējo pārdēvēšanu
+					</button>
+				)}
+			</div>
+		);
+	return (
+		<div className="card" style={{ margin: "6px 0", padding: 8 }}>
+			<div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+				<b>Pārdēvēt</b>
+				<select value={mode} onChange={(e) => setMode(e.target.value as RenameMode)}>
+					<option value="office">Biroja kārta: LAPAS-NR_nosaukums</option>
+					<option value="bis">BIS: NUMURS_MARKA_REVĪZIJA_LAPAS</option>
+				</select>
+				{mode === "bis" && (
+					<label className="small">
+						revīzija <input style={{ width: 48 }} value={revision} onChange={(e) => setRevision(e.target.value)} />
+					</label>
+				)}
+				<button className="small ghost" onClick={close}>
+					Aizvērt
+				</button>
+			</div>
+			{plan.error ? <Err error={plan.error} /> : null}
+			<table>
+				<tbody>
+					{rows.map((r) => {
+						const p = problem(r);
+						return (
+							<tr key={r.file}>
+								<td className="mono small">{r.file}</td>
+								<td>→</td>
+								<td className="mono small">
+									{needsName(r) ? <input style={{ width: "100%" }} value={typed[r.file] ?? ""} placeholder={r.to ?? "jaunais nosaukums ar paplašinājumu"} onChange={(e) => setTyped({ ...typed, [r.file]: e.target.value })} /> : r.to}
+									{p && (
+										<div className="small" style={{ color: "var(--bad)" }}>
+											{p}
+										</div>
+									)}
+								</td>
+								<td>
+									<Badge tone={RENAME_TONE[r.status]} title={r.why}>
+										{RENAME_LABEL[r.status]}
+									</Badge>
+								</td>
+								<td className="dim small">{r.why}</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+			<div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
+				<button
+					className="primary"
+					disabled={busy || bad || pairs.length === 0}
+					onClick={() =>
+						run("Pārdēvē", () => call("deliveries.renameApply", projectId, deliveryId, pairs), (r) => {
+							const x = r as RenameResult;
+							setBatch(x.batch);
+							close();
+							return `Pārdēvēti ${x.applied}${x.errors.length ? `; ${x.errors.join("; ")}` : ""}`;
+						})
+					}
+				>
+					Piemērot ({pairs.length})
+				</button>
+				<span className="dim small">Tikai nodevuma starpmapē; neko nepārraksta; var atsaukt.</span>
+			</div>
 		</div>
 	);
 }

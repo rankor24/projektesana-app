@@ -7,6 +7,7 @@ import { checklistOf, checklistSummary } from "../../checks/checklist.js";
 import { revitExport } from "../../revit/exports.js";
 import { stageRevitIfc, stageRevitSheets } from "../../revit/stage.js";
 import { activeDraft, DRAFT_KINDS, stageFile, startDraft, unstageFile } from "../../sources/staging.js";
+import { renamePlan, renameStaged } from "../../sources/staging-rename.js";
 import { uiResult } from "../../shared/ui-instruction.js";
 import { storeOf, type ToolCtx } from "./context.js";
 import { revit } from "./revit-commands.js";
@@ -103,6 +104,22 @@ export const deliveryTools: ToolDef[] = [
 			if (!from) throw new Error("Norādi sourceId vai path.");
 			const r = stageFile(store, d.id, from, name, "agent");
 			return uiResult(`Pievienots nodevumam: ${r.file.split(/[\\/]/).pop()}.`, { open_panel: { name: "nodevumi", filter: d.id } });
+		},
+	}),
+	tool({
+		name: "rename_staged",
+		level: "run",
+		description:
+			"Rename the staged files to the office convention (<sheet number>_<title>.ext, no diacritics) or, with mode 'bis', to BIS upload names. Without apply it only returns the plan (old → new, which files need a number from the user, which names collide). With apply it renames what the plan can decide, inside the staging folder only, never over a file; files the plan cannot decide are left and listed. The user can take the rename back.",
+		input: { deliveryId: z.string().optional(), mode: z.enum(["office", "bis"]).optional(), revision: z.string().optional(), apply: z.boolean().optional() },
+		run: (ctx, a) => {
+			const { store, d } = draft(ctx, a.deliveryId);
+			const plan = renamePlan(store, d.id, a.mode ?? "office", a.revision);
+			const todo = plan.filter((r) => r.status === "rename" && r.to);
+			const open = plan.filter((r) => r.status === "input" || r.status === "conflict");
+			if (!a.apply) return { plan, toRename: todo.length, needsYou: open.length, note: "Plāns. Lai pārdēvētu: rename_staged ar apply = true." };
+			const res = renameStaged(store, d.id, todo.map((r) => ({ file: r.file, to: r.to! })), "agent");
+			return uiResult(`Pārdēvēti ${res.applied} faili; nav izlemts ${open.length}${res.errors.length ? `; kļūdas: ${res.errors.join("; ")}` : ""}.`, { open_panel: { name: "nodevumi", filter: d.id } });
 		},
 	}),
 	tool({

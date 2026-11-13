@@ -7,6 +7,7 @@ import type { ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
 import type { UndoRow } from "../core/undo-types.js";
 import type { TraceView } from "./trace-types.js";
+import type { RenameMode, RenameResult, RenameRow } from "./rename.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
@@ -416,6 +417,11 @@ export interface ApiSpec {
 	/** A file the project has (a source, an export) copied into staging under a name. */
 	"deliveries.stageFile": (id: string, deliveryId: string, from: string, name?: string) => { file: string };
 	"deliveries.unstage": (id: string, deliveryId: string, name: string) => void;
+	/** what the staged files would be called by the office convention (or BIS upload names), and which cannot be decided or collide (task 8.12) */
+	"deliveries.renamePlan": (id: string, deliveryId: string, mode: RenameMode, revision?: string) => RenameRow[];
+	/** renames inside the draft's staging folder only, never over a file; every rename is recorded so the batch can be taken back */
+	"deliveries.renameApply": (id: string, deliveryId: string, pairs: { file: string; to: string }[]) => RenameResult;
+	"deliveries.renameUndo": (id: string, deliveryId: string, batch: string) => { reverted: number; errors: string[] };
 	"deliveries.openStaging": (id: string, deliveryId: string) => void;
 	/** Where "Kopēt uz 1.4_Nodevumi" would write and what stops it now (7.6). */
 	"deliveries.copyPlan": (id: string, deliveryId: string) => CopyPlan;
@@ -567,6 +573,9 @@ export const API_NAMES = [
 	"deliveries.stageIfc",
 	"deliveries.stageFile",
 	"deliveries.unstage",
+	"deliveries.renamePlan",
+	"deliveries.renameApply",
+	"deliveries.renameUndo",
 	"deliveries.openStaging",
 	"deliveries.copyPlan",
 	"deliveries.copy",

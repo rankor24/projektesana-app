@@ -61,7 +61,7 @@ export function undoRows(store: ProjectStore, run: string): UndoRow[] {
 		rows.push({
 			key: `cp:${cp.id}`,
 			kind: "file",
-			label: `${cp.created ? "Izveidots" : "Aizstāts vai izņemts"} fails ${cp.path.replace(/\\/g, "/")}`,
+			label: cp.renamedTo ? `Pārdēvēts: ${cp.path.split(/[\\/]/).pop()} → ${cp.renamedTo.split(/[\\/]/).pop()}` : `${cp.created ? "Izveidots" : "Aizstāts vai izņemts"} fails ${cp.path.replace(/\\/g, "/")}`,
 			at: cp.at,
 			tool: cp.tool,
 			undone: cp.state === "undone",
@@ -76,7 +76,7 @@ export function applyUndo(store: ProjectStore, key: string): string {
 	if (key.startsWith("cp:")) {
 		const r = undoCheckpoint(store, key.slice(3));
 		store.log({ kind: "undo", by: "user", data: { file: r.path, did: r.did } });
-		return r.did === "restored" ? "Fails atjaunots." : "Fails pārvietots malā (nekas netiek dzēsts).";
+		return r.did === "restored" ? "Fails atjaunots." : r.did === "renamed-back" ? "Faila vecais nosaukums atjaunots." : "Fails pārvietots malā (nekas netiek dzēsts).";
 	}
 	const m = /^log:(\d+)$/.exec(key);
 	if (!m) throw new Error(`Nezināma izmaiņa: ${key}`);

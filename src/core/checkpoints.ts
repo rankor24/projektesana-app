@@ -23,6 +23,10 @@ export interface Checkpoint {
 	/** the copy, relative to the data folder; null for a created file */
 	backup: string | null;
 	state: "active" | "undone";
+	/** a rename (task 8.12): `path` is the name the file had, this is the name it has now (relative to the data folder); undo renames it back */
+	renamedTo?: string;
+	/** the renames of one click or one tool call share a batch, so they can be taken back together */
+	batch?: string;
 }
 
 /** The data-folder subfolders whose files an agent tool can create. */
@@ -67,15 +71,26 @@ export function checkpointBeforeWrite(store: ProjectStore, abs: string): Checkpo
 	return cp;
 }
 
+/** A file renamed inside the data folder: recorded so that undo renames it back (the old name is the checkpoint's path). */
+export function recordRename(store: ProjectStore, from: string, to: string, batch: string): Checkpoint {
+	const scope = currentScope();
+	const cp: Checkpoint = { id: newId("cp"), at: new Date().toISOString(), run: scope?.run ?? null, tool: scope?.tool ?? "lietotājs", path: relative(store.dir, from), created: false, backup: null, state: "active", renamedTo: relative(store.dir, to), batch };
+	save(store, [...all(store), cp], "checkpoint.renamed");
+	return cp;
+}
+
 /** Runs a tool call and records the files it made. */
 export async function trackCreated<T>(store: ProjectStore | null, fn: () => Promise<T> | T): Promise<T> {
 	const scope = currentScope();
 	if (!store || !scope) return fn();
 	const before = snapshotFiles(store);
+	const started = new Date().toISOString();
 	try {
 		return await fn();
 	} finally {
-		const made = [...snapshotFiles(store)].filter((p) => !before.has(p));
+		// the new name of a file this call renamed is not a file it made: undo renames it back instead of moving it aside
+		const renamed = new Set(all(store).filter((c) => c.renamedTo && c.at >= started && c.run === scope.run && c.tool === scope.tool).map((c) => c.renamedTo));
+		const made = [...snapshotFiles(store)].filter((p) => !before.has(p) && !renamed.has(p));
 		if (made.length) {
 			const at = new Date().toISOString();
 			save(store, [...all(store), ...made.map((path): Checkpoint => ({ id: newId("cp"), at, run: scope.run, tool: scope.tool, path, created: true, backup: null, state: "active" }))], "checkpoint.created");
@@ -84,7 +99,7 @@ export async function trackCreated<T>(store: ProjectStore | null, fn: () => Prom
 }
 
 /** Puts one file back as it was: the copy returns, or a created file is moved aside. What is in the way goes to checkpoints\aside. */
-export function undoCheckpoint(store: ProjectStore, id: string): { path: string; did: "restored" | "moved-aside" } {
+export function undoCheckpoint(store: ProjectStore, id: string): { path: string; did: "restored" | "moved-aside" | "renamed-back" } {
 	const list = all(store);
 	const cp = list.find((c) => c.id === id);
 	if (!cp) throw new Error(`Kontrolpunkts ${id} nav atrasts.`);
@@ -97,8 +112,18 @@ export function undoCheckpoint(store: ProjectStore, id: string): { path: string;
 	const moveAside = () => {
 		if (existsSync(g.path)) renameSync(g.path, join(aside, `${newId("u")}__${basename(g.path)}`));
 	};
-	let did: "restored" | "moved-aside";
-	if (cp.created) {
+	let did: "restored" | "moved-aside" | "renamed-back";
+	if (cp.renamedTo) {
+		// a rename: the file goes back to its old name; whatever took that name since goes aside, nothing is lost
+		const now = resolve(store.dir, cp.renamedTo);
+		const cur = checkWrite(store.guard, now);
+		if (!cur.ok) throw new Error(cur.reason);
+		if (!existsSync(cur.path)) throw new Error(`Faila ar jauno nosaukumu (${basename(now)}) vairs nav: atsaukt nevar.`);
+		moveAside();
+		mkdirSync(join(g.path, ".."), { recursive: true });
+		renameSync(cur.path, g.path);
+		did = "renamed-back";
+	} else if (cp.created) {
 		moveAside();
 		did = "moved-aside";
 	} else {
