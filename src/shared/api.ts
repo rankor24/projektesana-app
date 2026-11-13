@@ -13,6 +13,7 @@ import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSour
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
+import type { LayoutStore } from "./layout.js";
 
 
 export interface AppInfo {
@@ -367,6 +368,9 @@ export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
 	"settings.set": (patch: Partial<Settings>) => Settings;
+	/** where each window is, per page (task 9.0): the renderer's own state, kept in the app's data folder */
+	"layout.get": () => LayoutStore;
+	"layout.set": (store: LayoutStore) => void;
 	"dialog.pickFolder": (title: string) => string | null;
 	"dialog.pickFile": (title: string, extensions: string[]) => string | null;
 	"agent.status": () => AgentStatus;
@@ -541,6 +545,8 @@ export const API_NAMES = [
 	"app.info",
 	"settings.get",
 	"settings.set",
+	"layout.get",
+	"layout.set",
 	"dialog.pickFolder",
 	"dialog.pickFile",
 	"agent.status",

@@ -1,9 +1,11 @@
-// One view: top bar, timeline, split (preview | agent), panel bar, floating panel windows on top.
+// One view: top bar, timeline, the work area (the viewer in the middle, a dock group on each of four sides), panel bar,
+// and the floating windows on top. Every window is in a tab group that floats or docks (task 9.0).
 import { useEffect, useState } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
 import { PanelBar } from "./shell/PanelBar";
+import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Preview } from "./shell/Preview";
 import { Timeline } from "./shell/Timeline";
@@ -22,7 +24,15 @@ import { Prasibas } from "./panels/Prasibas";
 import { Atmina } from "./panels/Atmina";
 import { Nodevumi } from "./panels/Nodevumi";
 import { Versijas } from "./panels/Versijas";
-import { PANEL_TITLE, useWindows, windows, type PanelId } from "./windows";
+import { PANEL_TITLE, WINDOW_TITLE, windows, type PanelId } from "./windows";
+import { CHAT } from "../shared/layout";
+
+/** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
+function Body({ id, filter }: { id: string; filter?: string }) {
+	if (id === CHAT) return <AgentDock />;
+	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
+	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
+}
 
 function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
@@ -39,9 +49,14 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 }
 
 export function App() {
-	const w = useWindows();
-	const docked = w.windows.find((x) => x.mode === "docked");
 	useEffect(() => on("data.changed", () => ui.bump()), []);
+	useEffect(() => {
+		void windows.init();
+		const refit = () => windows.refit();
+		window.addEventListener("resize", refit);
+		return () => window.removeEventListener("resize", refit);
+	}, []);
+	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId } = useUi();
 	const [row, setRow] = useState<ProjectRow | null>(null);
 	useEffect(() => {
@@ -65,25 +80,20 @@ export function App() {
 		<div className="app">
 			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} openInfo={row?.openInfo ?? 0} />
 			<Timeline />
-			<main className={`split ${docked ? "with-dock" : ""}`}>
-				<Preview />
-				{docked && (
-					<section className="docked">
-						<div className="docked-title">
-							<span>{docked.title}</span>
-							<button title="Atspraust" onClick={() => windows.mode(docked.id, "normal")}>⇤</button>
-							<button title="Aizvērt" onClick={() => windows.close(docked.id)}>×</button>
-						</div>
-						<div className="docked-body">
-							<Panel id={docked.id} filter={docked.filter} />
-						</div>
-					</section>
-				)}
-				<AgentDock />
-			</main>
+			<div className="workspace">
+				<DockArea side="top" render={body} />
+				<div className="ws-mid">
+					<DockArea side="left" render={body} />
+					<main className="canvas">
+						<Preview />
+					</main>
+					<DockArea side="right" render={body} />
+				</div>
+				<DockArea side="bottom" render={body} />
+			</div>
 			<StatusStrip />
 			<PanelBar />
-			<WindowLayer render={(id, filter) => <Panel id={id} filter={filter} />} />
+			<WindowLayer render={body} />
 			<CommandPalette />
 		</div>
 	);

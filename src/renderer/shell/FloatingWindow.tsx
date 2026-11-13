@@ -1,59 +1,51 @@
-// A draggable / resizable / maximisable / minimisable / dockable panel window.
-// Adapted from BIM Crew apps/client/src/components/FloatingWindow.tsx (branch feat/floating-workspace-ui): the drag and
-// resize math, the local geometry override during a drag committed once on pointer-up, the eight resize handles.
-// Changed: plain CSS classes instead of Tailwind, no icon library, our window store.
+// A floating tab group: dragged by its strip, resized from eight handles, brought to the front on a click. Adapted from
+// BIM Crew apps/client/src/components/FloatingWindow.tsx: the drag and resize math, the local geometry override during a
+// drag committed once on pointer-up, the eight resize handles. Changed: plain CSS classes, our layout store, and a drag
+// that ends on a screen edge docks the group, and on another strip joins it (shell/drag.ts).
 import { useCallback, useState, type ReactNode } from "react";
-import { windows, type WindowState } from "../windows";
+import { clampGeo, MIN_H, MIN_W, type FloatPlace, type Geo, type Group } from "../../shared/layout";
+import { windows } from "../windows";
+import { track } from "./drag";
+import { TabGroup } from "./TabGroup";
 
-const MIN_W = 360;
-const MIN_H = 240;
-
-type Geo = { x: number; y: number; w: number; h: number };
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
+const vp = () => ({ w: window.innerWidth, h: window.innerHeight });
 
-function clamp({ x, y, w, h }: Geo): Geo {
-	const cw = Math.max(MIN_W, Math.min(w, window.innerWidth - 16));
-	const ch = Math.max(MIN_H, Math.min(h, window.innerHeight - 16));
-	return { x: Math.max(0, Math.min(x, window.innerWidth - cw)), y: Math.max(0, Math.min(y, window.innerHeight - ch)), w: cw, h: ch };
-}
-
-export function FloatingWindow({ win, focused, children }: { win: WindowState; focused: boolean; children: ReactNode }) {
+export function FloatingWindow({ group, focused, render }: { group: Group; focused: boolean; render: (id: string, filter?: string) => ReactNode }) {
+	const p = group.place as FloatPlace;
+	const id = group.active;
 	const [live, setLive] = useState<Geo | null>(null);
-	const geo = live ?? { x: win.x, y: win.y, w: win.w, h: win.h };
-	const maximized = win.mode === "maximized";
+	const geo = live ?? { x: p.x, y: p.y, w: p.w, h: p.h };
 
-	const track = useCallback((e: React.MouseEvent, next: (dx: number, dy: number) => Geo, commit: (g: Geo) => void) => {
-		e.preventDefault();
-		e.stopPropagation();
-		windows.focus(win.id);
-		const sx = e.clientX;
-		const sy = e.clientY;
-		let final: Geo = { x: win.x, y: win.y, w: win.w, h: win.h };
-		const onMove = (ev: MouseEvent) => {
-			final = clamp(next(ev.clientX - sx, ev.clientY - sy));
-			setLive(final);
-		};
-		const onUp = () => {
-			document.removeEventListener("mousemove", onMove);
-			document.removeEventListener("mouseup", onUp);
-			commit(final);
-			setLive(null);
-		};
-		document.addEventListener("mousemove", onMove);
-		document.addEventListener("mouseup", onUp);
-	}, [win.id, win.x, win.y, win.w, win.h]);
-
-	const onDrag = (e: React.MouseEvent) => {
-		if (maximized || (e.target as HTMLElement).closest("button")) return;
-		track(e, (dx, dy) => ({ x: win.x + dx, y: win.y + dy, w: win.w, h: win.h }), (g) => windows.move(win.id, g.x, g.y));
+	const onMove = (e: React.MouseEvent) => {
+		if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+		windows.focus(id);
+		const o = { x: p.x, y: p.y, w: p.w, h: p.h };
+		track(e, id, group.tabs.length > 1 ? `${group.tabs.length} logi` : id, {
+			onMove: (_x, _y, dx, dy) => setLive(clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp())),
+			onEnd(_x, _y, moved, target) {
+				const final = live ?? o;
+				setLive(null);
+				if (!moved) return;
+				if (target?.kind === "tabs") return windows.mergeGroup(id, target.targetId);
+				if (target?.kind === "side") return windows.dock(id, target.side, { whole: true });
+				windows.move(id, final.x, final.y);
+			},
+		});
 	};
 
-	const onResize = (e: React.MouseEvent, dir: Dir) => {
-		if (maximized) return;
-		const o = { x: win.x, y: win.y, w: win.w, h: win.h };
-		track(
-			e,
-			(dx, dy) => {
+	const onResize = useCallback(
+		(e: React.MouseEvent, dir: Dir) => {
+			e.preventDefault();
+			e.stopPropagation();
+			windows.focus(id);
+			const o = { x: p.x, y: p.y, w: p.w, h: p.h };
+			const sx = e.clientX;
+			const sy = e.clientY;
+			let final: Geo = o;
+			const move = (ev: MouseEvent) => {
+				const dx = ev.clientX - sx;
+				const dy = ev.clientY - sy;
 				let { x, y, w, h } = o;
 				if (dir.includes("e")) w = Math.max(MIN_W, o.w + dx);
 				if (dir.includes("s")) h = Math.max(MIN_H, o.h + dy);
@@ -65,29 +57,27 @@ export function FloatingWindow({ win, focused, children }: { win: WindowState; f
 					h = Math.max(MIN_H, o.h - dy);
 					y = o.y + (o.h - h);
 				}
-				return { x, y, w, h };
-			},
-			(g) => windows.resize(win.id, g),
-		);
-	};
-
-	const zIndex = 200 + win.z;
-	const style: React.CSSProperties = maximized ? { left: 8, top: 8, right: 8, bottom: 8, zIndex } : { left: geo.x, top: geo.y, width: geo.w, height: geo.h, zIndex };
+				final = clampGeo({ x, y, w, h }, vp());
+				setLive(final);
+			};
+			const up = () => {
+				document.removeEventListener("mousemove", move);
+				document.removeEventListener("mouseup", up);
+				windows.resize(id, final);
+				setLive(null);
+			};
+			document.addEventListener("mousemove", move);
+			document.addEventListener("mouseup", up);
+		},
+		[id, p.x, p.y, p.w, p.h],
+	);
 
 	return (
-		<div className={`fw ${focused ? "fw-focused" : ""}`} style={style} onMouseDown={() => windows.focus(win.id)}>
-			<div className={`fw-title ${maximized ? "" : "fw-grab"}`} onMouseDown={onDrag} onDoubleClick={() => windows.mode(win.id, maximized ? "normal" : "maximized")}>
-				<span>{win.title}</span>
-				<div className="fw-buttons">
-					<button title="Minimizēt" onClick={() => windows.mode(win.id, "minimized")}>–</button>
-					<button title="Piespraust blakus čatam" onClick={() => windows.mode(win.id, "docked")}>⇥</button>
-					<button title={maximized ? "Atjaunot" : "Maksimizēt"} onClick={() => windows.mode(win.id, maximized ? "normal" : "maximized")}>{maximized ? "❐" : "□"}</button>
-					<button title="Aizvērt" className="fw-close" onClick={() => windows.close(win.id)}>×</button>
-				</div>
-			</div>
-			<div className="fw-body">{children}</div>
-			{!maximized &&
-				(["e", "w", "s", "n", "se", "sw", "ne", "nw"] as Dir[]).map((d) => <div key={d} className={`fw-rz fw-rz-${d}`} onMouseDown={(e) => onResize(e, d)} />)}
+		<div className={`fw ${focused ? "fw-focused" : ""}`} style={{ left: geo.x, top: geo.y, width: geo.w, height: geo.h, zIndex: 200 + p.z }} onMouseDown={() => windows.focus(id)}>
+			<TabGroup group={group} render={render} mode="float" onStripDown={onMove} />
+			{(["e", "w", "s", "n", "se", "sw", "ne", "nw"] as Dir[]).map((d) => (
+				<div key={d} className={`fw-rz fw-rz-${d}`} onMouseDown={(e) => onResize(e, d)} />
+			))}
 		</div>
 	);
 }

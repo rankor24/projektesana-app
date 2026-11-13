@@ -1,10 +1,13 @@
-// Floating window state. The model is BIM Crew's floating workspace (branch feat/floating-workspace-ui, store.ts
-// WindowState / WindowMode, one window per kind, cascade geometry, one docked window at a time); rewritten as a small
-// external store for useSyncExternalStore instead of BIM Crew's app-wide store.
+// The window layout store (task 9.0): a small external store over the pure layout model (shared/layout.ts) for
+// useSyncExternalStore. The layout is per page and kept in the app's data folder through main (layout.json), not in
+// localStorage; the old `projektesana:windows` value is read once and migrated. BIM Crew's floating-workspace store is
+// the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
+import * as L from "../shared/layout";
+import { call } from "./bridge";
 
-export const PANELS = ["projekts", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "iestatijumi"] as const;
-export type PanelId = (typeof PANELS)[number];
+export const PANELS = L.PANEL_IDS;
+export type PanelId = (typeof L.PANEL_IDS)[number];
 
 export const PANEL_TITLE: Record<PanelId, string> = {
 	projekts: "Projekts",
@@ -18,98 +21,109 @@ export const PANEL_TITLE: Record<PanelId, string> = {
 	versijas: "Versijas",
 	iestatijumi: "Iestatījumi",
 };
+export const WINDOW_TITLE: Record<string, string> = {
+	...PANEL_TITLE,
+	chat: "Aģents",
+	"viewer.props": "Īpašības",
+	"viewer.tree": "Elementu koks",
+	"viewer.ifcmeta": "IFC metadati",
+	"viewer.filemeta": "Faila metadati",
+	"viewer.comments": "Komentāri / BCF",
+};
 
-export type WindowMode = "normal" | "maximized" | "minimized" | "docked";
-
-export interface WindowState {
-	id: PanelId;
-	title: string;
-	x: number;
-	y: number;
-	w: number;
-	h: number;
-	z: number;
-	mode: WindowMode;
-	/** a filter the panel opens with (open_panel tool, links between panels) */
-	filter?: string;
+export interface WindowsState {
+	page: string;
+	layout: L.Layout;
+	store: L.LayoutStore;
+	loaded: boolean;
 }
 
-interface State {
-	windows: WindowState[];
-	focused: PanelId | null;
-}
-
-const KEY = "projektesana:windows";
-let state: State = load();
+const OLD_KEY = "projektesana:windows";
+const vp = (): L.Vp => ({ w: window.innerWidth, h: window.innerHeight });
+let defaultFor: (page: string) => L.Layout = () => L.emptyLayout();
+let state: WindowsState = { page: "main", layout: L.emptyLayout(), store: L.emptyStore(), loaded: false };
 const listeners = new Set<() => void>();
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
-function load(): State {
-	try {
-		const raw = localStorage.getItem(KEY);
-		if (raw) {
-			const s = JSON.parse(raw) as State;
-			return { windows: (s.windows ?? []).filter((w) => PANELS.includes(w.id)), focused: s.focused ?? null };
-		}
-	} catch {
-		// private mode or cleared storage: start with no windows
-	}
-	return { windows: [], focused: null };
-}
-
-function set(next: State) {
-	state = next;
-	try {
-		localStorage.setItem(KEY, JSON.stringify(state));
-	} catch {
-		// storage unavailable: layout is not remembered, nothing else changes
-	}
+function notify() {
 	for (const l of listeners) l();
 }
-
-const topZ = () => state.windows.reduce((m, w) => Math.max(m, w.z), 0);
-
-function nextGeometry(count: number) {
-	const w = Math.min(760, window.innerWidth - 80);
-	const h = Math.min(620, window.innerHeight - 160);
-	const off = (count % 6) * 28;
-	return { x: Math.max(16, Math.min(120 + off, window.innerWidth - w - 16)), y: Math.max(16, Math.min(110 + off, window.innerHeight - h - 16)), w, h };
+function scheduleSave() {
+	if (!state.loaded) return; // never overwrite the file with defaults before it was read
+	clearTimeout(saveTimer);
+	saveTimer = setTimeout(() => {
+		call("layout.set", state.store).catch(() => {
+			// the layout is not remembered this time; nothing else changes
+		});
+	}, 400);
 }
+function commit(next: L.Layout) {
+	if (next === state.layout) return;
+	state = { ...state, layout: next, store: L.withPage(state.store, state.page, next) };
+	notify();
+	scheduleSave();
+}
+const op = (f: (l: L.Layout, v: L.Vp) => L.Layout) => commit(f(state.layout, vp()));
 
 export const windows = {
-	open(id: PanelId, filter?: string) {
-		const have = state.windows.find((w) => w.id === id);
-		if (have) {
-			set({ windows: state.windows.map((w) => (w.id === id ? { ...w, mode: w.mode === "minimized" ? "normal" : w.mode, z: topZ() + 1, filter: filter ?? w.filter } : w)), focused: id });
-			return;
+	/** Reads layout.json (and migrates the old localStorage value once), then shows the current page's layout. */
+	async init() {
+		let store = L.emptyStore();
+		try {
+			store = await call("layout.get");
+		} catch {
+			// no file access: every page uses its default
 		}
-		const g = nextGeometry(state.windows.length);
-		set({ windows: [...state.windows, { id, title: PANEL_TITLE[id], ...g, z: topZ() + 1, mode: "normal", filter }], focused: id });
+		if (!Object.keys(store.pages).length && !store.legacy) {
+			try {
+				const raw = localStorage.getItem(OLD_KEY);
+				const old = raw ? L.fromLegacy(JSON.parse(raw), vp()) : null;
+				if (old) store = { ...store, legacy: old };
+				if (raw) localStorage.removeItem(OLD_KEY);
+			} catch {
+				// unreadable old value: start from the defaults
+			}
+		}
+		state = { ...state, store, loaded: true, layout: L.layoutFor(store, state.page, defaultFor, vp()) };
+		notify();
+		scheduleSave();
 	},
-	toggle(id: PanelId) {
-		const have = state.windows.find((w) => w.id === id);
-		if (have && have.mode !== "minimized" && state.focused === id) windows.mode(id, "minimized");
-		else windows.open(id);
+	/** The page's layout becomes the one shown; a page that was never laid out gets `def(page)`. */
+	setPage(page: string, def?: (page: string) => L.Layout) {
+		if (def) defaultFor = def;
+		if (page === state.page && state.loaded) return;
+		state = { ...state, page, layout: L.layoutFor(state.store, page, defaultFor, vp()) };
+		notify();
 	},
-	close(id: PanelId) {
-		set({ windows: state.windows.filter((w) => w.id !== id), focused: state.focused === id ? null : state.focused });
+	/** The window changed size: every size is clamped again. */
+	refit() {
+		const n = L.normalize(state.layout, vp());
+		if (JSON.stringify(n) !== JSON.stringify(state.layout)) commit(n);
 	},
-	focus(id: PanelId) {
-		if (state.focused === id && state.windows.find((w) => w.id === id)?.z === topZ()) return;
-		set({ windows: state.windows.map((w) => (w.id === id ? { ...w, z: topZ() + 1 } : w)), focused: id });
-	},
-	move(id: PanelId, x: number, y: number) {
-		set({ ...state, windows: state.windows.map((w) => (w.id === id ? { ...w, x, y } : w)) });
-	},
-	resize(id: PanelId, g: { x: number; y: number; w: number; h: number }) {
-		set({ ...state, windows: state.windows.map((w) => (w.id === id ? { ...w, ...g } : w)) });
-	},
-	/** Only one window is docked at a time; docking another one returns the previous one to normal. */
-	mode(id: PanelId, mode: WindowMode) {
-		set({ ...state, windows: state.windows.map((w) => (w.id === id ? { ...w, mode } : mode === "docked" && w.mode === "docked" ? { ...w, mode: "normal" } : w)) });
-	},
-	setFilter(id: PanelId, filter: string | undefined) {
-		set({ ...state, windows: state.windows.map((w) => (w.id === id ? { ...w, filter } : w)) });
-	},
+	open: (id: string, filter?: string) => op((l, v) => L.open(l, id, v, filter)),
+	toggle: (id: string) => op((l, v) => L.toggle(l, id, v)),
+	close: (id: string) => op((l) => L.close(l, id)),
+	focus: (id: string) => op((l) => L.focus(l, id)),
+	setActive: (id: string) => op((l) => L.setActive(l, id)),
+	move: (id: string, x: number, y: number) => op((l, v) => L.move(l, id, x, y, v)),
+	resize: (id: string, g: L.Geo) => op((l, v) => L.resize(l, id, g, v)),
+	resizeDock: (side: L.Side, size: number) => op((l, v) => L.resizeDock(l, side, size, v)),
+	dock: (id: string, side: L.Side, opts?: { whole?: boolean }) => op((l, v) => L.dock(l, id, side, v, opts)),
+	undock: (id: string) => op((l, v) => L.undock(l, id, v)),
+	pullOut: (id: string, at?: { x: number; y: number }) => op((l, v) => L.pullOut(l, id, v, at)),
+	mergeInto: (id: string, targetId: string, index?: number) => op((l) => L.mergeInto(l, id, targetId, index)),
+	/** a whole group dropped on a tab strip: every tab joins it */
+	mergeGroup: (id: string, targetId: string) =>
+		op((l) => {
+			let next = l;
+			for (const t of [...(L.groupOf(l, id)?.tabs ?? [])]) next = L.mergeInto(next, t, targetId);
+			return next;
+		}),
+	reorder: (id: string, index: number) => op((l) => L.reorder(l, id, index)),
+	collapse: (id: string, on = true) => op((l) => L.collapse(l, id, on)),
+	popOut: (id: string) => op((l, v) => L.popOut(l, id, v)),
+	popIn: (id: string) => op((l, v) => L.popIn(l, id, v)),
+	setFilter: (id: string, filter: string | undefined) => op((l) => L.setFilter(l, id, filter)),
 	get: () => state,
 };
 
@@ -118,6 +132,6 @@ const subscribe = (l: () => void) => {
 	return () => listeners.delete(l);
 };
 
-export function useWindows(): State {
+export function useWindows(): WindowsState {
 	return useSyncExternalStore(subscribe, () => state);
 }

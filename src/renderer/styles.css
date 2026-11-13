@@ -56,7 +56,7 @@ tr.click { cursor: pointer; }
 tr.click:hover td { background: var(--elev); }
 
 /* top bar, timeline, split, status strip (only while something runs), panel bar */
-.app { display: grid; grid-template-rows: auto auto 1fr auto auto; height: 100%; }
+.app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; height: 100%; }
 .topbar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .brand { font-weight: 700; letter-spacing: 0.02em; }
 .project-pick { font-weight: 600; }
@@ -69,14 +69,44 @@ tr.click:hover td { background: var(--elev); }
 .stage-name { font-weight: 600; color: var(--dim); margin-right: 4px; }
 .stage .chip { font-size: 11px; }
 
-.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 30%); min-height: 0; }
-.split.with-dock { grid-template-columns: minmax(0, 1fr) minmax(360px, 28%) minmax(360px, 26%); }
-.preview { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-.docked { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
-.docked-title { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font-weight: 600; }
-.docked-title span { flex: 1; }
-.docked-title button { padding: 0 6px; }
-.docked-body { flex: 1; min-height: 0; overflow: auto; }
+.workspace { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.ws-mid { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.canvas { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.canvas > .preview { flex: 1; }
+.preview { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.dock { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); flex: none; }
+.dock-left { border-right: 1px solid var(--border); }
+.dock-right { border-left: 1px solid var(--border); }
+.dock-top { border-bottom: 1px solid var(--border); }
+.dock-bottom { border-top: 1px solid var(--border); }
+.dock-main { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.dock-strip.dock-left, .dock-strip.dock-right { width: 28px; }
+.dock-strip.dock-top, .dock-strip.dock-bottom { height: 28px; }
+.dock-strip-btns { display: flex; gap: 2px; padding: 2px; }
+.dock-strip.dock-left .dock-strip-btns, .dock-strip.dock-right .dock-strip-btns { flex-direction: column; }
+.dock-strip-btn { padding: 4px 2px; }
+.dock-strip.dock-left .dock-strip-btn, .dock-strip.dock-right .dock-strip-btn { writing-mode: vertical-rl; }
+.dock-resize { position: absolute; z-index: 5; }
+.dock-resize-left { right: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.dock-resize-right { left: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.dock-resize-top { bottom: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.dock-resize-bottom { top: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.dock-resize:hover { background: color-mix(in srgb, var(--focus) 40%, transparent); }
+.tg { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.tg-strip { display: flex; align-items: stretch; gap: 1px; min-height: 30px; padding: 0 4px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; overflow: hidden; }
+.tg-tab { display: flex; align-items: center; gap: 4px; padding: 0 10px; cursor: grab; color: var(--dim); font-weight: 600; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tg-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.tg-x { padding: 0 4px; line-height: 16px; background: transparent; border-color: transparent; }
+.tg-x:hover { color: var(--bad); border-color: var(--border); }
+.tg-grow { flex: 1; cursor: grab; }
+.tg-buttons { display: flex; align-items: center; gap: 1px; }
+.tg-buttons button { padding: 0 6px; line-height: 20px; background: transparent; border-color: transparent; }
+.tg-buttons button:hover { border-color: var(--border); }
+.tg-body { flex: 1; display: flex; min-height: 0; min-width: 0; }
+.tg-pane { flex: 1; min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.drop-side { position: absolute; background: color-mix(in srgb, var(--focus) 28%, transparent); border: 2px solid var(--focus); pointer-events: none; }
+.drop-tabs-note, .drag-ghost { position: absolute; pointer-events: none; padding: 2px 8px; border-radius: 6px; background: var(--elev2); border: 1px solid var(--border-strong); font-size: 12px; }
+.drop-tabs-note { color: var(--accent); margin-top: 18px; }
 .agent-dock { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
 
 .panelbar { display: flex; gap: 4px; padding: 5px 12px; background: var(--panel); border-top: 1px solid var(--border); }
@@ -87,13 +117,6 @@ tr.click:hover td { background: var(--elev); }
 .window-layer { position: fixed; inset: 0; pointer-events: none; z-index: 150; }
 .fw { position: fixed; pointer-events: auto; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); overflow: hidden; }
 .fw-focused { border-color: var(--focus); }
-.fw-title { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; font-weight: 600; color: var(--dim); }
-.fw-grab { cursor: grab; }
-.fw-buttons { display: flex; gap: 2px; }
-.fw-buttons button { padding: 0 7px; line-height: 20px; background: transparent; border-color: transparent; }
-.fw-buttons button:hover { border-color: var(--border); }
-.fw-close:hover { color: var(--bad); }
-.fw-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .fw-rz { position: absolute; z-index: 10; }
 .fw-rz-e { right: 0; top: 32px; bottom: 8px; width: 6px; cursor: ew-resize; }
 .fw-rz-w { left: 0; top: 32px; bottom: 8px; width: 6px; cursor: ew-resize; }
