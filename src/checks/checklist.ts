@@ -58,18 +58,23 @@ function sheetsRow(d: Delivery, sheets: SheetRow[] | null, revitNote: string | n
 	return row;
 }
 
-function ifcRow(d: Delivery): ChecklistRow {
+function ifcRow(d: Delivery, findings: Finding[]): ChecklistRow {
 	const files = d.items.filter((i) => /\.ifc$/i.test(i.file)).map((i) => basename(i.file));
 	const required = IFC_KINDS.has(d.kind);
-	return {
-		id: "ifc",
-		group: "Modelis",
-		label: "Informācijas modelis (IFC)",
-		status: files.length ? (files.length > 1 ? "pārbaudi" : "gatavs") : required ? "trūkst" : "neobligāts",
-		action: "revit_ifc",
-		files,
-		detail: files.length > 1 ? `${files.length} IFC faili — vai visi vajadzīgi?` : undefined,
-	};
+	// the coordination audit (8.9): open remarks on the staged model itself
+	const remarks = findings.filter((f) => f.checkId === "coordination" && f.state === "open" && f.where.path !== undefined && files.includes(f.where.path)).length;
+	const status: RowStatus = files.length ? (files.length > 1 || remarks ? "pārbaudi" : "gatavs") : required ? "trūkst" : "neobligāts";
+	const detail = [files.length > 1 ? `${files.length} IFC faili — vai visi vajadzīgi?` : "", remarks ? `koordinācija: ${remarks} piezīmes modelim (Prasības → Atradumi)` : ""].filter(Boolean).join("; ");
+	return { id: "ifc", group: "Modelis", label: "Informācijas modelis (IFC)", status, action: "revit_ifc", files, detail: detail || undefined };
+}
+
+/** Shared coordinates (8.10): only when the project has a coordination reference. Done when the staged model has no open remark about its placement. */
+function coordRow(store: ProjectStore, d: Delivery, findings: Finding[]): ChecklistRow | null {
+	if (!store.readMeta<unknown>("coordination", null)) return null;
+	const files = d.items.filter((i) => /\.ifc$/i.test(i.file)).map((i) => basename(i.file));
+	const open = findings.filter((f) => f.checkId === "coordination" && f.state === "open" && f.message.includes("(Novietne)") && f.where.path !== undefined && files.includes(f.where.path));
+	const status: RowStatus = !files.length ? (IFC_KINDS.has(d.kind) ? "trūkst" : "neobligāts") : open.length ? "trūkst" : "gatavs";
+	return { id: "coords", group: "Modelis", label: "Koplietotās koordinātes: kubs uz pamatpunkta, IfcSite un IfcBuilding", status, action: "coordination", files: [], detail: !files.length ? "vispirms jābūt IFC" : open.length ? `${open.length} piezīmes par novietojumu: ${open.map((f) => f.message.replace(/^[^:]*\(Novietne\): /, "")).slice(0, 2).join("; ")}` : undefined };
 }
 
 function lawRows(d: Delivery, reqs: Requirement[], findings: Finding[]): ChecklistRow[] {
@@ -107,7 +112,7 @@ function clockRows(store: ProjectStore, today: string): ChecklistRow[] {
 export function checklistOf(store: ProjectStore, deliveryId: string, opts: { today: string; sheets: SheetRow[] | null; revitNote?: string | null }): ChecklistRow[] {
 	const d = store.read("deliveries").find((x) => x.id === deliveryId);
 	if (!d) throw new Error(`Nodevums ${deliveryId} nav atrasts.`);
-	return [sheetsRow(d, opts.sheets, opts.revitNote ?? null), ifcRow(d), ...lawRows(d, store.read("requirements"), store.read("findings")), ...clockRows(store, opts.today)];
+	return [sheetsRow(d, opts.sheets, opts.revitNote ?? null), ifcRow(d, store.read("findings")), ...[coordRow(store, d, store.read("findings"))].filter((r): r is ChecklistRow => !!r), ...lawRows(d, store.read("requirements"), store.read("findings")), ...clockRows(store, opts.today)];
 }
 
 /** One line per status for the agent and the page header. */

@@ -373,6 +373,11 @@ function ChecklistLine(p: {
 						Pievienot failu
 					</button>
 				)}
+				{r.action === "coordination" && (
+					<button className="small" onClick={() => windows.open("prasibas", "coordination")}>
+						Koordinācija
+					</button>
+				)}
 				{r.action === "requirements" && (
 					<button className="small" onClick={() => windows.open("prasibas")}>
 						Prasības

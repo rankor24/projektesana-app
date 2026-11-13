@@ -13,6 +13,8 @@ export interface CheckContext {
 	today: string;
 	/** set when the event is "delivery": the delivery being prepared */
 	deliveryId?: string;
+	/** the facts of the project's models, read once per file version (task 8.9); absent when BimCraft is not available */
+	ifcFacts?: (cubeNames: string[], deliveryId?: string) => Promise<{ facts: import("../core/coordination-types.js").ModelFacts[]; errors: { file: string; message: string }[] }>;
 	/** model rooms from Revit, when connected (3.2) */
 	modelRooms?: { number: string; name: string; level: string; area: number; id: string }[];
 }

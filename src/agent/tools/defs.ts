@@ -9,6 +9,7 @@ import { projectTools, sourceTools } from "./sources.js";
 import { skillTools } from "./revit.js";
 import { pinTools } from "./pins.js";
 import { todoTools } from "./todos.js";
+import { coordinationTools } from "./coordination.js";
 import { revitCommandTools } from "./revit-commands.js";
 import { requirementTools } from "./requirements.js";
 import { checkTools } from "./checks.js";
@@ -27,7 +28,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...viewerTools, ...pinTools, ...todoTools, ...skillTools, ...revitCommandTools];
+	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...viewerTools, ...pinTools, ...todoTools, ...coordinationTools, ...skillTools, ...revitCommandTools];
 }
 
 /** Level table of the app's own tools, for the gate. */

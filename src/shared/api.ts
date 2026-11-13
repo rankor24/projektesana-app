@@ -4,6 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
 import type { GrafikItem } from "./calendar.js";
 import type { ProjectSummary } from "../core/summary-types.js";
+import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
 import type { UndoRow } from "../core/undo-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
@@ -212,6 +213,17 @@ export interface ModelRow {
 	origin: ModelOrigin;
 	/** in an arhīvs folder: older than the file kept in its section */
 	archived: boolean;
+}
+
+/** The coordination panel's one answer (task 8.9): the reference, the audit of the models against it, what a seeded reference
+ *  leaves undecided, how many models there are and which could not be read, and why Revit is not in it when it is not. */
+export interface CoordinationView {
+	reference: CoordReference | null;
+	audit: AuditReport | null;
+	warnings: string[];
+	models: number;
+	errors: { file: string; message: string }[];
+	revit: string | null;
 }
 
 /** What the model turns of a project used (task 8.7); cost = the known prices added, `priced` of `turns` had one. */
@@ -448,6 +460,14 @@ export interface ApiSpec {
 	"bimcraft.status": () => BimcraftStatusRow;
 	/** tokens and cost per project, from the log the agent's turns are written to */
 	"usage.summary": () => UsageRow[];
+	"coordination.get": (id: string, withRevit: boolean) => CoordinationView;
+	"coordination.save": (id: string, reference: CoordReference) => void;
+	/** (re)build the reference from the models, with BIP values typed in when there are any; saves and returns it */
+	"coordination.seed": (id: string, declared?: Declared) => CoordReference;
+	/** the audit as an HTML file: into the draft's staging when a delivery is given, else the project's exports; → the file */
+	"coordination.report": (id: string, deliveryId: string | null) => string;
+	/** the shared-coordinates guide for this project (task 8.10): returned as text and kept as a note in Atmiņa */
+	"coordination.guide": (id: string) => string;
 	/** the office memory (task 8.8): lessons for every project; proposals from the agent are in the list, marked */
 	"memory.list": (type?: NoteType) => Note[];
 	"memory.write": (type: NoteType, title: string, body: string) => Note;
@@ -585,6 +605,11 @@ export const API_NAMES = [
 	"models.diff",
 	"bimcraft.status",
 	"usage.summary",
+	"coordination.get",
+	"coordination.save",
+	"coordination.seed",
+	"coordination.report",
+	"coordination.guide",
 	"memory.list",
 	"memory.write",
 	"memory.promote",

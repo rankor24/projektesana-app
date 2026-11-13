@@ -2,15 +2,18 @@
 // One place, called by every handler that changes project data (scan, role, fact decisions, deliveries, pins).
 import { statSync } from "node:fs";
 import { registerAppChecks } from "../checks/index.js";
-import type { CheckEvent } from "../checks/registry.js";
+import type { CheckContext, CheckEvent } from "../checks/registry.js";
 import { runChecks, type RunSummary } from "../checks/run.js";
 import type { ProjectStore } from "../core/store.js";
 import { refreshRequirements, type OfficeStandard } from "../rules/refresh.js";
+import { projectFacts } from "../sources/ifc-facts.js";
 import { pdfText } from "../sources/text/pdf.js";
 
 export interface EngineDeps {
 	dataDir: string;
 	officeStandardPdf: () => string | null;
+	/** resources/bimcraft/app: the engine that reads the models' facts (task 8.9) */
+	bimcraftApp?: string;
 	/** model rooms when Revit is connected (3.2) */
 	modelRooms?: () => Promise<{ number: string; name: string; level: string; area: number; id: string }[] | undefined>;
 }
@@ -38,11 +41,13 @@ export class ProjectEngine {
 		}
 	}
 
-	async afterChange(store: ProjectStore, what: string, opts: { deliveryId?: string } = {}): Promise<RunSummary> {
+	async afterChange(store: ProjectStore, what: string, opts: { deliveryId?: string; only?: string[] } = {}): Promise<RunSummary> {
 		const today = new Date().toISOString().slice(0, 10);
 		if (what === "sources" || what === "facts" || what === "roles" || what === "requirements" || what === "manual") refreshRequirements(store, this.d.dataDir, await this.officeStandard(), today);
 		const event = (["sources", "facts", "roles", "requirements", "delivery", "pins", "rooms", "manual"].includes(what) ? what : "manual") as CheckEvent;
 		const modelRooms = event === "rooms" || event === "manual" ? await this.d.modelRooms?.().catch(() => undefined) : undefined;
-		return runChecks(store, event, { dataDir: this.d.dataDir, today, deliveryId: opts.deliveryId, modelRooms });
+		const app = this.d.bimcraftApp;
+		const ifcFacts: CheckContext["ifcFacts"] = app ? (names, deliveryId) => projectFacts(app, store, names, deliveryId ?? opts.deliveryId) : undefined;
+		return runChecks(store, event, { dataDir: this.d.dataDir, today, deliveryId: opts.deliveryId, modelRooms, ifcFacts, only: opts.only });
 	}
 }

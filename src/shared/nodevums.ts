@@ -5,7 +5,7 @@ export type ChecklistGroup = "Lapas" | "Modelis" | "Likums" | "Saskaņojumi";
  *  neobligāts = not required for this kind */
 export type RowStatus = "trūkst" | "gatavs" | "pamatots" | "pārbaudi" | "neobligāts";
 /** what makes the row done: the page offers the matching button, the agent the matching tool */
-export type RowAction = "revit_sheets" | "revit_ifc" | "file" | "justify" | "clock" | "requirements";
+export type RowAction = "revit_sheets" | "revit_ifc" | "file" | "justify" | "clock" | "requirements" | "coordination";
 
 export interface ChecklistRow {
 	id: string;

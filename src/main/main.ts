@@ -135,6 +135,7 @@ const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.
 }
 const engine = new ProjectEngine({
 	dataDir,
+	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	officeStandardPdf: () => settings.get().officeStandardPdf,
 	modelRooms: async () => (revit.configured() ? (await revitRead.rooms(revit)).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.uniqueId })) : undefined),
 });
