@@ -122,6 +122,8 @@ export interface LaneDeps {
 	listed: readonly string[];
 	revitTools: ReadonlySet<string>;
 	locks: ProjectLocks;
+	/** the owner of the run that starts the lanes: its lanes share its Revit batch (see LockRegistry) */
+	ownerPrefix?: string;
 	/** the main run's event sink */
 	emit(e: RunEvent): void;
 	maxParallel(): number;
@@ -154,7 +156,7 @@ let laneN = 0;
 const stepWords = (name: string) => TOOLS[name]?.words ?? name;
 
 async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<LaneResult> {
-	const owner = `lane:${job.id}`;
+	const owner = `${deps.ownerPrefix ? `${deps.ownerPrefix}/` : ""}lane:${job.id}`;
 	const allowed = new Set(job.allowed);
 	// the lane's own gate: the same levels, but only its tools; a confirm tool cannot be reached (the cap kept them out)
 	const gate = new Gate((n) => (allowed.has(n) ? deps.levelOf(n) : "never"), async () => false);

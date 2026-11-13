@@ -188,7 +188,6 @@ export class ThreadRunner {
 					}
 					const ok = await i.ask(req);
 					if (ok) {
-						confirmedBatches++;
 						// a confirmed Revit batch stays whole: other agents' Revit calls wait until it ends
 						if (hasRevit) {
 							try {
@@ -199,6 +198,8 @@ export class ThreadRunner {
 								return false;
 							}
 						}
+						// counted only once the batch can run: afterBatch records a revision for it
+						confirmedBatches++;
 					}
 					return ok;
 				});
@@ -282,6 +283,7 @@ export class ThreadRunner {
 						listed,
 						revitTools: revitSet,
 						locks: locks.forProject(projectId),
+						ownerPrefix: owner,
 						emit: handle,
 						maxParallel: () => this.d.settings().maxParallelAgents,
 						specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,

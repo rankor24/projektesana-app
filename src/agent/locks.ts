@@ -156,12 +156,12 @@ export class LockRegistry {
 		// A batch can open while this call sits in the revit queue, so the hold is re-checked after every grant: a call
 		// never keeps Revit while another owner's batch is open; it gives it back and waits for the batch again.
 		for (;;) {
-			if (this.batch && this.batch.owner !== owner) {
+			if (this.batch && !this.inBatch(owner)) {
 				const held = await this.waitBatch(owner, signal);
 				if (!held.ok) return held;
 			}
 			const got = await this.revit.acquire("revit", owner, call, signal, label);
-			if (!got.ok || !this.batch || this.batch.owner === owner) return got;
+			if (!got.ok || !this.batch || this.inBatch(owner)) return got;
 			this.revit.release(call);
 		}
 	}
@@ -173,6 +173,11 @@ export class LockRegistry {
 			release: (call) => this.release(call),
 			releaseOwner: (owner) => this.releaseOwner(owner),
 		};
+	}
+
+	/** The batch holder, or one of its lanes (owner `<holder>/lane:<job>`): a run's helpers share its batch. */
+	private inBatch(owner: string): boolean {
+		return !!this.batch && (owner === this.batch.owner || owner.startsWith(`${this.batch.owner}/`));
 	}
 
 	/** Waits until the batch ends; same timeout, abort and owner-ended outcomes as a lock wait. */

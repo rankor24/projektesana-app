@@ -1,6 +1,6 @@
 // 10.4 thread runner: one run of one thread. The agent loop and the model are scripted; nothing leaves the machine.
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -34,7 +34,7 @@ function setup(runAgent: Run, o: { revit?: boolean; afterBatch?: (p: string, s: 
 		runtime: async () => rt,
 		settings: () => ({ ...DEFAULT_SETTINGS }),
 		toolsServer: (env) => (envs.push(env), { command: "node", args: [], env: {} }),
-		revit: () => (o.revit ? { command: "node", args: [], env: {}, tools: ["revit_set"], levels: { revit_set: "confirm" } } : null),
+		revit: () => (o.revit ? { command: "node", args: [], env: {}, tools: ["revit_set", "revit_edit"], levels: { revit_set: "confirm", revit_edit: "run" } } : null),
 		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
 		runsDir: join(dir, "runs"),
 		chatDir: join(dir, "chat"),
@@ -42,6 +42,7 @@ function setup(runAgent: Run, o: { revit?: boolean; afterBatch?: (p: string, s: 
 		complete: async () => reply("## Mērķis\nTelpu pārbaude"),
 		runAgent,
 		afterBatch: o.afterBatch,
+		agents: () => [{ id: "rv", name: "Revit", description: "", prompt: "p".repeat(12), tools: ["revit_edit"] }],
 		threads: () => store,
 		locks,
 	});
@@ -192,4 +193,77 @@ test("ThreadStore.get: a parseable thread.json of the wrong shape is no thread, 
 	assert.equal(s.get("odd"), null);
 	assert.equal(s.get("odd2"), null);
 	assert.deepEqual(s.list().map((t) => t.id), [ok.id]);
+});
+
+test("a lane of the run shares its confirmed Revit batch; another owner still waits", async () => {
+	const locks = new LockRegistry({ waitMs: 60 });
+	const got: Record<string, boolean | undefined> = {};
+	const t = setup(
+		async (o) => {
+			if (o.extraTools) {
+				assert.equal(await o.beforeToolCall!(ctxFor("revit_set", "c1")), undefined);
+				await o.afterToolCall!({ toolCall: { id: "c1" } } as never);
+				got.other = (await locks.acquire("p1", "revit", "other", "x1", undefined, "cits")).ok;
+				const r = await o.extraTools.find((x) => x.name === "delegate")!.execute("d1", { jobs: [{ agent: "rv", task: "t" }] }, o.signal);
+				got.lane = !r.isError;
+				o.onEvent({ type: "done", text: "gatavs" });
+				return;
+			}
+			// the lane's own run: a Revit write passes the batch gate at once (a wait would be refused after 60 ms)
+			const b = await o.beforeToolCall!(ctxFor("revit_edit", "l1"));
+			got.laneWrite = b === undefined;
+			await o.afterToolCall!({ toolCall: { id: "l1" } } as never);
+			o.onEvent({ type: "done", text: "lane" });
+		},
+		{ revit: true, locks },
+	);
+	await t.run(t.store.create({ projectId: "p1", agent: LEAD_ID, title: "A", startedBy: "user" }), "izmaini");
+	assert.equal(got.other, false, "another owner waits for the batch");
+	assert.equal(got.laneWrite, true, "the run's lane writes inside the batch");
+	assert.equal(got.lane, true);
+	locks.beginBatch("run:q", "galvenais aģents");
+	assert.equal((await locks.acquire("p1", "revit", "run:qq", "y2")).ok, false, "a longer owner name is not a lane of it");
+	locks.endBatch("run:q");
+});
+
+test("a run that fails after a confirmed Revit batch leaves nothing held", async () => {
+	const locks = new LockRegistry({ waitMs: 30 });
+	const t = setup(
+		async (o) => {
+			assert.equal(await o.beforeToolCall!(ctxFor("revit_set", "c1")), undefined);
+			throw new Error("modelis nokrita");
+		},
+		{ revit: true, locks },
+	);
+	const r = await t.run(t.store.create({ projectId: "p1", agent: LEAD_ID, title: "A", startedBy: "user" }), "izmaini");
+	assert.equal(r.ok, false);
+	assert.equal(locks.revitHeldBy(), null);
+	assert.equal((await locks.acquire("p1", "revit", "next", "n1")).ok, true);
+});
+
+test("a batch refused because another batch is open is not counted", async () => {
+	const locks = new LockRegistry({ waitMs: 30 });
+	locks.beginBatch("run:other", "cits");
+	let revisions = 0;
+	const t = setup(async (o) => {
+		const b = await o.beforeToolCall!(ctxFor("revit_set", "c1"));
+		assert.equal(b?.block, true);
+		o.onEvent({ type: "done", text: "ok" });
+	}, { revit: true, locks, afterBatch: async () => (revisions++, "x") });
+	const r = await t.run(t.store.create({ projectId: "p1", agent: LEAD_ID, title: "A", startedBy: "user" }), "izmaini");
+	assert.equal(r.confirmedBatches, 0);
+	assert.equal(revisions, 0);
+});
+
+test("ThreadStore.lead: a failed legacy copy leaves no lead thread, and the next call copies again", () => {
+	const dir = tmp();
+	const s = new ThreadStore(join(dir, "threads"));
+	const legacy = join(dir, "p1.jsonl");
+	mkdirSync(legacy); // a directory: copyFileSync throws
+	assert.throws(() => s.lead("p1", legacy));
+	assert.deepEqual(s.list(), []);
+	rmSync(legacy, { recursive: true });
+	writeFileSync(legacy, JSON.stringify({ role: "user", text: "vecā", at: "2026-11-13T10:00:00.000Z" }) + "\n");
+	const t = s.lead("p1", legacy);
+	assert.deepEqual(s.transcript(t.id).map((e) => e.text), ["vecā"]);
 });

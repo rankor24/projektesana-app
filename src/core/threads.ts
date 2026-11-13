@@ -30,10 +30,12 @@ export class ThreadStore {
 		return join(this.folder(id), "chat.jsonl");
 	}
 
-	create(i: { projectId: string | null; agent: string; title: string; topic?: string | null; startedBy: string }): Thread {
+	create(i: { projectId: string | null; agent: string; title: string; topic?: string | null; startedBy: string }, seed?: (chatFile: string) => void): Thread {
 		const now = new Date().toISOString();
 		const t: Thread = { id: newId("th"), projectId: i.projectId, agent: i.agent, title: i.title, topic: i.topic ?? null, state: "idle", startedBy: i.startedBy, wave: null, createdAt: now, lastAt: now, runs: 0 };
 		mkdirSync(this.folder(t.id), { recursive: true });
+		// before thread.json: a failed seed leaves a folder list() skips, never a thread with missing history
+		seed?.(this.chatFile(t.id));
 		this.save(t);
 		return t;
 	}
@@ -103,9 +105,9 @@ export class ThreadStore {
 		if (open) return open;
 		// "once": a lead thread that was closed already took the legacy lines, so a new one starts empty
 		const first = this.list({ agent: LEAD_ID }).length === 0;
-		const t = this.create({ projectId, agent: LEAD_ID, title: "Saruna", startedBy: "user" });
-		if (first && existsSync(legacyChat)) copyFileSync(legacyChat, this.chatFile(t.id));
-		return t;
+		return this.create({ projectId, agent: LEAD_ID, title: "Saruna", startedBy: "user" }, (chat) => {
+			if (first && existsSync(legacyChat)) copyFileSync(legacyChat, chat);
+		});
 	}
 }
 
