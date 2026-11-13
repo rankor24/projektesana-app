@@ -12,7 +12,7 @@ export const FIXED_ROLES: Record<string, string> = {
 };
 
 /** Roles a free folder can have. "Arhīvs" folders are not read: their files are counted, never listed one by one. */
-export const FREE_ROLES = ["TAA", "BIP / BIM prasības", "Grafiks", "Info no pasūtītāja", "Būvatļauja / nosacījumi", "Saskaņojumi", "Punktu mākonis", "Arhīvs", "Cits"] as const;
+export const FREE_ROLES = ["TAA", "BIP / BIM prasības", "Grafiks", "Info no pasūtītāja", "Būvatļauja / nosacījumi", "Saskaņojumi", "Ekspertīzes atzinums", "Punktu mākonis", "Arhīvs", "Cits"] as const;
 
 /** Roles one document can be given in Avoti. A folder role is a guess for every file in it; a client often sends the
  *  property documents as attachments of the PU (BD427: "Kadastrālā lieta" inside 1.1.04_PU), so the user can say what one

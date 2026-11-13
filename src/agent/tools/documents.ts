@@ -51,7 +51,7 @@ export const documentTools: ToolDef[] = [
 		name: "docx_outline",
 		level: "read",
 		description:
-			"The structure of a .docx: paragraphs in order with their style and heading level, and each table with its index, size, header row and first column. The numbers (table index) are the ones docx_apply uses. With find: only the paragraphs and tables that contain that text (and which table rows). Name the file by staged (a file in the delivery's staging folder), sourceId, or a path inside the project. Does not need Word.",
+			"Structure of a .docx: paragraphs in order (style, heading level) and each table (index, size, header row, first column). find narrows to paragraphs / table rows containing the text. Name the file by staged (in the delivery's staging), sourceId or path. No Word needed.",
 		input: { staged: z.string().optional(), sourceId: z.string().optional(), path: z.string().optional(), deliveryId: z.string().optional(), find: z.string().optional(), max: z.number().int().min(1).max(500).optional() },
 		run: (ctx, a) => {
 			const p = readable(ctx, a);
@@ -62,7 +62,7 @@ export const documentTools: ToolDef[] = [
 		name: "docx_apply",
 		level: "run",
 		description:
-			"Edit a .docx through Word, keeping its formatting, as one batch that is all or nothing: if any op matches nothing, nothing is saved and the answer says which op failed. Ops (docx_outline gives the indexes): replace (find → replace), insert_after (a new paragraph after the one with the anchor; style, colour, bold), append_text (text at the end of the anchor's paragraph), set_cell, add_row, delete_row, delete_paragraph. The result is written into the delivery's staging folder: give out (a new name, .docx) to keep the original as it is, or leave it out to edit the staged file itself (a copy is kept; the user can undo). A source (sourceId) is never changed: out is required. dryRun checks every op and saves nothing. Needs Word on this PC. Use docx_outline first, and tell the user what you changed.",
+			"Edit a .docx through Word keeping its formatting, as one all-or-nothing batch (a failed op saves nothing and is named). Ops: replace, insert_after, append_text, set_cell, add_row, delete_row, delete_paragraph; indexes from docx_outline. Result goes to the delivery's staging: out = new name, or omit out to edit the staged file itself (a copy is kept for undo). A sourceId is never changed (out required). dryRun checks and saves nothing. Needs Word.",
 		input: {
 			staged: z.string().optional().describe("a file in the delivery's staging folder"),
 			sourceId: z.string().optional().describe("a source of the project (copied, never changed)"),
@@ -105,7 +105,7 @@ export const documentTools: ToolDef[] = [
 		name: "write_document",
 		level: "run",
 		description:
-			"Write a new Word document from markdown into the delivery's staging folder (a paskaidrojuma raksts, a letter, a cover note): # headings, paragraphs, - lists, 1. lists, | tables |, **bold**, *italic*. A4, Calibri, Latvian. Never overwrites a file. With pdf = true the PDF is made too (needs Word; the .docx is kept if Word is missing). Write the text in Latvian for the office's documents and only from facts the project has confirmed; say what you could not fill in instead of inventing it.",
+			"Write a new Word document from markdown (# headings, paragraphs, - and 1. lists, | tables |, **bold**, *italic*) into the delivery's staging; A4, Latvian. Never overwrites. pdf = true also makes the PDF (needs Word). Write only from confirmed project facts; say what you could not fill in.",
 		input: { deliveryId: z.string().optional(), name: z.string().min(1).max(150), markdown: z.string().min(1).max(200_000), title: z.string().optional(), pdf: z.boolean().optional() },
 		run: async (ctx, a) => {
 			const store = storeOf(ctx);

@@ -7,6 +7,7 @@ import { BIM_STAGES, USER_LABEL, type Finding, type Requirement, type Source } f
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { Ekspertize } from "./Ekspertize";
 import { Koordinacija } from "./Koordinacija";
 
 const ORIGIN: Record<string, string> = { law: "likums", pu: "PU", bip: "BIP", tn: "TN", permit: "atļauja", office: "birojs" };
@@ -19,7 +20,7 @@ const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "dim
 
 export function Prasibas({ filter }: { filter?: string }) {
 	const { projectId } = useUi();
-	const [tab, setTab] = useState<"req" | "findings" | "coord">(filter === "findings" ? "findings" : filter === "coordination" ? "coord" : "req");
+	const [tab, setTab] = useState<"req" | "findings" | "coord" | "expert">(filter === "findings" ? "findings" : filter === "coordination" ? "coord" : filter === "expert" ? "expert" : "req");
 	if (!projectId) return <Empty title="nav projekta" />;
 	return (
 		<div className="fill-col">
@@ -27,8 +28,9 @@ export function Prasibas({ filter }: { filter?: string }) {
 				<button className={tab === "req" ? "on" : ""} onClick={() => setTab("req")}>Prasības</button>
 				<button className={tab === "findings" ? "on" : ""} onClick={() => setTab("findings")}>Atradumi</button>
 				<button className={tab === "coord" ? "on" : ""} onClick={() => setTab("coord")} title="Modeļu pamatpunkts, hierarhija un stāvi pret kopīgu atsauci">Koordinācija</button>
+				<button className={tab === "expert" ? "on" : ""} onClick={() => setTab("expert")} title="Ekspertīzes atzinuma piezīmes pa daļām un atbildīgajiem">Ekspertīze</button>
 			</div>
-			{tab === "req" ? <Requirements projectId={projectId} /> : tab === "findings" ? <Findings projectId={projectId} /> : <Koordinacija projectId={projectId} />}
+			{tab === "req" ? <Requirements projectId={projectId} /> : tab === "findings" ? <Findings projectId={projectId} /> : tab === "coord" ? <Koordinacija projectId={projectId} /> : <Ekspertize projectId={projectId} />}
 		</div>
 	);
 }

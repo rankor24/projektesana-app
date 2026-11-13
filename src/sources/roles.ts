@@ -28,6 +28,7 @@ export function proposeFreeRole(folderName: string): (typeof FREE_ROLES)[number]
 	if (/\bbip\b|\bbim\b|\beir\b/.test(n)) return "BIP / BIM prasības";
 	if (/pasutitaj|\binfo\b/.test(n)) return "Info no pasūtītāja";
 	if (/buvatlauj|nosacijum|\bbis\b/.test(n)) return "Būvatļauja / nosacījumi";
+	if (/ekspert|atzinum/.test(n)) return "Ekspertīzes atzinums";
 	if (/saskanoj/.test(n)) return "Saskaņojumi";
 	if (/grafik/.test(n)) return "Grafiks";
 	if (/punktu|makon|point ?cloud|skenej|lazer/.test(n)) return "Punktu mākonis";
