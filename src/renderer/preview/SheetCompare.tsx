@@ -44,7 +44,7 @@ async function renderPage(bytes: Uint8Array, n: number, w?: number, h?: number, 
 	}
 }
 
-export function SheetCompare({ projectId, a, b, aLabel, bLabel }: { projectId: string; a: string; b: string; aLabel: string; bLabel: string }) {
+export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false }: { projectId: string; a: string; b: string; aLabel: string; bLabel: string; /** list only the sheets that differ (9.9) */ only?: boolean }) {
 	const [rows, setRows] = useState<SheetDiffRow[] | null>(null);
 	const [i, setI] = useState(0);
 	const [zones, setZones] = useState<DiffZone[]>([]);
@@ -58,14 +58,15 @@ export function SheetCompare({ projectId, a, b, aLabel, bLabel }: { projectId: s
 			.then(([x, y, d]) => {
 				if (!live) return;
 				bytes.current = { a: x, b: y };
-				setRows(d);
+				// "only changes": the sheets the diff found something on (the list is the same either way)
+				setRows(only ? d.filter((r) => r.summary.length > 0) : d);
 				setI(0);
 			})
 			.catch((e) => live && setErr(errText(e)));
 		return () => {
 			live = false;
 		};
-	}, [projectId, a, b]);
+	}, [projectId, a, b, only]);
 
 	useEffect(() => {
 		const r = rows?.[i];

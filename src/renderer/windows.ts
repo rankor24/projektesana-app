@@ -36,6 +36,10 @@ export const WINDOW_TITLE: Record<string, string> = {
 	"coord.matrix": "Koordinācijas matrica",
 	"coord.reference": "Atsauce",
 	"coord.lines": "Šūnas labojumi",
+	"vers.list": "Izmaiņas",
+	"vers.models": "Modeļi",
+	"vers.sheets": "Lapu izmaiņas",
+	"vers.revit": "Revit",
 };
 
 export interface WindowsState {

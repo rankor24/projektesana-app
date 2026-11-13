@@ -47,6 +47,13 @@ test("every page's default layout is valid; the chat is docked left on every pag
 			assert.equal(L.dockGroup(l, "right"), undefined, "the cell's lines open on a click");
 			continue;
 		}
+		if (p.canvas === "viewer") {
+			// the viewer on the canvas; the change list on the right, Modeļi / Lapu izmaiņas / Revit at the bottom
+			assert.deepEqual(L.dockGroup(l, "right")!.tabs, ["vers.list"]);
+			assert.deepEqual(L.dockGroup(l, "bottom")!.tabs, ["vers.models", "vers.sheets", "vers.revit"]);
+			assert.equal(L.dockGroup(l, "bottom")!.active, "vers.models");
+			continue;
+		}
 		if (p.kind === "sidebar") {
 			const right = L.dockGroup(l, "right")!;
 			assert.deepEqual(right.tabs, [p.id], `${p.id}: its panel alone on the right`);

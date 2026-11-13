@@ -113,7 +113,7 @@ function ViewPane({ target, paneIndex, focused, sources, loading }: { target: Vi
 	if (target.kind === "ifc") return <IfcView projectId={projectId} key={target.path} name={target.label} load={modelLoad(target.path)} paneIndex={paneIndex} focused={focused} />;
 	if (target.kind === "compare" && target.mode === "ifc")
 		return <IfcView projectId={projectId} key={`${target.a}|${target.b}`} name={target.aLabel} load={modelLoad(target.a)} compareWith={{ name: target.bLabel, load: modelLoad(target.b) }} paneIndex={paneIndex} focused={focused} />;
-	if (target.kind === "compare") return <SheetCompare projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} />;
+	if (target.kind === "compare") return <SheetCompare projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} only={target.only} />;
 	const s = sources?.find((x) => x.id === target.sourceId);
 	if (!s) return <Empty title="nav avota">{loading ? "…" : "Avots vairs nav sarakstā."}</Empty>;
 	// an IFC the scan found (Avoti, the agent's show_source): the 3D view, not the text view that has nothing to show

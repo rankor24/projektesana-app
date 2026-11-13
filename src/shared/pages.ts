@@ -20,7 +20,7 @@ export interface PageDef {
 	/** a single glyph for the collapsed rail */
 	icon: string;
 	/** what fills the main area instead of the page's panel: the federated 3D scene of Koordinācija (9.8) */
-	canvas?: "scene";
+	canvas?: "scene" | "viewer";
 }
 
 export const GROUPS: { id: PageGroup; title: string }[] = [
@@ -40,7 +40,7 @@ export const PAGES: PageDef[] = [
 	{ id: "normativi", title: "Normatīvi", group: "dati", kind: "sidebar", hint: "likumi un noteikumi, bibliotēka", icon: "§" },
 	{ id: "atmina", title: "Atmiņa", group: "dati", kind: "sidebar", hint: "lēmumi un atbildes", icon: "✎" },
 	{ id: "nodevumi", title: "Nodevumi", group: "nodosana", kind: "page", hint: "nodot projektu, termiņi", icon: "⇪" },
-	{ id: "versijas", title: "Versijas", group: "nodosana", kind: "page", hint: "kas mainījās starp datumiem", icon: "⇄" },
+	{ id: "versijas", title: "Versijas", group: "nodosana", kind: "page", hint: "kas mainījās starp datumiem", icon: "⇄", canvas: "viewer" },
 	{ id: "koordinacija", title: "Koordinācija", group: "nodosana", kind: "page", hint: "modeļu pamatpunkts, hierarhija, stāvi", icon: "⊕", canvas: "scene" },
 ];
 
@@ -75,6 +75,16 @@ export function defaultLayout(page: string): Layout {
 		l = mergeInto(open(l, "coord.reference", NOMINAL), "coord.reference", "chat");
 		l = setActive(l, "chat");
 		l = dock(open(l, "coord.matrix", NOMINAL), "coord.matrix", "bottom", NOMINAL, { size: MATRIX_SIZE });
+		return { ...l, focused: "chat" };
+	}
+	if (def.canvas === "viewer") {
+		// the viewer (split A / B for the picked change) on the canvas; the change list docked on the right of it, with the kind
+		// filters; Modeļi, Lapu izmaiņas and Revit as one group at the bottom
+		l = dock(open(l, "vers.list", NOMINAL), "vers.list", "right", NOMINAL, { size: SIDEBAR_SIZE });
+		l = dock(open(l, "vers.models", NOMINAL), "vers.models", "bottom", NOMINAL, { size: MATRIX_SIZE });
+		l = mergeInto(open(l, "vers.sheets", NOMINAL), "vers.sheets", "vers.models");
+		l = mergeInto(open(l, "vers.revit", NOMINAL), "vers.revit", "vers.models");
+		l = setActive(l, "vers.models");
 		return { ...l, focused: "chat" };
 	}
 	if (def.kind === "sidebar") {

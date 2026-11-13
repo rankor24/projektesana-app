@@ -12,6 +12,7 @@ import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Viewer } from "./shell/Preview";
 import { ViewerPanel } from "./preview/ViewerPanels";
+import { VersList, VersModels, VersRevit, VersSheets } from "./panels/Versijas";
 import { CoordLinesPanel, CoordMatrixPanel, CoordReferencePanel, CoordScene } from "./shell/KoordScene";
 import { TopBar } from "./shell/TopBar";
 import { WindowLayer } from "./shell/WindowLayer";
@@ -43,6 +44,10 @@ function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === "coord.matrix") return <CoordMatrixPanel />;
 	if (id === "coord.reference") return <CoordReferencePanel />;
 	if (id === "coord.lines") return <CoordLinesPanel />;
+	if (id === "vers.list") return <VersList />;
+	if (id === "vers.models") return <VersModels />;
+	if (id === "vers.sheets") return <VersSheets />;
+	if (id === "vers.revit") return <VersRevit />;
 	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
 }
 
@@ -95,7 +100,7 @@ export function App() {
 	const { page, canvasFilter } = useWindows();
 	useEffect(() => commentSubject.clear(), [page]);
 	const def = pageById(page);
-	const fullPage = def?.kind === "page" && def.canvas !== "scene" ? page : null;
+	const fullPage = def?.kind === "page" && !def.canvas ? page : null;
 	const sceneCanvas = def?.canvas === "scene";
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId, preview } = useUi();
@@ -140,7 +145,7 @@ export function App() {
 									<CommentTools page={page} />
 								</div>
 							)}
-							{!sceneCanvas && (!fullPage || preview) && <Viewer />}
+							{!sceneCanvas && (!fullPage || preview) && (def?.canvas === "viewer" ? <div className="scene-body"><div className="scene-view"><Viewer /></div><CommentTools page={page} /></div> : <Viewer />)}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

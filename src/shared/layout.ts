@@ -13,7 +13,8 @@ export type Side = (typeof SIDES)[number];
 export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "iestatijumi"] as const;
 export const VIEWER_PANEL_IDS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"] as const;
 export const COORD_PANEL_IDS = ["coord.matrix", "coord.reference", "coord.lines"] as const;
-export const WINDOW_IDS: readonly string[] = ["chat", ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS];
+export const VERS_PANEL_IDS = ["vers.list", "vers.models", "vers.sheets", "vers.revit"] as const;
+export const WINDOW_IDS: readonly string[] = ["chat", ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS, ...VERS_PANEL_IDS];
 export const CHAT = "chat";
 export const isWindowId = (id: unknown): id is string => typeof id === "string" && WINDOW_IDS.includes(id);
 

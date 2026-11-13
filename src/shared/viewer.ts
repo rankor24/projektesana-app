@@ -7,7 +7,8 @@ export type ViewTarget =
 	/** `quote`: text to highlight on the page (a fact's citation, task 9.7); it is not part of the file's identity */
 	| { kind: "source"; sourceId: string; page?: number; quote?: string }
 	| { kind: "ifc"; path: string; label: string }
-	| { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc" }
+	/** `only` (sheets): list only the sheets that differ (9.9) */
+	| { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc"; only?: boolean }
 	| { kind: "law"; sourceId: string; quote?: string };
 
 export interface Tab {
