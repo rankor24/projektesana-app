@@ -20,7 +20,9 @@ export interface PageDef {
 	/** a single glyph for the collapsed rail */
 	icon: string;
 	/** what fills the main area instead of the page's panel: the federated 3D scene of Koordinācija (9.8) */
-	canvas?: "scene" | "viewer";
+	canvas?: "scene" | "viewer" | "plan";
+	/** not in the rail: reached from another page (Telpas: "Atvērt kā lapu") and by name */
+	hidden?: boolean;
 }
 
 export const GROUPS: { id: PageGroup; title: string }[] = [
@@ -34,6 +36,7 @@ export const PAGES: PageDef[] = [
 	{ id: "parskats", title: "Pārskats", group: "projekts", kind: "page", hint: "projekta panelis: kas jādara vispirms", icon: "▦" },
 	{ id: "grafiks", title: "Grafiks", group: "projekts", kind: "page", hint: "kalendārs, termiņi, uzdevumi", icon: "▤" },
 	{ id: "telpas", title: "Telpas", group: "projekts", kind: "sidebar", hint: "telpu programma pret modeli", icon: "▥" },
+	{ id: "telpaslapa", title: "Telpas (lapa)", group: "projekts", kind: "page", hint: "telpu plāns pa stāviem, atšķirības no modeļa", icon: "▥", canvas: "plan", hidden: true },
 	{ id: "prasibas", title: "Prasības", group: "projekts", kind: "sidebar", hint: "prasības un atradumi", icon: "☑" },
 	{ id: "avoti", title: "Avoti", group: "dati", kind: "sidebar", hint: "dokumenti pa mapēm", icon: "▤" },
 	{ id: "faili", title: "Faili", group: "dati", kind: "sidebar", hint: "mapju koks, meklēšana", icon: "▭" },
@@ -75,6 +78,15 @@ export function defaultLayout(page: string): Layout {
 		l = mergeInto(open(l, "coord.reference", NOMINAL), "coord.reference", "chat");
 		l = setActive(l, "chat");
 		l = dock(open(l, "coord.matrix", NOMINAL), "coord.matrix", "bottom", NOMINAL, { size: MATRIX_SIZE });
+		return { ...l, focused: "chat" };
+	}
+	if (def.canvas === "plan") {
+		// the floor strip and the tile plan on the canvas; the differences (and the inventory as a tab of the same group) docked on
+		// the right; INV Area at the bottom
+		l = dock(open(l, "telpas.diffs", NOMINAL), "telpas.diffs", "right", NOMINAL, { size: SIDEBAR_SIZE + 40 });
+		l = mergeInto(open(l, "telpas.inventory", NOMINAL), "telpas.inventory", "telpas.diffs");
+		l = setActive(l, "telpas.diffs");
+		l = dock(open(l, "telpas.inv", NOMINAL), "telpas.inv", "bottom", NOMINAL, { size: 200 });
 		return { ...l, focused: "chat" };
 	}
 	if (def.canvas === "viewer") {
@@ -124,7 +136,7 @@ export function resolveOpen(name: string, filter?: string): OpenTarget | null {
 // ---- the rail and the palette ----
 
 export function railGroups(): { id: PageGroup; title: string; pages: PageDef[] }[] {
-	return GROUPS.map((g) => ({ ...g, pages: PAGES.filter((p) => p.group === g.id) }));
+	return GROUPS.map((g) => ({ ...g, pages: PAGES.filter((p) => p.group === g.id && !p.hidden) }));
 }
 
 export interface PageItem {

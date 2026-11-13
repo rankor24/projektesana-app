@@ -15,6 +15,7 @@ export const PANEL_TITLE: Record<PanelId, string> = {
 	parskats: "Pārskats",
 	koordinacija: "Koordinācija",
 	normativi: "Normatīvi",
+	telpaslapa: "Telpas (lapa)",
 	faili: "Faili",
 	grafiks: "Grafiks",
 	avoti: "Avoti",
@@ -40,6 +41,9 @@ export const WINDOW_TITLE: Record<string, string> = {
 	"vers.models": "Modeļi",
 	"vers.sheets": "Lapu izmaiņas",
 	"vers.revit": "Revit",
+	"telpas.diffs": "Atšķirības",
+	"telpas.inventory": "Inventarizācija",
+	"telpas.inv": "INV Area",
 };
 
 export interface WindowsState {

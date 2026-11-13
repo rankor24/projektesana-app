@@ -480,3 +480,10 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .coord-matrix td.cell.on { outline: 2px solid var(--accent); outline-offset: -2px; }
 .scene-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .scene-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.floor-strip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.floor-chip.on { background: var(--elev2); border-color: var(--accent); }
+.floor-chip.bad { border-color: var(--bad); }
+.tile-plan { position: relative; flex: 1; min-height: 160px; margin: 8px; }
+.tile { position: absolute; box-sizing: border-box; border: 2px solid; padding: 2px 4px; overflow: hidden; cursor: pointer; border-radius: 3px; }
+.tile.model-only { border-style: dashed; }
+.tile:hover { filter: brightness(1.15); }

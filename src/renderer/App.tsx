@@ -12,6 +12,7 @@ import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Viewer } from "./shell/Preview";
 import { ViewerPanel } from "./preview/ViewerPanels";
+import { TelpasDiffs, TelpasInventory, TelpasInvArea, TelpasPlan } from "./panels/Telpas";
 import { VersList, VersModels, VersRevit, VersSheets } from "./panels/Versijas";
 import { CoordLinesPanel, CoordMatrixPanel, CoordReferencePanel, CoordScene } from "./shell/KoordScene";
 import { TopBar } from "./shell/TopBar";
@@ -44,6 +45,9 @@ function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === "coord.matrix") return <CoordMatrixPanel />;
 	if (id === "coord.reference") return <CoordReferencePanel />;
 	if (id === "coord.lines") return <CoordLinesPanel />;
+	if (id === "telpas.diffs") return <TelpasDiffs />;
+	if (id === "telpas.inventory") return <TelpasInventory />;
+	if (id === "telpas.inv") return <TelpasInvArea />;
 	if (id === "vers.list") return <VersList />;
 	if (id === "vers.models") return <VersModels />;
 	if (id === "vers.sheets") return <VersSheets />;
@@ -102,6 +106,7 @@ export function App() {
 	const def = pageById(page);
 	const fullPage = def?.kind === "page" && !def.canvas ? page : null;
 	const sceneCanvas = def?.canvas === "scene";
+	const planCanvas = def?.canvas === "plan";
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId, preview } = useUi();
 	const [row, setRow] = useState<ProjectRow | null>(null);
@@ -145,7 +150,15 @@ export function App() {
 									<CommentTools page={page} />
 								</div>
 							)}
-							{!sceneCanvas && (!fullPage || preview) && (def?.canvas === "viewer" ? <div className="scene-body"><div className="scene-view"><Viewer /></div><CommentTools page={page} /></div> : <Viewer />)}
+							{planCanvas && (
+								<div className="scene-body">
+									<div className="scene-view">
+										<TelpasPlan />
+									</div>
+									<CommentTools page={page} />
+								</div>
+							)}
+							{!sceneCanvas && !planCanvas && (!fullPage || preview) && (def?.canvas === "viewer" ? <div className="scene-body"><div className="scene-view"><Viewer /></div><CommentTools page={page} /></div> : <Viewer />)}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

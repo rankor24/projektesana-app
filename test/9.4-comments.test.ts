@@ -146,9 +146,9 @@ test("comment → task: the text as the title, the pin and the finding as the li
 });
 
 test("each page's tools: the table covers the pages that have comments, every tool fits its subject, and a tool says why it cannot be used", () => {
-	assert.deepEqual(pagesWithTools().sort(), ["koordinacija", "nodevumi", "parskats", "prasibas", "telpas", "versijas"]);
+	assert.deepEqual(pagesWithTools().sort(), ["koordinacija", "nodevumi", "parskats", "prasibas", "telpas", "telpaslapa", "versijas"]);
 	for (const id of pagesWithTools()) assert.ok(PAGES.some((p) => p.id === id), `${id} is a page`);
-	const ids = Object.values(TOOLS_BY_PAGE).flat().map((t) => t.id);
+	const ids = [...new Set(Object.values(TOOLS_BY_PAGE))].flat().map((t) => t.id); // the Telpas page shares the sidebar's list
 	assert.equal(new Set(ids).size, ids.length, "tool ids are unique");
 	assert.deepEqual(toolsFor("koordinacija").map((t) => t.id), ["cell-note", "storey-mark", "correct"]);
 	assert.deepEqual(toolsFor("versijas").map((t) => t.id), ["region-note", "accept-change", "reject-change"]);

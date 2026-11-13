@@ -2,7 +2,7 @@
 // process; its tool result carries the instruction and the chat dock carries it out. Viewer actions (task 9.5) change only
 // the view, never the model or any project data; the run card keeps them as chips the user can press again.
 
-export const PANEL_NAMES = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi"] as const;
+export const PANEL_NAMES = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa"] as const;
 
 /** One thing done to the viewer. The guids are IFC GlobalIds. */
 export type ViewerAction =

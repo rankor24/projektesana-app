@@ -55,6 +55,8 @@ export const TOOLS_BY_PAGE: Record<string, CommentTool[]> = {
 	],
 };
 
+TOOLS_BY_PAGE.telpaslapa = TOOLS_BY_PAGE.telpas;
+
 /** The model viewer's own tools (3D): a pin with the camera, marks over the view, a sketch for the agent (the viewer bar). */
 export const VIEWER_TOOLS: CommentTool[] = [
 	{ id: "pin", label: "Piezīme", hint: "Piezīme pie elementa (ar kameru)", intent: "note", on: ["element", "page"], needsText: true },

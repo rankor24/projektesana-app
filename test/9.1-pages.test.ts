@@ -24,10 +24,11 @@ test("every panel is the panel of exactly one page, or a global window; no page 
 test("the rail has the three groups in order, every page once, Koordinācija a page of its own", () => {
 	const g = P.railGroups();
 	assert.deepEqual(g.map((x) => x.title), ["Projekts", "Dati", "Nodošana"]);
-	assert.deepEqual(g[0].pages.map((p) => p.title), ["Pārskats", "Grafiks", "Telpas", "Prasības"]);
+	assert.deepEqual(g[0].pages.map((p) => p.title), ["Pārskats", "Grafiks", "Telpas", "Prasības"], "Telpas (lapa) is not here: it opens from the Telpas sidebar");
 	assert.deepEqual(g[1].pages.map((p) => p.title), ["Avoti", "Faili", "Normatīvi", "Atmiņa"]);
 	assert.deepEqual(g[2].pages.map((p) => p.title), ["Nodevumi", "Versijas", "Koordinācija"]);
-	assert.equal(g.flatMap((x) => x.pages).length, P.PAGES.length);
+	assert.equal(g.flatMap((x) => x.pages).length, P.PAGES.filter((p) => !p.hidden).length, "a hidden page (Telpas as a page) is not in the rail");
+	assert.deepEqual(P.PAGES.filter((p) => p.hidden).map((p) => p.id), ["telpaslapa"]);
 	assert.equal(P.pageById("koordinacija")?.kind, "page");
 	assert.equal(P.pageById("normativi")?.group, "dati");
 });
@@ -45,6 +46,13 @@ test("every page's default layout is valid; the chat is docked left on every pag
 			assert.deepEqual(L.dockGroup(l, "left")!.tabs, ["chat", "coord.reference"]);
 			assert.equal(L.dockGroup(l, "left")!.active, "chat", "the chat stays in front");
 			assert.equal(L.dockGroup(l, "right"), undefined, "the cell's lines open on a click");
+			continue;
+		}
+		if (p.canvas === "plan") {
+			// the tile plan on the canvas; the differences and the inventory as one group on the right, INV Area at the bottom
+			assert.deepEqual(L.dockGroup(l, "right")!.tabs, ["telpas.diffs", "telpas.inventory"]);
+			assert.equal(L.dockGroup(l, "right")!.active, "telpas.diffs");
+			assert.deepEqual(L.dockGroup(l, "bottom")!.tabs, ["telpas.inv"]);
 			continue;
 		}
 		if (p.canvas === "viewer") {
