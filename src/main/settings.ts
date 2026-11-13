@@ -3,6 +3,8 @@
 // v2 starts with a fresh data folder.
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_AGENTS } from "../agent/subagents.js";
+import type { AgentSpec } from "../shared/agent-types.js";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/types.js";
 
 export interface Crypto {
@@ -32,11 +34,28 @@ export class AppSettings {
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf", "userName"];
-		const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents"];
+		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
+		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
 		const s = { ...this.get(), ...clean };
 		writeFileSync(join(this.dir, "settings.json"), JSON.stringify(s, null, 2), "utf8");
 		return s;
+	}
+
+	/** the specialists (task 8.15): the saved list, or the shipped one until the user saves */
+	agentSpecs(): { specs: AgentSpec[]; shipped: boolean } {
+		const f = join(this.dir, "agents.json");
+		if (!existsSync(f)) return { specs: DEFAULT_AGENTS, shipped: true };
+		try {
+			const j = JSON.parse(readFileSync(f, "utf8")) as AgentSpec[];
+			return Array.isArray(j) ? { specs: j, shipped: false } : { specs: DEFAULT_AGENTS, shipped: true };
+		} catch {
+			return { specs: DEFAULT_AGENTS, shipped: true };
+		}
+	}
+
+	saveAgentSpecs(specs: AgentSpec[]): void {
+		writeFileSync(join(this.dir, "agents.json"), JSON.stringify(specs, null, 2), "utf8");
 	}
 
 	private keyFile(provider: string) {

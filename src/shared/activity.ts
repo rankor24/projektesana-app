@@ -71,6 +71,8 @@ export interface Activity {
 	progress?: { done: number; total: number };
 	/** a tool's whole answer in characters: what it costs the context */
 	chars?: number;
+	/** the line belongs to a helper or specialist working beside the run (task 8.15) */
+	lane?: { id: string; label: string };
 }
 
 /** The app's own tools: what each one is called on screen, and what kind of step it is. */
@@ -117,6 +119,20 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	stage_ifc: { words: "Eksportē IFC nodevumam", kind: "revit" },
 	stage_source_file: { words: "Pievieno failu nodevumam", kind: "write" },
 	unstage_file: { words: "Izņem failu no nodevuma", kind: "write" },
+	rename_staged: { words: "Pārdēvē nodevuma failus", kind: "write" },
+	docx_outline: { words: "Lasa Word dokumenta struktūru", kind: "read" },
+	docx_apply: { words: "Labo Word dokumentu", kind: "write" },
+	write_document: { words: "Raksta Word dokumentu", kind: "write" },
+	expert_import: { words: "Nolasa ekspertīzes atzinumu", kind: "read" },
+	expert_add: { words: "Pievieno ekspertīzes piezīmi", kind: "write" },
+	expert_remarks: { words: "Skatās ekspertīzes piezīmes", kind: "read" },
+	expert_fix_list: { words: "Sagatavo labojumu sarakstu", kind: "read" },
+	list_tasks: { words: "Skatās uzdevumus", kind: "read" },
+	create_task: { words: "Pievieno uzdevumu", kind: "write" },
+	update_task: { words: "Maina uzdevumu", kind: "write" },
+	coordinates_guide: { words: "Sagatavo koordināšu instrukciju", kind: "read" },
+	run_subagent: { words: "Dod uzdevumus palīgiem", kind: "other" },
+	delegate: { words: "Dod darbu speciālistiem", kind: "other" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {

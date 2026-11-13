@@ -1,6 +1,7 @@
 // 0.6 the session's context handling: the meter's numbers, compaction at the line and by hand, and what happens when the
 // model still says the request is too big. The model and the agent loop are scripted; nothing leaves the machine.
 import assert from "node:assert/strict";
+import { allTools } from "../src/agent/tools/defs.ts";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -62,7 +63,9 @@ test("context: before any conversation only the fixed part is known, and it is t
 	assert.equal(c.compactAt, compactLine(m.contextWindow));
 	assert.equal(c.used, null);
 	assert.equal(c.source, "none");
-	assert.ok(c.fixedEstimate > 4500 && c.fixedEstimate < 9000, `fixed ${c.fixedEstimate} (prompt + rules + skills + 36 tool declarations)`);
+	// every request carries this: the rules, the skills and the declarations of every tool (the app's own + run_subagent and delegate) and the
+	// specialists' roster. It grew with the tools of phase 8 (9.0K → 9.4K with sub-agents); past 10K, shorten descriptions before raising this.
+	assert.ok(c.fixedEstimate > 4500 && c.fixedEstimate < 10_000, `fixed ${c.fixedEstimate} (prompt + rules + skills + ${allTools().length + 2} tool declarations)`);
 	assert.equal(c.draft?.text, 2);
 	assert.ok(c.draft!.focus > 0, "'Fokuss: nekas' is sent with every message too");
 });

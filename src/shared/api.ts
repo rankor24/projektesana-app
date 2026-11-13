@@ -8,6 +8,7 @@ import type { AuditReport, CoordReference, Declared } from "../core/coordination
 import type { UndoRow } from "../core/undo-types.js";
 import type { TraceView } from "./trace-types.js";
 import type { RenameMode, RenameResult, RenameRow } from "./rename.js";
+import type { AgentSpec, AgentsView } from "./agent-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
@@ -423,6 +424,9 @@ export interface ApiSpec {
 	/** renames inside the draft's staging folder only, never over a file; every rename is recorded so the batch can be taken back */
 	"deliveries.renameApply": (id: string, deliveryId: string, pairs: { file: string; to: string }[]) => RenameResult;
 	"deliveries.renameUndo": (id: string, deliveryId: string, batch: string) => { reverted: number; errors: string[] };
+	/** the specialists the agent can delegate to (8.15), edited in Iestatījumi → Aģenti */
+	"agents.list": () => AgentsView;
+	"agents.save": (specs: AgentSpec[]) => AgentSpec[];
 	/** expert reviews (8.14): the remarks, the counts, and the documents that can be read as a review */
 	"expert.list": (id: string) => { remarks: ExpertRemark[]; summary: ExpertSummary; sources: ReviewSource[] };
 	"expert.read": (id: string, sourceId: string) => ImportResult;
@@ -584,6 +588,8 @@ export const API_NAMES = [
 	"deliveries.renamePlan",
 	"deliveries.renameApply",
 	"deliveries.renameUndo",
+	"agents.list",
+	"agents.save",
 	"expert.list",
 	"expert.read",
 	"expert.setState",

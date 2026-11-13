@@ -22,11 +22,14 @@ import { ctxEnv, type ToolCtx } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest, type Level } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
+import type { AgentSpec } from "../shared/agent-types.js";
+import { WriteLocks } from "./locks.js";
+import { DEFAULT_AGENTS, MAIN_TOOL_LEVELS, rosterText, subagentDeclarations, subagentTools } from "./subagents.js";
 
 /** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected. */
 let appToolTokens: number | null = null;
 function toolDeclarationTokens(): number {
-	if (appToolTokens === null) appToolTokens = estimateTextTokens(JSON.stringify(allTools().map((t) => ({ name: t.name, description: t.description, parameters: z.toJSONSchema(z.object(t.input)) }))));
+	if (appToolTokens === null) appToolTokens = estimateTextTokens(JSON.stringify([...allTools().map((t) => ({ name: t.name, description: t.description, parameters: z.toJSONSchema(z.object(t.input)) })), ...subagentDeclarations()]));
 	return appToolTokens;
 }
 
@@ -48,6 +51,8 @@ export interface SessionDeps {
 	/** the Revit MCP server, when configured; null = not connected */
 	revit: () => ToolServer | null;
 	ctx: Omit<ToolCtx, "projectId" | "runDir">;
+	/** the specialists the agent may delegate to (task 8.15); the shipped ones when absent */
+	agents?: () => AgentSpec[];
 	runsDir: string;
 	chatDir: string;
 	emit: (runId: string, event: RunEvent) => void;
@@ -186,7 +191,7 @@ export class AgentSession {
 
 	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. */
 	private standing(s: Settings): string {
-		return [SYSTEM_PROMPT, userLine(s.userName), REVIT_RULES, skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
+		return [SYSTEM_PROMPT, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -259,7 +264,7 @@ export class AgentSession {
 			const appTools = allTools().map((t) => t.name);
 			const app = appLevels();
 			const revit = this.d.revit();
-			const levelOf = makeLevelOf(app, revit?.levels ?? {});
+			const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, revit?.levels ?? {});
 			const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = { "projektesana-tools": { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) } };
 			if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
 
@@ -307,6 +312,48 @@ export class AgentSession {
 			const attempt = async (h: AgentMessage[]) => {
 				st.overflowed = null;
 				const base = estimateContext(h).tokens;
+				const handle = (e: RunEvent): void => {
+					if (e.type === "tool") st.toolsRan = true;
+					if (e.type === "usage") {
+						try {
+							appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
+						} catch {
+							// the log is a convenience: a full disk must not stop the run
+						}
+					}
+					if (e.type === "done") answer = e.text;
+					if (e.type === "error" && isContextOverflow({ stopReason: "error", errorMessage: e.message } as AssistantMessage)) {
+						st.overflowed = e.message;
+						// before any tool ran nothing has happened yet: held back, the run is compacted and repeated once
+						if (!st.toolsRan && !st.retried) return;
+						emit({ ...e, message: `${e.message}\n\nKonteksts ir pilns. Spied «saspiest» virs ievades vai sāc jaunu sarunu.` });
+						return;
+					}
+					emit(e);
+				};
+				// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
+				const listed = [...offered(appTools, levelOf), ...(revit ? offered(revit.tools, levelOf) : [])];
+				const appSet = new Set(appTools);
+				const revitSet = new Set(revit?.tools ?? []);
+				const extraTools = subagentTools({
+					run: this.d.runAgent ?? runPi,
+					base: { runtime: rt, provider: s.provider, modelId: s.model, effort: (s.effort || undefined) as PiEffort | undefined },
+					mcpFor: (allowed) => {
+						const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
+						const mine = allowed.filter((n) => appSet.has(n));
+						if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
+						const theirs = allowed.filter((n) => revitSet.has(n));
+						if (revit && theirs.length) m.revit = { ...revit, allow: theirs };
+						return m;
+					},
+					levelOf,
+					listed,
+					revitTools: revitSet,
+					locks: new WriteLocks(),
+					emit: handle,
+					maxParallel: () => this.d.settings().maxParallelAgents,
+					specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
+				});
 				await (this.d.runAgent ?? runPi)({
 					runtime: rt,
 					provider: s.provider,
@@ -320,25 +367,8 @@ export class AgentSession {
 					beforeToolCall: gate.before,
 					history: h,
 					onMessages: (messages) => this.conversations.set(id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }),
-					onEvent: (e) => {
-						if (e.type === "tool") st.toolsRan = true;
-						if (e.type === "usage") {
-							try {
-								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
-							} catch {
-								// the log is a convenience: a full disk must not stop the run
-							}
-						}
-						if (e.type === "done") answer = e.text;
-						if (e.type === "error" && isContextOverflow({ stopReason: "error", errorMessage: e.message } as AssistantMessage)) {
-							st.overflowed = e.message;
-							// before any tool ran nothing has happened yet: held back, the run is compacted and repeated once
-							if (!st.toolsRan && !st.retried) return;
-							emit({ ...e, message: `${e.message}\n\nKonteksts ir pilns. Spied «saspiest» virs ievades vai sāc jaunu sarunu.` });
-							return;
-						}
-						emit(e);
-					},
+					onEvent: handle,
+					extraTools,
 				});
 			};
 			await attempt(history);

@@ -6,6 +6,7 @@ import type { ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
 import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
+import { Agenti } from "./Agenti";
 
 export function Iestatijumi() {
 	const settings = useLoad(() => call("settings.get"), []);
@@ -166,6 +167,8 @@ export function Iestatijumi() {
 					</label>
 				</>
 			)}
+			<div className="section-title">Aģenti</div>
+			<Agenti />
 			<div className="section-title">Izmantojums</div>
 			<UsageTable />
 			<div className="section-title">3D skats (BimCraft)</div>

@@ -5,7 +5,7 @@
 // agent.abort on the caller's signal. Carried from projektesana-app v1. Changed for v2: the approval gate runs on pi's
 // beforeToolCall hook; the previous messages of the conversation are passed in and handed back, so a chat keeps its context.
 // A turn that fails on the wire is restarted with backoff (retry.ts) instead of ending the run.
-import { Agent, type AgentMessage, type BeforeToolCallContext, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
+import { Agent, type AfterToolCallContext, type AfterToolCallResult, type AgentMessage, type AgentTool, type BeforeToolCallContext, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, ImageContent, Model, RetryPolicy } from "@earendil-works/pi-ai";
 import type { RunEvent } from "../../shared/types.js";
 import { newPiState, piEvents } from "./events.js";
@@ -34,6 +34,10 @@ export interface PiRunOptions {
 	effort?: PiEffort;
 	/** The approval gate. */
 	beforeToolCall?: (ctx: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined>;
+	/** After every tool call (a lane frees its write lock here). */
+	afterToolCall?: (ctx: AfterToolCallContext, signal?: AbortSignal) => Promise<AfterToolCallResult | undefined>;
+	/** Tools of the main process, offered next to the tool servers' tools (sub-agents and delegate, task 8.15). */
+	extraTools?: AgentTool<any>[];
 	/** Messages of the conversation so far (same model family). */
 	history?: AgentMessage[];
 	/** Receives the conversation after the run, for the next turn. */
@@ -72,13 +76,14 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 				systemPrompt: o.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
 				model,
 				thinkingLevel: effortFor(model, o.effort),
-				tools: mcp.tools,
+				tools: [...mcp.tools, ...(o.extraTools ?? [])],
 				messages: o.history ?? [],
 			},
 			streamFn: streamFn(o.runtime.models),
 			// tools write project state and drive one Revit: one at a time
 			toolExecution: "sequential",
 			beforeToolCall: o.beforeToolCall,
+			afterToolCall: o.afterToolCall,
 			...(identity ? { identity: { attribution: { name: identity.name, url: identity.url } } } : {}),
 		});
 

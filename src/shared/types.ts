@@ -16,6 +16,8 @@ export type RunEvent =
 	| { type: "usage"; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
 	/** A model turn failed on the wire (fetch failed, 429, 5xx…); the run waits `delayMs` and restarts it. Not the end of the run. */
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
+	/** A helper or specialist working beside the main run (task 8.15): one lane per job. `step` replaces the lane's current action; `end` carries its report. */
+	| { type: "lane"; id: string; label: string; agent?: string; phase: "start" | "step" | "end"; text?: string; ok?: boolean; report?: string }
 	/** Raw provider error, never rewritten. */
 	| { type: "error"; engine: "pi"; message: string };
 
@@ -37,9 +39,11 @@ export interface Settings {
 	officeStandardPdf: string | null;
 	/** the person using the app: stamped on their decisions, shown in BCF comments, told to the agent. "" = not set */
 	userName: string;
+	/** how many helpers / specialists may work at once (task 8.15), 1–6 */
+	maxParallelAgents: number;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "" };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3 };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

@@ -113,6 +113,7 @@ const session = new AgentSession({
 		emit("data.changed", { projectId, what: ["revisions", "findings"] });
 		return `revīzija ${rev.id}${rev.diffFromPrev ? ` (+${rev.diffFromPrev.added} −${rev.diffFromPrev.removed} ~${rev.diffFromPrev.changed})` : ""}; atvērtie atradumi: ${r.open}`;
 	},
+	agents: () => settings.agentSpecs().specs,
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
 	emit: (runId, event) => {

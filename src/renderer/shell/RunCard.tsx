@@ -77,7 +77,7 @@ function Step({ a, live }: { a: Activity; live: boolean }) {
 			{a.status === "ok" && <span className="dim small">ieteikts — apstiprini: Projekts → profils</span>}
 		</div>
 	);
-	const cls = `act-step k-${a.kind} ${a.tool ? `t-${a.tool}` : ""} ${a.status ?? ""} ${a.fact ? "fact" : ""}`;
+	const cls = `act-step k-${a.kind} ${a.tool ? `t-${a.tool}` : ""} ${a.status ?? ""} ${a.fact ? "fact" : ""} ${a.lane && a.step?.endsWith("-now") ? "lane" : ""}`;
 	if (!a.detail)
 		return (
 			<div className={cls}>

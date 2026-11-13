@@ -243,6 +243,7 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .act-step.running { color: var(--text); }
 .act-step.failed { color: var(--bad); }
 .act-step.stopped { color: var(--muted); }
+.act-step.lane { margin-left: 18px; border-left: 2px solid var(--border); padding-left: 8px; }
 .act-step details > summary { list-style: none; cursor: pointer; }
 .act-step details > summary::-webkit-details-marker { display: none; }
 .act-sum { display: flex; align-items: center; gap: 6px; min-width: 0; }

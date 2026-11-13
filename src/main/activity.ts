@@ -188,6 +188,18 @@ export class ActivityLog {
 			case "confirm":
 				this.line(r, "confirm", `Gaida apstiprinājumu: ${e.tool}`, { step: `confirm-${e.id}`, status: "running", tool: "revit", detail: e.batch });
 				return;
+			case "lane": {
+				// a helper or specialist beside the run: one header line that goes running → done, and one line that says what it is doing now
+				const lane = { id: e.id, label: e.label };
+				const head = `${e.agent ? `${e.agent}: ` : ""}${e.label}`;
+				if (e.phase === "start") this.line(r, "note", head, { step: `lane-${e.id}`, status: "running", lane });
+				else if (e.phase === "step") this.line(r, "note", e.text ?? "", { step: `lane-${e.id}-now`, status: "running", lane });
+				else {
+					this.line(r, "note", e.ok ? head : `${head} — neizdevās`, { step: `lane-${e.id}`, status: e.ok ? "ok" : "failed", lane, detail: e.report });
+					this.line(r, "note", e.ok ? "Atskaite gatava" : "Apstājās", { step: `lane-${e.id}-now`, status: e.ok ? "ok" : "failed", lane });
+				}
+				return;
+			}
 			case "retry":
 				this.line(r, "note", `Savienojums pārtrūka (${oneLine(e.message, 80)}). Atkārto ${e.attempt}/${e.of}…`, { step: "retry", status: "running" });
 				return;

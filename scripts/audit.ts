@@ -6,6 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { allTools } from "../src/agent/tools/defs.ts";
 import { REVIT_LEVELS } from "../src/agent/tools/revit-levels.ts";
+import { MAIN_TOOL_LEVELS } from "../src/agent/subagents.ts";
 
 const root = join(import.meta.dirname, "..");
 const plan = readFileSync(join(root, "docs", "v2-work-plan.md"), "utf8");
@@ -111,7 +112,8 @@ for (const line of plan.split("\n")) {
 // the agent tool table
 const toolTable = plan.slice(plan.indexOf("## Agent tools"), plan.indexOf("Skills:"));
 const planned = [...toolTable.matchAll(/`([a-z_]+)(?:\(|`)/g)].map((x) => x[1]).filter((x) => !["send_code_to_revit", "delete_element"].includes(x));
-const have = new Set([...allTools().map((t) => t.name), ...Object.keys(REVIT_LEVELS)]);
+// run_subagent and delegate are tools of the main process (they start model runs), not of the tools server
+const have = new Set([...allTools().map((t) => t.name), ...Object.keys(REVIT_LEVELS), ...Object.keys(MAIN_TOOL_LEVELS)]);
 const missingTools = [...new Set(planned)].filter((t) => !have.has(t));
 for (const t of missingTools) problems.push(`tool ${t} missing`);
 
