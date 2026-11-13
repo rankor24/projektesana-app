@@ -53,6 +53,22 @@ const LIVE: Record<string, string> = {
 	"7.5": "the agent filling a draft needs the sign-in",
 	"7.6": "the copy into a real project's 1.4_Nodevumi is the user's click; tested on an invented tree only",
 	"7.7": "the page itself is the user's playtest",
+	"8.0": "the packaged exe opening BimCraft with the bridge add-on is the user's playtest; smoke:packaged checks the shipped files only",
+	"8.1": "an IFC picked in Avoti opening in 3D is the user's playtest",
+	"8.2": "a pin on a wall surviving a restart is the user's playtest; the agent naming it needs the sign-in",
+	"8.3": "finding a real project's file in two clicks is the user's playtest",
+	"8.4": "the dashboard on screen is the user's playtest",
+	"8.5": "planning a week on the Grafiks is the user's playtest",
+	"8.6": "the palette on screen is the user's playtest",
+	"8.7": "undoing an agent write needs the sign-in; the run card is the user's playtest",
+	"8.8": "a lesson in the agent's answer on another project needs the sign-in",
+	"8.9": "a real draft's IFC row needs a real project's models; the open Revit document's levels need Revit",
+	"8.10": "setting up a section's model from the guide needs Revit and the user",
+	"8.11": "a sheet change opening its element in 3D is the user's playtest",
+	"8.12": "the Pārdēvēt panel is the user's playtest",
+	"8.13": "Word ran on invented documents only; the agent drafting a paskaidrojuma raksts needs the sign-in",
+	"8.14": "a real atzinums' layout is not verified (invented reviews only); the tab is the user's playtest",
+	"8.15": "lanes against a real model need the sign-in (scripted loops only); the Aģenti page is the user's playtest",
 };
 
 /** Done-when lines checked on a real project on the user's PC (read-only, counts only — no project data in the repo). */
@@ -89,7 +105,11 @@ const rows: string[] = [];
 const problems: string[] = [];
 for (const line of plan.split("\n")) {
 	const m = /^\| (\d\.\d+) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \|$/.exec(line);
-	if (!m) continue;
+	if (!m) {
+		// a task row that does not parse was skipped without a word once (8.8: a carriage return where `\r` was meant)
+		if (/^\| \d\.\d+ \|/.test(line)) problems.push(`${line.slice(2, 8).trim()}: plan row does not parse (a control character or a missing cell?)`);
+		continue;
+	}
 	const [, id, build, filesCol, testsCol] = m;
 	const files = [...filesCol.matchAll(/`([^`]+)`/g)].flatMap((x) => x[1].split(/,\s+(?![^{]*\})/)).flatMap((x) => expand(x.trim())).filter((x) => /^(src|scripts|resources|test|docs)\//.test(x) || /\.(ts|tsx|mjs|ps1)$/.test(x));
 	const fileNotes = files.map((f) => {
