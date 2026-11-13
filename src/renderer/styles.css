@@ -297,3 +297,13 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .dash-name { margin-top: 2px; }
 .dash-root { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-facts { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; font-size: 12.5px; }
+
+/* Faili (8.3): the project's folders and files as a tree */
+.ftree { flex: 1; min-height: 0; overflow: auto; padding-bottom: 12px; }
+.ftree-row { display: flex; align-items: center; gap: 6px; padding-right: 10px; min-height: 26px; font-size: 12.5px; }
+.ftree-row:hover { background: var(--elev2); }
+.ftree-tw { width: 22px; padding: 0; }
+.ftree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ftree-meta { white-space: nowrap; }
+.ftree-actions { display: none; gap: 4px; }
+.ftree-row:hover .ftree-actions { display: flex; }

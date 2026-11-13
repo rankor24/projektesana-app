@@ -166,6 +166,37 @@ export interface RevitStatusRow {
 	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" } | null;
 }
 
+/** Where the Faili tab can look (task 8.3): the office folder, the drafts' staging, the app's own data for the project. */
+export interface FileRoot {
+	key: "projekts" | "uzmetumi" | "dati";
+	label: string;
+	exists: boolean;
+}
+
+export interface FileEntry {
+	name: string;
+	/** relative to the root; "<container>::<inner>" for a file inside an .edoc / .asice */
+	rel: string;
+	kind: "dir" | "file";
+	size: number | null;
+	mtime: string | null;
+	/** folder: files below it, counted by name (stops at 5 000: capped) */
+	files?: number;
+	capped?: boolean;
+	/** the scan's source for this file, and its role (for a folder: the office folder map's role) */
+	sourceId?: string;
+	role?: string;
+	roleFrom?: string;
+	/** a container with files the scan registered inside it */
+	inner?: number;
+}
+
+export interface FileList {
+	entries: FileEntry[];
+	/** entries not shown (the list is cut at 400; a search at 200) */
+	hidden: number;
+}
+
 /** Where a model sits (task 8.1): the office tree's parts, a draft's staging folder, a captured revision. */
 export type ModelOrigin = "izejas dati" | "projekta daļas" | "nodevumi" | "cits" | "uzmetums" | "revīzija";
 
@@ -399,6 +430,11 @@ export interface ApiSpec {
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
 	"bimcraft.status": () => BimcraftStatusRow;
+	"files.roots": (id: string) => FileRoot[];
+	"files.list": (id: string, root: FileRoot["key"], rel: string) => FileList;
+	"files.search": (id: string, root: FileRoot["key"], q: string) => FileList;
+	/** the file in the PC's own program, or a folder in Explorer */
+	"files.open": (id: string, root: FileRoot["key"], rel: string) => void;
 	"models.diff": (id: string, a: string, b: string) => { added: string[]; removed: string[]; changed: { guid: string; props: string[]; moved: number; reshaped: boolean }[]; same: number; dupes: number };
 	"revisions.ifc": (id: string, revisionId: string) => Uint8Array;
 	"revit.rooms": () => RevitRoomRow[];
@@ -514,6 +550,10 @@ export const API_NAMES = [
 	"sheets.diff",
 	"models.diff",
 	"bimcraft.status",
+	"files.roots",
+	"files.list",
+	"files.search",
+	"files.open",
 	"revisions.ifc",
 	"revit.rooms",
 	"revit.select",

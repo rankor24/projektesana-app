@@ -13,6 +13,9 @@ import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
 import { projectModels } from "../../sources/models.js";
 import { sourceBytes } from "../../sources/bytes.js";
+import { insideBase } from "../../sources/tree.js";
+import { rootDir } from "./files.js";
+import type { FileRoot } from "../../shared/api.js";
 
 type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
@@ -56,6 +59,13 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 				const name = s?.container?.inner ?? s?.paths.find((p) => !p.includes("::")) ?? s?.paths[0]?.split("::")[1] ?? "";
 				if (!/\.ifc$/i.test(name)) throw new Error("Tikai IFC faili.");
 				return sourceBytes(store, rel.slice(4));
+			}
+			if (rel.startsWith("file:")) {
+				// the Faili tab: "file:<root>:<path under that root>" (office folder, staging, project data)
+				const [, key, ...rest] = rel.split(":");
+				const abs = insideBase(rootDir(store, key as FileRoot["key"]), rest.join(":"));
+				if (!abs || !/\.ifc$/i.test(abs)) throw new Error("Tikai IFC faili projekta mapēs.");
+				return new Uint8Array(readFileSync(abs));
 			}
 			const g = checkRead(store.guard, rel);
 			if (!g.ok) throw new Error(g.reason);

@@ -3,11 +3,12 @@
 // external store for useSyncExternalStore instead of BIM Crew's app-wide store.
 import { useSyncExternalStore } from "react";
 
-export const PANELS = ["projekts", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "iestatijumi"] as const;
+export const PANELS = ["projekts", "faili", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "iestatijumi"] as const;
 export type PanelId = (typeof PANELS)[number];
 
 export const PANEL_TITLE: Record<PanelId, string> = {
 	projekts: "Projekts",
+	faili: "Faili",
 	avoti: "Avoti",
 	prasibas: "Prasības",
 	telpas: "Telpas",
