@@ -1,6 +1,6 @@
 // The preview area: left half of the split view. Shows a source (PDF view or text view), a model (IFC) or a comparison.
 // Which viewer is chosen from the source's file type; phases 3–5 add the overlays, the IFC view and the compare views.
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { Source } from "../../core/model";
 import { call } from "../bridge";
 import { SourcePdf } from "../preview/SourcePdf";
@@ -8,7 +8,7 @@ import { IfcView } from "../preview/IfcView";
 import { SheetCompare } from "../preview/SheetCompare";
 import { TextView } from "../preview/TextView";
 import { LawView } from "../preview/LawView";
-import { useUi } from "../state";
+import { ui, useUi } from "../state";
 import { Empty, useLoad } from "../ui";
 
 export function sourceExt(s: Source): string {
@@ -19,6 +19,19 @@ export function sourceExt(s: Source): string {
 export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	const { projectId, preview } = useUi();
 	const sources = useLoad<Source[]>(() => (projectId ? call("sources.list", projectId) : Promise.resolve([])), [projectId]);
+	// what the chat's Auto mode sends: which file is open (selection, camera and page are reported by the views themselves)
+	const srcTitle = preview?.kind === "source" ? sources.data?.find((x) => x.id === preview.sourceId)?.title : undefined;
+	useEffect(() => {
+		if (!preview) return ui.setView({ kind: null });
+		if (preview.kind === "ifc") ui.setView({ kind: "ifc", label: preview.label, path: preview.path, sourceId: undefined });
+		else if (preview.kind === "compare") ui.setView({ kind: preview.mode === "ifc" ? "compare" : "compare", label: `${preview.aLabel} ↔ ${preview.bLabel}`, path: `${preview.a}|${preview.b}`, sourceId: undefined });
+		else if (preview.kind === "law") ui.setView({ kind: "law", label: "likums", sourceId: preview.sourceId, path: undefined });
+		else {
+			const ifc = sources.data?.find((x) => x.id === preview.sourceId);
+			ui.setView({ kind: ifc && sourceExt(ifc) === ".ifc" ? "ifc" : "source", label: srcTitle ?? preview.sourceId, sourceId: preview.sourceId, path: undefined, ...(preview.page ? { page: preview.page } : {}) });
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [preview, srcTitle]);
 	// the law library is global: its acts open without a project
 	if (preview?.kind === "law") return <section className="preview"><LawView key={preview.sourceId} sourceId={preview.sourceId} quote={preview.quote} /></section>;
 	if (!projectId) return <section className="preview"><Empty title="nav projekta">Atver vai pievieno projektu panelī Projekts.</Empty></section>;

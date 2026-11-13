@@ -17,6 +17,7 @@ import { SYSTEM_PROMPT, buildPrompt, userLine, withEarlier } from "./prompt.js";
 import { REVIT_RULES } from "./tools/revit.js";
 import { listSkills, skillsText } from "./skills.js";
 import { ProjectStore } from "../core/store.js";
+import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { Pin } from "../core/model.js";
 import { ctxEnv, type ToolCtx } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
@@ -293,7 +294,7 @@ export class AgentSession {
 			const conv = this.conversations.get(id);
 			const rt = await this.d.runtime();
 			const model = lookupPiModel(rt, s.provider, s.model);
-			const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"));
+			const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), this.planOf(projectId, true));
 			const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
 			const keepRecent = keepRecentFor(model.contextWindow);
 
@@ -405,6 +406,17 @@ export class AgentSession {
 		}
 	}
 
+	/** The plan lines this turn carries when the user changed the plan: `take` clears the mark (the prompt is being sent). */
+	private planOf(projectId: string | null, take: boolean): string {
+		if (!projectId) return "";
+		try {
+			const store = ProjectStore.load(this.d.ctx.projectsDir, projectId);
+			return take ? takePendingPlanText(store) : peekPendingPlanText(store);
+		} catch {
+			return "";
+		}
+	}
+
 	/** Forgets the in-memory conversation (new topic, or the model changed). The transcript stays. */
 	reset(projectId: string | null) {
 		this.conversations.delete(projectId ?? "_");
@@ -432,7 +444,7 @@ export class AgentSession {
 			lastAdded: live?.lastAdded ?? null,
 			compactions: this.compactions.get(id) ?? 0,
 			// the Fokuss line is sent with every message, "Fokuss: nekas" included
-			draft: draft ? { text: estimateTextTokens(draft.text), focus: estimateTextTokens(focusText(draft.focus)), pins: estimateTextTokens(pinsText(this.pinsOf(projectId))) } : null,
+			draft: draft ? { text: estimateTextTokens(draft.text), focus: estimateTextTokens(focusText(draft.focus)), pins: estimateTextTokens(pinsText(this.pinsOf(projectId))), plan: estimateTextTokens(this.planOf(projectId, false)) } : null,
 		};
 	}
 

@@ -17,6 +17,7 @@ const KIND_LABEL: Record<FocusItem["kind"], string> = {
 	note: "atmiņa",
 	sketch: "skice",
 	text: "iezīmēts teksts",
+	view: "skats (atvērtais fails, lapa, iezīmētie elementi, kamera)",
 };
 
 /** Small, stable, readable: one line per item, data as compact JSON. Long text is cut so the Fokuss cannot fill the context. */

@@ -25,6 +25,7 @@ export function PdfView({
 	initialPage,
 	overlay,
 	onPageClick,
+	onPage,
 	toolbar,
 	sketchNote,
 	onSketchSent,
@@ -36,6 +37,8 @@ export function PdfView({
 	overlay?: (page: number, size: PageSize) => ReactNode;
 	/** a click in "pin" mode: page fractions */
 	onPageClick?: (page: number, x: number, y: number) => void;
+	/** the page now shown (the chat sends it in Auto mode) */
+	onPage?: (page: number) => void;
 	toolbar?: ReactNode;
 	/** given = the view offers Skice → aģentam: a drawn rectangle goes to the Fokuss with this note (8.2) */
 	sketchNote?: string;
@@ -44,6 +47,7 @@ export function PdfView({
 	const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const [page, setPage] = useState(initialPage ?? 1);
+	useEffect(() => onPage?.(page), [page]); // eslint-disable-line react-hooks/exhaustive-deps
 	const [zoom, setZoom] = useState<number | "fit">("fit");
 	const [mode, setMode] = useState<"text" | "region" | "pin" | "sketch">("text");
 	const [size, setSize] = useState<PageSize | null>(null);

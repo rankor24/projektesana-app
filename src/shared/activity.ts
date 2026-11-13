@@ -130,6 +130,7 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	list_tasks: { words: "Skatās uzdevumus", kind: "read" },
 	create_task: { words: "Pievieno uzdevumu", kind: "write" },
 	update_task: { words: "Maina uzdevumu", kind: "write" },
+	update_plan: { words: "Atjauno plānu", kind: "ui" },
 	coordinates_guide: { words: "Sagatavo koordināšu instrukciju", kind: "read" },
 	run_subagent: { words: "Dod uzdevumus palīgiem", kind: "other" },
 	delegate: { words: "Dod darbu speciālistiem", kind: "other" },

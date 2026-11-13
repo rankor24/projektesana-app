@@ -17,6 +17,7 @@ import { coordinationHandlers } from "./handlers/coordination.js";
 import { expertHandlers } from "./handlers/expert.js";
 import { agentHandlers } from "./handlers/agents.js";
 import { layoutHandlers } from "./handlers/layout.js";
+import { planHandlers } from "./handlers/plan.js";
 import type { RevitClient } from "../revit/client.js";
 
 export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string } & Pick<LibraryDeps, "fetchPage">;
@@ -26,5 +27,5 @@ export function createHandlers(d: AppDeps): Handlers {
 	const userName = () => d.settings.get().userName.trim() || undefined;
 	const e = { ...d, afterChange, userName };
 	const projects = projectHandlers(e);
-	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...layoutHandlers(d) };
+	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...layoutHandlers(d), ...planHandlers(d) };
 }

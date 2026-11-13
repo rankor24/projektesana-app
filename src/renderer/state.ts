@@ -2,6 +2,8 @@
 // A small external store, same pattern as windows.ts.
 import { useSyncExternalStore } from "react";
 import type { FocusItem } from "../shared/api";
+import type { PinCamera } from "../core/model";
+import type { ViewKind, ViewMode, ViewState } from "../shared/view-context";
 
 export type PreviewTarget = { kind: "source"; sourceId: string; page?: number } | { kind: "ifc"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc" } | { kind: "law"; sourceId: string; quote?: string } | null;
 
@@ -13,12 +15,17 @@ interface UiState {
 	draft: string | null;
 	/** GlobalIds the viewer selects as soon as the model it is about to open is open (a sheet change traced to elements, 8.11) */
 	highlight: string[] | null;
+	/** what the open viewer tab shows: file, page, selection, camera (task 9.2); the chat's Auto mode sends it */
+	view: ViewState;
+	/** the user's choice of Auto / Manual for the tab kind it was made on; null = the default of the tab */
+	viewChoice: { kind: ViewKind; mode: ViewMode } | null;
 	/** bumps when main says data changed, so panels reload */
 	tick: number;
 }
 
 const KEY = "projektesana:ui";
-let state: UiState = { projectId: null, preview: null, focus: [], draft: null, highlight: null, tick: 0 };
+const NO_VIEW: ViewState = { kind: null, selection: [] };
+let state: UiState = { projectId: null, preview: null, focus: [], draft: null, highlight: null, view: NO_VIEW, viewChoice: null, tick: 0 };
 
 /** The files the user opened lately, per project, for the command palette: a source or an IFC, newest first. */
 export type RecentTarget = { kind: "source"; sourceId: string } | { kind: "ifc"; path: string; label: string };
@@ -62,7 +69,7 @@ function set(patch: Partial<UiState>) {
 
 export const ui = {
 	get: () => state,
-	setProject: (projectId: string | null) => set({ projectId, preview: null, focus: [] }),
+	setProject: (projectId: string | null) => set({ projectId, preview: null, focus: [], view: NO_VIEW }),
 	show: (preview: PreviewTarget) => {
 		remember(state.projectId, preview);
 		set({ preview });
@@ -75,7 +82,24 @@ export const ui = {
 	focusRemove: (kind: FocusItem["kind"], id: string) => set({ focus: state.focus.filter((f) => !(f.kind === kind && f.id === id)) }),
 	focusClear: () => set({ focus: [] }),
 	bump: () => set({ tick: state.tick + 1 }),
+	/** The viewer tells what it shows. A new file (another kind, label, path or source) starts with no selection, camera or page. */
+	setView: (patch: Partial<ViewState>) => {
+		const v = state.view;
+		const fresh = ("kind" in patch && patch.kind !== v.kind) || ("label" in patch && patch.label !== v.label) || ("path" in patch && patch.path !== v.path) || ("sourceId" in patch && patch.sourceId !== v.sourceId);
+		const next: ViewState = fresh ? { kind: null, selection: [], ...patch } : { ...v, ...patch };
+		set({ view: next });
+		for (const w of viewWaiters.splice(0)) w();
+	},
+	setViewMode: (mode: ViewMode) => set({ viewChoice: { kind: state.view.kind, mode } }),
+	/** Resolves when the viewer next reports (the camera it was asked for), or after `ms`. */
+	nextView: (ms = 600) =>
+		new Promise<void>((resolve) => {
+			const t = setTimeout(resolve, ms);
+			viewWaiters.push(() => (clearTimeout(t), resolve()));
+		}),
 };
+const viewWaiters: (() => void)[] = [];
+export type { PinCamera };
 
 const subscribe = (l: () => void) => {
 	listeners.add(l);

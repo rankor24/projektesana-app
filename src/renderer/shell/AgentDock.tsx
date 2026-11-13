@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { groupRuns, isRunning } from "../../shared/activity";
 import { useActivity } from "../activity";
 import { RunCard } from "./RunCard";
+import { PlanBlock } from "./PlanBlock";
+import { effectiveMode, focusForSend } from "../../shared/view-context";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
 import { fmtTokens } from "../../shared/tokens";
 import type { RunEvent } from "../../shared/types";
@@ -36,7 +38,10 @@ type Line =
 	| { kind: "retry"; text: string };
 
 export function AgentDock() {
-	const { projectId, focus } = useUi();
+	const { projectId, focus, view, viewChoice } = useUi();
+	// Auto adds one item built from the viewer to every message (the 3D tab); Manual sends only the Fokuss (documents)
+	const mode = effectiveMode(viewChoice, view.kind);
+	const sendFocus = useMemo(() => focusForSend(focus, mode, view), [focus, mode, view]);
 	const status = useLoad<AgentStatus>(() => call("agent.status"), []);
 	const tasks = useLoad(() => call("tasks.list"), []);
 	const [lines, setLines] = useState<Line[]>([]);
@@ -72,7 +77,7 @@ export function AgentDock() {
 		const t = setTimeout(() => setTyped(text), 400);
 		return () => clearTimeout(t);
 	}, [text]);
-	const ctx = useLoad<ContextInfo>(() => call("agent.context", projectId, { text: typed, focus }), [projectId, typed, focus]);
+	const ctx = useLoad<ContextInfo>(() => call("agent.context", projectId, { text: typed, focus: sendFocus }), [projectId, typed, sendFocus]);
 
 	// the limits of the chosen model, read by the paste handler below
 	const limitsRef = useRef<AgentStatus["imageLimits"]>(null);
@@ -169,11 +174,16 @@ export function AgentDock() {
 		const files = pending;
 		sending.current = true;
 		try {
+			// Auto in 3D: ask the viewer for the camera as it is now, so the message carries what the user is looking at
+			if (mode === "auto" && view.kind === "ifc") {
+				bimcraft.send({ pj: 1, type: "capture" });
+				await ui.nextView();
+			}
 			const r = await call(
 				"agent.send",
 				projectId,
 				t,
-				focus,
+				focusForSend(ui.get().focus, mode, ui.get().view),
 				files.map(({ name, mimeType, data, thumb }) => ({ name, mimeType, data, thumb })),
 			);
 			runRef.current = r.runId;
@@ -222,7 +232,7 @@ export function AgentDock() {
 		c?.draft && (text.trim() || pending.length)
 			? (() => {
 					const files = pending.reduce((n, p) => n + p.cost.tokens, 0);
-					const total = c.draft.text + c.draft.focus + c.draft.pins + files;
+					const total = c.draft.text + c.draft.focus + c.draft.pins + c.draft.plan + files;
 					return { ...c.draft, files, total, over: (c.used ?? c.fixedEstimate) + total > c.compactAt };
 				})()
 			: null;
@@ -299,6 +309,7 @@ export function AgentDock() {
 			</div>
 			{err && <div className="err">{err}</div>}
 			<div className="chat-input">
+				<PlanBlock projectId={projectId} />
 				<div className="row">
 					<span className="dim small">Uzdevumi:</span>
 					{(tasks.data ?? []).map((t) => (
@@ -325,7 +336,7 @@ export function AgentDock() {
 				)}
 				{draftCost && (
 					<div className={`draft-cost small ${draftCost.over ? "warn" : "dim"}`} title="Aptuvens: teksts + Fokuss + atvērtās piezīmes + pielikumi. Precīzu skaitu pēc atbildes dod modelis.">
-						Šī ziņa pievienos ≈{fmtTokens(draftCost.total)}: teksts {fmtTokens(draftCost.text)} · fokuss {fmtTokens(draftCost.focus)} · piezīmes {fmtTokens(draftCost.pins)}
+						Šī ziņa pievienos ≈{fmtTokens(draftCost.total)}: teksts {fmtTokens(draftCost.text)} · fokuss {fmtTokens(draftCost.focus)} · piezīmes {fmtTokens(draftCost.pins)}{draftCost.plan > 0 && ` · plāns ${fmtTokens(draftCost.plan)}`}
 						{draftCost.files > 0 && ` · pielikumi ${fmtTokens(draftCost.files)}`}
 						{draftCost.over && " — pārsniegs saspiešanas robežu: saruna tiks saspiesta pirms atbildes"}
 					</div>
@@ -356,6 +367,11 @@ export function AgentDock() {
 							e.target.value = "";
 						}}
 					/>
+					<div className="view-toggle" title="Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.">
+						<span className="dim small">Skats:</span>
+						<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>Auto</button>
+						<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>Manuāli</button>
+					</div>
 					<span className="grow" />
 					{runId ? (
 						<button onClick={() => call("agent.stop")}>Apturēt</button>

@@ -58,6 +58,7 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 				}
 			} else if (m.type === "selection") {
 				setSel(m.items);
+				ui.setView({ selection: m.items.map((i) => ({ guid: i.guid, cls: i.cls, name: i.name })) });
 				for (const it of m.items.slice(0, 10)) ui.focusAdd(elementFocus(it, name));
 			} else if (m.type === "compared") {
 				setState("open");
@@ -65,6 +66,7 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 			} else if (m.type === "highlighted") setMsg(`iezīmēti ${m.found} no ${m.asked}`);
 			else if (m.type === "sketch") ui.focusAdd(sketchFocus(m.items, m.note, name));
 			else if (m.type === "captured") {
+				ui.setView({ camera: m.camera });
 				wantCapture.current?.(m);
 				wantCapture.current = null;
 			} else if (m.type === "marker") {

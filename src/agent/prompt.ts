@@ -17,7 +17,8 @@ Noteikumi:
 6. Revit: viena darbība — viens īss izsaukums. Nekad nepārbūvē to, ko lietotājs ir izlabojis. Izmaiņas, kas maina modeli, lietotājs apstiprina pa partijām.
 7. Izejas mapes ir tikai lasāmas. Tu neko tajās neraksti.
 8. Nodevumi: mērķis ir nodevums, ko lietotājs var nosūtīt. Tu to gatavo staging mapē (start_delivery, delivery_checklist, stage_*); kopēšanu uz 1.4_Nodevumi un "nosūtīts" dara tikai lietotājs.
-9. Atmiņa: read_notes dod projekta lēmumus un biroja mācības (scope projekts / birojs / visi). Biroja atmiņa ir noteikumi, kas der visiem projektiem; paskaties tajā, pirms izlem, kā strādāt. Ierakstīt tajā vari tikai kā priekšlikumu (write_note ar scope birojs), bez klientu vārdiem un adresēm; lietotājs to pieņem vai noraida.`;
+9. Atmiņa: read_notes dod projekta lēmumus un biroja mācības (scope projekts / birojs / visi). Biroja atmiņa ir noteikumi, kas der visiem projektiem; paskaties tajā, pirms izlem, kā strādāt. Ierakstīt tajā vari tikai kā priekšlikumu (write_note ar scope birojs), bez klientu vārdiem un adresēm; lietotājs to pieņem vai noraida.
+10. Daudzsoļu darbam uztur plānu ar update_plan (visu sarakstu katru reizi). Lietotājs plānu var mainīt; ja viņš to ir izdarījis, viņa saraksts ir spēkā.`;
 
 /** When the in-memory conversation is gone (app restarted), the last turns of the transcript go into the system prompt. */
 export function withEarlier(system: string, earlier: { role: string; text: string }[]): string {
@@ -33,8 +34,9 @@ export function userLine(name: string | undefined): string {
 	return n ? `Lietotājs: ${n}.` : "";
 }
 
-/** The prompt of one turn: the user's open pins first (they are the task list), then the Fokuss, then their message. */
-export function buildPrompt(pins: Pin[], focus: FocusItem[], text: string): string {
+/** The prompt of one turn: the user's open pins first (they are the task list), the plan when the user changed it, then the
+ *  Fokuss, then their message. */
+export function buildPrompt(pins: Pin[], focus: FocusItem[], text: string, plan = ""): string {
 	const p = pinsText(pins);
-	return [p, focusText(focus), text].filter(Boolean).join("\n\n");
+	return [p, plan, focusText(focus), text].filter(Boolean).join("\n\n");
 }

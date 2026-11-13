@@ -14,6 +14,8 @@ import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
+import type { PlanStep } from "./plan.js";
+import type { PlanDoc } from "../core/model.js";
 
 
 export interface AppInfo {
@@ -56,7 +58,7 @@ export interface ContextInfo {
 	/** compactions of this conversation since the app started */
 	compactions: number;
 	/** what the message being typed would add, without files: the text, the Fokuss, the open pins */
-	draft: { text: number; focus: number; pins: number } | null;
+	draft: { text: number; focus: number; pins: number; plan: number } | null;
 }
 
 /** What one attached file will add to the context. */
@@ -110,7 +112,7 @@ export interface ProviderRow {
 
 /** What the agent receives as the Fokuss: what the user has selected in panels and the preview. */
 export interface FocusItem {
-	kind: "source" | "page-region" | "fact" | "requirement" | "finding" | "room" | "delivery" | "element" | "pin" | "note" | "sketch" | "text";
+	kind: "source" | "page-region" | "fact" | "requirement" | "finding" | "room" | "delivery" | "element" | "pin" | "note" | "sketch" | "text" | "view";
 	id: string;
 	label: string;
 	/** details the agent needs, kept small */
@@ -371,6 +373,9 @@ export interface ApiSpec {
 	/** where each window is, per page (task 9.0): the renderer's own state, kept in the app's data folder */
 	"layout.get": () => LayoutStore;
 	"layout.set": (store: LayoutStore) => void;
+	/** the plan above the chat input (task 9.2): the agent writes it with update_plan, the user edits it here */
+	"plan.get": (id: string) => PlanDoc;
+	"plan.set": (id: string, steps: PlanStep[]) => PlanDoc;
 	"dialog.pickFolder": (title: string) => string | null;
 	"dialog.pickFile": (title: string, extensions: string[]) => string | null;
 	"agent.status": () => AgentStatus;
@@ -547,6 +552,8 @@ export const API_NAMES = [
 	"settings.set",
 	"layout.get",
 	"layout.set",
+	"plan.get",
+	"plan.set",
 	"dialog.pickFolder",
 	"dialog.pickFile",
 	"agent.status",

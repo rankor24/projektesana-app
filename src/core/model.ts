@@ -313,6 +313,15 @@ export interface Task {
 	doneAt?: string;
 }
 
+/** The plan above the chat input (task 9.2): one document per project. */
+export interface PlanDoc {
+	steps: import("../shared/plan.js").PlanStep[];
+	by: Who;
+	at: string;
+	/** the user changed it and no prompt has carried the change yet */
+	pending: boolean;
+}
+
 export interface Collections {
 	sources: Source[];
 	facts: Fact[];
@@ -322,10 +331,12 @@ export interface Collections {
 	pins: Pin[];
 	revisions: Revision[];
 	tasks: Task[];
+	/** zero or one document */
+	plan: PlanDoc[];
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTIONS: CollectionName[] = ["sources", "facts", "requirements", "findings", "deliveries", "pins", "revisions", "tasks"];
+export const COLLECTIONS: CollectionName[] = ["sources", "facts", "requirements", "findings", "deliveries", "pins", "revisions", "tasks", "plan"];
 
 /** BD code from an office folder name: "BD427-2026_Pilseta_Iela 9" → "BD427"; a prefix such as "AU_" (autoruzraudzība)
  *  before the code is allowed. */

@@ -22,6 +22,7 @@ const COLLECTION_LABEL: Record<CollectionName, string> = {
 	pins: "Piezīmes",
 	revisions: "Revīzijas",
 	tasks: "Uzdevumi",
+	plan: "Plāns",
 };
 
 const isCollection = (c: unknown): c is CollectionName => typeof c === "string" && (COLLECTIONS as string[]).includes(c);

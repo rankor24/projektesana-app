@@ -46,6 +46,7 @@ export function SourcePdf({ projectId, sourceId, title, page }: { projectId: str
 						sourceId={sourceId}
 						title={title}
 						initialPage={jump}
+						onPage={(pg) => ui.setView({ page: pg })}
 						sketchNote={note}
 						onSketchSent={() => setNote("")}
 						toolbar={
