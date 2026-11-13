@@ -3,8 +3,14 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
+// @ts-expect-error plain .mjs shared with the build script, no types
+import { bimcraftForTests } from "../scripts/bimcraft-source.mjs";
 
 export const FIX = join(import.meta.dirname, "fixtures");
+/** BimCraft checkout for the tests that run its real engine: same lookup as the build (BIMCRAFT_SOURCE, opensrc mirror, sibling). */
+const bc = bimcraftForTests() as { dir: string | null; tried: string[] };
+export const BIMCRAFT_DIR: string | null = bc.dir;
+export const BIMCRAFT_TRIED: string[] = bc.tried;
 export const tmp = (prefix = "pj-") => mkdtempSync(join(tmpdir(), prefix));
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

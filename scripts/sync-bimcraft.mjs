@@ -2,22 +2,33 @@
 // the pre-rendered page and the pinned vendor libraries (fetched and sha256-checked by BimCraft's own
 // devshell/fetch-vendor.mjs), plus our bridge add-on (src/bimcraft-addon/projektesana) listed in its add-on index.
 // The copy is build output and git-ignored; BimCraft's checkout is never changed.
-//   BIMCRAFT_SOURCE=<path> node scripts/sync-bimcraft.mjs
+//   BIMCRAFT_SOURCE=<path> node scripts/sync-bimcraft.mjs [--optional]
+// Where it looks: scripts/bimcraft-source.mjs (BIMCRAFT_SOURCE, the opensrc mirror, a sibling checkout). Strict by default:
+// a build without BimCraft would ship a preview that answers 404, so a missing checkout or missing vendor libraries stop
+// the build with the paths tried. --optional only warns (a machine that runs typecheck or tests, not the app).
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { findBimcraftSource, missingVendor } from "./bimcraft-source.mjs";
 
 const root = join(import.meta.dirname, "..");
-const src = process.env.BIMCRAFT_SOURCE ?? join(root, "..", "getcadcraft", "bimcraft");
 const out = join(root, "resources", "bimcraft");
+const optional = process.argv.includes("--optional");
+const stop = (msg) => {
+	if (optional) {
+		console.warn(`bimcraft: ${msg} — skipped (--optional); the IFC preview will say "nav konfigurēts"`);
+		process.exit(0);
+	}
+	console.error(`bimcraft: ${msg}`);
+	process.exit(1);
+};
 
-if (!existsSync(join(src, "app", "bimcraft.js"))) {
-	console.warn(`bimcraft: not found at ${src} — the IFC preview will say "nav konfigurēts" (set BIMCRAFT_SOURCE)`);
-	process.exit(0);
-}
+const found = findBimcraftSource();
+if (!found.dir) stop(`BimCraft not found. Looked for app/bimcraft.js in:\n  ${found.tried.join("\n  ")}\nSet BIMCRAFT_SOURCE to the checkout.`);
+const src = found.dir;
 const vendor = join(src, "devshell", "vendor");
 const meta = JSON.parse(readFileSync(join(src, "devshell", "app.json"), "utf8"));
-const missing = Object.entries(meta.vendor ?? {}).filter(([lib, ver]) => !existsSync(join(vendor, lib, ver)));
-if (missing.length) console.warn(`bimcraft: vendor libraries not fetched yet: ${missing.map(([l, v]) => `${l}@${v}`).join(", ")} — run node devshell/fetch-vendor.mjs in ${src}`);
+const missing = missingVendor(src);
+if (missing.length) stop(`vendor libraries not fetched: ${missing.map(([l, v]) => `${l}@${v}`).join(", ")} — run node devshell/fetch-vendor.mjs in ${src}`);
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
@@ -45,4 +56,4 @@ const list = JSON.parse(readFileSync(idx, "utf8"));
 list.addons = ["projektesana", ...(list.addons ?? []).filter((a) => a !== "projektesana")];
 writeFileSync(idx, JSON.stringify(list, null, 2));
 writeFileSync(join(out, "SOURCE.txt"), `BimCraft copied from ${src} on ${new Date().toISOString()}; vendor pins: ${JSON.stringify(meta.vendor)}\n`);
-console.log(`bimcraft: synced from ${src}${missing.length ? ` (${missing.length} vendor libraries missing)` : ""}`);
+console.log(`bimcraft: synced from ${src} (${found.why})`);

@@ -165,6 +165,8 @@ export function Iestatijumi() {
 					</label>
 				</>
 			)}
+			<div className="section-title">3D skats (BimCraft)</div>
+			<BimcraftCopy />
 			<div className="section-title">Biroja standarts</div>
 			{s && (
 				<label className="row">
@@ -188,6 +190,30 @@ export function Iestatijumi() {
 					))}
 				</div>
 			)}
+		</div>
+	);
+}
+
+/** The BimCraft copy the app ships: where the build took it from, when, and whether our bridge add-on is switched on. */
+function BimcraftCopy() {
+	const st = useLoad(() => call("bimcraft.status"), []);
+	const b = st.data;
+	if (st.error) return <Err error={st.error} />;
+	if (!b) return <div className="dim small">pārbauda…</div>;
+	return (
+		<div className="small">
+			<div className="row">
+				<Badge tone={b.state === "gatavs" ? "ok" : b.state === "nav tilta" ? "warn" : "bad"}>{b.state}</Badge>
+				{b.state !== "nav konfigurēts" && <span>{b.vendor} bibliotēkas · tilta papildinājums {b.addon ? "ieslēgts" : "nav ieslēgts"}</span>}
+				<button className="small ghost" onClick={st.reload}>pārbaudīt</button>
+			</div>
+			{b.source && (
+				<div className="dim mono">
+					no {b.source}
+					{b.copiedAt ? ` · ${b.copiedAt.slice(0, 16).replace("T", " ")}` : ""}
+				</div>
+			)}
+			{b.message && <div className="dim">{b.message}</div>}
 		</div>
 	);
 }

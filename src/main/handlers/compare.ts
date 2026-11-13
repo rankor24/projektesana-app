@@ -13,9 +13,10 @@ import { checkWrite } from "../../core/guard.js";
 import { listModels } from "../../sources/models.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { diffIfc } from "../../sources/ifc-diff.js";
+import { bimcraftStatus } from "../bimcraft-status.js";
 import { pairPages, diffPages, readSheet, whereOnA } from "../../sources/sheets/vector-diff.js";
 
-type K = "sheets.bytes" | "sheets.diff" | "models.diff" | "versions.between" | "bcf.export" | "bcf.import";
+type K = "sheets.bytes" | "sheets.diff" | "models.diff" | "versions.between" | "bcf.export" | "bcf.import" | "bimcraft.status";
 
 export function refBytes(store: ProjectStore, ref: string, ext: RegExp): Uint8Array {
 	if (ref.startsWith("src:")) return sourceBytes(store, ref.slice(4));
@@ -73,6 +74,7 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 			});
 		},
 		"versions.between": (id, from, to) => versionsBetween(d.registry.store(id), from, to),
+		"bimcraft.status": () => bimcraftStatus(d.bimcraftApp),
 		"models.diff": (id, a, b) => {
 			const store = d.registry.store(id);
 			return diffIfc(d.bimcraftApp, refBytes(store, a, /\.ifc$/i), refBytes(store, b, /\.ifc$/i));

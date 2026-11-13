@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { disciplinesOf, findingOfTopic, findingsToBcf, readBcfFile, stableGuid, topicOf } from "../src/checks/bcf.ts";
 import type { Finding, Requirement } from "../src/core/model.ts";
+import { BIMCRAFT_DIR, BIMCRAFT_TRIED } from "./helpers.ts";
 
-const APP = join(process.env.BIMCRAFT_SOURCE ?? join(import.meta.dirname, "..", "..", "getcadcraft", "bimcraft"), "app");
+const APP = join(BIMCRAFT_DIR ?? "", "app");
 const at = "2026-11-06T10:00:00.000Z";
 
 test("BIM Crew discipline pairs", () => {
@@ -29,7 +30,7 @@ test("stable GUIDs: the same finding is the same topic in every export", () => {
 	assert.match(stableGuid("x1"), /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
-test("round trip: finding → BCF 2.1 → topic with its requirement, decision and element", { skip: existsSync(join(APP, "bcf.js")) ? false : `BimCraft not at ${APP}` }, async () => {
+test("round trip: finding → BCF 2.1 → topic with its requirement, decision and element", { skip: existsSync(join(APP, "bcf.js")) ? false : `BimCraft not found in: ${BIMCRAFT_TRIED.join(" | ")}` }, async () => {
 	const req: Requirement = { id: "law:mbp-facades:0", origin: "law", citation: { kind: "law", act: "MK 529", actId: "269164", actVersionDate: "2026-01-01", readOn: "2026-11-03", point: "26.4.2. apakšpunkts", url: "https://likumi.lv/ta/id/269164#p26.4.2", quote: "26.4.2. ēkas fasādes ar augstuma atzīmēm;" }, text: "Fasādes ar augstuma atzīmēm", appliesTo: {}, checkId: "completeness", status: "failed", evidence: [], state: "confirmed", by: "app", at };
 	const findings: Finding[] = [
 		{ id: "x1", checkId: "completeness", requirementId: req.id, severity: "error", where: { deliveryId: "d1" }, message: "MBP 261005: nav atrasts “Fasādes ar augstuma atzīmēm”", key: "k1", state: "open", firstSeen: at, lastSeen: at },

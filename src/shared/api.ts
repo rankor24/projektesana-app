@@ -165,6 +165,19 @@ export interface RevitStatusRow {
 	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" } | null;
 }
 
+/** The BimCraft copy the app ships (task 8.0): present, where from, and whether our bridge add-on is on. */
+export interface BimcraftStatusRow {
+	state: "gatavs" | "nav tilta" | "nav konfigurēts";
+	dir: string;
+	/** the checkout the build copied it from (SOURCE.txt) */
+	source: string | null;
+	copiedAt: string | null;
+	/** pinned vendor libraries in the copy */
+	vendor: number;
+	addon: boolean;
+	message?: string;
+}
+
 export interface RevitRoomRow {
 	id: string;
 	uniqueId: string;
@@ -365,6 +378,7 @@ export interface ApiSpec {
 	"sheets.bytes": (id: string, ref: string) => Uint8Array;
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
+	"bimcraft.status": () => BimcraftStatusRow;
 	"models.diff": (id: string, a: string, b: string) => { added: string[]; removed: string[]; changed: { guid: string; props: string[]; moved: number; reshaped: boolean }[]; same: number; dupes: number };
 	"revisions.ifc": (id: string, revisionId: string) => Uint8Array;
 	"revit.rooms": () => RevitRoomRow[];
@@ -477,6 +491,7 @@ export const API_NAMES = [
 	"versions.between",
 	"sheets.diff",
 	"models.diff",
+	"bimcraft.status",
 	"revisions.ifc",
 	"revit.rooms",
 	"revit.select",

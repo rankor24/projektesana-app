@@ -8,14 +8,14 @@ import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { MessageChannel } from "node:worker_threads";
 import { elementFocus, isBimcraftMessage, type BimcraftToHost } from "../src/shared/bimcraft-protocol.ts";
-import { FIX, tmp } from "./helpers.ts";
+import { BIMCRAFT_DIR, BIMCRAFT_TRIED, FIX, tmp } from "./helpers.ts";
 
 const ROOT = join(import.meta.dirname, "..");
-const BIMCRAFT = process.env.BIMCRAFT_SOURCE ?? join(ROOT, "..", "getcadcraft", "bimcraft");
+const BIMCRAFT = BIMCRAFT_DIR ?? "";
 const DEV = join(BIMCRAFT, "app");
 const have = existsSync(join(DEV, "addons", "bimcraft-api.js"));
 
-test("bridge: ready, open through its importer, selection with GlobalIds, select by id, sketch", { skip: have ? false : `BimCraft not at ${BIMCRAFT}` }, async () => {
+test("bridge: ready, open through its importer, selection with GlobalIds, select by id, sketch", { skip: have ? false : `BimCraft not found in: ${BIMCRAFT_TRIED.join(" | ")}` }, async () => {
 	(globalThis as { document?: unknown }).document ??= { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null };
 	const imp = (f: string) => import(pathToFileURL(join(DEV, f)).href);
 	const i18n = await imp("i18n.js");

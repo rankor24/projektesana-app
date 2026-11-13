@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { ProjectStore } from "../src/core/store.ts";
 import { captureRevision, isWorkCopy, nextRevisionId, revisionDiff, workDir } from "../src/revit/revision.ts";
-import { FIX, tmp } from "./helpers.ts";
+import { BIMCRAFT_DIR, BIMCRAFT_TRIED, FIX, tmp } from "./helpers.ts";
 
-const APP = join(process.env.BIMCRAFT_SOURCE ?? join(import.meta.dirname, "..", "..", "getcadcraft", "bimcraft"), "app");
+const APP = join(BIMCRAFT_DIR ?? "", "app");
 const store = () => ProjectStore.open(tmp(), { id: "BD999", name: "BD999", root: tmp(), createdAt: "2026-11-06T00:00:00Z" });
 
 test("revision ids follow the stored list", () => {
@@ -31,7 +31,7 @@ test("capture refuses when the open document is not the working copy (recorded d
 	assert.deepEqual(s.read("revisions"), []);
 });
 
-test("diff between two exports: +1 wall, 1 changed", { skip: existsSync(join(APP, "ifc-compare.js")) ? false : `BimCraft not at ${APP}` }, async () => {
+test("diff between two exports: +1 wall, 1 changed", { skip: existsSync(join(APP, "ifc-compare.js")) ? false : `BimCraft not found in: ${BIMCRAFT_TRIED.join(" | ")}` }, async () => {
 	const d = await revisionDiff(APP, new Uint8Array(readFileSync(join(FIX, "ifc", "two-walls.ifc"))), new Uint8Array(readFileSync(join(FIX, "ifc", "two-walls-rev-b.ifc"))));
 	assert.deepEqual(d, { added: 1, removed: 0, changed: 1 });
 });

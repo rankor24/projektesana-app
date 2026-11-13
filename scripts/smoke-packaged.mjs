@@ -39,7 +39,7 @@ const check = async (name, fn) => {
 };
 
 await check("resources shipped", () => {
-	const need = ["data", "tessdata/lav.traineddata.gz", "bimcraft/index.html", "skills/index.json", "office-text.ps1"];
+	const need = ["data", "tessdata/lav.traineddata.gz", "bimcraft/index.html", "bimcraft/app/bimcraft.js", "bimcraft/app/addons/projektesana", "bimcraft/vendor/three", "skills/index.json", "office-text.ps1"];
 	const missing = need.filter((p) => !existsSync(join(res, p)));
 	if (missing.length) throw new Error(`missing: ${missing.join(", ")}`);
 	return need.join(", ");

@@ -5,11 +5,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { diffIfc } from "../src/sources/ifc-diff.ts";
-import { FIX } from "./helpers.ts";
+import { BIMCRAFT_DIR, BIMCRAFT_TRIED, FIX } from "./helpers.ts";
 
-const APP = join(process.env.BIMCRAFT_SOURCE ?? join(import.meta.dirname, "..", "..", "getcadcraft", "bimcraft"), "app");
+const APP = join(BIMCRAFT_DIR ?? "", "app");
 
-test("added, removed, changed by GlobalId, with what changed", { skip: existsSync(join(APP, "ifc-compare.js")) ? false : `BimCraft not at ${APP}` }, async () => {
+test("added, removed, changed by GlobalId, with what changed", { skip: existsSync(join(APP, "ifc-compare.js")) ? false : `BimCraft not found in: ${BIMCRAFT_TRIED.join(" | ")}` }, async () => {
 	const a = new Uint8Array(readFileSync(join(FIX, "ifc", "two-walls.ifc")));
 	const b = new Uint8Array(readFileSync(join(FIX, "ifc", "two-walls-rev-b.ifc")));
 	const d = await diffIfc(APP, a, b);
