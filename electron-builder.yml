@@ -20,6 +20,8 @@ extraResources:
     to: skills
   - from: resources/office-text.ps1
     to: office-text.ps1
+  - from: resources/office-word.ps1
+    to: office-word.ps1
 asarUnpack:
   - dist/agent/tools/**
 win:

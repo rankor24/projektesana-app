@@ -16,7 +16,7 @@ import { tool, type ToolDef } from "./tool.js";
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** The draft a tool works on: the one named, else the newest open one; none → say how to start one. */
-function draft(ctx: ToolCtx, deliveryId?: string) {
+export function draft(ctx: ToolCtx, deliveryId?: string) {
 	const store = storeOf(ctx);
 	const d = activeDraft(store, deliveryId);
 	if (!d) throw new Error("Nav gatavojama nodevuma. Vispirms start_delivery (veids un datums) — lietotājs to apstiprina.");

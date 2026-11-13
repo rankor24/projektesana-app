@@ -15,6 +15,7 @@ import { requirementTools } from "./requirements.js";
 import { checkTools } from "./checks.js";
 import { viewerTools } from "./viewer.js";
 import { deliveryTools } from "./deliveries.js";
+import { documentTools } from "./documents.js";
 
 
 export const focusTools: ToolDef[] = [
@@ -28,7 +29,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...viewerTools, ...pinTools, ...todoTools, ...coordinationTools, ...skillTools, ...revitCommandTools];
+	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...documentTools, ...viewerTools, ...pinTools, ...todoTools, ...coordinationTools, ...skillTools, ...revitCommandTools];
 }
 
 /** Level table of the app's own tools, for the gate. */
