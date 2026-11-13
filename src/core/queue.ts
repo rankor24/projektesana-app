@@ -1,26 +1,10 @@
 // The run queue as plain data: who may start next, and how it is kept on disk. No timers, no runs.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { StartInput } from "../shared/thread-types.js";
+import type { QueueItem, Running } from "../shared/thread-types.js";
 
-export interface QueueItem {
-	id: string;
-	threadId: string;
-	agent: string;
-	projectId: string | null;
-	wave: string;
-	at: string;
-	state: "queued" | "stopped";
-	input: Omit<StartInput, "threadId" | "projectId" | "wave">;
-}
-export interface Running {
-	runId: string;
-	threadId: string;
-	agent: string;
-	projectId: string | null;
-	wave: string;
-	waitingConfirm: boolean;
-}
+// The shapes live in shared/thread-types.ts (the window imports them and must not reach node:fs through this file).
+export type { QueueItem, Running };
 
 /** The oldest queued item whose thread is not running, whose agent is not running in that project, while fewer than `cap` runs are not waiting for a confirmation. */
 export function pickNext(queue: QueueItem[], running: Running[], cap: number, paused: boolean): QueueItem | null {

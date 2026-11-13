@@ -157,6 +157,7 @@ const session = new AgentSession({
 		emit("agent.event", { runId, event, ...meta });
 	},
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
+	onQueue: (v) => emit("queue.changed", v),
 });
 
 const registry = new Registry(settings.registryFile(), settings.projectsDir());

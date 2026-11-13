@@ -39,3 +39,40 @@ export interface StartInput {
 	wave?: string;
 	cause: { by: "user" } | { by: "message"; ids: string[] };
 }
+
+export interface QueueItem {
+	id: string;
+	threadId: string;
+	agent: string;
+	projectId: string | null;
+	wave: string;
+	at: string;
+	state: "queued" | "stopped";
+	input: Omit<StartInput, "threadId" | "projectId" | "wave">;
+}
+export interface Running {
+	runId: string;
+	threadId: string;
+	agent: string;
+	projectId: string | null;
+	wave: string;
+	waitingConfirm: boolean;
+}
+
+/** A wave: the runs one user start set going (filled by task 12.4; the queue view carries none until then). */
+export interface Wave {
+	id: string;
+	projectId: string | null;
+	startedAt: string;
+	runs: number;
+	cost: number;
+	paused: null | "runs" | "cost";
+}
+
+/** What the window sees of the run table and the queue; sent as `queue.changed` on every change. */
+export interface QueueView {
+	running: Running[];
+	queued: QueueItem[];
+	paused: boolean;
+	waves: Wave[];
+}

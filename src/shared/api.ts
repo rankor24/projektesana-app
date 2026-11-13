@@ -12,7 +12,7 @@ import type { AgentSpec, AgentsView } from "./agent-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
-import type { Thread } from "./thread-types.js";
+import type { QueueView, Thread } from "./thread-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
@@ -396,7 +396,7 @@ export interface ApiSpec {
 	"agent.login": (provider: string) => void;
 	"agent.loginAnswer": (text: string) => void;
 	"agent.logout": (provider: string) => void;
-	"agent.send": (projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string };
+	"agent.send": (projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean };
 	"agent.stop": () => void;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
@@ -718,6 +718,8 @@ export interface EventSpec {
 	"agent.event": { runId: string; event: RunEvent; threadId: string; agent: string; projectId: string | null; wave: string };
 	/** a thread was made or changed state (running, waiting-confirm, idle) */
 	"threads.changed": { projectId: string | null; thread: Thread };
+	/** the run table or the queue changed (task 11.2) */
+	"queue.changed": QueueView;
 	"agent.login": LoginNotice;
 	/** the layout file was saved (by `origin`): every window adopts it (task 9.11) */
 	"layout.changed": { store: LayoutStore; origin: string };
@@ -731,6 +733,6 @@ export interface EventSpec {
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

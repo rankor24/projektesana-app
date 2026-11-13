@@ -108,7 +108,9 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			d.activity?.begin(projectId, text);
 			try {
 				const r = await d.session.send(projectId, text, focus, attachments ?? []);
-				d.activity?.bind(r.runId);
+				// a queued start has no run yet; its first event opens the run and takes the pending title
+				if (r.runId) // a queued start has no run yet; its first event opens the run and takes the pending title
+				if (r.runId) d.activity?.bind(r.runId);
 				return r;
 			} catch (e) {
 				d.activity?.cancel();

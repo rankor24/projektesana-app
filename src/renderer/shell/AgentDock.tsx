@@ -25,6 +25,8 @@ type Line =
 	| { kind: "assistant"; text: string; thinking?: string }
 	/** the run card of one run: its steps come from the activity feed */
 	| { kind: "run"; runId: string }
+	/** a start that waits in the queue; the first event of this chat's run replaces it with the run card */
+	| { kind: "waiting" }
 	| { kind: "compact"; phase: "start" | "done" | "failed" | "past"; text: string; summary?: string }
 	| { kind: "confirm"; id: string; tool: string; batch: string; answered?: boolean; allow?: boolean }
 	| { kind: "error"; text: string }
@@ -42,6 +44,9 @@ export function AgentDock() {
 	const [text, setText] = useState("");
 	const [err, setErr] = useState<string | null>(null);
 	const runRef = useRef<string | null>(null);
+	const queuedRef = useRef(false);
+	const projectIdRef = useRef(projectId);
+	projectIdRef.current = projectId;
 	const endRef = useRef<HTMLDivElement>(null);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -142,7 +147,14 @@ export function AgentDock() {
 
 	useEffect(
 		() =>
-			on("agent.event", ({ runId: id, event }) => {
+			on("agent.event", ({ runId: id, event, agent, projectId: pj }) => {
+					if (queuedRef.current && !runRef.current && agent === "lead" && pj === projectIdRef.current) {
+						// the queued start has begun: take its run id and swap the waiting line for the run card
+						queuedRef.current = false;
+						runRef.current = id;
+						setRunId(id);
+						setLines((ls) => ls.map((l) => (l.kind === "waiting" ? { kind: "run" as const, runId: id } : l)));
+					}
 				if (id !== runRef.current) return;
 				setLines((ls) => apply(ls, event));
 				if (event.type === "tool_result" && event.ok) runUi(readUi(event.output));
@@ -179,10 +191,19 @@ export function AgentDock() {
 				focusForSend(ui.get().focus, mode, ui.get().view),
 				files.map(({ name, mimeType, data, thumb }) => ({ name, mimeType, data, thumb })),
 			);
-			runRef.current = r.runId;
-			setRunId(r.runId);
 			const refs: ChatAttachmentRef[] = files.map((f) => ({ name: f.name, kind: f.kind, thumb: f.thumb }));
-			setLines((ls) => [...ls, { kind: "user", text: t, attachments: refs.length ? refs : undefined }, { kind: "run", runId: r.runId }]);
+			const user = { kind: "user" as const, text: t, attachments: refs.length ? refs : undefined };
+			if (r.runId) {
+				const id = r.runId;
+				runRef.current = id;
+				setRunId(id);
+				setLines((ls) => [...ls, user, { kind: "run", runId: id }]);
+			} else {
+				// queued: no run id yet; the waiting line keeps Apturēt and blocks a second send
+				queuedRef.current = true;
+				setRunId("queued");
+				setLines((ls) => [...ls, user, { kind: "waiting" }]);
+			}
 			setText("");
 			setPending([]);
 		} catch (e) {
@@ -190,6 +211,16 @@ export function AgentDock() {
 			setErr(errText(e));
 		} finally {
 			sending.current = false;
+		}
+	};
+
+	const stop = () => {
+		call("agent.stop");
+		// a queued start has no events that would end it: clear it here
+		if (queuedRef.current) {
+			queuedRef.current = false;
+			setRunId(null);
+			setLines((ls) => ls.filter((l) => l.kind !== "waiting"));
 		}
 	};
 
@@ -288,7 +319,9 @@ export function AgentDock() {
 			<div className="chat">
 				{lines.length === 0 && <div className="dim small chat-empty">{projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
 				{lines.map((l, i) =>
-					l.kind === "run" ? (
+					l.kind === "waiting" ? (
+						<div key={`w${i}`} className="dim small">Gaida rindā</div>
+					) : l.kind === "run" ? (
 						runs.get(l.runId) ? (
 							<RunCard key={l.runId} lines={runs.get(l.runId)!} latest={l.runId === lastRun} />
 						) : (
@@ -367,7 +400,7 @@ export function AgentDock() {
 					</div>
 					<span className="grow" />
 					{runId ? (
-						<button onClick={() => call("agent.stop")}>Apturēt</button>
+						<button onClick={stop}>Apturēt</button>
 					) : (
 						<button className="primary" disabled={!canSend || blind} onClick={send}>
 							Sūtīt
@@ -475,6 +508,7 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 				)}
 			</div>
 		);
+	if (l.kind === "waiting") return null;
 	if (l.kind === "retry") return <div className="retry">{l.text}</div>;
 	return <div className="err">{l.text}</div>;
 }

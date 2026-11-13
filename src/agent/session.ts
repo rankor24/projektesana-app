@@ -12,7 +12,7 @@ import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesIm
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import type { AgentSpec } from "../shared/agent-types.js";
-import type { RunMeta, Thread } from "../shared/thread-types.js";
+import type { QueueView, RunMeta, Thread } from "../shared/thread-types.js";
 import { ThreadStore, threadsDir } from "../core/threads.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
@@ -41,6 +41,8 @@ export interface SessionDeps {
 	emit: (runId: string, event: RunEvent, meta: RunMeta) => void;
 	/** a thread's stored state changed (running, waiting-confirm, idle) */
 	onThread?: (t: Thread) => void;
+	/** the run table or the queue changed */
+	onQueue?: (v: QueueView) => void;
 	/** one model call for the summaries; the app streams through pi, tests inject a fake */
 	complete?: Complete;
 	/** the agent loop; defaults to pi's, tests inject a scripted one */
@@ -58,7 +60,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, queueFile: join(d.ctx.appDir, "queue.json") });
 	}
 
 	private threads(projectId: string | null): ThreadStore {
@@ -111,14 +113,14 @@ export class AgentSession {
 		return this.threads(projectId).transcript(t.id);
 	}
 
-	/** Starts a run; events arrive through `emit`. Refuses while another run is going. Attachments are read and checked
+	/** Starts a run; events arrive through `emit`. Runs now, or waits in the queue when the cap is reached; refuses while this chat's own run is going or queued. Attachments are read and checked
 	 *  first, so a file the model cannot take is refused here (the window keeps it in the strip) and no run starts. */
-	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = []): Promise<{ runId: string }> {
+	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = []): Promise<{ runId: string | null; queued: boolean }> {
 		const busy = "Aģents jau strādā. Aptur vai pagaidi.";
-		if (this.coordinator.busy()) throw new Error(busy);
+		const thread = this.leadOf(projectId);
+		if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
 		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
 		const runId = this.coordinator.newRunId();
-		const thread = this.leadOf(projectId);
 		let files: PreparedAttachments = { images: [], text: "", refs: [] };
 		if (attachments.length) {
 			const s = this.d.settings();
@@ -131,7 +133,7 @@ export class AgentSession {
 				imagesInContext: this.runner.imagesInContext(thread),
 			});
 			// reading the files took a moment: another message may have started meanwhile
-			if (this.coordinator.busy()) throw new Error(busy);
+			if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
 		}
 		// the files are already prepared (above), so the coordinator is handed them and does not read `attachments` itself
 		return this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
