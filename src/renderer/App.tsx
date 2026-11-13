@@ -1,14 +1,13 @@
-// One view: top bar, timeline, the work area (the viewer in the middle, a dock group on each of four sides), panel bar,
+// One view: top bar, the rail, the work area (the viewer, or a full page, in the middle; a dock group on each of four sides)
 // and the floating windows on top. Every window is in a tab group that floats or docks (task 9.0).
 import { useEffect, useState } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
-import { PanelBar } from "./shell/PanelBar";
+import { Rail } from "./shell/Rail";
 import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Preview } from "./shell/Preview";
-import { Timeline } from "./shell/Timeline";
 import { TopBar } from "./shell/TopBar";
 import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
@@ -24,7 +23,11 @@ import { Prasibas } from "./panels/Prasibas";
 import { Atmina } from "./panels/Atmina";
 import { Nodevumi } from "./panels/Nodevumi";
 import { Versijas } from "./panels/Versijas";
-import { PANEL_TITLE, WINDOW_TITLE, windows, type PanelId } from "./windows";
+import { Parskats } from "./panels/Parskats";
+import { Koordinacija } from "./panels/Koordinacija";
+import { Normativi } from "./panels/Normativi";
+import { PANEL_TITLE, WINDOW_TITLE, useWindows, windows, type PanelId } from "./windows";
+import { pageById } from "../shared/pages";
 import { CHAT } from "../shared/layout";
 
 /** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
@@ -32,6 +35,15 @@ function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === CHAT) return <AgentDock />;
 	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
 	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
+}
+
+function KoordinacijaPage() {
+	const { projectId } = useUi();
+	return projectId ? <Koordinacija projectId={projectId} /> : <Empty title="nav projekta" />;
+}
+function NormativiPage() {
+	const { projectId } = useUi();
+	return <Normativi projectId={projectId} />;
 }
 
 function Panel({ id, filter }: { id: PanelId; filter?: string }) {
@@ -45,6 +57,9 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "atmina") return <Atmina />;
 	if (id === "nodevumi") return <Nodevumi filter={filter} />;
 	if (id === "versijas") return <Versijas />;
+	if (id === "parskats") return <Parskats />;
+	if (id === "koordinacija") return <KoordinacijaPage />;
+	if (id === "normativi") return <NormativiPage />;
 	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
 }
 
@@ -56,8 +71,10 @@ export function App() {
 		window.addEventListener("resize", refit);
 		return () => window.removeEventListener("resize", refit);
 	}, []);
+	const { page, canvasFilter } = useWindows();
+	const fullPage = pageById(page)?.kind === "page" ? page : null;
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
-	const { tick, projectId } = useUi();
+	const { tick, projectId, preview } = useUi();
 	const [row, setRow] = useState<ProjectRow | null>(null);
 	useEffect(() => {
 		call("settings.get").then((s) => {
@@ -78,21 +95,27 @@ export function App() {
 	}, [projectId, tick]);
 	return (
 		<div className="app">
-			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} openInfo={row?.openInfo ?? 0} />
-			<Timeline />
-			<div className="workspace">
-				<DockArea side="top" render={body} />
-				<div className="ws-mid">
-					<DockArea side="left" render={body} />
-					<main className="canvas">
-						<Preview />
-					</main>
-					<DockArea side="right" render={body} />
+			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} openInfo={row?.openInfo ?? 0} stage={row?.stage ?? null} />
+			<div className="body">
+				<Rail />
+				<div className="workspace">
+					<DockArea side="top" render={body} />
+					<div className="ws-mid">
+						<DockArea side="left" render={body} />
+						<main className={`canvas ${fullPage ? "canvas-page" : ""}`}>
+							{fullPage && (
+								<div className="page-body">
+									<Panel id={fullPage as PanelId} filter={canvasFilter} />
+								</div>
+							)}
+							{(!fullPage || preview) && <Preview />}
+						</main>
+						<DockArea side="right" render={body} />
+					</div>
+					<DockArea side="bottom" render={body} />
 				</div>
-				<DockArea side="bottom" render={body} />
 			</div>
 			<StatusStrip />
-			<PanelBar />
 			<WindowLayer render={body} />
 			<CommandPalette />
 		</div>

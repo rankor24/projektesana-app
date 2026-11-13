@@ -5,20 +5,15 @@ import type { ProjectRow, RoleQuestion, ScanProgress, ScanSummaryRow } from "../
 import type { ProjectSummary } from "../../core/summary-types";
 import { call, errText, on } from "../bridge";
 import { ui, useUi } from "../state";
+import { windows } from "../windows";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { Dashboard } from "./Dashboard";
-import { Profile } from "./Profile";
 
 export function Projekts() {
-	const { projectId } = useUi();
-	const [tab, setTab] = useState<"list" | "profile">(projectId ? "profile" : "list");
+	// the project list; opening a project shows its page (Pārskats) and the list window closes
 	return (
 		<div className="fill-col">
-			<div className="tabs">
-				<button className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>Projekti</button>
-				<button className={tab === "profile" ? "on" : ""} disabled={!projectId} onClick={() => setTab("profile")}>Profils</button>
-			</div>
-			{tab === "list" || !projectId ? <ProjectList onOpen={() => setTab("profile")} /> : <Profile projectId={projectId} />}
+			<ProjectList onOpen={() => (windows.go("parskats"), windows.close("projekts"))} />
 		</div>
 	);
 }

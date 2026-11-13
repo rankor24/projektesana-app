@@ -7,21 +7,10 @@ import { fold, rank, type PaletteItem } from "../../shared/palette";
 import { sourceFocus } from "../../shared/focus-items";
 import { call } from "../bridge";
 import { ui, useUi } from "../state";
-import { PANEL_TITLE, PANELS, windows, type PanelId } from "../windows";
+import { pageItems } from "../../shared/pages";
+import { windows } from "../windows";
 
-const PANEL_HINT: Record<PanelId, string> = {
-	projekts: "projekti, profils, nolasīšana",
-	faili: "mapju koks, meklēšana",
-	grafiks: "kalendārs, termiņi, uzdevumi",
-	avoti: "dokumenti pa mapēm",
-	prasibas: "prasības un atradumi",
-	telpas: "telpu programma pret modeli",
-	nodevumi: "nodot projektu, termiņi",
-	atmina: "lēmumi un atbildes",
-	versijas: "kas mainījās starp datumiem",
-	iestatijumi: "ceļi, modelis, Revit",
-};
-const GROUP_LABEL = { recent: "nesen", panel: "panelis", project: "projekts", template: "aģenta uzdevums", source: "avots" } as const;
+const GROUP_LABEL = { recent: "nesen", panel: "lapa", project: "projekts", template: "aģenta uzdevums", source: "avots" } as const;
 
 interface Entry extends PaletteItem {
 	run: () => void;
@@ -65,7 +54,7 @@ export function CommandPalette() {
 				if (s) list.push({ id: `recent:${s.id}`, group: "recent", label: s.title, hint: s.role, run: () => (ui.show({ kind: "source", sourceId: s.id }), close()) });
 			} else list.push({ id: `recent:${t.path}`, group: "recent", label: t.label, hint: "modelis", run: () => (ui.show({ kind: "ifc", path: t.path, label: t.label }), close()) });
 		}
-		for (const id of PANELS) list.push({ id: `panel:${id}`, group: "panel", label: PANEL_TITLE[id], hint: PANEL_HINT[id], run: () => (windows.open(id), close()) });
+		for (const p of pageItems()) list.push({ id: `panel:${p.id}`, group: "panel", label: p.label, hint: p.hint, keywords: p.keywords, run: () => (windows.go(p.id), close()) });
 		for (const p of data.projects) list.push({ id: `project:${p.id}`, group: "project", label: `${p.id} ${p.name}`, hint: "atvērt projektu", run: () => (ui.setProject(p.id), close()) });
 		for (const t of data.templates) list.push({ id: `template:${t.id}`, group: "template", label: t.label, hint: t.text.slice(0, 80), run: () => (ui.draft(t.text), close()) });
 		for (const s of data.sources) {
@@ -95,7 +84,7 @@ export function CommandPalette() {
 			<div className="palette" onMouseDown={(e) => e.stopPropagation()}>
 				<input
 					ref={input}
-					placeholder="Panelis, projekts, avots, aģenta uzdevums… (Esc aizver)"
+					placeholder="Lapa, projekts, avots, aģenta uzdevums… (Esc aizver)"
 					value={q}
 					onChange={(e) => (setQ(e.target.value), setPos(0))}
 					onKeyDown={(e) => {

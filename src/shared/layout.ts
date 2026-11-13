@@ -10,7 +10,7 @@ export const SIDES = ["left", "right", "top", "bottom"] as const;
 export type Side = (typeof SIDES)[number];
 
 /** Everything that can be a window. Panels first; the viewer's side panels (9.3); the chat. */
-export const PANEL_IDS = ["projekts", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "iestatijumi"] as const;
+export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "iestatijumi"] as const;
 export const VIEWER_PANEL_IDS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"] as const;
 export const WINDOW_IDS: readonly string[] = ["chat", ...PANEL_IDS, ...VIEWER_PANEL_IDS];
 export const CHAT = "chat";
@@ -397,6 +397,8 @@ export interface LayoutStore {
 	pages: Record<string, Layout>;
 	/** the layout of the old single-layout shell, until a page gets its own */
 	legacy?: Layout;
+	/** the page that was open when the app closed */
+	current?: string;
 }
 export const emptyStore = (): LayoutStore => ({ version: 1, pages: {} });
 
@@ -418,7 +420,10 @@ export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore
 		if (!j || j.version !== 1 || typeof j.pages !== "object" || j.pages === null) return emptyStore();
 		const pages: Record<string, Layout> = {};
 		for (const [k, v] of Object.entries(j.pages)) if (v && typeof v === "object") pages[k] = normalize(v as Layout, vp);
-		return j.legacy ? { version: 1, pages, legacy: normalize(j.legacy, vp) } : { version: 1, pages };
+		const out: LayoutStore = { version: 1, pages };
+		if (j.legacy) out.legacy = normalize(j.legacy, vp);
+		if (typeof j.current === "string") out.current = j.current;
+		return out;
 	} catch {
 		return emptyStore();
 	}

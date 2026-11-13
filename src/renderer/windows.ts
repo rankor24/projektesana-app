@@ -4,13 +4,17 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
+import { defaultLayout, pageById, resolveOpen, SIDEBAR_SIZE, START_PAGE } from "../shared/pages";
 import { call } from "./bridge";
 
 export const PANELS = L.PANEL_IDS;
 export type PanelId = (typeof L.PANEL_IDS)[number];
 
 export const PANEL_TITLE: Record<PanelId, string> = {
-	projekts: "Projekts",
+	projekts: "Projekti",
+	parskats: "Pārskats",
+	koordinacija: "Koordinācija",
+	normativi: "Normatīvi",
 	faili: "Faili",
 	grafiks: "Grafiks",
 	avoti: "Avoti",
@@ -33,6 +37,8 @@ export const WINDOW_TITLE: Record<string, string> = {
 
 export interface WindowsState {
 	page: string;
+	/** the filter the open full page's panel was opened with (a sidebar page's filter lives in the layout) */
+	canvasFilter?: string;
 	layout: L.Layout;
 	store: L.LayoutStore;
 	loaded: boolean;
@@ -40,8 +46,8 @@ export interface WindowsState {
 
 const OLD_KEY = "projektesana:windows";
 const vp = (): L.Vp => ({ w: window.innerWidth, h: window.innerHeight });
-let defaultFor: (page: string) => L.Layout = () => L.emptyLayout();
-let state: WindowsState = { page: "main", layout: L.emptyLayout(), store: L.emptyStore(), loaded: false };
+let defaultFor: (page: string) => L.Layout = defaultLayout;
+let state: WindowsState = { page: START_PAGE, layout: L.emptyLayout(), store: L.emptyStore(), loaded: false };
 const listeners = new Set<() => void>();
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -84,23 +90,41 @@ export const windows = {
 				// unreadable old value: start from the defaults
 			}
 		}
-		state = { ...state, store, loaded: true, layout: L.layoutFor(store, state.page, defaultFor, vp()) };
+		const page = store.current && pageById(store.current) ? store.current : state.page;
+		state = { ...state, page, store, loaded: true, layout: L.layoutFor(store, page, defaultFor, vp()) };
 		notify();
 		scheduleSave();
 	},
 	/** The page's layout becomes the one shown; a page that was never laid out gets `def(page)`. */
-	setPage(page: string, def?: (page: string) => L.Layout) {
-		if (def) defaultFor = def;
-		if (page === state.page && state.loaded) return;
-		state = { ...state, page, layout: L.layoutFor(state.store, page, defaultFor, vp()) };
+	setPage(page: string, canvasFilter?: string) {
+		if (page === state.page && state.loaded) {
+			if (canvasFilter !== state.canvasFilter) (state = { ...state, canvasFilter }), notify();
+			return;
+		}
+		state = { ...state, page, canvasFilter, store: { ...state.store, current: page }, layout: L.layoutFor(state.store, page, defaultFor, vp()) };
 		notify();
+		scheduleSave();
+	},
+	/** The rail, Ctrl+K, the agent's open_panel and the links between panels: a page opens as the page; a global window floats. */
+	go(name: string, filter?: string) {
+		const t = resolveOpen(name, filter);
+		if (!t || !t.page) return windows.openWindow(name, filter);
+		const def = pageById(t.page)!;
+		windows.setPage(t.page, def.kind === "page" ? t.filter : undefined);
+		if (def.kind === "sidebar") {
+			// the sidebar's panel is part of the page's layout; reopen it where it belongs if the user closed it
+			if (!L.groupOf(state.layout, def.id)) op((l, v) => L.dock(L.open(l, def.id, v), def.id, "right", v, { size: SIDEBAR_SIZE }));
+			op((l, v) => L.open(l, def.id, v, t.filter));
+		}
 	},
 	/** The window changed size: every size is clamped again. */
 	refit() {
 		const n = L.normalize(state.layout, vp());
 		if (JSON.stringify(n) !== JSON.stringify(state.layout)) commit(n);
 	},
-	open: (id: string, filter?: string) => op((l, v) => L.open(l, id, v, filter)),
+	/** Opens a window in the current page's layout (floating if new). Panel names that are pages go through `go`. */
+	openWindow: (id: string, filter?: string) => op((l, v) => L.open(l, id, v, filter)),
+	open: (id: string, filter?: string) => windows.go(id, filter),
 	toggle: (id: string) => op((l, v) => L.toggle(l, id, v)),
 	close: (id: string) => op((l) => L.close(l, id)),
 	focus: (id: string) => op((l) => L.focus(l, id)),
