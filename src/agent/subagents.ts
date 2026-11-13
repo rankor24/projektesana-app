@@ -16,7 +16,7 @@ import { Type, type Static } from "@earendil-works/pi-ai";
 import { TOOLS } from "../shared/activity.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import type { RunEvent } from "../shared/types.js";
-import { WriteLocks, lockKeyOf } from "./locks.js";
+import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
@@ -121,7 +121,7 @@ export interface LaneDeps {
 	/** every tool name the main agent was offered */
 	listed: readonly string[];
 	revitTools: ReadonlySet<string>;
-	locks: WriteLocks;
+	locks: ProjectLocks;
 	/** the main run's event sink */
 	emit(e: RunEvent): void;
 	maxParallel(): number;

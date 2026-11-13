@@ -18,6 +18,13 @@ export function lockKeyOf(tool: string, level: Level, revitTools: ReadonlySet<st
 	return "store";
 }
 
+/** What a lane or a run needs of the locks, for one project: `WriteLocks` and `LockRegistry.forProject` both fit. */
+export interface ProjectLocks {
+	acquire(key: LockKey, owner: string, call: string, signal?: AbortSignal, label?: string): Promise<Acquired>;
+	release(call: string): void;
+	releaseOwner(owner: string): void;
+}
+
 export type Acquired = { ok: true } | { ok: false; reason: string };
 
 interface Waiter {
@@ -157,6 +164,15 @@ export class LockRegistry {
 			if (!got.ok || !this.batch || this.batch.owner === owner) return got;
 			this.revit.release(call);
 		}
+	}
+
+	/** The registry seen from one project: the shape lanes take (task 10.4). */
+	forProject(projectId: string | null): ProjectLocks {
+		return {
+			acquire: (key, owner, call, signal, label) => this.acquire(projectId, key, owner, call, signal, label),
+			release: (call) => this.release(call),
+			releaseOwner: (owner) => this.releaseOwner(owner),
+		};
 	}
 
 	/** Waits until the batch ends; same timeout, abort and owner-ended outcomes as a lock wait. */

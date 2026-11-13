@@ -1,41 +1,21 @@
-// The agent as the main process runs it: one conversation per project, one run at a time, the approval gate, the Fokuss.
+// The agent as the main process runs it: one conversation per project (the lead's thread), one run at a time, the approval gate, the Fokuss.
+// The run itself lives in ThreadRunner (thread-runner.ts); this class is the facade the IPC handlers call.
 // No Electron imports: the runtime, the settings and the event sink are injected.
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { isContextOverflow, normalizeContext, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { join } from "node:path";
-import { z } from "zod";
-import type { AgentStatus, ChatAttachment, ChatAttachmentRef, ChatEntry, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
+import type { AgentStatus, ChatAttachment, ChatEntry, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
 import { measureAttachment, prepareAttachments, type PreparedAttachments } from "./attachments.js";
-import { compactMessages, type Complete } from "./compact.js";
-import { appendUsage } from "./usage.js";
-import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, imageLimits, pruneImages, trimToolResults } from "./context.js";
+import { type Complete } from "./compact.js";
+import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
-import { focusText } from "./focus.js";
-import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, streamFn, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
-import { SYSTEM_PROMPT, buildPrompt, userLine, withEarlier } from "./prompt.js";
-import { REVIT_RULES } from "./tools/revit.js";
-import { listSkills, skillsText } from "./skills.js";
-import { ProjectStore } from "../core/store.js";
-import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
-import type { Pin } from "../core/model.js";
-import { ctxEnv, type ToolCtx } from "./tools/context.js";
-import { allTools, appLevels } from "./tools/defs.js";
-import { Gate, makeLevelOf, offered, type ConfirmRequest, type Level } from "./tools/levels.js";
-import { pinsText } from "./tools/pins.js";
+import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
+import type { ToolCtx } from "./tools/context.js";
+import type { ConfirmRequest, Level } from "./tools/levels.js";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { WriteLocks } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOL_LEVELS, rosterText, subagentDeclarations, subagentTools } from "./subagents.js";
-
-/** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected. */
-let appToolTokens: number | null = null;
-function toolDeclarationTokens(): number {
-	if (appToolTokens === null) appToolTokens = estimateTextTokens(JSON.stringify([...allTools().map((t) => ({ name: t.name, description: t.description, parameters: z.toJSONSchema(z.object(t.input)) })), ...subagentDeclarations()]));
-	return appToolTokens;
-}
-
-/** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
-const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
+import type { Thread } from "../shared/thread-types.js";
+import { ThreadStore, threadsDir } from "../core/threads.js";
+import { LockRegistry } from "./locks.js";
+import { ThreadRunner, type Conversation } from "./thread-runner.js";
 
 export interface ToolServer extends McpLaunchSpec {
 	/** every tool name the server may list; the gate's level table filters what is offered */
@@ -67,23 +47,39 @@ export interface SessionDeps {
 	afterBatch?: (projectId: string, summary: string) => Promise<string>;
 }
 
-interface Conversation {
-	key: string;
-	messages: AgentMessage[];
-	/** tokens the last run added to the context (estimated from the provider's counts); null = not known */
-	lastAdded: number | null;
-}
-
 export class AgentSession {
-	private conversations = new Map<string, Conversation>();
-	/** compactions per conversation since the app started */
-	private compactions = new Map<string, number>();
 	private running: { id: string; abort: AbortController } | null = null;
 	private runDone: Promise<unknown> | null = null;
 	private confirms = new Map<string, (ok: boolean) => void>();
 	private n = 0;
+	private runner: ThreadRunner;
+	private stores = new Map<string, ThreadStore>();
 
-	constructor(private d: SessionDeps) {}
+	constructor(private d: SessionDeps) {
+		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
+	}
+
+	private threads(projectId: string | null): ThreadStore {
+		const id = projectId ?? "_";
+		let s = this.stores.get(id);
+		if (!s) this.stores.set(id, (s = new ThreadStore(threadsDir(this.d.ctx.appDir, this.d.ctx.projectsDir, projectId))));
+		return s;
+	}
+
+	/** The one chat of a project is the lead's thread; the old chat file is copied in once, when that thread is first made. */
+	private leadOf(projectId: string | null): Thread {
+		return this.threads(projectId).lead(projectId, join(this.d.chatDir, `${projectId ?? "_"}.jsonl`));
+	}
+
+	/** The lead's in-memory conversation by project id ("_" = no project). Kept for tests that seed or inspect it; the runner keys by thread. */
+	get conversations() {
+		const lead = (k: string) => this.leadOf(k === "_" ? null : k).id;
+		return {
+			get: (k: string) => this.runner.conversations.get(lead(k)),
+			set: (k: string, c: Conversation) => this.runner.conversations.set(lead(k), c),
+			clear: () => this.runner.conversations.clear(),
+		};
+	}
 
 	async status(): Promise<AgentStatus> {
 		const s = this.d.settings();
@@ -108,29 +104,9 @@ export class AgentSession {
 		}
 	}
 
-	private chatFile(projectId: string | null) {
-		mkdirSync(this.d.chatDir, { recursive: true });
-		return join(this.d.chatDir, `${projectId ?? "_"}.jsonl`);
-	}
-
 	history(projectId: string | null): ChatEntry[] {
-		const f = this.chatFile(projectId);
-		if (!existsSync(f)) return [];
-		const out: ChatEntry[] = [];
-		for (const line of readFileSync(f, "utf8").split("\n")) {
-			if (!line.trim()) continue;
-			try {
-				out.push(JSON.parse(line));
-			} catch {
-				// a torn line is skipped
-			}
-		}
-		return out;
-	}
-
-	private remember(projectId: string | null, role: "user" | "assistant", text: string, attachments?: ChatAttachmentRef[]) {
-		const entry: ChatEntry = { role, text, at: new Date().toISOString(), ...(attachments?.length ? { attachments } : {}) };
-		if (text.trim() || attachments?.length) appendFileSync(this.chatFile(projectId), JSON.stringify(entry) + "\n", "utf8");
+		const t = this.leadOf(projectId);
+		return this.threads(projectId).transcript(t.id);
 	}
 
 	/** Starts a run; events arrive through `emit`. Refuses while another run is going. Attachments are read and checked
@@ -139,24 +115,30 @@ export class AgentSession {
 		if (this.running) throw new Error("Aģents jau strādā. Aptur vai pagaidi.");
 		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
 		const runId = `r${Date.now().toString(36)}${++this.n}`;
+		const thread = this.leadOf(projectId);
 		let files: PreparedAttachments = { images: [], text: "", refs: [] };
 		if (attachments.length) {
 			const s = this.d.settings();
 			const model = await this.modelOf(s);
-			const conv = this.conversations.get(projectId ?? "_");
 			files = await prepareAttachments(attachments, {
 				seesImages: model ? seesImages(model) : true,
 				model: s.model || model?.id || "(noklusējums)",
 				saveDir: join(this.d.runsDir, runId, "attachments"),
 				limits: model ? imageLimits(model) : null,
-				imagesInContext: conv && conv.key === `${s.provider}/${s.model}` ? countImages(this.shrink(conv.messages)) : 0,
+				imagesInContext: this.runner.imagesInContext(thread),
 			});
 			// reading the files took a moment: another message may have started meanwhile
 			if (this.running) throw new Error("Aģents jau strādā. Aptur vai pagaidi.");
 		}
 		const abort = new AbortController();
 		this.running = { id: runId, abort };
-		this.runDone = this.run(runId, projectId, text, focus, files, abort.signal).finally(() => {
+		const emit = (e: RunEvent) => this.d.emit(runId, e);
+		const ask = (req: ConfirmRequest) =>
+			new Promise<boolean>((resolve) => {
+				this.confirms.set(req.id, resolve);
+				emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
+			});
+		this.runDone = this.runner.run({ runId, thread, spec: null, text, focus, files, wave: runId, signal: abort.signal, emit, ask }).finally(() => {
 			this.running = null;
 			for (const [, r] of this.confirms) r(false);
 			this.confirms.clear();
@@ -190,262 +172,14 @@ export class AgentSession {
 		}
 	}
 
-	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. */
-	private standing(s: Settings): string {
-		return [SYSTEM_PROMPT, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
-	}
-
-	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
-	private shrink(messages: AgentMessage[]): AgentMessage[] {
-		return trimToolResults(pruneImages(messages).messages).messages;
-	}
-
-	private completeFn(rt: PiRuntime): Complete {
-		if (this.d.complete) return this.d.complete;
-		const stream = streamFn(rt.models);
-		return async (model, system, user, signal) => {
-			const ctx = normalizeContext({ systemPrompt: system, messages: [{ role: "user", content: [{ type: "text", text: user }], timestamp: Date.now() }] });
-			// a one-off request: no cache write for it
-			return (await stream(model, ctx, { signal, cacheRetention: "none", sessionId: uuidv7() })).result();
-		};
-	}
-
-	private rememberCompaction(projectId: string | null, summary: string, before: number, after: number) {
-		const entry: ChatEntry = { role: "assistant", kind: "compaction", text: summary, at: new Date().toISOString(), tokens: { before, after } };
-		appendFileSync(this.chatFile(projectId), JSON.stringify(entry) + "\n", "utf8");
-		const id = projectId ?? "_";
-		this.compactions.set(id, (this.compactions.get(id) ?? 0) + 1);
-	}
-
-	/**
-	 * Summarizes the older part of `history`. Returns the new messages, or null when nothing could be done (the reason goes
-	 * out as a `compact` failed event): the run then goes on with what it has, never stops on a failed summary.
-	 */
-	private async compactHistory(o: { projectId: string | null; rt: PiRuntime; model: Model<Api>; history: AgentMessage[]; signal: AbortSignal; emit?: (e: RunEvent) => void; keepRecent: number }): Promise<AgentMessage[] | null> {
-		const before = estimateContext(o.history).tokens;
-		o.emit?.({ type: "compact", phase: "start", before });
-		try {
-			const c = await compactMessages(o.history, { complete: this.completeFn(o.rt), model: o.model, keepRecentTokens: o.keepRecent, signal: o.signal, maxInputTokens: Math.floor(o.model.contextWindow * 0.7) });
-			if (!c) {
-				o.emit?.({ type: "compact", phase: "failed", before, message: "Nav ko saspiest: sarunā ir tikai viens posms, vai viss ietilpst nesenajā daļā." });
-				return null;
-			}
-			this.rememberCompaction(o.projectId, c.summary, before, c.tokensAfter);
-			o.emit?.({ type: "compact", phase: "done", before, after: c.tokensAfter });
-			return c.messages;
-		} catch (e) {
-			o.emit?.({ type: "compact", phase: "failed", before, message: (e as Error).message });
-			return null;
-		}
-	}
-
-	/** The newest compaction summary in the transcript and the lines after it, for a conversation that is not in memory (restart, model change). */
-	private transcriptSeed(projectId: string | null): { summary: string | null; earlier: { role: string; text: string }[] } {
-		const all = this.history(projectId);
-		const ci = all.map((e) => e.kind).lastIndexOf("compaction");
-		const tail = all.slice(ci + 1).slice(-11, -1);
-		return {
-			summary: ci >= 0 ? all[ci].text : null,
-			earlier: tail.map((e) => ({ role: e.role, text: e.attachments?.length ? `${e.text}\n[pielikumi: ${e.attachments.map((a) => a.name).join(", ")}]` : e.text })),
-		};
-	}
-
-	private async run(runId: string, projectId: string | null, text: string, focus: FocusItem[], files: PreparedAttachments, signal: AbortSignal) {
-		const emit = (e: RunEvent) => this.d.emit(runId, e);
-		let answer = "";
-		let confirmedBatches = 0;
-		try {
-			const s = this.d.settings();
-			const runDir = join(this.d.runsDir, runId);
-			mkdirSync(runDir, { recursive: true });
-			writeFileSync(join(runDir, "focus.json"), JSON.stringify(focus), "utf8");
-			this.remember(projectId, "user", text, files.refs);
-
-			const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: null, thread: null });
-			const appTools = allTools().map((t) => t.name);
-			const app = appLevels();
-			const revit = this.d.revit();
-			const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, revit?.levels ?? {});
-			const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = { "projektesana-tools": { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) } };
-			if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
-
-			const revitTools = new Set(revit?.tools ?? []);
-			const gate = new Gate(levelOf, async (req: ConfirmRequest) => {
-				if (signal.aborted) return false;
-				// a batch that changes the Revit model runs only on this project's working copy (never the office file)
-				if (req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_")) && this.d.revitWork) {
-					const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
-					if (!w.ok) {
-						emit({ type: "error", engine: "pi", message: `Partija noraidīta: aktīvais Revit dokuments nav šī projekta darba kopija (${w.title}). Izveido to: Versijas → Revit → Darba kopija.` });
-						return false;
-					}
-				}
-				return new Promise<boolean>((resolve) => {
-					this.confirms.set(req.id, (ok) => {
-						if (ok) confirmedBatches++;
-						resolve(ok);
-					});
-					emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
-				});
-			});
-
-			const key = `${s.provider}/${s.model}`;
-			const id = projectId ?? "_";
-			const conv = this.conversations.get(id);
-			const rt = await this.d.runtime();
-			const model = lookupPiModel(rt, s.provider, s.model);
-			const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), this.planOf(projectId, true));
-			const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
-			const keepRecent = keepRecentFor(model.contextWindow);
-
-			// 1. the cheap ways first: old screenshots out, old tool results cut (already-shrunk messages stay shrunk)
-			let history = conv && conv.key === key ? this.shrink(conv.messages) : [];
-			// 2. at the line (80% of the window, at most 200K) the older conversation becomes a summary, before the request is made
-			if (history.length && estimateContext(history).tokens + promptTokens > compactLine(model.contextWindow)) {
-				history = (await this.compactHistory({ projectId, rt, model, history, signal, emit, keepRecent })) ?? history;
-			}
-
-			const standing = this.standing(s);
-			const seed = this.transcriptSeed(projectId);
-			const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
-			// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
-			const st = { toolsRan: false, overflowed: null as string | null, retried: false };
-			const attempt = async (h: AgentMessage[]) => {
-				st.overflowed = null;
-				const base = estimateContext(h).tokens;
-				const handle = (e: RunEvent): void => {
-					if (e.type === "tool") st.toolsRan = true;
-					if (e.type === "usage") {
-						try {
-							appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
-						} catch {
-							// the log is a convenience: a full disk must not stop the run
-						}
-					}
-					if (e.type === "done") answer = e.text;
-					if (e.type === "error" && isContextOverflow({ stopReason: "error", errorMessage: e.message } as AssistantMessage)) {
-						st.overflowed = e.message;
-						// before any tool ran nothing has happened yet: held back, the run is compacted and repeated once
-						if (!st.toolsRan && !st.retried) return;
-						emit({ ...e, message: `${e.message}\n\nKonteksts ir pilns. Spied «saspiest» virs ievades vai sāc jaunu sarunu.` });
-						return;
-					}
-					emit(e);
-				};
-				// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
-				const listed = [...offered(appTools, levelOf), ...(revit ? offered(revit.tools, levelOf) : [])];
-				const appSet = new Set(appTools);
-				const revitSet = new Set(revit?.tools ?? []);
-				const extraTools = subagentTools({
-					run: this.d.runAgent ?? runPi,
-					base: { runtime: rt, provider: s.provider, modelId: s.model, effort: (s.effort || undefined) as PiEffort | undefined },
-					mcpFor: (allowed) => {
-						const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
-						const mine = allowed.filter((n) => appSet.has(n));
-						if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
-						const theirs = allowed.filter((n) => revitSet.has(n));
-						if (revit && theirs.length) m.revit = { ...revit, allow: theirs };
-						return m;
-					},
-					levelOf,
-					listed,
-					revitTools: revitSet,
-					locks: new WriteLocks(),
-					emit: handle,
-					maxParallel: () => this.d.settings().maxParallelAgents,
-					specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
-				});
-				await (this.d.runAgent ?? runPi)({
-					runtime: rt,
-					provider: s.provider,
-					modelId: s.model,
-					effort: (s.effort || undefined) as PiEffort | undefined,
-					prompt,
-					images: files.images,
-					systemPrompt: h.length ? standing : withEarlier(seeded, seed.earlier),
-					mcp,
-					signal,
-					beforeToolCall: gate.before,
-					history: h,
-					onMessages: (messages) => this.conversations.set(id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }),
-					onEvent: handle,
-					extraTools,
-				});
-			};
-			await attempt(history);
-			if (st.overflowed && !st.toolsRan && !st.retried && !signal.aborted) {
-				// the model refused the request for its size, although the estimate said it fits: summarize harder and ask again, once
-				st.retried = true;
-				const smaller = history.length ? await this.compactHistory({ projectId, rt, model, history, signal, emit, keepRecent: Math.floor(keepRecent / 2) }) : null;
-				if (smaller) await attempt(smaller);
-				else emit({ type: "error", engine: "pi", message: `${st.overflowed}\n\nKonteksts ir pilns, un to nevarēja saspiest. Sāc jaunu sarunu vai pievieno mazāk.` });
-			}
-		} catch (e) {
-			emit({ type: "error", engine: "pi", message: (e as Error).message });
-		} finally {
-			this.remember(projectId, "assistant", answer);
-		}
-		// after a batch the user confirmed: the app captures a revision and runs the room check (6.2, 6.5)
-		if (confirmedBatches > 0 && projectId && this.d.afterBatch) {
-			try {
-				emit({ type: "text", text: "\n\n[lietotne] Fiksē revīziju un pārbauda telpas…" });
-				const r = await this.d.afterBatch(projectId, answer.slice(0, 500));
-				emit({ type: "text", text: `\n[lietotne] ${r}` });
-			} catch (e) {
-				emit({ type: "error", engine: "pi", message: `Revīzija netika fiksēta: ${(e as Error).message}` });
-			}
-		}
-	}
-
-	private pinsOf(projectId: string | null): Pin[] {
-		if (!projectId) return [];
-		try {
-			return ProjectStore.load(this.d.ctx.projectsDir, projectId).read("pins");
-		} catch {
-			return [];
-		}
-	}
-
-	/** The plan lines this turn carries when the user changed the plan: `take` clears the mark (the prompt is being sent). */
-	private planOf(projectId: string | null, take: boolean): string {
-		if (!projectId) return "";
-		try {
-			const store = ProjectStore.load(this.d.ctx.projectsDir, projectId);
-			return take ? takePendingPlanText(store) : peekPendingPlanText(store);
-		} catch {
-			return "";
-		}
-	}
-
 	/** Forgets the in-memory conversation (new topic, or the model changed). The transcript stays. */
 	reset(projectId: string | null) {
-		this.conversations.delete(projectId ?? "_");
-		this.compactions.delete(projectId ?? "_");
+		this.runner.reset(this.leadOf(projectId).id);
 	}
 
 	/** What the next request carries, where the limits are, and what the message being typed would add. */
-	async context(projectId: string | null, draft?: { text: string; focus: FocusItem[] }): Promise<ContextInfo> {
-		const s = this.d.settings();
-		const model = lookupPiModel(await this.d.runtime(), s.provider, s.model);
-		const id = projectId ?? "_";
-		const conv = this.conversations.get(id);
-		const live = conv && conv.key === `${s.provider}/${s.model}` && conv.messages.length > 0 ? conv : null;
-		const est = live ? estimateContext(live.messages) : null;
-		const b = live ? breakdown(live.messages) : null;
-		return {
-			window: model.contextWindow,
-			compactAt: compactLine(model.contextWindow),
-			used: est ? est.tokens : null,
-			source: est ? est.source : "none",
-			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
-			imageCount: b?.imageCount ?? 0,
-			messages: live?.messages.length ?? 0,
-			fixedEstimate: estimateTextTokens(this.standing(s)) + toolDeclarationTokens(),
-			lastAdded: live?.lastAdded ?? null,
-			compactions: this.compactions.get(id) ?? 0,
-			// the Fokuss line is sent with every message, "Fokuss: nekas" included
-			draft: draft ? { text: estimateTextTokens(draft.text), focus: estimateTextTokens(focusText(draft.focus)), pins: estimateTextTokens(pinsText(this.pinsOf(projectId))), plan: estimateTextTokens(this.planOf(projectId, false)) } : null,
-		};
+	context(projectId: string | null, draft?: { text: string; focus: FocusItem[] }): Promise<ContextInfo> {
+		return this.runner.context(this.leadOf(projectId), draft);
 	}
 
 	/** What one attached file adds to the context; throws when it could not be sent (a scanned PDF, an unknown format). */
@@ -456,22 +190,11 @@ export class AgentSession {
 	/** The user's own "saspiest": the same summary as at the limit, now. Refused while a run is going. */
 	async compactNow(projectId: string | null): Promise<{ before: number; after: number }> {
 		if (this.running) throw new Error("Aģents strādā. Aptur vai pagaidi.");
-		const s = this.d.settings();
-		const id = projectId ?? "_";
-		const conv = this.conversations.get(id);
-		if (!conv || conv.key !== `${s.provider}/${s.model}` || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
-		const rt = await this.d.runtime();
-		const model = lookupPiModel(rt, s.provider, s.model);
+		const thread = this.leadOf(projectId);
 		const abort = new AbortController();
 		this.running = { id: "compact", abort };
 		try {
-			const history = this.shrink(conv.messages);
-			const before = estimateContext(conv.messages).tokens;
-			const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal: abort.signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });
-			if (!c) throw new Error(`Nav ko saspiest: sarunā ir tikai viens posms, vai viss (${before} tokeni) ietilpst nesenajā daļā.`);
-			this.rememberCompaction(projectId, c.summary, before, c.tokensAfter);
-			this.conversations.set(id, { key: conv.key, messages: c.messages, lastAdded: null });
-			return { before, after: c.tokensAfter };
+			return await this.runner.compactNow(thread, abort.signal);
 		} finally {
 			this.running = null;
 		}

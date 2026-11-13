@@ -44,7 +44,9 @@ export class ThreadStore {
 
 	get(id: string): Thread | null {
 		try {
-			return JSON.parse(readFileSync(this.metaFile(id), "utf8")) as Thread;
+			const t = JSON.parse(readFileSync(this.metaFile(id), "utf8"));
+			// parseable but not a thread (hand-edited, other tool): treated as absent, so list() never throws on it
+			return typeof t?.id === "string" && typeof t.agent === "string" ? (t as Thread) : null;
 		} catch {
 			return null;
 		}
