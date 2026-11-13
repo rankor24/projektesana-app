@@ -11,6 +11,7 @@ import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { RoleQuestions, ScanBar, useScanProgress } from "./Projekts";
 import { Normativi } from "./Normativi";
+import { sourceExt } from "../shell/Preview";
 
 const STATE: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "dim" | "info" }> = {
 	ok: { label: "teksts", tone: "ok" },
@@ -110,6 +111,12 @@ export function Avoti({ filter }: { filter?: string }) {
 														</button>{" "}
 														{s.container && <span className="dim">↳ </span>}
 														{s.title}
+														{sourceExt(s) === ".ifc" && (
+															<>
+																{" "}
+																<Badge tone="info" title="Atveras 3D skatā">3D</Badge>
+															</>
+														)}
 														{s.kind === "photoSurvey" && s.survey && (
 															<span className="dim">
 																{" "}

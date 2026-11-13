@@ -44,7 +44,7 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 			const all = store.read("findings");
 			const pick = ids ? all.filter((f) => ids.includes(f.id)) : all.filter((f) => f.state !== "closed");
 			if (!pick.length) throw new Error("Nav atradumu eksportam.");
-			const models = await listModels(store.project.root);
+			const models = (await listModels(store.project.root)).filter((m) => !m.archived);
 			const bytes = await findingsToBcf(d.bimcraftApp, pick, store.read("requirements"), models[0] ? { name: models[0].name } : null);
 			const file = join(store.dir, "exports", `${id}_atradumi_${new Date().toISOString().slice(0, 10)}.bcf`);
 			const g = checkWrite(store.guard, file);
@@ -58,7 +58,7 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 		"bcf.import": async (id, file) => {
 			const store = d.registry.store(id);
 			if (!/\.bcf(zip)?$/i.test(file)) throw new Error("Tikai .bcf / .bcfzip.");
-			const models = await listModels(store.project.root);
+			const models = (await listModels(store.project.root)).filter((m) => !m.archived);
 			const r = await readBcfFile(d.bimcraftApp, new Uint8Array(readFileSync(file)), models.map((m) => m.name));
 			const incoming = r.topics.map((t) => findingOfTopic(t));
 			store.update("findings", (all) => [...all.filter((f) => !incoming.some((x) => x.key === f.key)), ...incoming], { kind: "bcf.imported", by: "user", data: { topics: incoming.length } });

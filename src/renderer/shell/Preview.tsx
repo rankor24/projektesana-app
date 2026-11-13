@@ -46,6 +46,13 @@ export function Preview({ extra }: { extra?: (kind: string) => ReactNode }) {
 	const s = sources.data?.find((x) => x.id === preview.sourceId);
 	if (!s) return <section className="preview"><Empty title="nav avota">{sources.loading ? "…" : "Avots vairs nav sarakstā."}</Empty></section>;
 	const ext = sourceExt(s);
+	// an IFC the scan found (Avoti, the agent's show_source): the 3D view, not the text view that has nothing to show
+	if (ext === ".ifc")
+		return (
+			<section className="preview">
+				<IfcView key={s.id} name={s.title} load={() => call("models.bytes", projectId, `src:${s.id}`)} />
+			</section>
+		);
 	return (
 		<section className="preview">
 			{ext === ".pdf" ? (

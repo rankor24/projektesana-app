@@ -52,9 +52,9 @@ export function Versijas() {
 				</tbody>
 			</table>
 			<RevitSection projectId={projectId} />
-			<div className="section-title">Modeļi (IFC no 1.2_Projekta dalas)</div>
+			<div className="section-title">Modeļi (visi projekta IFC: izejas dati, daļas, nodevumi, uzmetumi, revīzijas)</div>
 			{models.error ? <Err error={models.error} /> : null}
-			{models.data?.length === 0 && <div className="dim small">no data: sadaļu mapēs IFC failu nav.</div>}
+			{models.data?.length === 0 && <div className="dim small">no data: projekta mapē, uzmetumos un revīzijās IFC failu nav.</div>}
 			<table>
 				<tbody>
 					{(models.data ?? []).map((m) => (
@@ -62,8 +62,19 @@ export function Versijas() {
 							<td>
 								<input type="checkbox" checked={pick.includes(m.rel)} onChange={(e) => setPick(e.target.checked ? [...pick, m.rel].slice(-2) : pick.filter((x) => x !== m.rel))} />
 							</td>
-							<td>{m.section}</td>
-							<td>{m.name}</td>
+							<td className="small">
+								{m.origin}
+								{m.section ? <span className="dim"> · {m.section}</span> : null}
+							</td>
+							<td className={m.archived ? "dim" : ""}>
+								{m.name}
+								{m.archived && (
+									<>
+										{" "}
+										<Badge tone="dim" title="arhīvs: vecāks par failu sadaļas mapē">arhīvs</Badge>
+									</>
+								)}
+							</td>
 							<td className="small dim">
 								{(m.size / 1048576).toFixed(1)} MB · {m.mtime.slice(0, 10)}
 							</td>

@@ -165,6 +165,21 @@ export interface RevitStatusRow {
 	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" } | null;
 }
 
+/** Where a model sits (task 8.1): the office tree's parts, a draft's staging folder, a captured revision. */
+export type ModelOrigin = "izejas dati" | "projekta daļas" | "nodevumi" | "cits" | "uzmetums" | "revīzija";
+
+export interface ModelRow {
+	/** what the preview opens it by: a path under the project folder, an absolute path in the data folder, "src:<id>" or "rev:<id>" */
+	rel: string;
+	name: string;
+	section: string | null;
+	size: number;
+	mtime: string;
+	origin: ModelOrigin;
+	/** in an arhīvs folder: older than the file kept in its section */
+	archived: boolean;
+}
+
 /** The BimCraft copy the app ships (task 8.0): present, where from, and whether our bridge add-on is on. */
 export interface BimcraftStatusRow {
 	state: "gatavs" | "nav tilta" | "nav konfigurēts";
@@ -372,7 +387,7 @@ export interface ApiSpec {
 	"revit.workCopy": (id: string) => string;
 	"revisions.capture": (id: string, summary: string, sheetIds: string[]) => Revision;
 	"tasks.list": () => { id: string; label: string; text: string }[];
-	"models.list": (id: string) => { rel: string; name: string; section: string | null; size: number; mtime: string }[];
+	"models.list": (id: string) => ModelRow[];
 	"models.bytes": (id: string, rel: string) => Uint8Array;
 	"revisions.list": (id: string) => Revision[];
 	"sheets.bytes": (id: string, ref: string) => Uint8Array;

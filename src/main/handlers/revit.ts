@@ -11,7 +11,8 @@ import { captureRevision, makeWorkCopy } from "../../revit/revision.js";
 import { TASKS } from "../../agent/tasks.js";
 import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
-import { listModels } from "../../sources/models.js";
+import { projectModels } from "../../sources/models.js";
+import { sourceBytes } from "../../sources/bytes.js";
 
 type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
@@ -46,9 +47,16 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		},
 		"revit.workCopy": (id) => makeWorkCopy(d.registry.store(id), d.revit),
 		"revisions.capture": (id, summary, sheetIds) => captureRevision(d.registry.store(id), d.revit, { trigger: "manualSave", summary, sheetIds, bimcraftApp: d.bimcraftApp }),
-		"models.list": (id) => listModels(d.registry.get(id).root),
+		"models.list": (id) => projectModels(d.registry.store(id)),
 		"models.bytes": (id, rel) => {
 			const store = d.registry.store(id);
+			if (rel.startsWith("src:")) {
+				// an .ifc the scan registered as a source (Avoti): the same bytes the source reader serves
+				const s = store.read("sources").find((x) => x.id === rel.slice(4));
+				const name = s?.container?.inner ?? s?.paths.find((p) => !p.includes("::")) ?? s?.paths[0]?.split("::")[1] ?? "";
+				if (!/\.ifc$/i.test(name)) throw new Error("Tikai IFC faili.");
+				return sourceBytes(store, rel.slice(4));
+			}
 			const g = checkRead(store.guard, rel);
 			if (!g.ok) throw new Error(g.reason);
 			if (!/\.ifc$/i.test(g.path)) throw new Error("Tikai IFC faili.");
