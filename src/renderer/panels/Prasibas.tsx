@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { BIM_STAGES, USER_LABEL, type Finding, type Requirement, type Source } from "../../core/model";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
+import { commentSubject } from "../comment-subject";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { Ekspertize } from "./Ekspertize";
 
@@ -151,7 +152,7 @@ function Requirements({ projectId }: { projectId: string }) {
 					</thead>
 					<tbody>
 						{rows.map((r) => (
-							<tr key={r.id} className={`click ${open === r.id ? "sel" : ""}`} onClick={() => setOpen(open === r.id ? null : r.id)}>
+							<tr key={r.id} className={`click ${open === r.id ? "sel" : ""}`} onClick={() => (setOpen(open === r.id ? null : r.id), commentSubject.pick({ thing: "requirement", id: r.id }, `prasība: ${r.text.slice(0, 40)}`))}>
 								<td>
 									<Badge>{ORIGIN[r.origin]}</Badge>
 								</td>
@@ -225,7 +226,7 @@ function Findings({ projectId }: { projectId: string }) {
 			{findings.error ? <Err error={findings.error} /> : null}
 			{rows.length === 0 && <Empty title={show === "open" ? "atvērto atradumu nav" : "no data"} />}
 			{rows.map((f) => (
-				<div key={f.id} className="confirm" style={{ borderColor: f.state === "open" ? (f.severity === "error" ? "var(--bad)" : "var(--warn)") : "var(--border)" }}>
+				<div key={f.id} className="confirm" onClick={() => commentSubject.pick({ thing: "finding", id: f.id }, `atradums: ${f.message.slice(0, 40)}`)} style={{ borderColor: f.state === "open" ? (f.severity === "error" ? "var(--bad)" : "var(--warn)") : "var(--border)" }}>
 					<div className="row">
 						<Badge tone={SEV[f.severity]}>{f.severity}</Badge>
 						<span className="mono small dim">{f.checkId}</span>

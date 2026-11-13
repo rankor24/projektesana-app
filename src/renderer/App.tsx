@@ -5,6 +5,9 @@ import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
 import { Rail } from "./shell/Rail";
+import { CommentTools } from "./shell/CommentTools";
+import { commentSubject } from "./comment-subject";
+import { toolsFor } from "../shared/comment-tools";
 import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Viewer } from "./shell/Preview";
@@ -48,7 +51,19 @@ function NormativiPage() {
 	return <Normativi projectId={projectId} />;
 }
 
+/** A page with comment tools: the panel above, the comment strip under it. */
 function Panel({ id, filter }: { id: PanelId; filter?: string }) {
+	const inner = <PanelBody id={id} filter={filter} />;
+	if (toolsFor(id).length === 0) return inner;
+	return (
+		<div className="fill-col">
+			<div className="page-scroll">{inner}</div>
+			<CommentTools page={id} />
+		</div>
+	);
+}
+
+function PanelBody({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
 	if (id === "projekts") return <Projekts />;
 	if (id === "faili") return <Faili />;
@@ -74,6 +89,7 @@ export function App() {
 		return () => window.removeEventListener("resize", refit);
 	}, []);
 	const { page, canvasFilter } = useWindows();
+	useEffect(() => commentSubject.clear(), [page]);
 	const fullPage = pageById(page)?.kind === "page" ? page : null;
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId, preview } = useUi();

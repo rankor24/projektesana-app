@@ -10,6 +10,7 @@ import { validName, type RenameMode, type RenameResult, type RenameRow } from ".
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { windows } from "../windows";
+import { commentSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
 
 const KINDS = ["MBP", "BP", "SKICE", "DT", "STARP"] as const;
@@ -253,6 +254,7 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 										})}
 										onIfc={(replace) => run("Eksportē IFC", () => call("deliveries.stageIfc", projectId, d.id, { part, replace }), (x) => `IFC: ${fileName((x as { file: string }).file)}`)}
 										onFile={pickFile}
+										onPick={() => commentSubject.pick({ thing: "item", delivery: d.id, item: r.id }, `punkts: ${r.label.slice(0, 40)}`)}
 										onAgent={() =>
 											ui.focusAdd({ kind: r.requirementId ? "requirement" : "delivery", id: r.requirementId ?? `${d.id}:${r.id}`, label: `${r.citation ? `${r.citation}: ` : ""}${r.label.slice(0, 60)}`, data: { deliveryId: d.id, status: r.status, detail: r.detail } })
 										}
@@ -438,10 +440,12 @@ function ChecklistLine(p: {
 	onIfc: (replace: boolean) => void;
 	onFile: () => void;
 	onAgent: () => void;
+	/** the user clicked the row: it is what the comment strip comments on */
+	onPick: () => void;
 }) {
 	const { r } = p;
 	return (
-		<tr>
+		<tr className="click" onClick={p.onPick}>
 			<td style={{ whiteSpace: "nowrap" }}>
 				<Badge tone={TONE[r.status]}>{r.status}</Badge>
 			</td>

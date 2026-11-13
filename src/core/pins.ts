@@ -1,6 +1,7 @@
 // Pins: the user's notes on a page or a model element, worked as tasks. open → resolved (the agent says what it changed)
 // → closed (the user only). A pin can be tied to a finding or a requirement.
-import { newId, type Pin, type PinCamera, type PinTarget, type Who } from "./model.js";
+import { newId, type Markup, type Pin, type PinCamera, type PinIntent, type PinTarget, type Who } from "./model.js";
+import { checkMarkup, checkTarget, isIntent } from "../shared/pins-view.js";
 import type { ProjectStore } from "./store.js";
 
 const vec3 = (v: unknown): boolean => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
@@ -11,11 +12,42 @@ export function validCamera(c: unknown): c is PinCamera {
 	return !!x && vec3(x.position) && vec3(x.target) && typeof x.fov === "number" && x.fov >= 10 && x.fov <= 120;
 }
 
-export function addPin(store: ProjectStore, target: PinTarget, text: string, by: Who, links: { findingId?: string; requirementId?: string } = {}): Pin {
+export interface PinOptions {
+	findingId?: string;
+	requirementId?: string;
+	/** what the user means (task 9.4) */
+	intent?: PinIntent;
+	/** marks drawn with it, in page (or view) fractions */
+	markup?: Markup[];
+}
+
+export function addPin(store: ProjectStore, target: PinTarget, text: string, by: Who, links: PinOptions = {}): Pin {
 	if (!text.trim()) throw new Error("Tukša piezīme.");
-	const valid = "elementGuid" in target ? !!target.elementGuid && (target.camera === undefined || validCamera(target.camera)) : Number.isFinite(target.x) && Number.isFinite(target.y) && target.x >= 0 && target.x <= 1 && target.y >= 0 && target.y <= 1;
-	if (!valid) throw new Error("Nederīga piezīmes vieta.");
-	const pin: Pin = { id: newId("p"), target, text: text.trim(), comments: [], by, at: new Date().toISOString(), state: "open", findingId: links.findingId ?? null, requirementId: links.requirementId ?? null };
+	if (!target || typeof target !== "object") throw new Error("Nederīga piezīmes vieta.");
+	if ("thing" in target) {
+		const known = target.thing === "requirement" ? { requirements: new Set(store.read("requirements").map((r) => r.id)) } : target.thing === "finding" ? { findings: new Set(store.read("findings").map((f) => f.id)) } : {};
+		const bad = checkTarget(target, known);
+		if (bad) throw new Error(bad);
+	} else {
+		const valid = "elementGuid" in target ? !!target.elementGuid && (target.camera === undefined || validCamera(target.camera)) : Number.isFinite(target.x) && Number.isFinite(target.y) && target.x >= 0 && target.x <= 1 && target.y >= 0 && target.y <= 1;
+		if (!valid) throw new Error("Nederīga piezīmes vieta.");
+	}
+	const badMarks = checkMarkup(links.markup);
+	if (badMarks) throw new Error(badMarks);
+	if (links.intent !== undefined && !isIntent(links.intent)) throw new Error(`Nezināms nolūks: ${String(links.intent)}.`);
+	const pin: Pin = {
+		id: newId("p"),
+		target,
+		text: text.trim(),
+		comments: [],
+		by,
+		at: new Date().toISOString(),
+		state: "open",
+		findingId: links.findingId ?? null,
+		requirementId: links.requirementId ?? null,
+		...(links.intent && links.intent !== "note" ? { intent: links.intent } : {}),
+		...(links.markup?.length ? { markup: links.markup } : {}),
+	};
 	store.update("pins", (all) => [...all, pin], { kind: "pin.added", by, data: { id: pin.id } });
 	return pin;
 }

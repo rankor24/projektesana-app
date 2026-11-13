@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { pdfSketchFocus, regionFocus, textFocus } from "../../shared/focus-items";
 import { errText } from "../bridge";
 import { ui } from "../state";
+import type { Markup } from "../../core/model";
+import { MarkupDraw, MarkupShapes } from "./Markup";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -26,6 +28,7 @@ export function PdfView({
 	overlay,
 	onPageClick,
 	onPage,
+	markup,
 	toolbar,
 	sketchNote,
 	onSketchSent,
@@ -40,6 +43,8 @@ export function PdfView({
 	/** the page now shown (the chat sends it in Auto mode) */
 	onPage?: (page: number) => void;
 	toolbar?: ReactNode;
+	/** marks over the page (task 9.4): the saved ones of this page, the pending ones, and the shape being drawn (null = not drawing) */
+	markup?: { shape: Markup["shape"] | null; shown: (page: number) => Markup[]; onDone: (page: number, m: Markup) => void };
 	/** given = the view offers Skice → aģentam: a drawn rectangle goes to the Fokuss with this note (8.2) */
 	sketchNote?: string;
 	onSketchSent?: () => void;
@@ -184,6 +189,8 @@ export function PdfView({
 					<canvas ref={canvas} />
 					<div className="textLayer" ref={textDiv} />
 					{size && overlay?.(page, size)}
+					{size && markup && <MarkupShapes marks={markup.shown(page)} />}
+					{size && markup?.shape && <MarkupDraw key={`${page}:${markup.shape}`} shape={markup.shape} onDone={(m) => markup.onDone(page, m)} />}
 					{mode !== "text" && (
 						<div
 							className="region-layer"

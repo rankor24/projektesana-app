@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import type { CoordReference, StoreyScheme } from "../../core/coordination-types";
 import type { Delivery } from "../../core/model";
+import { commentSubject } from "../comment-subject";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
@@ -210,7 +211,7 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 							<table className="small">
 								<tbody>
 									{g.lines.map((l) => (
-										<tr key={l.id}>
+										<tr key={l.id} className="click" onClick={() => commentSubject.pick({ thing: "cell", model: m.file, group: g.g }, `šūna ${m.code} · ${g.g}`)}>
 											<td style={{ width: "24%" }}><b>{l.w}</b></td>
 											<td className="bad-text">{l.now}</td>
 											<td className="dim" style={{ width: 24 }}>→</td>

@@ -59,8 +59,8 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 			return r.open;
 		},
 		"pins.list": (id) => d.registry.store(id).read("pins"),
-		"pins.add": (id, target, text) => {
-			const p = addPin(d.registry.store(id), target, text, "user");
+		"pins.add": (id, target, text, opts) => {
+			const p = addPin(d.registry.store(id), target, text, "user", opts ?? {});
 			d.emit("data.changed", { projectId: id, what: ["pins"] });
 			return p;
 		},

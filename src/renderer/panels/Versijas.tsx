@@ -4,6 +4,7 @@
 import { useState } from "react";
 import type { VersionRow } from "../../shared/api";
 import { call, errText } from "../bridge";
+import { commentSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
@@ -33,7 +34,7 @@ export function Versijas() {
 			<table>
 				<tbody>
 					{(rows.data ?? []).map((r, i) => (
-						<tr key={i}>
+						<tr key={i} className="click" onClick={() => commentSubject.pick({ thing: "change", version: `${r.at.slice(0, 10)} ${r.label}`.slice(0, 120), side: "A" }, `izmaiņa: ${r.label.slice(0, 40)}`)}>
 							<td className="small dim" style={{ whiteSpace: "nowrap" }}>{r.at.slice(0, 10)}</td>
 							<td>
 								<Badge>{KIND[r.kind]}</Badge>

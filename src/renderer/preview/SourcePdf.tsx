@@ -2,10 +2,12 @@
 // pins (6.4, 8.2). The overlay draws in page fractions, so it stays on the plan at any zoom. Pins are made with the note
 // field in the toolbar (Electron has no window.prompt): write the note, press Piezīme, click the page.
 import { useCallback, useEffect, useState } from "react";
-import type { Pin } from "../../core/model";
+import type { Markup, Pin } from "../../core/model";
+import { MarkupTools } from "./Markup";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { viewer } from "../viewer-store";
+import { pinFocus } from "../../shared/pins-view";
 import { PdfView } from "./PdfView";
 import { PinPanel, useFilePins } from "./Annotate";
 
@@ -18,6 +20,9 @@ export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, foc
 	const [note, setNote] = useState("");
 	const [active, setActive] = useState<string | null>(null);
 	const [jump, setJump] = useState<number | undefined>(page);
+	// marks drawn and not yet saved with a note (page, mark), and the shape being drawn
+	const [shape, setShape] = useState<Markup["shape"] | null>(null);
+	const [drawn, setDrawn] = useState<{ page: number; m: Markup }[]>([]);
 	// a linked split turns this page when the other one turns
 	useEffect(() => {
 		if (page) setJump(page);
@@ -33,7 +38,7 @@ export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, foc
 			setErr(errText(e));
 		}
 	};
-	const focusPin = (p: Pin) => ui.focusAdd({ kind: "pin", id: p.id, label: p.text.slice(0, 50), data: { state: p.state, target: p.target } });
+	const focusPin = (p: Pin) => ui.focusAdd(pinFocus(p));
 	const select = (p: Pin) => {
 		setActive(p.id);
 		focusPin(p);
@@ -55,11 +60,13 @@ export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, foc
 							if (focused) ui.setView({ page: pg });
 							viewer.pageChanged(paneIndex, sourceId, pg);
 						}}
+						markup={{ shape, shown: (pg) => [...pins.items.filter(({ pin }) => "page" in pin.target && pin.target.page === pg).flatMap(({ pin }) => pin.markup ?? []), ...drawn.filter((d) => d.page === pg).map((d) => d.m)], onDone: (pg, m) => setDrawn((d) => [...d, { page: pg, m }]) }}
 						sketchNote={note}
 						onSketchSent={() => setNote("")}
 						toolbar={
 							<>
 								<input placeholder="piezīme: Piezīme + klikšķis, vai Skice + taisnstūris" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 230 }} />
+								<MarkupTools shape={shape} setShape={setShape} count={drawn.length} onClear={() => setDrawn([])} />
 								<button className={geoOn ? "primary" : ""} onClick={toggleGeo} title="Plāna līnijas no vektoru PDF">
 									Ģeometrija
 								</button>
@@ -73,8 +80,9 @@ export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, foc
 						onPageClick={(pg, x, y) => {
 							if (!note.trim()) return setErr("Ieraksti piezīmi laukā virs lapas, tad klikšķini lapā.");
 							setErr(null);
-							call("pins.add", projectId, { sourceId, page: pg, x, y }, note.trim())
-								.then((p) => (setNote(""), setActive(p.id), pins.reload()))
+							const marks = drawn.filter((d) => d.page === pg).map((d) => d.m);
+							call("pins.add", projectId, { sourceId, page: pg, x, y }, note.trim(), marks.length ? { intent: "mark", markup: marks } : undefined)
+								.then((p) => (setNote(""), setDrawn((d) => d.filter((x) => x.page !== pg)), setActive(p.id), pins.reload()))
 								.catch((e) => setErr(errText(e)));
 						}}
 						overlay={(pg) => {

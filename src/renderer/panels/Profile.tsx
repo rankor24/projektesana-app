@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PROFILE_KEYS, profileOf, USER_LABEL, type Fact, type ProfileKey, type Source } from "../../core/model";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
+import { commentSubject } from "../comment-subject";
 import { Badge, Err, useLoad } from "../ui";
 
 const LABEL: Record<ProfileKey, string> = {

@@ -4,9 +4,11 @@
 // Annotation (8.2): the toolbar makes a pin on the selected element (with the camera it was seen from), the pins of this
 // model are numbered dots in 3D, listed beside the view; a click on a dot or a row flies back to the pin.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Pin, PinTarget } from "../../core/model";
+import type { Markup, Pin, PinTarget } from "../../core/model";
+import { MarkupDraw, MarkupShapes, MarkupTools } from "./Markup";
 import { elementFocus, isBimcraftMessage, sketchFocus, type BimcraftItem, type HostToBimcraft, type PinMarker } from "../../shared/bimcraft-protocol";
 import { followerOf } from "../../shared/viewer";
+import { pinFocus } from "../../shared/pins-view";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { Badge } from "../ui";
@@ -34,6 +36,9 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 	const [note, setNote] = useState("");
 	const [active, setActive] = useState<string | null>(null);
 	const wantCapture = useRef<((c: Captured) => void) | null>(null);
+	// marks drawn over the view, kept with the next pin and the camera it was drawn from
+	const [shape, setShape] = useState<Markup["shape"] | null>(null);
+	const [marks, setMarks] = useState<Markup[]>([]);
 
 	// pins on elements of THIS model; one the agent made without naming a model shows wherever its element is found
 	const belongs = useCallback((p: Pin) => "elementGuid" in p.target && (p.target.model === undefined || p.target.model === name), [name]);
@@ -122,7 +127,7 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 			} else if (m.type === "marker") {
 				setActive(m.id);
 				const p = pins.all.find((x) => x.id === m.id);
-				if (p) ui.focusAdd({ kind: "pin", id: p.id, label: p.text.slice(0, 50), data: { state: p.state, target: p.target } });
+				if (p) ui.focusAdd(pinFocus(p));
 			} else if (m.type === "markers") {
 				if (m.drawn < m.asked) setMsg(`${m.asked - m.drawn} piezīmju elementu šajā modelī nav (cita versija?)`);
 			} else if (m.type === "error") {
@@ -153,8 +158,8 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 			const el = c.items.find((i) => i.guid);
 			if (!el?.guid) return setMsg("Iezīmētajam elementam nav GlobalId.");
 			const target: PinTarget = { elementGuid: el.guid, model: name, ...(c.camera ? { camera: c.camera } : {}), ...(c.viewpoint ? { viewpoint: c.viewpoint } : {}) };
-			call("pins.add", projectId, target, note.trim())
-				.then((p) => (setNote(""), setActive(p.id), setMsg(null), pins.reload()))
+			call("pins.add", projectId, target, note.trim(), marks.length ? { intent: "mark", markup: marks } : undefined)
+				.then((p) => (setNote(""), setMarks([]), setShape(null), setActive(p.id), setMsg(null), pins.reload()))
 				.catch((e) => setMsg(errText(e)));
 		};
 		post({ pj: 1, type: "capture" });
@@ -162,7 +167,7 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 
 	const select = (p: Pin) => {
 		setActive(p.id);
-		ui.focusAdd({ kind: "pin", id: p.id, label: p.text.slice(0, 50), data: { state: p.state, target: p.target } });
+		ui.focusAdd(pinFocus(p));
 		if ("elementGuid" in p.target) post({ pj: 1, type: "fly", ...(p.target.camera ? { camera: p.target.camera } : { guid: p.target.elementGuid }) });
 	};
 
@@ -184,6 +189,7 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 				{!compareWith && (
 					<>
 						<input placeholder="piezīme pinam vai skicei aģentam" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && state === "open" && makePin()} style={{ width: 240 }} />
+						<MarkupTools shape={shape} setShape={setShape} count={marks.length} onClear={() => setMarks([])} />
 						<button className="primary" disabled={state !== "open"} title="Piezīme tiek pie iezīmētā elementa, kopā ar skatu, no kura to redzēji" onClick={makePin}>
 							Piezīme
 						</button>
@@ -195,7 +201,11 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 			</div>
 			{msg && <div className="dim small" style={{ padding: "2px 10px" }}>{msg}</div>}
 			<div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-				<iframe ref={frame} title="BimCraft" src="bimcraft://app/" style={{ flex: 1, minWidth: 0, border: "none", background: "#fff" }} />
+				<div style={{ position: "relative", display: "flex", flex: 1, minWidth: 0 }}>
+					<iframe ref={frame} title="BimCraft" src="bimcraft://app/" style={{ flex: 1, minWidth: 0, border: "none", background: "#fff" }} />
+					{!compareWith && <MarkupShapes marks={marks} />}
+					{!compareWith && shape && <MarkupDraw shape={shape} onDone={(m) => setMarks((x) => [...x, m])} />}
+				</div>
 			</div>
 		</div>
 	);

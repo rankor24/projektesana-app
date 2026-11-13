@@ -258,7 +258,36 @@ export interface PinViewpoint {
 }
 
 /** A pin on a page (fractions of the page) or on a model element: its GlobalId, the model it was placed in, the view. */
-export type PinTarget = { sheet?: string; sourceId?: string; page?: number; x: number; y: number; viewId?: string } | { elementGuid: string; model?: string; camera?: PinCamera; viewpoint?: PinViewpoint };
+export type PagePinTarget = { sheet?: string; sourceId?: string; page?: number; x: number; y: number; viewId?: string };
+export type ElementPinTarget = { elementGuid: string; model?: string; camera?: PinCamera; viewpoint?: PinViewpoint };
+
+/** What a comment on a page other than a model or a document points at (task 9.4): a thing the page shows. */
+export const COORD_GROUPS = ["Novietne", "Hierarhija", "Stāvi"] as const;
+export const TILE_IDS = ["findings", "delivery", "deadline", "coordination", "rooms", "stage", "attention", "facts", "changes", "folders"] as const;
+export type ThingTarget =
+	/** a coordination cell: one model × one group of the matrix */
+	| { thing: "cell"; model: string; group: (typeof COORD_GROUPS)[number] }
+	/** a change between two versions: the row, the side it is on, and a region of the page it points at (page fractions) */
+	| { thing: "change"; version: string; side: "A" | "B"; region?: { x: number; y: number; w: number; h: number } }
+	| { thing: "room"; no: string; floor?: string }
+	| { thing: "fact"; key: string }
+	| { thing: "tile"; id: (typeof TILE_IDS)[number] }
+	/** one row of a delivery's checklist */
+	| { thing: "item"; delivery: string; item: string }
+	| { thing: "requirement"; id: string }
+	| { thing: "finding"; id: string };
+export type PinTarget = PagePinTarget | ElementPinTarget | ThingTarget;
+
+/** What the user means by a comment: how he steers the agent. A plain note is `note`. */
+export const PIN_INTENTS = ["note", "fix", "correct", "mark", "colour", "boundary", "accept", "reject", "override", "justify", "block", "approve", "move-date"] as const;
+export type PinIntent = (typeof PIN_INTENTS)[number];
+
+/** A mark drawn on a 2D page (page fractions) or over a 3D view (fractions of the view at the pin's camera). */
+export interface Markup {
+	shape: "line" | "circle" | "rect" | "free";
+	/** line, rect: two points (corners); circle: centre and a point on the edge; free: 2 to 200 points */
+	points: [number, number][];
+}
 
 export interface Pin {
 	id: string;
@@ -271,6 +300,10 @@ export interface Pin {
 	state: "open" | "resolved" | "closed";
 	findingId: string | null;
 	requirementId: string | null;
+	/** what the user means (task 9.4); absent = a plain note */
+	intent?: PinIntent;
+	/** marks drawn with the comment (task 9.4) */
+	markup?: Markup[];
 }
 
 export type NoteType = "decision" | "answer" | "learning" | "question";

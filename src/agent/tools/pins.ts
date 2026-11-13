@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { addPin, commentPin, pinsAsTasks, resolvePin } from "../../core/pins.js";
 import type { Pin } from "../../core/model.js";
+import { pinMeaning, pinWhere } from "../../shared/pins-view.js";
 import { storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -10,8 +11,8 @@ import { tool, type ToolDef } from "./tool.js";
 export function pinsText(pins: Pin[]): string {
 	const tasks = pinsAsTasks(pins);
 	if (!tasks.length) return "";
-	const where = (p: Pin) => ("elementGuid" in p.target ? `elements ${p.target.elementGuid}${p.target.model ? ` modelī ${p.target.model}` : ""}` : `${p.target.sourceId ?? p.target.sheet ?? "lapa"}${p.target.page ? `, lpp. ${p.target.page}` : ""}`);
-	const lines = tasks.map((p, i) => `${i + 1}. [${p.id}] ${p.state === "open" ? "ATVĒRTA" : "gaida lietotāju"} — ${p.text} (${where(p)})${p.comments.length ? ` · pēdējais: ${p.comments[p.comments.length - 1].text}` : ""}`);
+	const where = pinWhere;
+	const lines = tasks.map((p, i) => `${i + 1}. [${p.id}] ${p.state === "open" ? "ATVĒRTA" : "gaida lietotāju"} — ${pinMeaning(p)} (${where(p)})${p.comments.length ? ` · pēdējais: ${p.comments[p.comments.length - 1].text}` : ""}`);
 	return `Lietotāja piezīmes (uzdevumi; atvērtās vispirms):\n${lines.join("\n")}`;
 }
 

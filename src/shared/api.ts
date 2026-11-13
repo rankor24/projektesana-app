@@ -1,7 +1,7 @@
 // The IPC contract: every method the renderer may call and every event main may send, with their types.
 // main/api.ts must implement exactly API_NAMES (checked by test/0.4-ipc.test.ts); the preload exposes one invoke and one on.
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
-import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
+import type { BimStage, Delivery, Fact, Finding, Markup, Note, NoteType, Pin, PinIntent, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
 import type { GrafikItem } from "./calendar.js";
 import type { ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
@@ -466,7 +466,8 @@ export interface ApiSpec {
 	"bcf.exportPins": (id: string) => string;
 	"bcf.import": (id: string, file: string) => { topics: number; byDiscipline: Record<string, number>; notes: string[] };
 	"pins.list": (id: string) => Pin[];
-	"pins.add": (id: string, target: PinTarget, text: string) => Pin;
+	/** a comment on anything a page shows (task 9.4): a target, the text, what the user means and the marks drawn with it */
+	"pins.add": (id: string, target: PinTarget, text: string, opts?: { intent?: PinIntent; markup?: Markup[] }) => Pin;
 	"pins.comment": (id: string, pinId: string, text: string) => void;
 	"pins.close": (id: string, pinId: string) => void;
 	"pins.reopen": (id: string, pinId: string) => void;

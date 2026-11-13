@@ -90,7 +90,7 @@ export function Viewer() {
 							{p.tabs.length === 0 && !two && <span className="dim small" style={{ padding: "6px 10px" }}>nav atvērtu failu</span>}
 							{two && p.tabs.length > 0 && <button className="ghost small" title="Šajā skatā atvērt otru failu: izvēlies to sarakstā" onClick={() => viewer.focusPane(i)}>＋</button>}
 						</div>
-						<div className="viewer-body">
+						<div className="viewer-pane-body">
 							<ViewPane target={v.tabs.find((t) => t.id === p.active)?.target ?? null} paneIndex={i} focused={v.focused === i} sources={sources.data} loading={sources.loading} />
 						</div>
 					</div>

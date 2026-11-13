@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { InvAreaRow, InventoryTable, RoomCompareRow } from "../../shared/api";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
+import { commentSubject } from "../comment-subject";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
 const KIND: Record<string, string> = { "missing-in-model": "nav modelī", "missing-in-inventory": "nav inventarizācijā", area: "platība", name: "nosaukums", floor: "stāvs", duplicate: "dubults Nr." };
@@ -57,7 +58,7 @@ function Compare({ projectId }: { projectId: string }) {
 					</thead>
 					<tbody>
 						{d.diffs.map((x, i) => (
-							<tr key={i}>
+							<tr key={i} className="click" onClick={() => commentSubject.pick({ thing: "room", no: x.no, ...(x.inventory?.floor ? { floor: String(x.inventory.floor) } : {}) }, `telpa ${x.no}`)}>
 								<td>{x.no}</td>
 								<td>
 									<Badge tone={x.kind === "name" ? "warn" : "bad"}>{KIND[x.kind] ?? x.kind}</Badge>
@@ -170,7 +171,7 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 				</thead>
 				<tbody>
 					{t.rows.map((r, i) => (
-						<tr key={i} className="click" onClick={() => ui.show({ kind: "source", sourceId: t.sourceId, page: r.page })}>
+						<tr key={i} className="click" onClick={() => (ui.show({ kind: "source", sourceId: t.sourceId, page: r.page }), commentSubject.pick({ thing: "room", no: r.no, floor: String(r.floor) }, `telpa ${r.no}`))}>
 							<td>{r.floor}</td>
 							<td>{r.no}</td>
 							<td>{r.name}</td>

@@ -423,7 +423,13 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .viewer-tab span { overflow: hidden; text-overflow: ellipsis; }
 .viewer-tab.on { color: var(--text); border-bottom-color: var(--accent); }
 .viewer-tab .x { padding: 0 4px; background: transparent; border-color: transparent; }
-.viewer-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.viewer-pane-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 .tree-row { display: flex; align-items: center; gap: 4px; padding: 1px 4px; white-space: nowrap; }
 .tree-row.click { cursor: pointer; }
 .tree-row.click:hover { background: var(--elev); }
+
+.markup-draw { position: absolute; inset: 0; cursor: crosshair; z-index: 6; }
+.page-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.comment-tools { border-top: 1px solid var(--border); background: var(--elev); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; flex: none; max-height: 45%; overflow: auto; }
+.comment-row { display: flex; align-items: center; gap: 4px; padding: 1px 0; border-top: 1px dashed var(--border); }
+tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, transparent); }
