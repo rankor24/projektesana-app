@@ -1,0 +1,2 @@
+From BIM Crew (D:\Code\BIM\BIM Crew), per the phase 8 rule "each task names the BIM Crew file it ports":
+8.15: `tools/{subagent,delegate}.ts`, `runtime/crew.ts` (the slot limiter, the lane events, the specialist's report), `runtime/file-locks.ts` (a queue per key, a bounded wait, release after the call), `AgentsArtifact.tsx` (the page)
