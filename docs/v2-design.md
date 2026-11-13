@@ -22,6 +22,16 @@ Language rule: English prose; Latvian for UI strings, domain terms and file name
 13. **Single-user.** Each person has their own projects and their own work; nothing is shared between users. App data stays on this PC with the app. The project folders on the office drive are read-only to the app.
 14. **A totally new test pack.** The v1 tests are disposable. Each v2 step gets its own tests, on real documents. The 99 remaining v1 tests go with the code they test as that code is replaced.
 
+The workspace (the user, 2026-11-13, on the layout board; built in phase 9 of `v2-work-plan.md`). These refine decisions 3 and 5:
+
+15. **Rail with pages**, grouped Projekts / Dati / Nodošana. Avoti, Prasības, Faili, Sessions and the Telpas list are sidebars; Pārskats, Nodevumi, Koordinācija, Versijas and the Telpas compare are full pages. The Profils panel becomes part of Pārskats, the project dashboard.
+16. **Chat is always on**, docked left by default, never closed: the AI co-workers do the work and the user watches it.
+17. **One full-screen viewer** for DOCX, XLSX, PDF, DWG and IFC that splits for several angles or a comparison. Every panel floats over it and docks to any of the four sides; windows combine as tabs; a window can pop out to a second monitor.
+18. **Comment tools on every page, specific to the page**: they are how the user gives the direction of fixes, and every comment reaches the agent.
+19. **Plan, tasks and notes above the chat input**: the agent writes the order of work, the user edits it.
+20. **View context toggle** in the chat bar: Auto (the open file, page, selection and camera go with each message; default in 3D) or Manual (the Fokuss only; default for documents).
+21. **Timeline** = the calendar grafiks inside the Projekts section; the TopBar shows at most one project status pill.
+
 ---
 
 ## 1. Why gathering fails in v1
