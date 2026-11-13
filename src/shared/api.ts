@@ -448,6 +448,12 @@ export interface ApiSpec {
 	"bimcraft.status": () => BimcraftStatusRow;
 	/** tokens and cost per project, from the log the agent's turns are written to */
 	"usage.summary": () => UsageRow[];
+	/** the office memory (task 8.8): lessons for every project; proposals from the agent are in the list, marked */
+	"memory.list": (type?: NoteType) => Note[];
+	"memory.write": (type: NoteType, title: string, body: string) => Note;
+	/** lift one of the project's notes up to the office memory (a copy; the project's stays) */
+	"memory.promote": (id: string, noteId: string) => Note;
+	"memory.decide": (noteId: string, accept: boolean) => void;
 	/** what an agent run changed, newest last, and whether each change can still be taken back (task 8.7) */
 	"undo.list": (id: string, run: string) => UndoRow[];
 	"undo.apply": (id: string, key: string) => string;
@@ -579,6 +585,10 @@ export const API_NAMES = [
 	"models.diff",
 	"bimcraft.status",
 	"usage.summary",
+	"memory.list",
+	"memory.write",
+	"memory.promote",
+	"memory.decide",
 	"undo.list",
 	"undo.apply",
 	"todos.list",

@@ -283,6 +283,10 @@ export interface Note {
 	refs: string[];
 	by: Who;
 	at: string;
+	/** office memory only (task 8.8): the project note this was lifted from */
+	from?: { project: string; note: string };
+	/** office memory only: an agent's note waits as "proposed" until the user accepts it */
+	state?: "proposed";
 }
 
 export interface Event {

@@ -5,15 +5,18 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Registry } from "../../core/registry.js";
 import type { ProjectStore } from "../../core/store.js";
+import { OfficeMemory } from "../../core/office-memory.js";
 import { applyUndo, undoRows } from "../../core/undo.js";
 import type { EventName, EventSpec, FileRoot, Handlers, ScanSummaryRow } from "../../shared/api.js";
 import { buildOverlay, insideBase, listDirectory, searchTree } from "../../sources/tree.js";
 
-type K = "files.roots" | "files.list" | "files.search" | "files.open" | "undo.list" | "undo.apply";
+type K = "files.roots" | "files.list" | "files.search" | "files.open" | "undo.list" | "undo.apply" | "memory.list" | "memory.write" | "memory.promote" | "memory.decide";
 
 export const rootDir = (store: ProjectStore, key: FileRoot["key"]): string => (key === "projekts" ? store.project.root : key === "uzmetumi" ? join(store.dir, "nodevumi") : store.dir);
 
-export function fileHandlers(d: { registry: Registry; openPath(p: string): Promise<string>; emit<E extends EventName>(event: E, payload: EventSpec[E]): void }): Pick<Handlers, K> {
+export function fileHandlers(d: { registry: Registry; settings: { dir: string }; openPath(p: string): Promise<string>; emit<E extends EventName>(event: E, payload: EventSpec[E]): void }): Pick<Handlers, K> {
+	const memory = () => new OfficeMemory(join(d.settings.dir, "memory"));
+	const memoryChanged = () => d.emit("data.changed", { projectId: null, what: ["memory"] });
 	const overlay = (store: ProjectStore, key: FileRoot["key"]) => (key === "projekts" ? buildOverlay(store.project.root, store.read("sources"), store.readMeta<ScanSummaryRow | null>("scan", null)?.folders ?? []) : undefined);
 	return {
 		"files.roots": (id) => {
@@ -37,6 +40,21 @@ export function fileHandlers(d: { registry: Registry; openPath(p: string): Promi
 			const base = rootDir(store, root);
 			if (!existsSync(base)) throw new Error(`Mape nav pieejama: ${base}`);
 			return searchTree(base, q, overlay(store, root));
+		},
+		"memory.list": (type) => memory().list({ type }),
+		"memory.write": (type, title, body) => {
+			const n = memory().write({ type, title, body }, "user");
+			memoryChanged();
+			return n;
+		},
+		"memory.promote": (id, noteId) => {
+			const n = memory().promote(d.registry.store(id), noteId);
+			memoryChanged();
+			return n;
+		},
+		"memory.decide": (noteId, accept) => {
+			memory().decide(noteId, accept);
+			memoryChanged();
 		},
 		"undo.list": (id, run) => undoRows(d.registry.store(id), run),
 		"undo.apply": (id, key) => {

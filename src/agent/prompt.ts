@@ -16,7 +16,8 @@ Noteikumi:
 5. Fokuss ir tas, ko lietotājs ir iezīmējis panelī vai priekšskatā. Sāc no tā.
 6. Revit: viena darbība — viens īss izsaukums. Nekad nepārbūvē to, ko lietotājs ir izlabojis. Izmaiņas, kas maina modeli, lietotājs apstiprina pa partijām.
 7. Izejas mapes ir tikai lasāmas. Tu neko tajās neraksti.
-8. Nodevumi: mērķis ir nodevums, ko lietotājs var nosūtīt. Tu to gatavo staging mapē (start_delivery, delivery_checklist, stage_*); kopēšanu uz 1.4_Nodevumi un "nosūtīts" dara tikai lietotājs.`;
+8. Nodevumi: mērķis ir nodevums, ko lietotājs var nosūtīt. Tu to gatavo staging mapē (start_delivery, delivery_checklist, stage_*); kopēšanu uz 1.4_Nodevumi un "nosūtīts" dara tikai lietotājs.
+9. Atmiņa: read_notes dod projekta lēmumus un biroja mācības (scope projekts / birojs / visi). Biroja atmiņa ir noteikumi, kas der visiem projektiem; paskaties tajā, pirms izlem, kā strādāt. Ierakstīt tajā vari tikai kā priekšlikumu (write_note ar scope birojs), bez klientu vārdiem un adresēm; lietotājs to pieņem vai noraida.`;
 
 /** When the in-memory conversation is gone (app restarted), the last turns of the transcript go into the system prompt. */
 export function withEarlier(system: string, earlier: { role: string; text: string }[]): string {

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { join } from "node:path";
 import { checkWrite, isInside } from "./guard.js";
 import { appendLog, readLog, type StoredEntry } from "./log.js";
+import { readNotes, writeNoteFile } from "./notes.js";
 import { currentScope } from "./scope.js";
 import { COLLECTIONS, upgradeWho, type CollectionName, type Collections, type Note, type NoteType, type Project, type Who } from "./model.js";
 
@@ -162,32 +163,13 @@ export class ProjectStore {
 
 	// ---- notes (Atmiņa): one markdown file per note ----
 
-	private noteFile(id: string) {
-		if (!/^[a-z0-9_]+$/i.test(id)) throw new Error(`Nederīgs piezīmes id: ${id}`);
-		return join(this.dir, "notes", `${id}.md`);
-	}
-
 	writeNote(n: Note): void {
-		const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at };
-		const f = this.noteFile(n.id);
-		if (existsSync(f)) renameSync(f, join(this.dir, "versions", `note.${n.id}.${Date.now()}.md`));
-		atomicWrite(f, `---\n${JSON.stringify(fm)}\n---\n${n.body}\n`);
+		writeNoteFile(join(this.dir, "notes"), n, join(this.dir, "versions"));
 		this.log({ kind: "note.written", by: n.by, data: { id: n.id, type: n.type } });
 	}
 
 	notes(type?: NoteType): Note[] {
-		const dir = join(this.dir, "notes");
-		return readdirSync(dir)
-			.filter((n) => n.endsWith(".md"))
-			.map((n) => {
-				const raw = readFileSync(join(dir, n), "utf8").replace(/\r\n/g, "\n");
-				const m = /^---\n(.*)\n---\n([\s\S]*)$/.exec(raw);
-				if (!m) return null;
-				const fm = upgradeWho(JSON.parse(m[1]) as Omit<Note, "body">);
-				return { ...fm, body: m[2].replace(/\n$/, "") } as Note;
-			})
-			.filter((n): n is Note => !!n && (!type || n.type === type))
-			.sort((a, b) => b.at.localeCompare(a.at));
+		return readNotes(join(this.dir, "notes"), type);
 	}
 
 	/** Removes stray temp files from a crash mid-write. */

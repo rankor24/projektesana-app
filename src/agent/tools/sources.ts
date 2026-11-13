@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { proposeFact } from "../../core/facts.js";
 import { newId, profileOf, type NoteType } from "../../core/model.js";
+import { OfficeMemory } from "../../core/office-memory.js";
 import { Library } from "../../rules/library.js";
 import { EXTRACTION_PROMPT, extractFor } from "../../sources/extract/index.js";
 import { norm } from "../../sources/extract/common.js";
@@ -151,19 +152,26 @@ export const sourceTools: ToolDef[] = [
 	tool({
 		name: "read_notes",
 		level: "read",
-		description: "The project memory (Atmiņa): decisions, answers, learnings and open questions written earlier, newest first.",
-		input: { type: z.enum(["decision", "answer", "learning", "question"]).optional() },
-		run: (ctx, { type }) => {
-			const n = storeOf(ctx).notes(type as NoteType | undefined);
-			return n.length ? n : "no data: atmiņā nav ierakstu.";
+		description: "The memory (Atmiņa): decisions, answers, learnings and open questions written earlier, newest first. scope 'projekts' = this project's; 'birojs' = the office memory, lessons that hold for every project (only the ones the user has accepted); 'visi' (default) = both, each marked with its scope.",
+		input: { type: z.enum(["decision", "answer", "learning", "question"]).optional(), scope: z.enum(["projekts", "birojs", "visi"]).optional() },
+		run: (ctx, { type, scope }) => {
+			const s = scope ?? "visi";
+			const mine = s !== "birojs" && ctx.projectId ? storeOf(ctx).notes(type as NoteType | undefined).map((n) => ({ scope: "projekts", ...n })) : [];
+			const office = s !== "projekts" ? new OfficeMemory(join(ctx.appDir, "memory")).list({ type: type as NoteType | undefined, standing: true }).map((n) => ({ scope: "birojs", ...n })) : [];
+			const all = [...mine, ...office];
+			return all.length ? all : "no data: atmiņā nav ierakstu.";
 		},
 	}),
 	tool({
 		name: "write_note",
 		level: "propose",
-		description: "Write to the project memory: a decision the user made, an answer to a question, a learning, or a question for the user. Short markdown; refs = ids it is about.",
-		input: { type: z.enum(["decision", "answer", "learning", "question"]), title: z.string().min(3), body: z.string(), refs: z.array(z.string()).optional() },
+		description: "Write to the memory: a decision the user made, an answer to a question, a learning, or a question for the user. Short markdown; refs = ids it is about. scope 'projekts' (default) = this project's memory; 'birojs' = a lesson that holds for every project: it is only a proposal until the user accepts it, so write it as a rule that can stand on its own, with no client names or addresses.",
+		input: { type: z.enum(["decision", "answer", "learning", "question"]), title: z.string().min(3), body: z.string(), refs: z.array(z.string()).optional(), scope: z.enum(["projekts", "birojs"]).optional() },
 		run: (ctx, a) => {
+			if (a.scope === "birojs") {
+				const n = new OfficeMemory(join(ctx.appDir, "memory")).write({ type: a.type, title: a.title, body: a.body, refs: a.refs }, "agent");
+				return { ok: true, note: n.id, state: n.state, message: "Priekšlikums biroja atmiņai. Lietotājs to pieņem: Atmiņa → Birojs." };
+			}
 			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString() };
 			storeOf(ctx).writeNote(note);
 			return { ok: true, note: note.id };
