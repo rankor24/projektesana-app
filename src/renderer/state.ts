@@ -101,6 +101,8 @@ export const ui = {
 		set({ view: next });
 		for (const w of viewWaiters.splice(0)) w();
 	},
+	/** The other window changed the open project (a pop-out follows the main window): adopted without closing anything here. */
+	adoptProject: (projectId: string | null) => set({ projectId, focus: [] }),
 	setViewMode: (mode: ViewMode) => set({ viewChoice: { kind: state.view.kind, mode } }),
 	/** Resolves when the viewer next reports (the camera it was asked for), or after `ms`. */
 	nextView: (ms = 600) =>

@@ -285,6 +285,12 @@ export function popIn(l: Layout, id: string, vp: Vp): Layout {
 	return { ...layout, groups: [...layout.groups, { tabs: [id], active: id, place: { ...from, z: topZ(layout) + 1 } }], focused: id };
 }
 export const poppedOut = (l: Layout): string[] => l.groups.filter((g) => g.place.kind === "pop").flatMap((g) => g.tabs);
+/** Every popped window docked back where it was: the OS windows are gone after a restart. */
+export function popInAll(l: Layout, vp: Vp): Layout {
+	let next = l;
+	for (const id of poppedOut(l)) next = popIn(next, id, vp);
+	return next;
+}
 
 export function setFilter(l: Layout, id: string, filter: string | undefined): Layout {
 	const filters = { ...l.filters };

@@ -487,3 +487,6 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .tile { position: absolute; box-sizing: border-box; border: 2px solid; padding: 2px 4px; overflow: hidden; cursor: pointer; border-radius: 3px; }
 .tile.model-only { border-style: dashed; }
 .tile:hover { filter: brightness(1.15); }
+.popout { grid-template-rows: auto minmax(0, 1fr); }
+.popout-head { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.popout-body { min-height: 0; overflow: auto; display: flex; flex-direction: column; }

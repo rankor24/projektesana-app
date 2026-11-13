@@ -16,6 +16,8 @@ import { TASKS } from "../agent/tasks.js";
 import { makeLevelOf } from "../agent/tools/levels.js";
 import { appLevels } from "../agent/tools/defs.js";
 import { AppSettings } from "./settings.js";
+import { PopoutManager } from "./windows.js";
+import { popTitle } from "../shared/popout.js";
 import { Registry } from "../core/registry.js";
 import { ProjectEngine } from "./engine.js";
 import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch } from "../revit/client.js";
@@ -59,11 +61,45 @@ const openUrl = (url: string) => {
 	if (/^https:\/\//i.test(url)) void shell.openExternal(url);
 };
 
+// The OS windows of popped-out layout windows (task 9.11): the same renderer bundle with ?pop=<id>, the same preload; closing one
+// tells the main window to dock the layout window back.
+const popouts = new PopoutManager(
+	(id) => {
+		const w = new BrowserWindow({
+			width: 780,
+			height: 680,
+			minWidth: 360,
+			minHeight: 240,
+			title: popTitle(id),
+			backgroundColor: "#161615",
+			webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
+		});
+		w.setMenuBarVisibility(false);
+		w.webContents.setWindowOpenHandler(({ url }) => {
+			openUrl(url);
+			return { action: "deny" };
+		});
+		w.webContents.on("console-message", (e) => {
+			if (e.level === "error" || e.level === "warning") log(`popout ${id} ${e.level}: ${e.message} (${e.sourceId}:${e.lineNumber})`);
+		});
+		void w.loadFile(join(here, "..", "renderer", "index.html"), { query: { pop: id } });
+		return {
+			focus: () => w.focus(),
+			close: () => (w.isDestroyed() ? undefined : w.close()),
+			send: (channel, payload) => (w.isDestroyed() ? undefined : w.webContents.send(channel, payload)),
+			onClosed: (cb) => w.on("closed", cb),
+		};
+	},
+	(id) => emit("layout.popped", { id }),
+);
+
 const events = new Set<string>(EVENT_NAMES);
 const emit = <E extends EventName>(event: E, payload: EventSpec[E]) => {
 	// the folder scan also shows in the activity feed, beside the agent's runs
 	if (event === "scan.progress") activity.scan(payload as EventSpec["scan.progress"]);
-	if (events.has(event)) win?.webContents.send(`ev:${event}`, payload);
+	if (!events.has(event)) return;
+	win?.webContents.send(`ev:${event}`, payload);
+	popouts.broadcast(`ev:${event}`, payload);
 };
 
 // What the agent and the folder scan are doing, as lines a person reads: the dock's run card and the status strip.
@@ -154,6 +190,7 @@ const handlers = createHandlers({
 	activity,
 	pi,
 	emit,
+	popouts,
 	pickFolder: async (title) => {
 		const r = await dialog.showOpenDialog(win!, { title, properties: ["openDirectory"] });
 		return r.canceled ? null : r.filePaths[0];
@@ -234,6 +271,7 @@ let closing = false;
 async function shutdown(): Promise<void> {
 	pageRenderer.close();
 	const closeAll = Promise.allSettled([session.shutdown(), revit.close(), ocr.close()]);
+	popouts.closeAll();
 	await Promise.race([closeAll, new Promise((r) => setTimeout(r, 4000))]);
 }
 app.on("before-quit", (e) => {

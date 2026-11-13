@@ -15,6 +15,7 @@ import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
+import type { RelayMsg } from "./popout.js";
 import type { PlanDoc } from "../core/model.js";
 
 
@@ -374,7 +375,14 @@ export interface ApiSpec {
 	"settings.set": (patch: Partial<Settings>) => Settings;
 	/** where each window is, per page (task 9.0): the renderer's own state, kept in the app's data folder */
 	"layout.get": () => LayoutStore;
-	"layout.set": (store: LayoutStore) => void;
+	/** `origin` names the window that saved: it is told "layout.changed" like the others, and ignores its own */
+	"layout.set": (store: LayoutStore, origin?: string) => void;
+	/** open the OS window of a layout window (a second monitor); closing it docks the window back (task 9.11) */
+	"layout.popOut": (id: string) => void;
+	/** close that OS window (the layout window was docked back in the main window) */
+	"layout.popIn": (id: string) => void;
+	/** a popped window asks the main window to do something (open a file in the viewer, fly the camera, go to a page) */
+	"layout.relay": (msg: RelayMsg) => void;
 	/** the plan above the chat input (task 9.2): the agent writes it with update_plan, the user edits it here */
 	"plan.get": (id: string) => PlanDoc;
 	"plan.set": (id: string, steps: PlanStep[]) => PlanDoc;
@@ -557,6 +565,9 @@ export const API_NAMES = [
 	"settings.set",
 	"layout.get",
 	"layout.set",
+	"layout.popOut",
+	"layout.popIn",
+	"layout.relay",
 	"plan.get",
 	"plan.set",
 	"dialog.pickFolder",
@@ -705,12 +716,18 @@ export interface EventSpec {
 	"data.changed": { projectId: string | null; what: string[] };
 	"agent.event": { runId: string; event: RunEvent };
 	"agent.login": LoginNotice;
+	/** the layout file was saved (by `origin`): every window adopts it (task 9.11) */
+	"layout.changed": { store: LayoutStore; origin: string };
+	/** the OS window of a popped layout window was closed */
+	"layout.popped": { id: string };
+	/** a popped window's request to the main window */
+	"layout.relay": { msg: RelayMsg };
 	"scan.progress": ScanProgress;
 	/** What the agent or the folder scan is doing, as a line a person reads (shared/activity.ts). */
 	activity: Activity;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "scan.progress", "activity"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

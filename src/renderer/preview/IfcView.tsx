@@ -18,7 +18,14 @@ import { useFilePins } from "./Annotate";
 type Cmd = Exclude<HostToBimcraft, { type: "open" }>;
 const listeners = new Set<(c: Cmd) => void>();
 /** Other parts of the renderer (the agent's tool results) send commands to the open viewer through here. */
-export const bimcraft = { send: (c: Cmd) => listeners.forEach((l) => l(c)) };
+let relay: ((c: Cmd) => void) | null = null;
+export const bimcraft = {
+	send: (c: Cmd) => (relay ? relay(c) : listeners.forEach((l) => l(c))),
+	/** in a popped-out window there is no viewer: its messages go to the main window's (task 9.11) */
+	setRelay: (fn: ((c: Cmd) => void) | null) => {
+		relay = fn;
+	},
+};
 
 type Captured = Extract<import("../../shared/bimcraft-protocol").BimcraftToHost, { type: "captured" }>;
 

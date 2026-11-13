@@ -89,6 +89,9 @@ export function TabGroup({
 							⇱
 						</button>
 					)}
+					<button title="Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas" onClick={() => windows.popOut(own)}>
+						⧉
+					</button>
 					<button title={mode === "dock" ? "Sakļaut joslu" : "Minimizēt"} onClick={() => windows.collapse(own, true)}>
 						–
 					</button>

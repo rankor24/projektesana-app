@@ -5,7 +5,8 @@
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
 import { defaultLayout, pageById, resolveOpen, SIDEBAR_SIZE, START_PAGE } from "../shared/pages";
-import { call } from "./bridge";
+import { popIdOf } from "../shared/popout";
+import { call, on } from "./bridge";
 
 export const PANELS = L.PANEL_IDS;
 export type PanelId = (typeof L.PANEL_IDS)[number];
@@ -56,20 +57,25 @@ export interface WindowsState {
 }
 
 const OLD_KEY = "projektesana:windows";
+/** which layout window this OS window shows (a pop-out), or null for the main window */
+export const POP_ID = typeof location === "undefined" ? null : popIdOf(location.search);
+/** names this window to main, so it does not adopt its own "layout.changed" */
+const ORIGIN = Math.random().toString(36).slice(2, 10);
 const vp = (): L.Vp => ({ w: window.innerWidth, h: window.innerHeight });
 let defaultFor: (page: string) => L.Layout = defaultLayout;
 let state: WindowsState = { page: START_PAGE, layout: L.emptyLayout(), store: L.emptyStore(), loaded: false };
 const listeners = new Set<() => void>();
+let listening = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 function notify() {
 	for (const l of listeners) l();
 }
 function scheduleSave() {
-	if (!state.loaded) return; // never overwrite the file with defaults before it was read
+	if (!state.loaded || POP_ID) return; // never overwrite the file with defaults before it was read; a pop-out does not own the layout
 	clearTimeout(saveTimer);
 	saveTimer = setTimeout(() => {
-		call("layout.set", state.store).catch(() => {
+		call("layout.set", state.store, ORIGIN).catch(() => {
 			// the layout is not remembered this time; nothing else changes
 		});
 	}, 400);
@@ -102,9 +108,27 @@ export const windows = {
 			}
 		}
 		const page = store.current && pageById(store.current) ? store.current : state.page;
-		state = { ...state, page, store, loaded: true, layout: L.layoutFor(store, page, defaultFor, vp()) };
+		// the OS windows of a last session are gone: whatever was popped out is docked back (a pop-out window shows its one window)
+		const layout = POP_ID ? L.layoutFor(store, page, defaultFor, vp()) : L.popInAll(L.layoutFor(store, page, defaultFor, vp()), vp());
+		state = { ...state, page, store, loaded: true, layout, ...(POP_ID ? {} : { store: L.withPage(store, page, layout) }) };
 		notify();
 		scheduleSave();
+		windows.listen();
+	},
+	/** One store for every window (task 9.11): what another window saved is adopted; our own saves are ignored. */
+	listen() {
+		if (listening) return;
+		listening = true;
+		on("layout.changed", ({ store, origin }) => {
+			if (origin === ORIGIN) return;
+			const page = POP_ID && store.current && pageById(store.current) ? store.current : state.page;
+			state = { ...state, store, page, layout: L.layoutFor(store, page, defaultFor, vp()) };
+			notify();
+		});
+		// the OS window of a popped window was closed: it docks back where it was
+		on("layout.popped", ({ id }) => {
+			if (!POP_ID) op((l, v) => L.popIn(l, id, v));
+		});
 	},
 	/** The page's layout becomes the one shown; a page that was never laid out gets `def(page)`. */
 	setPage(page: string, canvasFilter?: string) {
@@ -118,6 +142,8 @@ export const windows = {
 	},
 	/** The rail, Ctrl+K, the agent's open_panel and the links between panels: a page opens as the page; a global window floats. */
 	go(name: string, filter?: string) {
+		// a pop-out has no pages: the main window goes there
+		if (POP_ID) return void call("layout.relay", { t: "go", name, ...(filter !== undefined ? { filter } : {}) }).catch(() => undefined);
 		const t = resolveOpen(name, filter);
 		if (!t || !t.page) return windows.openWindow(name, filter);
 		const def = pageById(t.page)!;
@@ -156,8 +182,17 @@ export const windows = {
 		}),
 	reorder: (id: string, index: number) => op((l) => L.reorder(l, id, index)),
 	collapse: (id: string, on = true) => op((l) => L.collapse(l, id, on)),
-	popOut: (id: string) => op((l, v) => L.popOut(l, id, v)),
-	popIn: (id: string) => op((l, v) => L.popIn(l, id, v)),
+	/** Pops a window out to its own OS window (a second monitor); if the window cannot be made it stays where it was. */
+	popOut(id: string) {
+		const before = state.layout;
+		op((l, v) => L.popOut(l, id, v));
+		call("layout.popOut", id).catch(() => commit(before));
+	},
+	/** Docks a popped window back and closes its OS window. */
+	popIn(id: string) {
+		op((l, v) => L.popIn(l, id, v));
+		call("layout.popIn", id).catch(() => undefined);
+	},
 	setFilter: (id: string, filter: string | undefined) => op((l) => L.setFilter(l, id, filter)),
 	get: () => state,
 };

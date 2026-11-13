@@ -35,6 +35,8 @@ import { Koordinacija } from "./panels/Koordinacija";
 import { Normativi } from "./panels/Normativi";
 import { PANEL_TITLE, WINDOW_TITLE, useWindows, windows, type PanelId } from "./windows";
 import { pageById } from "../shared/pages";
+import { checkRelay, type RelayMsg } from "../shared/popout";
+import { bimcraft } from "./preview/IfcView";
 import { CHAT } from "../shared/layout";
 
 /** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
@@ -93,8 +95,60 @@ function PanelBody({ id, filter }: { id: PanelId; filter?: string }) {
 	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
 }
 
+/** A layout window in its own OS window (task 9.11): the same renderer, showing that one window over its whole area. */
+export function PopOut({ id }: { id: string }) {
+	useEffect(() => on("data.changed", () => ui.bump()), []);
+	useEffect(() => {
+		void windows.init();
+		// no viewer here: opening a file, going to a page and messages for the 3D view are done by the main window
+		ui.onShow((t) => void call("layout.relay", { t: "show", target: t as never }).catch(() => undefined));
+		bimcraft.setRelay((cmd) => void call("layout.relay", { t: "bimcraft", cmd: cmd as never }).catch(() => undefined));
+		// the project follows the main window's (localStorage is shared between the windows)
+		const onStore = (e: StorageEvent) => {
+			if (e.key !== "projektesana:ui" || !e.newValue) return;
+			try {
+				ui.adoptProject((JSON.parse(e.newValue) as { projectId?: string | null }).projectId ?? null);
+			} catch {
+				// unreadable value: keep the project this window has
+			}
+		};
+		window.addEventListener("storage", onStore);
+		return () => window.removeEventListener("storage", onStore);
+	}, []);
+	const { tick } = useUi();
+	useEffect(() => {
+		call("settings.get").then((s) => {
+			const dark = s.theme === "dark" || (s.theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+			document.documentElement.dataset.theme = dark ? "dark" : "light";
+		});
+	}, [tick]);
+	const body = <Body id={id} filter={windows.get().layout.filters[id]} />;
+	return (
+		<div className="app popout">
+			<div className="popout-head">
+				<b>{WINDOW_TITLE[id] ?? id}</b>
+				<span className="grow" />
+				<button className="ghost small" title="Aizvērt šo logu: tas atgriežas galvenajā logā" onClick={() => window.close()}>
+					Atgriezt galvenajā logā
+				</button>
+			</div>
+			<div className="popout-body">{body}</div>
+		</div>
+	);
+}
+
+/** What a pop-out asks of the main window arrives here. */
+function runRelay(m: RelayMsg) {
+	const bad = checkRelay(m);
+	if (bad) return;
+	if (m.t === "show") ui.show(m.target as never);
+	else if (m.t === "go") windows.go(m.name, m.filter);
+	else if (m.t === "bimcraft") bimcraft.send(m.cmd as never);
+}
+
 export function App() {
 	useEffect(() => on("data.changed", () => ui.bump()), []);
+	useEffect(() => on("layout.relay", ({ msg }) => runRelay(msg)), []);
 	useEffect(() => {
 		void windows.init();
 		const refit = () => windows.refit();

@@ -4,7 +4,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emptyStore, parseStore, type LayoutStore, type Vp } from "../../shared/layout.js";
-import type { Handlers } from "../../shared/api.js";
+import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
+import { checkRelay } from "../../shared/popout.js";
+import type { PopoutManager } from "../windows.js";
 
 /** The renderer clamps to its real window; the file is read without clamping to any particular size. */
 const WIDE: Vp = { w: 100000, h: 100000 };
@@ -30,12 +32,28 @@ export class LayoutFile {
 	}
 }
 
-type K = "layout.get" | "layout.set";
+type K = "layout.get" | "layout.set" | "layout.popOut" | "layout.popIn" | "layout.relay";
 
-export function layoutHandlers(d: { settings: { dir: string } }): Pick<Handlers, K> {
+export function layoutHandlers(d: { settings: { dir: string }; emit?: <E extends EventName>(event: E, payload: EventSpec[E]) => void; popouts?: PopoutManager }): Pick<Handlers, K> {
 	const f = new LayoutFile(d.settings.dir);
+	const mgr = () => {
+		if (!d.popouts) throw new Error("Šajā palaišanā logus nevar iznest.");
+		return d.popouts;
+	};
 	return {
 		"layout.get": () => f.read(),
-		"layout.set": (s) => f.write(parseStore(JSON.stringify(s), WIDE)),
+		"layout.set": (s, origin) => {
+			const clean = parseStore(JSON.stringify(s), WIDE);
+			f.write(clean);
+			// one store for every window: the others adopt what was saved
+			d.emit?.("layout.changed", { store: clean, origin: typeof origin === "string" ? origin : "" });
+		},
+		"layout.popOut": (id) => void mgr().popOut(id),
+		"layout.popIn": (id) => void mgr().popIn(id),
+		"layout.relay": (msg) => {
+			const bad = checkRelay(msg);
+			if (bad) throw new Error(bad);
+			d.emit?.("layout.relay", { msg });
+		},
 	};
 }

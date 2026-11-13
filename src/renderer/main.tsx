@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
+import { App, PopOut } from "./App";
+import { popIdOf } from "../shared/popout";
 import "./styles.css";
 
 /** A render error shows its message and a reload, never a black window. */
@@ -29,6 +30,6 @@ ${info.componentStack ?? ""}`);
 
 createRoot(document.getElementById("root")!).render(
 	<Boundary>
-		<App />
+		{popIdOf(location.search) ? <PopOut id={popIdOf(location.search)!} /> : <App />}
 	</Boundary>,
 );
