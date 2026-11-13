@@ -14,6 +14,14 @@ export function regionFocus(sourceId: string, title: string, page: number, rect:
 	};
 }
 
+/** A sketch on a PDF page (8.2, Skice → aģentam): the rectangle the user drew with the note from the toolbar — an instruction to
+ *  the agent, like a 3D sketch. The note goes first in the data, so the Fokuss line's length cut never drops it. */
+export function pdfSketchFocus(sourceId: string, title: string, page: number, rect: { x: number; y: number; w: number; h: number }, text: string, note: string): FocusItem {
+	const region = regionFocus(sourceId, title, page, rect, text);
+	const n = note.trim();
+	return { kind: "sketch", id: `sketch:${region.id}`, label: `skice: ${title}, lpp. ${page}${n ? ` — ${n.slice(0, 40)}` : ""}`, data: { note: n, ...region.data } };
+}
+
 export function sourceFocus(sourceId: string, title: string, role: string, page?: number): FocusItem {
 	return { kind: "source", id: sourceId, label: page ? `${title} (lpp. ${page})` : title, data: { sourceId, role, ...(page ? { page } : {}) } };
 }

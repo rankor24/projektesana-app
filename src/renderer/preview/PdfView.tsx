@@ -3,7 +3,7 @@
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { regionFocus, textFocus } from "../../shared/focus-items";
+import { pdfSketchFocus, regionFocus, textFocus } from "../../shared/focus-items";
 import { errText } from "../bridge";
 import { ui } from "../state";
 
@@ -26,6 +26,8 @@ export function PdfView({
 	overlay,
 	onPageClick,
 	toolbar,
+	sketchNote,
+	onSketchSent,
 }: {
 	load: () => Promise<Uint8Array>;
 	sourceId: string;
@@ -35,12 +37,15 @@ export function PdfView({
 	/** a click in "pin" mode: page fractions */
 	onPageClick?: (page: number, x: number, y: number) => void;
 	toolbar?: ReactNode;
+	/** given = the view offers Skice → aģentam: a drawn rectangle goes to the Fokuss with this note (8.2) */
+	sketchNote?: string;
+	onSketchSent?: () => void;
 }) {
 	const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const [page, setPage] = useState(initialPage ?? 1);
 	const [zoom, setZoom] = useState<number | "fit">("fit");
-	const [mode, setMode] = useState<"text" | "region" | "pin">("text");
+	const [mode, setMode] = useState<"text" | "region" | "pin" | "sketch">("text");
 	const [size, setSize] = useState<PageSize | null>(null);
 	const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 	const body = useRef<HTMLDivElement>(null);
@@ -134,7 +139,11 @@ export function PdfView({
 			})
 			.map((s) => s.textContent ?? "")
 			.join(" ");
-		ui.focusAdd(regionFocus(sourceId, title, page, { x, y, w, h }, inside));
+		if (mode === "sketch") {
+			ui.focusAdd(pdfSketchFocus(sourceId, title, page, { x, y, w, h }, inside, sketchNote ?? ""));
+			onSketchSent?.();
+			setMode("text");
+		} else ui.focusAdd(regionFocus(sourceId, title, page, { x, y, w, h }, inside));
 	};
 
 	const n = doc?.numPages ?? 0;
@@ -159,6 +168,11 @@ export function PdfView({
 					<button className={mode === "pin" ? "primary" : ""} onClick={() => setMode("pin")} title="Klikšķis lapā pievieno piezīmi">Piezīme</button>
 				)}
 				{toolbar}
+				{sketchNote !== undefined && (
+					<button className={mode === "sketch" ? "primary" : ""} onClick={() => setMode("sketch")} title="Velc taisnstūri lapā: tas ar piezīmi no lauka nonāk aģenta Fokusā kā norādījums">
+						Skice → aģentam
+					</button>
+				)}
 			</div>
 			{err && <div className="err">{err}</div>}
 			<div className="viewer-body" ref={body}>

@@ -46,9 +46,11 @@ export function SourcePdf({ projectId, sourceId, title, page }: { projectId: str
 						sourceId={sourceId}
 						title={title}
 						initialPage={jump}
+						sketchNote={note}
+						onSketchSent={() => setNote("")}
 						toolbar={
 							<>
-								<input placeholder="piezīme, tad Piezīme un klikšķis lapā" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 230 }} />
+								<input placeholder="piezīme: Piezīme + klikšķis, vai Skice + taisnstūris" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 230 }} />
 								<button className={geoOn ? "primary" : ""} onClick={toggleGeo} title="Plāna līnijas no vektoru PDF">
 									Ģeometrija
 								</button>
