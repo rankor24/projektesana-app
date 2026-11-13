@@ -172,7 +172,7 @@ export const sourceTools: ToolDef[] = [
 				const n = new OfficeMemory(join(ctx.appDir, "memory")).write({ type: a.type, title: a.title, body: a.body, refs: a.refs }, "agent");
 				return { ok: true, note: n.id, state: n.state, message: "Priekšlikums biroja atmiņai. Lietotājs to pieņem: Atmiņa → Birojs." };
 			}
-			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString() };
+			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString(), ...(ctx.agent ? { agent: ctx.agent } : {}) };
 			storeOf(ctx).writeNote(note);
 			return { ok: true, note: note.id };
 		},

@@ -224,12 +224,12 @@ function setup() {
 	const d = startDraft(store, "MBP", "2026-12-01", "user");
 	const runDir = join(tmp(), "run_w1");
 	mkdirSync(runDir, { recursive: true });
-	const ctx: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir, skillsDir: join(import.meta.dirname, "..", "resources", "skills") };
+	const ctx: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir, agent: null, thread: null, skillsDir: join(import.meta.dirname, "..", "resources", "skills") };
 	return { store, ctx, id: d.id, dir: d.draft!.stagingDir, root };
 }
 const asAgent = (store: ProjectStore, ctx: ToolCtx, tool: string, args: Record<string, unknown>) => {
 	const t = allTools().find((x) => x.name === tool)!;
-	return inToolScope({ run: "run_w1", tool }, () => trackCreated(store, () => t.run(ctx, args as never)));
+	return inToolScope({ run: "run_w1", tool, agent: null, thread: null }, () => trackCreated(store, () => t.run(ctx, args as never)));
 };
 
 test("8.13 tools: levels; the outline of a source and of a staged file; no office-folder write", async () => {

@@ -51,7 +51,7 @@ export interface SessionDeps {
 	toolsServer: (env: Record<string, string>) => McpLaunchSpec;
 	/** the Revit MCP server, when configured; null = not connected */
 	revit: () => ToolServer | null;
-	ctx: Omit<ToolCtx, "projectId" | "runDir">;
+	ctx: Omit<ToolCtx, "projectId" | "runDir" | "agent" | "thread">;
 	/** the specialists the agent may delegate to (task 8.15); the shipped ones when absent */
 	agents?: () => AgentSpec[];
 	runsDir: string;
@@ -261,7 +261,7 @@ export class AgentSession {
 			writeFileSync(join(runDir, "focus.json"), JSON.stringify(focus), "utf8");
 			this.remember(projectId, "user", text, files.refs);
 
-			const env = ctxEnv({ ...this.d.ctx, projectId, runDir });
+			const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: null, thread: null });
 			const appTools = allTools().map((t) => t.name);
 			const app = appLevels();
 			const revit = this.d.revit();

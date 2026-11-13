@@ -112,7 +112,7 @@ test("the panel's button keeps the guide as one note, replaced each time, and sa
 test("the agent's tool reads the guide and writes nothing; without a reference it says so", async () => {
 	assert.equal(appLevels().coordinates_guide, "read");
 	const s = project();
-	const ctx: ToolCtx = { projectsDir: s.projectsDir, projectId: "BD900", dataDir: tmp(), appDir: tmp(), runDir: null };
+	const ctx: ToolCtx = { projectsDir: s.projectsDir, projectId: "BD900", dataDir: tmp(), appDir: tmp(), runDir: null, agent: null, thread: null };
 	const tool = allTools().find((t) => t.name === "coordinates_guide")!;
 	assert.match(String(await tool.run(ctx, {} as never)), /no data: projektam nav koordinācijas atsauces/);
 	s.writeMeta("coordination", REF, { kind: "t", by: "user" });

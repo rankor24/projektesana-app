@@ -118,7 +118,7 @@ test("an open task past its date is red", () => {
 });
 
 function ctxOf(store: ProjectStore): ToolCtx {
-	return { projectsDir: store.projectsDir, projectId: store.project.id, dataDir: tmp(), appDir: tmp(), runDir: null };
+	return { projectsDir: store.projectsDir, projectId: store.project.id, dataDir: tmp(), appDir: tmp(), runDir: null, agent: null, thread: null };
 }
 const tool = (name: string) => allTools().find((t) => t.name === name)!;
 

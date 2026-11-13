@@ -267,7 +267,7 @@ test("8.14 tools: levels, import then add, the quote is checked, and no tool clo
 	const lv = (n: string) => tools.find((t) => t.name === n)?.level;
 	assert.deepEqual(["expert_import", "expert_add", "expert_remarks", "expert_fix_list"].map(lv), ["run", "propose", "read", "read"]);
 	assert.deepEqual(tools.map((t) => t.name).filter((n) => /expert/.test(n) && /state|close|done|resolve|decide/.test(n)), []);
-	const ctx: ToolCtx = { projectsDir: join(store.dir, ".."), projectId: "BD999", dataDir: DATA, appDir: tmp(), runDir: null };
+	const ctx: ToolCtx = { projectsDir: join(store.dir, ".."), projectId: "BD999", dataDir: DATA, appDir: tmp(), runDir: null, agent: null, thread: null };
 	const run = (n: string, a: Record<string, unknown>) => tools.find((t) => t.name === n)!.run(ctx, a as never) as Promise<Record<string, unknown>> | Record<string, unknown>;
 	assert.match(String(await run("expert_remarks", {})), /no data/);
 	const imp = (await run("expert_import", { sourceId: "s_exp" })) as { found: number; added: number; now: { open: number } };

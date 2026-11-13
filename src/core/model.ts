@@ -320,6 +320,14 @@ export interface Note {
 	from?: { project: string; note: string };
 	/** office memory only: an agent's note waits as "proposed" until the user accepts it */
 	state?: "proposed";
+	/** which agent wrote it (task 10.2) */
+	agent?: string;
+	/** mail between agents: the addressee, the topic, the stage, whether it is still open, whether the lead has reviewed it */
+	to?: string;
+	topic?: string;
+	stage?: string;
+	status?: "open" | "closed";
+	reviewed?: boolean;
 }
 
 export interface Event {

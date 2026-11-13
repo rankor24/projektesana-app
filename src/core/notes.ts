@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { upgradeWho, type Note, type NoteType } from "./model.js";
 
 export function serializeNote(n: Note): string {
-	const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at, ...(n.from ? { from: n.from } : {}), ...(n.state ? { state: n.state } : {}) };
+	const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at, ...(n.from ? { from: n.from } : {}), ...(n.state ? { state: n.state } : {}), ...(n.agent ? { agent: n.agent } : {}), ...(n.to ? { to: n.to } : {}), ...(n.topic ? { topic: n.topic } : {}), ...(n.stage ? { stage: n.stage } : {}), ...(n.status ? { status: n.status } : {}), ...(n.reviewed !== undefined ? { reviewed: n.reviewed } : {}) };
 	return `---\n${JSON.stringify(fm)}\n---\n${n.body}\n`;
 }
 

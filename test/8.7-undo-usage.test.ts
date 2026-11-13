@@ -28,14 +28,14 @@ function setup() {
 	const store = ProjectStore.open(projectsDir, { id: "BD999", name: "BD999", root, createdAt: "2026-11-13T00:00:00Z" });
 	const runDir = join(tmp(), RUN);
 	mkdirSync(runDir, { recursive: true });
-	const ctx: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir };
+	const ctx: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir, agent: null, thread: null };
 	return { store, ctx };
 }
 
 /** One agent tool call, as server.ts runs it. */
 function asAgent(store: ProjectStore, tool: string, ctx: ToolCtx, args: Record<string, unknown>, run = RUN) {
 	const t = allTools().find((x) => x.name === tool)!;
-	return inToolScope({ run, tool }, () => trackCreated(store, () => t.run(ctx, args as never)));
+	return inToolScope({ run, tool, agent: null, thread: null }, () => trackCreated(store, () => t.run(ctx, args as never)));
 }
 
 test("an agent write names the run and the tool in the log; a user's write does not", async () => {
@@ -139,7 +139,7 @@ test("outside an agent tool call nothing is checkpointed, and nothing outside th
 	writeFileSync(f, "x");
 	assert.equal(checkpointBeforeWrite(store, f), null, "a user's own click is not an agent write");
 	const office = join(store.project.root, "01_Projektesana", "1.1_Izejas dati", "TN.pdf");
-	assert.equal(await inToolScope({ run: RUN, tool: "t" }, () => checkpointBeforeWrite(store, office)), null, "the office folder is never touched");
+	assert.equal(await inToolScope({ run: RUN, tool: "t", agent: null, thread: null }, () => checkpointBeforeWrite(store, office)), null, "the office folder is never touched");
 	assert.deepEqual(listCheckpoints(store), []);
 });
 

@@ -6,6 +6,10 @@ export interface ToolScope {
 	/** the agent run (the name of its run folder); null when the server was started without one */
 	run: string | null;
 	tool: string;
+	/** which agent the call runs for (task 10.2); null for the lead or when nobody set it */
+	agent: string | null;
+	/** which thread the call belongs to; null when nobody set it */
+	thread: string | null;
 }
 
 const als = new AsyncLocalStorage<ToolScope>();

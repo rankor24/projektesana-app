@@ -20,7 +20,7 @@ import { DEFAULT_SETTINGS } from "../src/shared/types.ts";
 import { BIMCRAFT_DIR, BIMCRAFT_TRIED, FIX, tmp } from "./helpers.ts";
 
 const mk = () => ProjectStore.open(tmp(), { id: "BD932", name: "BD932", root: tmp(), createdAt: "2026-11-13T00:00:00Z" });
-const ctxOf = (s: ProjectStore): ToolCtx => ({ projectsDir: s.projectsDir, projectId: s.project.id, dataDir: tmp(), appDir: tmp(), runDir: null });
+const ctxOf = (s: ProjectStore): ToolCtx => ({ projectsDir: s.projectsDir, projectId: s.project.id, dataDir: tmp(), appDir: tmp(), runDir: null, agent: null, thread: null });
 const tool = (name: string) => allTools().find((t) => t.name === name)!;
 const G1 = "0Wall0000000000000001";
 const G2 = "0Wall0000000000000002";

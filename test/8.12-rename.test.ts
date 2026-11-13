@@ -167,18 +167,18 @@ test("8.12 undo of a batch: names return; a name that is gone is said; what took
 
 function asAgent(store: ProjectStore, ctx: ToolCtx, args: Record<string, unknown>) {
 	const t = allTools().find((x) => x.name === "rename_staged")!;
-	return inToolScope({ run: RUN, tool: "rename_staged" }, () => trackCreated(store, () => t.run(ctx, args as never)));
+	return inToolScope({ run: RUN, tool: "rename_staged", agent: null, thread: null }, () => trackCreated(store, () => t.run(ctx, args as never)));
 }
 
 test("8.12 rename_staged: the plan without apply; with apply the run's undo list shows the rename, no 'created' row, and undo renames back", async () => {
 	const { store, id, dir } = setup({ "AR 3 Fasādes.pdf": "a", "Skati.pdf": "b" });
 	const runDir = join(tmp(), RUN);
 	mkdirSync(runDir, { recursive: true });
-	const ctx: ToolCtx = { projectsDir: store.dir.replace(/[\\/][^\\/]+$/, ""), projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir };
+	const ctx: ToolCtx = { projectsDir: store.dir.replace(/[\\/][^\\/]+$/, ""), projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir, agent: null, thread: null };
 	void ctx;
 	// the store was opened in its own temp folder: build the ctx the way test 8.7 does, from the same projects dir
 	const projectsDir = join(store.dir, "..");
-	const c: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir };
+	const c: ToolCtx = { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir, agent: null, thread: null };
 	const plan = (await asAgent(store, c, { deliveryId: id })) as { toRename: number; needsYou: number };
 	assert.deepEqual([plan.toRename, plan.needsYou], [1, 1]);
 	assert.ok(existsSync(join(dir, "AR 3 Fasādes.pdf")), "no apply, nothing renamed");

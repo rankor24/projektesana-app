@@ -66,7 +66,7 @@ export class ProjectStore {
 	log(e: { kind: string; by: Who | string; data?: Record<string, unknown> }): StoredEntry {
 		// inside an agent tool call (task 8.7) the entry says which run and tool wrote it
 		const sc = currentScope();
-		return appendLog(this.logFile(), sc ? { ...e, data: { ...e.data, run: sc.run, tool: sc.tool } } : e);
+		return appendLog(this.logFile(), sc ? { ...e, data: { ...e.data, run: sc.run, tool: sc.tool, ...(sc.agent ? { agent: sc.agent } : {}), ...(sc.thread ? { thread: sc.thread } : {}) } } : e);
 	}
 
 	events(): StoredEntry[] {

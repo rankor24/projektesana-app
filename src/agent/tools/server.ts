@@ -23,7 +23,7 @@ for (const t of allTools()) {
 			if (t.level === "read") return out(await t.run(ctx, args as never));
 			const store = ctx.projectId ? ProjectStore.load(ctx.projectsDir, ctx.projectId) : null;
 			const run = ctx.runDir ? basename(ctx.runDir) : null;
-			return out(await inToolScope({ run, tool: t.name }, () => trackCreated(store, () => t.run(ctx, args as never))));
+			return out(await inToolScope({ run, tool: t.name, agent: ctx.agent, thread: ctx.thread }, () => trackCreated(store, () => t.run(ctx, args as never))));
 		} catch (e) {
 			return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
 		}

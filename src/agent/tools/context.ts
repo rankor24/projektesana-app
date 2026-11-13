@@ -18,6 +18,10 @@ export interface ToolCtx {
 	runDir: string | null;
 	/** synced skills (resources/skills) */
 	skillsDir?: string;
+	/** the agent this run is for (task 10.2); null = the lead / not set */
+	agent: string | null;
+	/** the thread this run belongs to; null = not set */
+	thread: string | null;
 }
 
 export function ctxFromEnv(env: NodeJS.ProcessEnv): ToolCtx {
@@ -26,11 +30,11 @@ export function ctxFromEnv(env: NodeJS.ProcessEnv): ToolCtx {
 		if (!v) throw new Error(`tools server: ${k} not set`);
 		return v;
 	};
-	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null, skillsDir: env.PROJEKTESANA_SKILLS || undefined };
+	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null, skillsDir: env.PROJEKTESANA_SKILLS || undefined, agent: env.PROJEKTESANA_AGENT || null, thread: env.PROJEKTESANA_THREAD || null };
 }
 
 export function ctxEnv(c: ToolCtx): Record<string, string> {
-	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "", PROJEKTESANA_SKILLS: c.skillsDir ?? "" };
+	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "", PROJEKTESANA_SKILLS: c.skillsDir ?? "", PROJEKTESANA_AGENT: c.agent ?? "", PROJEKTESANA_THREAD: c.thread ?? "" };
 }
 
 export function storeOf(c: ToolCtx): ProjectStore {

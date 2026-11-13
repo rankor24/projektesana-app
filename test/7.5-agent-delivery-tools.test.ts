@@ -18,7 +18,7 @@ function ctx(): { c: ToolCtx; store: ProjectStore; root: string } {
 	mkdirSync(join(root, "01_Projektesana", "1.1_Izejas dati"), { recursive: true });
 	writeFileSync(join(root, "01_Projektesana", "1.1_Izejas dati", "TN.pdf"), "tn");
 	const store = ProjectStore.open(projectsDir, { id: "BD999", name: "BD999", root, createdAt: "2026-11-10T00:00:00Z" });
-	return { c: { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir: null }, store, root };
+	return { c: { projectsDir, projectId: "BD999", dataDir: tmp(), appDir: tmp(), runDir: null, agent: null, thread: null }, store, root };
 }
 const run = (name: string, c: ToolCtx, args: Record<string, unknown>) => allTools().find((t) => t.name === name)!.run(c, args as never);
 

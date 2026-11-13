@@ -19,7 +19,7 @@ import { DEFAULT_SETTINGS } from "../src/shared/types.ts";
 import { tmp } from "./helpers.ts";
 
 const mk = () => ProjectStore.open(tmp(), { id: "BD930", name: "BD930", root: tmp(), createdAt: "2026-11-01T00:00:00Z" });
-const ctxOf = (s: ProjectStore): ToolCtx => ({ projectsDir: s.projectsDir, projectId: s.project.id, dataDir: tmp(), appDir: tmp(), runDir: null });
+const ctxOf = (s: ProjectStore): ToolCtx => ({ projectsDir: s.projectsDir, projectId: s.project.id, dataDir: tmp(), appDir: tmp(), runDir: null, agent: null, thread: null });
 const tool = (name: string) => allTools().find((t) => t.name === name)!;
 const ids = () => {
 	let n = 0;

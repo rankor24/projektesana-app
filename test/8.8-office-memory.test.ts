@@ -85,7 +85,7 @@ test("lifting copies a project note to the office, says where it came from, keep
 });
 
 function ctxOf(store: ProjectStore | null, appDir: string, projectsDir: string): ToolCtx {
-	return { projectsDir, projectId: store?.project.id ?? null, dataDir: tmp(), appDir, runDir: null };
+	return { projectsDir, projectId: store?.project.id ?? null, dataDir: tmp(), appDir, runDir: null, agent: null, thread: null };
 }
 const tool = (name: string) => allTools().find((t) => t.name === name)!;
 
