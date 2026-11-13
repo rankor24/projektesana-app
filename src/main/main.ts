@@ -154,7 +154,7 @@ const session = new AgentSession({
 	chatDir: settings.chatDir(),
 	emit: (runId, event, meta) => {
 		activity.event(runId, event, meta);
-		if (meta) emit("agent.event", { runId, event, ...meta });
+		emit("agent.event", { runId, event, ...meta });
 	},
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 });

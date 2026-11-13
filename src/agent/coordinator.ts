@@ -64,6 +64,15 @@ export class Coordinator {
 		return next;
 	}
 
+	/** A state write that must never get in the way of an answer, a stop or the end of a run (a locked file, a window already gone). */
+	private mark(t: Thread, p: Parameters<ThreadStore["patch"]>[1]): void {
+		try {
+			this.setState(t, p);
+		} catch {
+			// the state is a display; the run's own flow does not depend on it
+		}
+	}
+
 	async start(i: StartRequest): Promise<{ runId: string }> {
 		if (this.busy()) throw new Error(BUSY);
 		const store = this.d.threads(i.projectId);
@@ -81,8 +90,8 @@ export class Coordinator {
 				this.confirms.set(req.id, {
 					resolve,
 					live,
-					waiting: () => this.setState(thread, { state: "waiting-confirm" }),
-					resume: () => this.setState(thread, { state: "running" }),
+					waiting: () => this.mark(thread, { state: "waiting-confirm" }),
+					resume: () => this.mark(thread, { state: "running" }),
 				});
 				this.confirms.get(req.id)!.waiting();
 				emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
@@ -97,7 +106,7 @@ export class Coordinator {
 					c.resolve(false);
 				}
 				this.live.delete(runId);
-				this.setState(thread, { state: "idle" });
+				this.mark(thread, { state: "idle" });
 			});
 		return { runId };
 	}
@@ -120,8 +129,8 @@ export class Coordinator {
 		for (const l of this.live.values()) l.abort.abort();
 		for (const [id, c] of [...this.confirms]) {
 			this.confirms.delete(id);
-			c.resume();
 			c.resolve(false);
+			c.resume();
 		}
 	}
 
@@ -129,8 +138,8 @@ export class Coordinator {
 		const c = this.confirms.get(id);
 		if (!c) throw new Error("Šis apstiprinājums vairs negaida.");
 		this.confirms.delete(id);
-		c.resume();
 		c.resolve(allow);
+		c.resume();
 	}
 
 	/** App is quitting: stop everything and wait until the runs have closed their tool servers (the Revit MCP child and the tools child). */

@@ -163,3 +163,47 @@ test("stopAll aborts the run and answers an open confirmation with no", async ()
 	assert.ok(aborted);
 	assert.equal(t.store.get(t.thread.id)!.state, "idle");
 });
+
+test("a failing state write (onThread throws) neither loses an answer nor holds the slot", async () => {
+	let answer!: Promise<boolean>;
+	let release!: () => void;
+	let broken = false;
+	const dir = tmp();
+	const store = new ThreadStore(join(dir, "threads"));
+	const thread = store.create({ projectId: "p1", agent: LEAD_ID, title: "Galvenā", startedBy: "user" });
+	const c = new Coordinator({
+		runner: { run: async (i: Parameters<ThreadRunner["run"]>[0]) => ((answer = i.ask(batch)), await answer, await new Promise<void>((r) => (release = r)), { ok: true, answer: "", confirmedBatches: 0 }) } as unknown as ThreadRunner,
+		threads: () => store,
+		settings: () => ({ ...DEFAULT_SETTINGS }),
+		emit: () => undefined,
+		onThread: () => {
+			if (broken) throw new Error("EPERM");
+		},
+	});
+	const go = () => c.start({ threadId: thread.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" } });
+	await go();
+	await tick();
+	broken = true;
+	c.confirm("c1", true);
+	assert.equal(await answer, true, "the Allow reached the run although the state write failed");
+	await tick();
+	release();
+	await c.shutdown();
+	// stop with an open confirmation while writes fail: the run still ends and the slot is free
+	broken = false;
+	await go();
+	await tick();
+	broken = true;
+	c.stopAll();
+	assert.equal(await answer, false);
+	await tick();
+	release();
+	await c.shutdown();
+	broken = false;
+	await go();
+	await tick();
+	c.stopAll();
+	await tick();
+	release();
+	await c.shutdown();
+});

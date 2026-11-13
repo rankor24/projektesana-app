@@ -38,7 +38,7 @@ export interface SessionDeps {
 	runsDir: string;
 	chatDir: string;
 	/** every event of a run; `meta` is the envelope the coordinator stamps (thread, agent, project, wave) */
-	emit: (runId: string, event: RunEvent, meta?: RunMeta) => void;
+	emit: (runId: string, event: RunEvent, meta: RunMeta) => void;
 	/** a thread's stored state changed (running, waiting-confirm, idle) */
 	onThread?: (t: Thread) => void;
 	/** one model call for the summaries; the app streams through pi, tests inject a fake */
