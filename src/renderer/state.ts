@@ -11,12 +11,14 @@ interface UiState {
 	focus: FocusItem[];
 	/** text the palette (or another part of the window) puts in the agent's message box: the dock takes it and clears it */
 	draft: string | null;
+	/** GlobalIds the viewer selects as soon as the model it is about to open is open (a sheet change traced to elements, 8.11) */
+	highlight: string[] | null;
 	/** bumps when main says data changed, so panels reload */
 	tick: number;
 }
 
 const KEY = "projektesana:ui";
-let state: UiState = { projectId: null, preview: null, focus: [], draft: null, tick: 0 };
+let state: UiState = { projectId: null, preview: null, focus: [], draft: null, highlight: null, tick: 0 };
 
 /** The files the user opened lately, per project, for the command palette: a source or an IFC, newest first. */
 export type RecentTarget = { kind: "source"; sourceId: string } | { kind: "ifc"; path: string; label: string };
@@ -67,6 +69,7 @@ export const ui = {
 	},
 	recent: (projectId: string | null): RecentTarget[] => (projectId ? readRecent()[projectId] ?? [] : []),
 	draft: (text: string | null) => set({ draft: text }),
+	highlightNext: (guids: string[] | null) => set({ highlight: guids }),
 	/** Adds to the Fokuss, replacing an item with the same kind and id. */
 	focusAdd: (item: FocusItem) => set({ focus: [...state.focus.filter((f) => !(f.kind === item.kind && f.id === item.id)), item] }),
 	focusRemove: (kind: FocusItem["kind"], id: string) => set({ focus: state.focus.filter((f) => !(f.kind === kind && f.id === id)) }),

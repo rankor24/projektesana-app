@@ -50,6 +50,12 @@ export function IfcView({ projectId, load, name, compareWith }: { projectId: str
 			} else if (m.type === "opened") {
 				setState("open");
 				if (!compareWith) post({ pj: 1, type: "markers", markers: markersRef.current });
+				// elements a traced sheet change named: selected as soon as the model is open
+				const want = ui.get().highlight;
+				if (want?.length) {
+					post({ pj: 1, type: "highlight", guids: want });
+					ui.highlightNext(null);
+				}
 			} else if (m.type === "selection") {
 				setSel(m.items);
 				for (const it of m.items.slice(0, 10)) ui.focusAdd(elementFocus(it, name));

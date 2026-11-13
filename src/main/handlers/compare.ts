@@ -15,8 +15,17 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { diffIfc } from "../../sources/ifc-diff.js";
 import { bimcraftStatus } from "../bimcraft-status.js";
 import { pairPages, diffPages, readSheet, whereOnA } from "../../sources/sheets/vector-diff.js";
+import { describeMatch, itemsFromPage, traceItem, type TraceModel } from "../../sources/sheets/trace.js";
+import { withTraceModel } from "../../sources/ifc-trace-model.js";
+import { insideBase } from "../../sources/tree.js";
+import { rootDir } from "./files.js";
+import type { FileRoot } from "../../shared/api.js";
+import type { TraceItem, TraceRow, TraceView } from "../../shared/trace-types.js";
 
-type K = "sheets.bytes" | "sheets.diff" | "models.diff" | "versions.between" | "bcf.export" | "bcf.exportPins" | "bcf.import" | "bimcraft.status";
+/** How many labelled changes one trace works through: each one looks at the model, and a sheet reissued whole has hundreds. */
+const TRACE_MAX = 60;
+
+type K = "sheets.bytes" | "sheets.diff" | "sheets.trace" | "models.diff" | "versions.between" | "bcf.export" | "bcf.exportPins" | "bcf.import" | "bimcraft.status";
 
 export function refBytes(store: ProjectStore, ref: string, ext: RegExp): Uint8Array {
 	if (ref.startsWith("src:")) return sourceBytes(store, ref.slice(4));
@@ -30,6 +39,13 @@ export function refBytes(store: ProjectStore, ref: string, ext: RegExp): Uint8Ar
 		const g = checkRead(store.guard, join(store.dir, r.ifc));
 		if (!g.ok) throw new Error(g.reason);
 		return new Uint8Array(readFileSync(g.path));
+	}
+	if (ref.startsWith("file:")) {
+		// the Faili tab's refs: "file:<root>:<path under that root>"
+		const [, key, ...rest] = ref.split(":");
+		const abs = insideBase(rootDir(store, key as FileRoot["key"]), rest.join(":"));
+		if (!abs || !ext.test(abs)) throw new Error(`Nepareizs faila veids: ${ref}`);
+		return new Uint8Array(readFileSync(abs));
 	}
 	const g = checkRead(store.guard, ref);
 	if (!g.ok) throw new Error(g.reason);
@@ -86,6 +102,29 @@ export function compareHandlers(d: { registry: Registry; bimcraftApp: string; op
 				const r = diffPages(x, y);
 				return { a: r.a, b: r.b, sheetNo: r.sheetNo, summary: r.summary, where: r.changes.map((c) => whereOnA(c, x)), frameA: x.frame, frameB: y.frame };
 			});
+		},
+		"sheets.trace": async (id, a, b, newIfc, oldIfc) => {
+			const store = d.registry.store(id);
+			const [pa, pb] = await Promise.all([readSheet(refBytes(store, a, /\.pdf$/i)), readSheet(refBytes(store, b, /\.pdf$/i))]);
+			const items: { sheetNo: string | null; page: number; item: TraceItem }[] = [];
+			const untraceable: TraceView["untraceable"] = [];
+			for (const [x, y] of pairPages(pa, pb)) {
+				const diff = diffPages(x, y);
+				const r = itemsFromPage(diff, x, y, `${diff.sheetNo ?? `lpp${x.page}`}:`);
+				for (const item of r.items) items.push({ sheetNo: diff.sheetNo, page: x.page, item });
+				for (const u of r.untraceable) untraceable.push({ sheetNo: diff.sheetNo, ...u });
+			}
+			const cut = items.slice(0, TRACE_MAX);
+			const newBytes = refBytes(store, newIfc, /\.ifc$/i);
+			const oldBytes = oldIfc ? refBytes(store, oldIfc, /\.ifc$/i) : null;
+			const run = (nw: TraceModel, old: TraceModel | null): TraceRow[] =>
+				cut.map(({ sheetNo, page, item }) => {
+					const r = traceItem(item, nw, old);
+					return { sheetNo, page, item, tokens: r.tokens, matches: r.matches.map((m) => ({ ...m, lines: describeMatch(item, m) })) };
+				});
+			const rows = await withTraceModel(d.bimcraftApp, newBytes, "jaunais modelis", (nw) => (oldBytes ? withTraceModel(d.bimcraftApp, oldBytes, "vecais modelis", (old) => run(nw, old)) : run(nw, null)));
+			store.log({ kind: "sheets.traced", by: "user", data: { items: cut.length, found: rows.filter((r) => r.matches.length).length } });
+			return { rows, untraceable, total: items.length };
 		},
 		"versions.between": (id, from, to) => versionsBetween(d.registry.store(id), from, to),
 		"bimcraft.status": () => bimcraftStatus(d.bimcraftApp),

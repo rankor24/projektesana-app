@@ -6,6 +6,7 @@ import type { GrafikItem } from "./calendar.js";
 import type { ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
 import type { UndoRow } from "../core/undo-types.js";
+import type { TraceView } from "./trace-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
@@ -457,6 +458,8 @@ export interface ApiSpec {
 	"sheets.bytes": (id: string, ref: string) => Uint8Array;
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
+	/** the labelled changes between two issues of a sheet traced to elements of the model (task 8.11); oldIfc = the model of the older issue, when there is one */
+	"sheets.trace": (id: string, a: string, b: string, newIfc: string, oldIfc: string | null) => TraceView;
 	"bimcraft.status": () => BimcraftStatusRow;
 	/** tokens and cost per project, from the log the agent's turns are written to */
 	"usage.summary": () => UsageRow[];
@@ -602,6 +605,7 @@ export const API_NAMES = [
 	"sheets.bytes",
 	"versions.between",
 	"sheets.diff",
+	"sheets.trace",
 	"models.diff",
 	"bimcraft.status",
 	"usage.summary",

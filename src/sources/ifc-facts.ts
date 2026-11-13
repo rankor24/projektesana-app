@@ -6,36 +6,11 @@
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { disciplineOf } from "../core/coordination.js";
 import type { ModelFacts, Placed } from "../core/coordination-types.js";
 import type { ProjectStore } from "../core/store.js";
+import { withIfc } from "./ifc-engine.js";
 import { listModels, stagedModels } from "./models.js";
-
-type Api = {
-	Init(o?: object): Promise<unknown>;
-	OpenModel(b: Uint8Array, s?: object): number;
-	CloseModel(m: number): void;
-	GetLine(m: number, id: number, flat: boolean): Record<string, { value?: unknown } | undefined> | null;
-	GetWorldTransformMatrix(m: number, placement: number): number[];
-};
-type Engine = { IfcAPI: new () => Api; ids: (api: Api, mid: number, cls: string) => number[]; val: (v: unknown) => unknown; lengthUnitMm: (api: Api, mid: number) => number };
-
-const engines = new Map<string, Promise<Engine>>();
-function engine(appDir: string): Promise<Engine> {
-	let e = engines.get(appDir);
-	if (!e) {
-		e = (async () => {
-			(globalThis as { document?: unknown }).document ??= { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null };
-			const imp = (f: string) => import(pathToFileURL(join(appDir, f)).href);
-			const W = await imp("ifc/api.js");
-			const U = await imp("ifc-util.js");
-			return { IfcAPI: W.IfcAPI, ids: U.ids, val: U.val, lengthUnitMm: U.lengthUnitMm } as Engine;
-		})();
-		engines.set(appDir, e);
-	}
-	return e;
-}
 
 /** FILE_SCHEMA, the time stamp's day and the authoring application, from the STEP header (its first kilobytes, plain text). */
 export function parseIfcHeader(bytes: Uint8Array): { schema: string | null; ts: string; app: string } {
@@ -50,13 +25,8 @@ export function parseIfcHeader(bytes: Uint8Array): { schema: string | null; ts: 
 /** Classes a coordination marker can be modelled as. */
 const MARKER_CLASSES = ["IFCBUILDINGELEMENTPROXY", "IFCCOLUMN", "IFCFURNISHINGELEMENT", "IFCGEOGRAPHICELEMENT", "IFCMEMBER", "IFCPLATE", "IFCSLAB", "IFCWALL", "IFCBEAM", "IFCDISCRETEACCESSORY", "IFCCOVERING"];
 
-export async function readIfcFacts(appDir: string, bytes: Uint8Array, file: string, cubeNames: string[]): Promise<ModelFacts> {
-	const E = await engine(appDir);
-	const api = new E.IfcAPI();
-	await api.Init({ manifold: false });
-	const mid = api.OpenModel(bytes, {});
-	if (mid < 0) throw new Error(`${file}: nav IFC fails vai tas ir bojāts.`);
-	try {
+export function readIfcFacts(appDir: string, bytes: Uint8Array, file: string, cubeNames: string[]): Promise<ModelFacts> {
+	return withIfc(appDir, bytes, file, (api, mid, E) => {
 		const unit = E.lengthUnitMm(api, mid);
 		// a file in metres gives 9.45 * 1000 = 9450.000000000002: millimetres to a thousandth, no float noise on the screen
 		const mm = (v: number) => Math.round(v * 1000) / 1000;
@@ -66,7 +36,8 @@ export async function readIfcFacts(appDir: string, bytes: Uint8Array, file: stri
 		};
 		const world = (id: number, name: string): Placed | null => {
 			const l = api.GetLine(mid, id, false);
-			const p = l?.ObjectPlacement?.value;
+			const ref = l?.ObjectPlacement;
+			const p = ref && !Array.isArray(ref) ? ref.value : undefined;
 			if (typeof p !== "number") return null;
 			const M = api.GetWorldTransformMatrix(mid, p);
 			return { name, x: mm(M[12] * unit), y: mm(M[13] * unit), z: mm(M[14] * unit) };
@@ -114,9 +85,7 @@ export async function readIfcFacts(appDir: string, bytes: Uint8Array, file: stri
 			storeys,
 			cubes,
 		};
-	} finally {
-		api.CloseModel(mid);
-	}
+	});
 }
 
 interface CacheEntry {

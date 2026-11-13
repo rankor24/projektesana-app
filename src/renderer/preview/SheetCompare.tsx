@@ -9,6 +9,7 @@ import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { Badge, Empty } from "../ui";
 import { computeDiff, type DiffZone } from "./pixel-diff";
+import { TracePanel } from "./TracePanel";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -129,6 +130,7 @@ export function SheetCompare({ projectId, a, b, aLabel, bLabel }: { projectId: s
 							</button>
 						</div>
 					))}
+					<TracePanel projectId={projectId} a={a} b={b} />
 				</div>
 			</div>
 		</div>
