@@ -1,0 +1,3 @@
+From BIM Crew (D:\Code\BIM\BIM Crew), per the phase 8 rule "each task names the BIM Crew file it ports":
+8.9: `server/src/ito/{reference,report,report-html,types}.ts`, `routes/model-audit.ts`, `ModelAuditTab.tsx`; the Solibri ITO xlsx ingest (`core/ito_audit.py`) is replaced by reading the IFC itself
+8.10: `core/coordinates_guide.py`
