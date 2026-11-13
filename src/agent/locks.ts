@@ -113,3 +113,99 @@ export class WriteLocks {
 }
 
 const LABEL: Record<LockKey, string> = { staging: "Nodevuma mapi", store: "Projekta datus", revit: "Revit" };
+
+interface BatchWaiter {
+	owner: string;
+	go: () => void;
+	cancel: () => void;
+}
+
+/**
+ * Locks for every run at once (task 10.3). `staging` and `store` are per project (two projects never wait on each other);
+ * `revit` is one for the whole app, as there is one Revit. A batch hold keeps a confirmed Revit batch whole: from its first
+ * change until `endBatch`, other owners' Revit calls wait, then take the normal revit queue.
+ */
+export class LockRegistry {
+	private perProject = new Map<string, WriteLocks>();
+	private revit: WriteLocks;
+	private batch: { owner: string; label: string } | null = null;
+	private batchWaiters: BatchWaiter[] = [];
+	private waitMs: number;
+
+	constructor(private opts: LockOptions = {}) {
+		this.waitMs = opts.waitMs ?? 120_000;
+		this.revit = new WriteLocks(opts);
+	}
+
+	private locksOf(projectId: string | null): WriteLocks {
+		const id = projectId ?? "_";
+		let l = this.perProject.get(id);
+		if (!l) this.perProject.set(id, (l = new WriteLocks(this.opts)));
+		return l;
+	}
+
+	async acquire(projectId: string | null, key: LockKey, owner: string, call: string, signal?: AbortSignal, label = owner): Promise<Acquired> {
+		if (key !== "revit") return this.locksOf(projectId).acquire(key, owner, call, signal, label);
+		if (this.batch && this.batch.owner !== owner) {
+			const held = await this.waitBatch(owner, signal);
+			if (!held.ok) return held;
+		}
+		return this.revit.acquire("revit", owner, call, signal, label);
+	}
+
+	/** Waits until the batch ends; same timeout, abort and owner-ended outcomes as a lock wait. */
+	private waitBatch(owner: string, signal?: AbortSignal): Promise<Acquired> {
+		if (signal?.aborted) return Promise.resolve({ ok: false, reason: "Apturēts." });
+		const by = this.batch!.label;
+		return new Promise<Acquired>((resolve) => {
+			let done = false;
+			const finish = (r: Acquired) => {
+				if (done) return;
+				done = true;
+				clearTimeout(timer);
+				signal?.removeEventListener("abort", onAbort);
+				this.batchWaiters = this.batchWaiters.filter((w) => w !== waiter);
+				resolve(r);
+			};
+			const waiter: BatchWaiter = {
+				owner,
+				go: () => finish({ ok: true }),
+				cancel: () => finish({ ok: false, reason: "Aģents beidza darbu, gaidot rindā." }),
+			};
+			const onAbort = () => finish({ ok: false, reason: "Apturēts, gaidot citu aģentu." });
+			const timer = setTimeout(
+				() => finish({ ok: false, reason: `${LABEL.revit} šobrīd maina ${by}; gaidīts ${Math.round(this.waitMs / 1000)} s. Dari citu darbu vai mēģini vēlāk.` }),
+				this.waitMs,
+			);
+			signal?.addEventListener("abort", onAbort, { once: true });
+			this.batchWaiters.push(waiter);
+		});
+	}
+
+	release(call: string): void {
+		this.revit.release(call);
+		for (const l of this.perProject.values()) l.release(call);
+	}
+
+	releaseOwner(owner: string): void {
+		if (this.batch?.owner === owner) this.endBatch(owner);
+		for (const w of this.batchWaiters.filter((w) => w.owner === owner)) w.cancel();
+		this.revit.releaseOwner(owner);
+		for (const l of this.perProject.values()) l.releaseOwner(owner);
+	}
+
+	beginBatch(owner: string, label: string): void {
+		if (this.batch && this.batch.owner !== owner) throw new Error(`Revit partiju jau veic ${this.batch.label}.`);
+		this.batch = { owner, label };
+	}
+
+	endBatch(owner: string): void {
+		if (this.batch?.owner !== owner) return;
+		this.batch = null;
+		for (const w of [...this.batchWaiters]) w.go();
+	}
+
+	revitHeldBy(): string | null {
+		return this.batch?.owner ?? this.revit.heldBy("revit");
+	}
+}
