@@ -80,3 +80,47 @@ test("10.3 registry: a batch wait past waitMs names the holder's label; Stop end
 	ac.abort();
 	assert.equal((await w).ok, false);
 });
+
+test("10.3 registry: a waiter already queued on revit when a batch begins does not get Revit mid-batch", async () => {
+	const r = new LockRegistry();
+	await r.acquire("p1", "revit", "a", "a1");
+	const order: string[] = [];
+	const c = r.acquire("p1", "revit", "c", "c1").then((x) => (order.push("c"), x));
+	await tick();
+	r.beginBatch("a", "A");
+	r.release("a1");
+	const a2 = r.acquire("p1", "revit", "a", "a2").then((x) => (order.push("a2"), x));
+	await tick();
+	assert.deepEqual(order, ["a2"]);
+	assert.equal(r.revitHeldBy(), "a");
+	r.release("a2");
+	await tick();
+	assert.deepEqual(order, ["a2"]);
+	r.endBatch("a");
+	assert.deepEqual(await c, { ok: true });
+	assert.deepEqual(order, ["a2", "c"]);
+	assert.deepEqual(await a2, { ok: true });
+	r.release("c1");
+});
+
+test("10.3 registry: two waiters woken by endBatch; the first begins its own batch, the second waits for that one", async () => {
+	const r = new LockRegistry();
+	r.beginBatch("a", "A");
+	const b = r.acquire("p1", "revit", "b", "b1");
+	const c = r.acquire("p1", "revit", "c", "c1");
+	let cGot = false;
+	void c.then(() => (cGot = true));
+	r.endBatch("a");
+	assert.deepEqual(await b, { ok: true });
+	r.beginBatch("b", "B");
+	r.release("b1");
+	await tick();
+	assert.equal(cGot, false);
+	assert.deepEqual(await r.acquire("p1", "revit", "b", "b2"), { ok: true });
+	r.release("b2");
+	await tick();
+	assert.equal(cGot, false);
+	r.endBatch("b");
+	assert.deepEqual(await c, { ok: true });
+	r.release("c1");
+});

@@ -146,11 +146,17 @@ export class LockRegistry {
 
 	async acquire(projectId: string | null, key: LockKey, owner: string, call: string, signal?: AbortSignal, label = owner): Promise<Acquired> {
 		if (key !== "revit") return this.locksOf(projectId).acquire(key, owner, call, signal, label);
-		if (this.batch && this.batch.owner !== owner) {
-			const held = await this.waitBatch(owner, signal);
-			if (!held.ok) return held;
+		// A batch can open while this call sits in the revit queue, so the hold is re-checked after every grant: a call
+		// never keeps Revit while another owner's batch is open; it gives it back and waits for the batch again.
+		for (;;) {
+			if (this.batch && this.batch.owner !== owner) {
+				const held = await this.waitBatch(owner, signal);
+				if (!held.ok) return held;
+			}
+			const got = await this.revit.acquire("revit", owner, call, signal, label);
+			if (!got.ok || !this.batch || this.batch.owner === owner) return got;
+			this.revit.release(call);
 		}
-		return this.revit.acquire("revit", owner, call, signal, label);
 	}
 
 	/** Waits until the batch ends; same timeout, abort and owner-ended outcomes as a lock wait. */
