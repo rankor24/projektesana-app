@@ -1,0 +1,3 @@
+From BIM Crew (D:\Code\BIM\BIM Crew), per the phase 8 rule "each task names the BIM Crew file it ports":
+8.5: `CalendarArtifact.tsx`, `calendar/{MonthGrid,DayPlanner,StageDatesDialog}.tsx`, `TaskPlannerArtifact.tsx`, `server/src/project-schedule.ts`, `core/grafik_schedule.py`
+8.6: `shell/CommandPalette.tsx`
