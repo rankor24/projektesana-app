@@ -12,6 +12,7 @@ import { registerAppChecks } from "../src/checks/index.ts";
 import { runChecks } from "../src/checks/run.ts";
 import { addRemark, editRemark, fixList, importReview, readRemarks, remarkId, setRemarkState, summarize } from "../src/core/expertise.ts";
 import { ProjectStore } from "../src/core/store.ts";
+import { EXPERT_ROLE, expertHandlers } from "../src/main/handlers/expert.ts";
 import { DOC_ROLES } from "../src/shared/roles.ts";
 import { daļaOf, parseExpertReview } from "../src/sources/extract/expert.ts";
 import { quoteOnPage } from "../src/sources/extract/common.ts";
@@ -239,6 +240,23 @@ test("8.14 role: the review has its own role, proposed from a folder name, and a
 	assert.equal(proposeFreeRole("1.1.9_Atzinums"), "Ekspertīzes atzinums");
 	assert.equal(proposeFreeRole("1.1.10_Saskaņojumi"), "Saskaņojumi", "the other roles are as they were");
 	assert.ok(DOC_ROLES.includes("Ekspertīzes atzinums"));
+});
+
+test("8.14 panel: Nolasīt atzinumu gives the document the review's role through Avoti's setRole, once", async () => {
+	const store = setup();
+	const calls: unknown[][] = [];
+	const setRole = async (id: string, sourceId: string, role: string | null) => {
+		calls.push([id, sourceId, role]);
+		store.update("sources", (all) => all.map((s) => (s.id === sourceId && role ? { ...s, role, roleFrom: "document" as const } : s)), { kind: "t", by: "user" });
+	};
+	const h = expertHandlers({ registry: { store: () => store } as never, dataDir: DATA, emit: () => undefined, setRole });
+	const r = await h["expert.read"]("BD999", "s_exp");
+	assert.equal(r.added, 12);
+	assert.deepEqual(calls, [["BD999", "s_exp", EXPERT_ROLE]]);
+	assert.equal(store.read("sources")[0].role, EXPERT_ROLE);
+	await h["expert.read"]("BD999", "s_exp");
+	assert.equal(calls.length, 1, "already the review's role: not set again");
+	assert.ok(DOC_ROLES.includes(EXPERT_ROLE), "Avoti's setRole accepts it");
 });
 
 // ---- the agent's tools --------------------------------------------------------------------------------------------------------

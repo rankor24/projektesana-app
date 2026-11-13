@@ -10,7 +10,10 @@ type K = "expert.list" | "expert.read" | "expert.setState" | "expert.edit" | "ex
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function expertHandlers(d: { registry: Registry; dataDir: string; emit: (e: "data.changed", p: { projectId: string | null; what: string[] }) => void }): Pick<Handlers, K> {
+export const EXPERT_ROLE = "Ekspertīzes atzinums";
+
+/** `setRole` is Avoti's own `sources.setRole`: the user's click on Nolasīt atzinumu gives the document its role the same way. */
+export function expertHandlers(d: { registry: Registry; dataDir: string; emit: (e: "data.changed", p: { projectId: string | null; what: string[] }) => void; setRole?: Handlers["sources.setRole"] }): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["expertise", "findings"] });
 	const recheck = (id: string) => runChecks(d.registry.store(id), "manual", { dataDir: d.dataDir, today: today(), only: ["expert"] }).catch(() => undefined);
 	return {
@@ -25,7 +28,11 @@ export function expertHandlers(d: { registry: Registry; dataDir: string; emit: (
 			return { remarks, summary: summarize(remarks), sources };
 		},
 		"expert.read": async (id, sourceId) => {
-			const r = importReview(d.registry.store(id), sourceId, "user");
+			const store = d.registry.store(id);
+			const r = importReview(store, sourceId, "user");
+			// the panel promises it: the document read as a review gets the review's role (only on the user's click; the agent's
+			// expert_import leaves roles to the user)
+			if (d.setRole && store.read("sources").find((s) => s.id === sourceId)?.role !== EXPERT_ROLE) await d.setRole(id, sourceId, EXPERT_ROLE);
 			await recheck(id);
 			changed(id);
 			return r;

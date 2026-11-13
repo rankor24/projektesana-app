@@ -24,5 +24,6 @@ export function createHandlers(d: AppDeps): Handlers {
 	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);
 	const userName = () => d.settings.get().userName.trim() || undefined;
 	const e = { ...d, afterChange, userName };
-	return { ...coreHandlers(d), ...projectHandlers(e), ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers(d), ...agentHandlers(d) };
+	const projects = projectHandlers(e);
+	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d) };
 }
