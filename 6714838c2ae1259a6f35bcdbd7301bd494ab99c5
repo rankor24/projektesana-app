@@ -1,0 +1,2 @@
+From BIM Crew (D:\Code\BIM\BIM Crew), per the phase 8 rule "each task names the BIM Crew file it ports":
+8.14: `core/expert_review.py` (the three layouts, the keyword lists, the summary and the per-discipline fix lists); its YAML export, `assign` config and `status` commands were not needed
