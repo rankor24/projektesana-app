@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { AgentStatus, ChatAttachment, ChatAttachmentRef, ChatEntry, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
 import { measureAttachment, prepareAttachments, type PreparedAttachments } from "./attachments.js";
 import { compactMessages, type Complete } from "./compact.js";
+import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, imageLimits, pruneImages, trimToolResults } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { focusText } from "./focus.js";
@@ -321,6 +322,13 @@ export class AgentSession {
 					onMessages: (messages) => this.conversations.set(id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }),
 					onEvent: (e) => {
 						if (e.type === "tool") st.toolsRan = true;
+						if (e.type === "usage") {
+							try {
+								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
+							} catch {
+								// the log is a convenience: a full disk must not stop the run
+							}
+						}
 						if (e.type === "done") answer = e.text;
 						if (e.type === "error" && isContextOverflow({ stopReason: "error", errorMessage: e.message } as AssistantMessage)) {
 							st.overflowed = e.message;

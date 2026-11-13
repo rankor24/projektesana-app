@@ -3,8 +3,11 @@
 // Steps and the run box follow konkurss-app src/renderer/screens/ActivityPanel.tsx (Run, Step).
 import { useEffect, useRef, useState } from "react";
 import { changesText, isRunning, KIND_LABEL, type ActKind, type Activity, type RunSummary } from "../../shared/activity";
-import { fmtTokens } from "../../shared/tokens";
+import { fmtTokens, usageText } from "../../shared/tokens";
+import type { UndoRow } from "../../core/undo-types";
+import { call, errText } from "../bridge";
 import { ui } from "../state";
+import { useLoad } from "../ui";
 
 const ICON: Record<ActKind | "thinking" | "note" | "confirm" | "error", string> = {
 	read: "▤",
@@ -115,6 +118,42 @@ function Chips({ s }: { s: RunSummary }) {
 	);
 }
 
+/** What the run changed in the project, each with a way back (task 8.7). Nothing shows when it changed nothing. */
+function Changes({ project, run }: { project: string; run: string }) {
+	const rows = useLoad<UndoRow[]>(() => call("undo.list", project, run), [project, run]);
+	const [err, setErr] = useState<string | null>(null);
+	const list = rows.data ?? [];
+	if (list.length === 0) return null;
+	const live = list.filter((r) => !r.undone).length;
+	const undo = (r: UndoRow) =>
+		call("undo.apply", project, r.key)
+			.then(() => (setErr(null), rows.reload()))
+			.catch((e) => setErr(errText(e)));
+	return (
+		<details className="run-undo">
+			<summary className="dim small">
+				Izmaiņas, ko var atsaukt: {live} no {list.length}
+			</summary>
+			{err && <div className="err">{err}</div>}
+			{list.map((r) => (
+				<div key={r.key} className={`undo-row ${r.undone ? "done" : ""}`}>
+					<span className="grow small" title={r.tool ?? undefined}>
+						{r.label}
+					</span>
+					{r.undone ? (
+						<span className="dim small">atsaukts</span>
+					) : (
+						<button className="small ghost" disabled={!r.undoable} title={r.why ?? "Atgriež, kā bija pirms šīs izmaiņas. Nekas netiek dzēsts."} onClick={() => undo(r)}>
+							Atsaukt
+						</button>
+					)}
+					{!r.undone && !r.undoable && r.why && <span className="dim small">{r.why}</span>}
+				</div>
+			))}
+		</details>
+	);
+}
+
 /** Lines of one run. `latest` = the newest run of the conversation, open by default. */
 export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean }) {
 	const start = lines.find((l) => l.kind === "start");
@@ -169,6 +208,11 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				<span className="dim small run-meta">
 					{clock(lines[0].at).slice(0, 5)} · {summary?.steps ?? 0} soļi · {duration(took)}
 				</span>
+				{summary?.usage && (
+					<span className="dim small run-meta" title={`${summary.usage.turns} modeļa piegājieni; kešatmiņā lasīti ${fmtTokens(summary.usage.cacheRead)}, ierakstīti ${fmtTokens(summary.usage.cacheWrite)}`}>
+						{usageText(summary.usage)}
+					</span>
+				)}
 			</summary>
 			{start?.detail && (
 				<details className="run-task">
@@ -190,6 +234,7 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				))}
 				{running && steps.length === 0 && <div className="dim small">Aģents sāk darbu…</div>}
 			</div>
+			{!running && start?.project && <Changes project={start.project} run={start.run} />}
 			<div className="run-foot small">
 				{changed ? `${running ? "Līdz šim: " : "Izmaiņas: "}${changed}` : running ? "Projektā vēl nekas nav mainīts" : "Projektā nekas netika mainīts"}
 			</div>

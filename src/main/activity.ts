@@ -169,6 +169,12 @@ export class ActivityLog {
 		switch (e.type) {
 			case "turn":
 				return;
+			case "usage": {
+				const u = r.summary.usage ?? { turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: null };
+				r.summary.usage = { turns: u.turns + 1, input: u.input + e.input, output: u.output + e.output, cacheRead: u.cacheRead + e.cacheRead, cacheWrite: u.cacheWrite + e.cacheWrite, cost: e.cost === null ? u.cost : (u.cost ?? 0) + e.cost };
+				this.sendSummary(r);
+				return;
+			}
 			case "tool":
 				return this.toolStart(r, e);
 			case "tool_result":
@@ -331,7 +337,7 @@ export class ActivityLog {
 	}
 
 	private sendSummary(r: Run) {
-		this.line(r, "summary", "", { step: "summary", summary: { ...r.summary, sources: [...r.summary.sources], changes: { ...r.summary.changes } } });
+		this.line(r, "summary", "", { step: "summary", summary: { ...r.summary, sources: [...r.summary.sources], changes: { ...r.summary.changes }, ...(r.summary.usage ? { usage: { ...r.summary.usage } } : {}) } });
 	}
 
 	// ---- growing blocks ---------------------------------------------------------------------------------------------

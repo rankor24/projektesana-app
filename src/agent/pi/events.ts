@@ -76,6 +76,12 @@ export function piEvents(ev: AgentEvent, st: PiState): RunEvent[] {
 			st.errored = true;
 			emit({ type: "error", engine: "pi", message: m.errorMessage || m.stopReason });
 		}
+		// the turn's token counts; a price of 0 is "no catalogue price" (a subscription), not "free"
+		const u = m.usage;
+		if (u && Number.isFinite(u.input) && Number.isFinite(u.output) && u.input + u.output > 0) {
+			const total = u.cost?.total;
+			emit({ type: "usage", input: u.input, output: u.output, cacheRead: u.cacheRead || 0, cacheWrite: u.cacheWrite || 0, cost: typeof total === "number" && total > 0 ? total : null });
+		}
 	} else if (ev.type === "tool_execution_start") {
 		st.names.set(ev.toolCallId, ev.toolName);
 		emit({ type: "tool", name: ev.toolName, id: ev.toolCallId, detail: JSON.stringify(ev.args ?? {}).slice(0, INPUT_MAX) });

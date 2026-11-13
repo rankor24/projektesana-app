@@ -42,6 +42,8 @@ export interface RunSummary {
 	listed: number | null;
 	sources: SourceChip[];
 	changes: Changes;
+	/** the model turns' tokens so far (task 8.7); absent until the first turn reports */
+	usage?: { turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null };
 }
 
 export interface Activity {

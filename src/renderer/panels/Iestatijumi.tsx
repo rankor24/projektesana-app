@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { LoginNotice } from "../../shared/types";
 import type { ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
+import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
 
 export function Iestatijumi() {
@@ -165,6 +166,8 @@ export function Iestatijumi() {
 					</label>
 				</>
 			)}
+			<div className="section-title">Izmantojums</div>
+			<UsageTable />
 			<div className="section-title">3D skats (BimCraft)</div>
 			<BimcraftCopy />
 			<div className="section-title">Biroja standarts</div>
@@ -191,6 +194,47 @@ export function Iestatijumi() {
 				</div>
 			)}
 		</div>
+	);
+}
+
+/** What the agent's model turns used, per project: tokens, and the price where the provider gave one. */
+function UsageTable() {
+	const u = useLoad(() => call("usage.summary"), []);
+	if (u.error) return <Err error={u.error} />;
+	if (!u.data) return <div className="dim small">ielādē…</div>;
+	if (u.data.length === 0) return <div className="dim small">no data: aģents vēl nav izmantots.</div>;
+	const sum = u.data.reduce((a, r) => ({ ...a, input: a.input + r.input, output: a.output + r.output, cacheRead: a.cacheRead + r.cacheRead, turns: a.turns + r.turns, priced: a.priced + r.priced, cost: r.cost === null ? a.cost : (a.cost ?? 0) + r.cost }), { input: 0, output: 0, cacheRead: 0, turns: 0, priced: 0, cost: null as number | null });
+	return (
+		<table className="small">
+			<thead>
+				<tr>
+					<th>Projekts</th>
+					<th>Palaišanas</th>
+					<th>Izmantojums</th>
+					<th>Pēdējo reizi</th>
+				</tr>
+			</thead>
+			<tbody>
+				{u.data.map((r) => (
+					<tr key={r.project ?? "_"}>
+						<td>{r.project ?? <span className="dim">bez projekta</span>}</td>
+						<td>{r.runs}</td>
+						<td>{usageText(r)}</td>
+						<td className="dim">{new Date(r.lastAt).toLocaleDateString("lv-LV")}</td>
+					</tr>
+				))}
+				<tr>
+					<td>
+						<b>Kopā</b>
+					</td>
+					<td>{u.data.reduce((n, r) => n + r.runs, 0)}</td>
+					<td>
+						<b>{usageText(sum)}</b>
+					</td>
+					<td />
+				</tr>
+			</tbody>
+		</table>
 	);
 }
 

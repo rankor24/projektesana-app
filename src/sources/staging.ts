@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { checkpointBeforeWrite } from "../core/checkpoints.js";
 import { checkRead, checkWrite, isInside } from "../core/guard.js";
 import type { Delivery, DeliveryItem, DeliveryKind, Who } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
@@ -149,6 +150,7 @@ export function unstageFile(store: ProjectStore, deliveryId: string, name: strin
 	if (!hit) throw new Error(`Nodevumā nav faila “${name}”.`);
 	const g = checkWrite(store.guard, hit.file);
 	if (!g.ok || !isInside(hit.file, d.draft.stagingDir)) throw new Error(`Ārpus nodevuma mapes: ${hit.file}`);
+	checkpointBeforeWrite(store, hit.file);
 	rmSync(hit.file, { force: true });
 	refreshDraft(store, deliveryId, by, "delivery.unstaged");
 }

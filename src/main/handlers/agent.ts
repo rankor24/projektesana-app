@@ -1,5 +1,7 @@
 // App, settings, dialog and agent handlers (sign-in, chat, confirmations).
+import { join } from "node:path";
 import type { AgentSession } from "../../agent/session.js";
+import { readUsage, summarizeUsage } from "../../agent/usage.js";
 import type { ActivityLog } from "../activity.js";
 import type { PiRuntime } from "../../agent/pi/index.js";
 import type { EventName, EventSpec, Handlers, ProviderRow } from "../../shared/api.js";
@@ -21,7 +23,7 @@ export interface CoreDeps {
 	openUrl(url: string): void;
 }
 
-type K = "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "activity.recent";
+type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -38,6 +40,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		"dialog.pickFolder": (title) => d.pickFolder(title),
 		"dialog.pickFile": (title, ext) => d.pickFile(title, ext),
 
+		"usage.summary": () => summarizeUsage(readUsage(join(d.settings.dir, "usage.jsonl"))),
 		"agent.status": () => d.session.status(),
 		"agent.providers": async () => {
 			const m = await import("../../agent/pi/index.js");

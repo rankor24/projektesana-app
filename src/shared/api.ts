@@ -4,6 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
 import type { GrafikItem } from "./calendar.js";
 import type { ProjectSummary } from "../core/summary-types.js";
+import type { UndoRow } from "../core/undo-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
@@ -211,6 +212,20 @@ export interface ModelRow {
 	origin: ModelOrigin;
 	/** in an arhīvs folder: older than the file kept in its section */
 	archived: boolean;
+}
+
+/** What the model turns of a project used (task 8.7); cost = the known prices added, `priced` of `turns` had one. */
+export interface UsageRow {
+	project: string | null;
+	runs: number;
+	turns: number;
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number | null;
+	priced: number;
+	lastAt: string;
 }
 
 /** The BimCraft copy the app ships (task 8.0): present, where from, and whether our bridge add-on is on. */
@@ -431,6 +446,11 @@ export interface ApiSpec {
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
 	"bimcraft.status": () => BimcraftStatusRow;
+	/** tokens and cost per project, from the log the agent's turns are written to */
+	"usage.summary": () => UsageRow[];
+	/** what an agent run changed, newest last, and whether each change can still be taken back (task 8.7) */
+	"undo.list": (id: string, run: string) => UndoRow[];
+	"undo.apply": (id: string, key: string) => string;
 	/** the project's tasks (not the agent's task templates, which are tasks.list) */
 	"todos.list": (id: string) => Task[];
 	"todos.add": (id: string, input: { title: string; due?: string | null; refs?: Task["refs"]; note?: string }) => Task;
@@ -558,6 +578,9 @@ export const API_NAMES = [
 	"sheets.diff",
 	"models.diff",
 	"bimcraft.status",
+	"usage.summary",
+	"undo.list",
+	"undo.apply",
 	"todos.list",
 	"todos.add",
 	"todos.update",

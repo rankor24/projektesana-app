@@ -3,6 +3,7 @@
 // which. IFC: one file named <BD code>_<daļa>_<YYMMDD>.ifc. Exports do not change the model. Writes only into staging.
 import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { checkpointBeforeWrite } from "../core/checkpoints.js";
 import { checkWrite } from "../core/guard.js";
 import type { ProjectStore } from "../core/store.js";
 import type { Who } from "../core/model.js";
@@ -56,6 +57,7 @@ export async function stageRevitSheets(
 					out.kept.push(file);
 					continue;
 				}
+				checkpointBeforeWrite(store, target);
 				rmSync(target, { force: true });
 			}
 			try {
@@ -82,7 +84,11 @@ export async function stageRevitIfc(store: ProjectStore, revit: RevitCaller, del
 	const file = ifcFileName(store.project.id, opts.part ?? "AR", d.draft.date);
 	const other = readdirSync(d.draft.stagingDir).filter((n) => /\.ifc$/i.test(n));
 	if (other.length && !opts.replace) throw new Error(`Nodevumā jau ir IFC: ${other.join(", ")}. Aizstāt var ar replace.`);
-	if (opts.replace) for (const n of other.filter((n) => n.toLowerCase() === file.toLowerCase())) rmSync(join(d.draft.stagingDir, n), { force: true });
+	if (opts.replace)
+		for (const n of other.filter((n) => n.toLowerCase() === file.toLowerCase())) {
+			checkpointBeforeWrite(store, join(d.draft.stagingDir, n));
+			rmSync(join(d.draft.stagingDir, n), { force: true });
+		}
 	try {
 		await revitExport.exportIfc(revit, d.draft.stagingDir, file);
 		if (!existsSync(join(d.draft.stagingDir, file))) throw new Error(`Revit neizveidoja ${file}`);

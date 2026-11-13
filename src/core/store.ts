@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { join } from "node:path";
 import { checkWrite, isInside } from "./guard.js";
 import { appendLog, readLog, type StoredEntry } from "./log.js";
+import { currentScope } from "./scope.js";
 import { COLLECTIONS, upgradeWho, type CollectionName, type Collections, type Note, type NoteType, type Project, type Who } from "./model.js";
 
 export const SUBDIRS = ["notes", "revisions", "text", "versions"] as const;
@@ -62,7 +63,9 @@ export class ProjectStore {
 	}
 
 	log(e: { kind: string; by: Who | string; data?: Record<string, unknown> }): StoredEntry {
-		return appendLog(this.logFile(), e);
+		// inside an agent tool call (task 8.7) the entry says which run and tool wrote it
+		const sc = currentScope();
+		return appendLog(this.logFile(), sc ? { ...e, data: { ...e.data, run: sc.run, tool: sc.tool } } : e);
 	}
 
 	events(): StoredEntry[] {

@@ -346,3 +346,8 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .palette-group { flex: none; width: 96px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .palette-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .palette-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+
+/* what a run changed, with a way back (8.7) */
+.run-undo { padding: 4px 10px; border-top: 1px solid var(--border); }
+.undo-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.undo-row.done { opacity: 0.55; }

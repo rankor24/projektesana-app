@@ -12,6 +12,8 @@ export type RunEvent =
 	/** A `confirm` tool is waiting for the user; `batch` names what will run. */
 	| { type: "confirm"; id: string; tool: string; batch: string }
 	| { type: "done"; text: string }
+	/** One model turn's token counts (and its price at the catalogue, null when the provider gives none). Task 8.7. */
+	| { type: "usage"; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
 	/** A model turn failed on the wire (fetch failed, 429, 5xx…); the run waits `delayMs` and restarts it. Not the end of the run. */
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** Raw provider error, never rewritten. */
