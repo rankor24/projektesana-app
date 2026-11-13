@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { ScanProgress } from "../shared/api.js";
 import type { RunEvent } from "../shared/types.js";
+import type { RunMeta } from "../shared/thread-types.js";
 import {
 	addActivity,
 	answerLine,
@@ -76,6 +77,8 @@ interface Run {
 	/** sources a call read successfully: they stay read whatever a later call on them does */
 	readOk: Set<string>;
 	ended: boolean;
+	/** who the run belongs to; stamped on each line */
+	meta?: Pick<RunMeta, "agent" | "threadId">;
 }
 
 interface Scan {
@@ -152,8 +155,9 @@ export class ActivityLog {
 		}
 	}
 
-	event(runId: string, e: RunEvent) {
-		const r = this.runs.get(runId) ?? this.open(runId);
+	event(runId: string, e: RunEvent, meta?: RunMeta) {
+		const r = this.runs.get(runId) ?? this.open(runId, meta);
+		if (meta) r.meta = { agent: meta.agent, threadId: meta.threadId };
 		if (e.type === "text") {
 			// after the run ended only the app writes (the revision after a confirmed batch): a note, not the answer
 			if (r.ended) {
@@ -245,10 +249,10 @@ export class ActivityLog {
 
 	// ---- runs -------------------------------------------------------------------------------------------------------
 
-	private open(runId: string): Run {
+	private open(runId: string, meta?: RunMeta): Run {
 		const p = this.pending;
 		this.pending = null;
-		const r: Run = { id: runId, project: p?.projectId ?? null, calls: new Map(), anonymous: 0, block: null, summary: { steps: 0, listed: null, sources: [], changes: noChanges() }, titles: null, readOk: new Set(), ended: false };
+		const r: Run = { id: runId, project: p?.projectId ?? null, calls: new Map(), anonymous: 0, block: null, summary: { steps: 0, listed: null, sources: [], changes: noChanges() }, titles: null, readOk: new Set(), ended: false, ...(meta ? { meta: { agent: meta.agent, threadId: meta.threadId } } : {}) };
 		this.runs.set(runId, r);
 		this.prune();
 		this.line(r, "start", p ? taskTitle(p.prompt, this.d.templates) : "Uzdevums", { detail: p?.prompt });
@@ -386,7 +390,7 @@ export class ActivityLog {
 	}
 
 	private line(r: Run, kind: Activity["kind"], text: string, more: Partial<Activity> = {}) {
-		this.push(this.mk(r.id, r.project, "agent", kind, text, more));
+		this.push(this.mk(r.id, r.project, "agent", kind, text, { ...(r.meta ? { agent: r.meta.agent, thread: r.meta.threadId } : {}), ...more }));
 	}
 
 	private push(a: Activity) {

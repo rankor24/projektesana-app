@@ -10,11 +10,12 @@ import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
 import type { ToolCtx } from "./tools/context.js";
-import type { ConfirmRequest, Level } from "./tools/levels.js";
+import type { Level } from "./tools/levels.js";
 import type { AgentSpec } from "../shared/agent-types.js";
-import type { Thread } from "../shared/thread-types.js";
+import type { RunMeta, Thread } from "../shared/thread-types.js";
 import { ThreadStore, threadsDir } from "../core/threads.js";
 import { LockRegistry } from "./locks.js";
+import { Coordinator } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
 
 export interface ToolServer extends McpLaunchSpec {
@@ -36,7 +37,10 @@ export interface SessionDeps {
 	agents?: () => AgentSpec[];
 	runsDir: string;
 	chatDir: string;
-	emit: (runId: string, event: RunEvent) => void;
+	/** every event of a run; `meta` is the envelope the coordinator stamps (thread, agent, project, wave) */
+	emit: (runId: string, event: RunEvent, meta?: RunMeta) => void;
+	/** a thread's stored state changed (running, waiting-confirm, idle) */
+	onThread?: (t: Thread) => void;
 	/** one model call for the summaries; the app streams through pi, tests inject a fake */
 	complete?: Complete;
 	/** the agent loop; defaults to pi's, tests inject a scripted one */
@@ -48,15 +52,13 @@ export interface SessionDeps {
 }
 
 export class AgentSession {
-	private running: { id: string; abort: AbortController } | null = null;
-	private runDone: Promise<unknown> | null = null;
-	private confirms = new Map<string, (ok: boolean) => void>();
-	private n = 0;
 	private runner: ThreadRunner;
+	private coordinator: Coordinator;
 	private stores = new Map<string, ThreadStore>();
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread });
 	}
 
 	private threads(projectId: string | null): ThreadStore {
@@ -112,9 +114,10 @@ export class AgentSession {
 	/** Starts a run; events arrive through `emit`. Refuses while another run is going. Attachments are read and checked
 	 *  first, so a file the model cannot take is refused here (the window keeps it in the strip) and no run starts. */
 	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = []): Promise<{ runId: string }> {
-		if (this.running) throw new Error("Aģents jau strādā. Aptur vai pagaidi.");
+		const busy = "Aģents jau strādā. Aptur vai pagaidi.";
+		if (this.coordinator.busy()) throw new Error(busy);
 		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
-		const runId = `r${Date.now().toString(36)}${++this.n}`;
+		const runId = this.coordinator.newRunId();
 		const thread = this.leadOf(projectId);
 		let files: PreparedAttachments = { images: [], text: "", refs: [] };
 		if (attachments.length) {
@@ -128,39 +131,23 @@ export class AgentSession {
 				imagesInContext: this.runner.imagesInContext(thread),
 			});
 			// reading the files took a moment: another message may have started meanwhile
-			if (this.running) throw new Error("Aģents jau strādā. Aptur vai pagaidi.");
+			if (this.coordinator.busy()) throw new Error(busy);
 		}
-		const abort = new AbortController();
-		this.running = { id: runId, abort };
-		const emit = (e: RunEvent) => this.d.emit(runId, e);
-		const ask = (req: ConfirmRequest) =>
-			new Promise<boolean>((resolve) => {
-				this.confirms.set(req.id, resolve);
-				emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
-			});
-		this.runDone = this.runner.run({ runId, thread, spec: null, text, focus, files, wave: runId, signal: abort.signal, emit, ask }).finally(() => {
-			this.running = null;
-			for (const [, r] of this.confirms) r(false);
-			this.confirms.clear();
-		});
-		return { runId };
+		// the files are already prepared (above), so the coordinator is handed them and does not read `attachments` itself
+		return this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
 	}
 
 	stop() {
-		this.running?.abort.abort();
+		this.coordinator.stopAll();
 	}
 
 	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */
 	async shutdown(): Promise<void> {
-		this.stop();
-		await this.runDone?.catch(() => undefined);
+		await this.coordinator.shutdown();
 	}
 
 	confirm(id: string, allow: boolean) {
-		const r = this.confirms.get(id);
-		if (!r) throw new Error("Šis apstiprinājums vairs negaida.");
-		this.confirms.delete(id);
-		r(allow);
+		this.coordinator.confirm(id, allow);
 	}
 
 	/** The chosen model, or null when it cannot be looked up (the run itself reports why). */
@@ -189,14 +176,7 @@ export class AgentSession {
 
 	/** The user's own "saspiest": the same summary as at the limit, now. Refused while a run is going. */
 	async compactNow(projectId: string | null): Promise<{ before: number; after: number }> {
-		if (this.running) throw new Error("Aģents strādā. Aptur vai pagaidi.");
 		const thread = this.leadOf(projectId);
-		const abort = new AbortController();
-		this.running = { id: "compact", abort };
-		try {
-			return await this.runner.compactNow(thread, abort.signal);
-		} finally {
-			this.running = null;
-		}
+		return this.coordinator.exclusive((signal) => this.runner.compactNow(thread, signal));
 	}
 }

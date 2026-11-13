@@ -52,6 +52,9 @@ export interface Activity {
 	project: string | null;
 	/** "agent" = a model run; "app" = the app's own work (scanning the project folder) */
 	who: "agent" | "app";
+	/** the agent and the thread the line belongs to (a run of the coordinator); absent on the app's own lines */
+	agent?: string;
+	thread?: string;
 	at: string;
 	kind: "start" | "thinking" | "tool" | "answer" | "note" | "confirm" | "summary" | "done" | "error";
 	text: string;

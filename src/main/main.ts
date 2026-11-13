@@ -152,10 +152,11 @@ const session = new AgentSession({
 	agents: () => settings.agentSpecs().specs,
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
-	emit: (runId, event) => {
-		activity.event(runId, event);
-		emit("agent.event", { runId, event });
+	emit: (runId, event, meta) => {
+		activity.event(runId, event, meta);
+		if (meta) emit("agent.event", { runId, event, ...meta });
 	},
+	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 });
 
 const registry = new Registry(settings.registryFile(), settings.projectsDir());
