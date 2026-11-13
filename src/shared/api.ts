@@ -2,6 +2,7 @@
 // main/api.ts must implement exactly API_NAMES (checked by test/0.4-ipc.test.ts); the preload exposes one invoke and one on.
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
 import type { BimStage, Delivery, Fact, Finding, Note, NoteType, Pin, PinTarget, Project, Requirement, Revision, Source } from "../core/model.js";
+import type { ProjectSummary } from "../core/summary-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
@@ -324,6 +325,8 @@ export interface ApiSpec {
 	/** The activity lines main still keeps (all projects, oldest first), for a window that opened or reloaded mid-run. */
 	"activity.recent": () => Activity[];
 	"projects.list": () => ProjectRow[];
+	/** the dashboard: per project the stage, next delivery, open findings, closest clock, last scan and why it needs attention (task 8.4) */
+	"projects.summaries": () => ProjectSummary[];
 	"projects.add": (root: string) => ProjectRow;
 	"projects.forget": (id: string) => void;
 	"projects.scan": (id: string) => void;
@@ -446,6 +449,7 @@ export const API_NAMES = [
 	"agent.compact",
 	"activity.recent",
 	"projects.list",
+	"projects.summaries",
 	"projects.add",
 	"projects.forget",
 	"projects.scan",

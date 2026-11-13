@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
+import { projectSummary, stageOf } from "../../core/summary.js";
 import type { Registry } from "../../core/registry.js";
 import type { ProjectStore } from "../../core/store.js";
 import type { EventName, EventSpec, Handlers, ProjectRow, ScanSummaryRow } from "../../shared/api.js";
@@ -19,7 +20,7 @@ export interface ProjectDeps {
 	afterChange?: (store: ProjectStore, what: string) => void | Promise<void>;
 }
 
-type K = "projects.list" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.setRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
+type K = "projects.list" | "projects.summaries" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.setRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
 
 export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 	const scanning = new Set<string>();
@@ -29,12 +30,11 @@ export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 		const open = store.read("findings").filter((f) => f.state === "open");
 		const openFindings = open.filter((f) => f.severity !== "info").length;
 		const openInfo = open.length - openFindings;
-		const deliveries = store.read("deliveries");
-		const lastSent = deliveries.filter((x) => x.submittedDate).sort((a, b) => (a.submittedDate! < b.submittedDate! ? 1 : -1))[0];
-		return { ...p, missing: !existsSync(p.root), stage: lastSent?.stage ?? null, openFindings, openInfo };
+		return { ...p, missing: !existsSync(p.root), stage: stageOf(store.read("deliveries")), openFindings, openInfo };
 	};
 	return {
 		"projects.list": () => d.registry.list().map((p) => row(p.id)),
+		"projects.summaries": () => d.registry.list().map((p) => projectSummary(d.registry.store(p.id), new Date().toISOString().slice(0, 10), !existsSync(p.root))),
 		"projects.add": (root) => {
 			const p = d.registry.add(root);
 			d.emit("data.changed", { projectId: p.id, what: ["projects"] });

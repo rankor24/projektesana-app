@@ -2,9 +2,11 @@
 // questions for free 1.1.x folders, and the open project's profile (task 1.11).
 import { useEffect, useState } from "react";
 import type { ProjectRow, RoleQuestion, ScanProgress, ScanSummaryRow } from "../../shared/api";
+import type { ProjectSummary } from "../../core/summary-types";
 import { call, errText, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { Dashboard } from "./Dashboard";
 import { Profile } from "./Profile";
 
 export function Projekts() {
@@ -61,6 +63,7 @@ export function ScanBar({ p }: { p: ScanProgress }) {
 function ProjectList({ onOpen }: { onOpen: () => void }) {
 	const { projectId } = useUi();
 	const list = useLoad<ProjectRow[]>(() => call("projects.list"), []);
+	const summaries = useLoad<ProjectSummary[]>(() => call("projects.summaries"), []);
 	const [err, setErr] = useState<string | null>(null);
 	const progress = useScanProgress(projectId);
 
@@ -88,60 +91,16 @@ function ProjectList({ onOpen }: { onOpen: () => void }) {
 			{list.error ? <Err error={list.error} /> : null}
 			{list.data && list.data.length === 0 && <Empty title="nav projekta">Pievieno pirmo projektu.</Empty>}
 			{list.data && list.data.length > 0 && (
-				<table>
-					<thead>
-						<tr>
-							<th>BD</th>
-							<th>Mape</th>
-							<th>Stadija</th>
-							<th>Atradumi</th>
-							<th />
-						</tr>
-					</thead>
-					<tbody>
-						{list.data.map((p) => (
-							<tr key={p.id} className={`click ${p.id === projectId ? "sel" : ""}`} onClick={() => (ui.setProject(p.id), onOpen())}>
-								<td>
-									<b>{p.id}</b>
-								</td>
-								<td>
-									{p.name}
-									{p.missing && (
-										<>
-											{" "}
-											<Badge tone="bad">mape nav pieejama</Badge>
-										</>
-									)}
-									<div className="dim small mono">{p.root}</div>
-								</td>
-								<td>{p.stage ?? <span className="dim">nav nodevumu</span>}</td>
-								<td>
-									{p.openFindings ? <Badge tone="bad">{p.openFindings}</Badge> : <span className="dim">0</span>}
-									{p.openInfo > 0 && (
-										<span className="dim small" title="Informācija: neaptur nodevumu">
-											{" "}
-											+{p.openInfo} info
-										</span>
-									)}
-								</td>
-								<td onClick={(e) => e.stopPropagation()}>
-									<div className="row">
-										<button disabled={p.missing} onClick={() => call("projects.scan", p.id).catch((e) => setErr(errText(e)))}>Nolasīt</button>
-										<button
-											className="ghost"
-											title="Noņem no saraksta. Mapes paliek."
-											onClick={() => {
-												if (confirm(`Noņemt ${p.id} no saraksta? Biroja mape un app dati paliek.`)) call("projects.forget", p.id).then(() => (p.id === projectId && ui.setProject(null), list.reload()));
-											}}
-										>
-											Noņemt
-										</button>
-									</div>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
+				<Dashboard
+					projects={list.data}
+					summaries={summaries.data ?? []}
+					projectId={projectId}
+					onOpen={(id) => (ui.setProject(id), onOpen())}
+					onScan={(id) => call("projects.scan", id).catch((e) => setErr(errText(e)))}
+					onForget={(id) => {
+						if (confirm(`Noņemt ${id} no saraksta? Biroja mape un app dati paliek.`)) call("projects.forget", id).then(() => (id === projectId && ui.setProject(null), list.reload()));
+					}}
+				/>
 			)}
 			{progress && <ScanBar p={progress} />}
 			{projectId && <RoleQuestions projectId={projectId} />}

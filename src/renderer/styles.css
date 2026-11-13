@@ -285,3 +285,15 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .pin-body { min-width: 0; flex: 1; }
 .pin-actions { display: flex; gap: 6px; margin-top: 4px; }
 .pin-foot { padding: 6px 10px; border-top: 1px solid var(--border); }
+
+/* projects dashboard (8.4) */
+.dash-attention { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0 12px; background: var(--panel); }
+.dash-title { font-weight: 600; margin-bottom: 6px; }
+.dash-item { display: flex; gap: 8px; align-items: center; padding: 3px 0; cursor: pointer; }
+.dash-item:hover { background: var(--elev2); }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.dash-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--panel); }
+.dash-card.sel { border-color: var(--accent); }
+.dash-name { margin-top: 2px; }
+.dash-root { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-facts { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; font-size: 12.5px; }
