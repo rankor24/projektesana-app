@@ -11,6 +11,7 @@ import { Timeline } from "../shell/Timeline";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { windows } from "../windows";
+import { factReview } from "../fact-review";
 import { Profile } from "./Profile";
 
 export function Parskats() {
@@ -94,7 +95,7 @@ export function Parskats() {
 					</div>
 					<div className="ps-facts">
 						{x.facts.map((f) => (
-							<div key={f.key} className={`ps-fact ${f.state}`} title={f.value ?? "nav datu"} onClick={() => (f.state === "proposed" && f.factId ? setAllFacts(true) : commentSubject.pick({ thing: "fact", key: `profile.${f.key}` }, `fakts: ${f.label}`))}>
+							<div key={f.key} className={`ps-fact ${f.state}`} title={f.value ?? "nav datu"} onClick={() => (f.state === "proposed" && f.factId ? factReview.start(projectId, f.factId) : commentSubject.pick({ thing: "fact", key: `profile.${f.key}` }, `fakts: ${f.label}`))}>
 								<span className="dim small">{f.label}</span>
 								<span className="ps-fact-v">
 									{f.state === "confirmed" ? "✓ " : f.state === "proposed" ? "? " : ""}
@@ -103,9 +104,16 @@ export function Parskats() {
 							</div>
 						))}
 					</div>
-					<button className="small ghost" onClick={() => setAllFacts(!allFacts)}>
-						{allFacts ? "Slēpt faktu tabulu" : "Visi fakti ar avotiem"}
-					</button>
+					<div className="row">
+						{proposals.length > 0 && (
+							<button className="small primary" title="Avota dokuments atveras pie citāta; Enter apstiprina, Del noraida, bultiņas pāriet" onClick={() => factReview.start(projectId)}>
+								Pārskatīt {proposals.length} priekšlikumus
+							</button>
+						)}
+						<button className="small ghost" onClick={() => setAllFacts(!allFacts)}>
+							{allFacts ? "Slēpt faktu tabulu" : "Visi fakti ar avotiem"}
+						</button>
+					</div>
 				</section>
 			</div>
 			{allFacts && <Profile projectId={projectId} />}

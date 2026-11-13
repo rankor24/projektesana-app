@@ -7,13 +7,14 @@ import { MarkupTools } from "./Markup";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { viewer } from "../viewer-store";
+import { factReview } from "../fact-review";
 import { pinFocus } from "../../shared/pins-view";
 import { PdfView } from "./PdfView";
 import { PinPanel, useFilePins } from "./Annotate";
 
 type Geo = Awaited<ReturnType<typeof call<"rooms.geometry">>>;
 
-export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, focused = true }: { projectId: string; sourceId: string; title: string; page?: number; paneIndex?: number; focused?: boolean }) {
+export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex = 0, focused = true }: { projectId: string; sourceId: string; title: string; page?: number; quote?: string; paneIndex?: number; focused?: boolean }) {
 	const [geo, setGeo] = useState<Geo | null>(null);
 	const [geoOn, setGeoOn] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
@@ -56,6 +57,8 @@ export function SourcePdf({ projectId, sourceId, title, page, paneIndex = 0, foc
 						sourceId={sourceId}
 						title={title}
 						initialPage={jump}
+						highlight={quote}
+						onQuote={(k) => factReview.quoteFound(k)}
 						onPage={(pg) => {
 							if (focused) ui.setView({ page: pg });
 							viewer.pageChanged(paneIndex, sourceId, pg);

@@ -14,6 +14,7 @@ import { LawView } from "../preview/LawView";
 import { ui, useUi } from "../state";
 import { Empty, useLoad } from "../ui";
 import { viewer, useViewer } from "../viewer-store";
+import { FactCard } from "../preview/FactCard";
 import { WINDOW_TITLE, windows } from "../windows";
 
 export function sourceExt(s: Source): string {
@@ -96,6 +97,7 @@ export function Viewer() {
 					</div>
 				))}
 			</div>
+			<FactCard />
 		</section>
 	);
 }
@@ -117,7 +119,7 @@ function ViewPane({ target, paneIndex, focused, sources, loading }: { target: Vi
 	// an IFC the scan found (Avoti, the agent's show_source): the 3D view, not the text view that has nothing to show
 	if (sourceExt(s) === ".ifc") return <IfcView projectId={projectId} key={s.id} name={s.title} load={() => call("models.bytes", projectId, `src:${s.id}`)} paneIndex={paneIndex} focused={focused} />;
 	return sourceExt(s) === ".pdf" ? (
-		<SourcePdf key={s.id} projectId={projectId} sourceId={s.id} title={s.title} page={target.page} paneIndex={paneIndex} focused={focused} />
+		<SourcePdf key={s.id} projectId={projectId} sourceId={s.id} title={s.title} page={target.page} quote={target.quote} paneIndex={paneIndex} focused={focused} />
 	) : (
 		<TextView sourceId={s.id} title={s.title} page={target.page} />
 	);

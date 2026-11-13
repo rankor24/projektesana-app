@@ -4,7 +4,8 @@
 // node-free: the viewer component, the Versijas page (9.9) and the tests use the same functions.
 
 export type ViewTarget =
-	| { kind: "source"; sourceId: string; page?: number }
+	/** `quote`: text to highlight on the page (a fact's citation, task 9.7); it is not part of the file's identity */
+	| { kind: "source"; sourceId: string; page?: number; quote?: string }
 	| { kind: "ifc"; path: string; label: string }
 	| { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc" }
 	| { kind: "law"; sourceId: string; quote?: string };

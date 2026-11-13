@@ -8,6 +8,7 @@ import { errText } from "../bridge";
 import { ui } from "../state";
 import type { Markup } from "../../core/model";
 import { MarkupDraw, MarkupShapes } from "./Markup";
+import { findQuote } from "../../shared/fact-review";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -28,6 +29,8 @@ export function PdfView({
 	overlay,
 	onPageClick,
 	onPage,
+	highlight,
+	onQuote,
 	markup,
 	toolbar,
 	sketchNote,
@@ -40,6 +43,9 @@ export function PdfView({
 	overlay?: (page: number, size: PageSize) => ReactNode;
 	/** a click in "pin" mode: page fractions */
 	onPageClick?: (page: number, x: number, y: number) => void;
+	/** text to mark on the page (a fact's quote, 9.7) and what was found: "whole", "start" (only its first words) or null */
+	highlight?: string;
+	onQuote?: (found: "whole" | "start" | null) => void;
 	/** the page now shown (the chat sends it in Auto mode) */
 	onPage?: (page: number) => void;
 	toolbar?: ReactNode;
@@ -117,6 +123,22 @@ export function PdfView({
 			renderTask?.cancel();
 		};
 	}, [doc, page, zoom]);
+
+	// the quote of a fact under review: its text items get the mark, the first one is scrolled into view
+	useEffect(() => {
+		const tl = textDiv.current;
+		if (!tl || !size) return;
+		const spans = [...tl.querySelectorAll<HTMLElement>("span:not(.markedContent)")];
+		for (const s of spans) s.classList.remove("quote-hit");
+		if (!highlight) return;
+		const m = findQuote(spans.map((s) => s.textContent ?? ""), highlight);
+		if (m) {
+			for (const h of m.hits) spans[h.item].classList.add("quote-hit");
+			spans[m.hits[0].item].scrollIntoView({ block: "center", behavior: "smooth" });
+		}
+		onQuote?.(m ? m.kind : null);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [highlight, size, page]);
 
 	// text selected in the text layer goes to the Fokuss
 	const onMouseUp = () => {
