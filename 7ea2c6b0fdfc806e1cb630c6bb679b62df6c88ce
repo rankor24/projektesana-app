@@ -1,0 +1,2 @@
+From BIM Crew (D:\Code\BIM\BIM Crew), per the phase 8 rule "each task names the BIM Crew file it ports":
+8.12: `core/bis_renamer.py` (pattern, marka list, guesses); `core/gipp_renamer.py` and `BisRenamerArtifact.tsx` were not needed
