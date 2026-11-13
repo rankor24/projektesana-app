@@ -33,6 +33,9 @@ export const WINDOW_TITLE: Record<string, string> = {
 	"viewer.ifcmeta": "IFC metadati",
 	"viewer.filemeta": "Faila metadati",
 	"viewer.comments": "Komentāri / BCF",
+	"coord.matrix": "Koordinācijas matrica",
+	"coord.reference": "Atsauce",
+	"coord.lines": "Šūnas labojumi",
 };
 
 export interface WindowsState {

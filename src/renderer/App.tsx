@@ -12,6 +12,7 @@ import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Viewer } from "./shell/Preview";
 import { ViewerPanel } from "./preview/ViewerPanels";
+import { CoordLinesPanel, CoordMatrixPanel, CoordReferencePanel, CoordScene } from "./shell/KoordScene";
 import { TopBar } from "./shell/TopBar";
 import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
@@ -39,6 +40,9 @@ function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === CHAT) return <AgentDock />;
 	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
 	if (id.startsWith("viewer.")) return <ViewerPanel id={id} />;
+	if (id === "coord.matrix") return <CoordMatrixPanel />;
+	if (id === "coord.reference") return <CoordReferencePanel />;
+	if (id === "coord.lines") return <CoordLinesPanel />;
 	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
 }
 
@@ -90,7 +94,9 @@ export function App() {
 	}, []);
 	const { page, canvasFilter } = useWindows();
 	useEffect(() => commentSubject.clear(), [page]);
-	const fullPage = pageById(page)?.kind === "page" ? page : null;
+	const def = pageById(page);
+	const fullPage = def?.kind === "page" && def.canvas !== "scene" ? page : null;
+	const sceneCanvas = def?.canvas === "scene";
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId, preview } = useUi();
 	const [row, setRow] = useState<ProjectRow | null>(null);
@@ -126,7 +132,15 @@ export function App() {
 									<Panel id={fullPage as PanelId} filter={canvasFilter} />
 								</div>
 							)}
-							{(!fullPage || preview) && <Viewer />}
+							{sceneCanvas && (
+								<div className="scene-body">
+									<div className="scene-view">
+										<CoordScene />
+									</div>
+									<CommentTools page={page} />
+								</div>
+							)}
+							{!sceneCanvas && (!fullPage || preview) && <Viewer />}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

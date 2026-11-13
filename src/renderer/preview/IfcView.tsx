@@ -22,7 +22,9 @@ export const bimcraft = { send: (c: Cmd) => listeners.forEach((l) => l(c)) };
 
 type Captured = Extract<import("../../shared/bimcraft-protocol").BimcraftToHost, { type: "captured" }>;
 
-export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, focused = true }: { projectId: string; load: () => Promise<Uint8Array>; name: string; compareWith?: { name: string; load: () => Promise<Uint8Array> }; paneIndex?: number; focused?: boolean }) {
+export function IfcView({ projectId, load, name, compareWith, scene, paneIndex = 0, focused = true }: { projectId: string; load: () => Promise<Uint8Array>; name: string; compareWith?: { name: string; load: () => Promise<Uint8Array> }; /** several IFC files in ONE scene (the federated 3D of Koordinācija, 9.8): `load` is ignored */ scene?: { name: string; load: () => Promise<Uint8Array> }[]; paneIndex?: number; focused?: boolean }) {
+	// a compare or a scene of several models: no pins, no marks, no element panels (those belong to one model)
+	const multi = !!compareWith || !!scene;
 	// only the focused pane answers the chat, the toolbar and the side panels; both panes feed a linked camera
 	const focusedRef = useRef(focused);
 	focusedRef.current = focused;
@@ -60,12 +62,12 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 	};
 	// the pane that is focused again tells the panels about its model
 	useEffect(() => {
-		if (focused && state === "open" && !compareWith) publishInfo();
+		if (focused && state === "open" && !multi) publishInfo();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [focused, state]);
 	// a linked split: this view posts its camera and the other one follows it
 	useEffect(() => {
-		if (state !== "open" || compareWith) return;
+		if (state !== "open" || multi) return;
 		post({ pj: 1, type: "watch", on: camLinked });
 		return () => post({ pj: 1, type: "watch", on: false });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,14 +89,16 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 			const m = e.data;
 			if (m.type === "ready") {
 				setState("ready");
-				(compareWith
+				(scene
+					? Promise.all(scene.map((x) => x.load().then((bytes) => ({ name: x.name, bytes })))).then((models) => post({ pj: 1, type: "scene", models }))
+					: compareWith
 					? Promise.all([load(), compareWith.load()]).then(([a, b]) => post({ pj: 1, type: "compare", a: { name, bytes: a }, b: { name: compareWith.name, bytes: b } }))
 					: load().then((bytes) => post({ pj: 1, type: "open", name, bytes })))
 					.catch((err) => (setState("error"), setMsg(errText(err))));
 			} else if (m.type === "opened") {
 				setState("open");
-				if (focusedRef.current && !compareWith) publishInfo();
-				if (!compareWith) post({ pj: 1, type: "markers", markers: markersRef.current });
+				if (focusedRef.current && !multi) publishInfo();
+				if (!multi) post({ pj: 1, type: "markers", markers: markersRef.current });
 				// elements a traced sheet change named: selected as soon as the model is open
 				const want = ui.get().highlight;
 				if (want?.length) {
@@ -115,6 +119,11 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 				if (focusedRef.current) viewerInfo.set({ tree: m.nodes });
 			} else if (m.type === "meta") {
 				if (focusedRef.current) viewerInfo.set({ meta: m.info });
+			} else if (m.type === "scene") {
+				setState("open");
+				setMsg(`${m.models.length} modeļi vienā ainā`);
+			} else if (m.type === "modelShown") {
+				setMsg(m.name ? `rādīts tikai ${m.name}` : "rādīti visi modeļi");
 			} else if (m.type === "viewed") {
 				setMsg(m.action === "isolate" ? `izolēti ${m.found} no ${m.asked}` : m.action === "show_all" ? "rādīts viss modelis" : "krāsas noņemtas");
 				if (m.action === "uncolour") setLegend(null);
@@ -155,7 +164,7 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 
 	// the dots follow the pins: a new, closed or reopened pin redraws them
 	useEffect(() => {
-		if (state === "open" && !compareWith) post({ pj: 1, type: "markers", markers });
+		if (state === "open" && !multi) post({ pj: 1, type: "markers", markers });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markers, state]);
 
@@ -194,7 +203,7 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 				)}
 				{sel.length > 0 && <span className="dim small">iezīmēti {sel.length}</span>}
 				<span className="grow" />
-				{!compareWith && (
+				{!multi && (
 					<>
 						<input placeholder="piezīme pinam vai skicei aģentam" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && state === "open" && makePin()} style={{ width: 240 }} />
 						<MarkupTools shape={shape} setShape={setShape} count={marks.length} onClear={() => setMarks([])} />
@@ -225,8 +234,8 @@ export function IfcView({ projectId, load, name, compareWith, paneIndex = 0, foc
 							))}
 						</div>
 					)}
-					{!compareWith && <MarkupShapes marks={marks} />}
-					{!compareWith && shape && <MarkupDraw shape={shape} onDone={(m) => setMarks((x) => [...x, m])} />}
+					{!multi && <MarkupShapes marks={marks} />}
+					{!multi && shape && <MarkupDraw shape={shape} onDone={(m) => setMarks((x) => [...x, m])} />}
 				</div>
 			</div>
 		</div>

@@ -43,12 +43,14 @@ export function coordinationHandlers(d: { registry: Registry; engine: ProjectEng
 		"coordination.get": async (id, withRevit) => {
 			const store = d.registry.store(id);
 			const reference = store.readMeta<CoordReference | null>(COORDINATION_META, null);
-			const models = (await auditedModels(store)).length;
-			if (!reference) return { reference: null, audit: null, warnings: [], models, errors: [], revit: null };
+			const audited = await auditedModels(store);
+			const models = audited.length;
+			const files = audited.map((m) => ({ file: m.file, key: m.key }));
+			if (!reference) return { reference: null, audit: null, warnings: [], models, files, errors: [], revit: null };
 			const { facts, errors } = await projectFacts(d.bimcraftApp, store, reference.cubeNames);
 			const rv = withRevit ? await revitModel(d.revit) : { facts: null, note: null };
 			const all = rv.facts ? [...facts, rv.facts] : facts;
-			return { reference, audit: buildAudit(all, reference, today()), warnings: referenceWarnings(reference, facts), models, errors, revit: rv.note };
+			return { reference, audit: buildAudit(all, reference, today()), warnings: referenceWarnings(reference, facts), models, files, errors, revit: rv.note };
 		},
 		"coordination.save": async (id, reference) => {
 			if (!Number.isFinite(reference.tolerance) || reference.tolerance < 0) throw new Error("Pielaide ir skaitlis, 0 vai lielāks (mm).");

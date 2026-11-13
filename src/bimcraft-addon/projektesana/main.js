@@ -15,6 +15,8 @@
  *                    tree                       answer with the spatial structure: project, site, building, storeys, their elements
  *                    meta                       answer with the model's schema, project and the file header
  *                    watch { on }               post the camera whenever the user moves it (a linked second view follows)
+ *                    scene { models }           open several IFC files in one scene (BimCraft's own federated models; up to 63)
+ *                    model { name | null }      show only the model of that file in the scene; null = every model again
  *                    isolate { guids, ghost }   show only these elements (the viewer's own visibility); no guids = show all
  *                    colour { property, guids } paint by a property / attribute value (the viewer's own colouring), with a legend
  *   BimCraft → app   ready { api }              the bridge is active
@@ -26,6 +28,8 @@
  *                    tree { nodes }             answer to tree
  *                    meta { info }              answer to meta
  *                    camera { camera }          the camera moved (only while watched)
+ *                    scene { models }           the scene is open: [{ mi, name, elements }]
+ *                    modelShown { name, shown, total }   a model alone, or all again
  *                    viewed { action, found, asked }   isolate / show all / colour cleared
  *                    coloured { property, legend, total, painted, partial }   the painting, one legend row per value
  *                    marker { id }              the user clicked a pin's dot
@@ -360,6 +364,30 @@ export function activate(api) {
         const opened = await globalThis.ccAddons?.openFromAddon(f);
         if (opened === false) throw new Error('BimCraft did not take the model');
         post('opened', { name: pending?.name ?? m.name });
+      } else if (m.type === 'scene') {
+        const list = Array.isArray(m.models) ? m.models : [];
+        if (!list.length) throw new Error('scene needs at least one model');
+        if (list.length > 63) throw new Error('BimCraft takes up to 63 models in one scene');
+        const M = globalThis.bimcraftModels;
+        if (list.length > 1 && !(M && typeof M.add === 'function')) throw new Error('scene needs BimCraft\'s Models panel (bimcraftModels)');
+        clearDots();
+        const u8 = (b) => (b instanceof Uint8Array ? b : new Uint8Array(b));
+        // the first model opens through the importer (as open), the rest are added as federated models, each in its own key range
+        pending = { bytes: u8(list[0].bytes), name: String(list[0].name || 'model.ifc') };
+        const f = typeof File === 'function' ? new File([pending.bytes], `${pending.name}${PJ_EXT}`) : { name: `${pending.name}${PJ_EXT}` };
+        if ((await globalThis.ccAddons?.openFromAddon(f)) === false) throw new Error('BimCraft did not take the model');
+        for (const x of list.slice(1)) await M.add(new File([u8(x.bytes)], String(x.name)));
+        post('scene', { models: M && typeof M.list === 'function' ? M.list().map((e) => ({ mi: e.mi, name: e.name, elements: typeof e.elements === 'number' ? e.elements : null })) : [{ mi: 0, name: pending ? pending.name : String(list[0].name), elements: null }] });
+      } else if (m.type === 'model') {
+        const v = viewerOf();
+        const M = globalThis.bimcraftModels;
+        if (!v || typeof v.setModelVisible !== 'function' || !M) throw new Error('no scene of several models yet');
+        const all = M.list();
+        const name = m.name === null || m.name === undefined ? null : String(m.name);
+        if (name !== null && !all.some((e) => e.name === name)) throw new Error('the model is not in this scene');
+        for (const e of all) v.setModelVisible(e.mi, name === null || e.name === name);
+        v.render?.();
+        post('modelShown', { name, shown: name === null ? all.length : 1, total: all.length });
       } else if (m.type === 'select') {
         api.model.select((m.ids || []).map(Number).filter(Number.isFinite));
         await poll();

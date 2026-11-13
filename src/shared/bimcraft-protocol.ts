@@ -23,6 +23,10 @@ export type HostToBimcraft =
 	| { pj: 1; type: "watch"; on: boolean }
 	/** show only these elements (ghost: the rest dimmed); no guids = show everything (the agent's viewer_isolate) */
 	| { pj: 1; type: "isolate"; guids: string[]; ghost?: boolean }
+	/** open several IFC files in ONE scene: the first through the importer, the others as BimCraft's own federated models (9.8) */
+	| { pj: 1; type: "scene"; models: { name: string; bytes: Uint8Array }[] }
+	/** show only the model of this file name in the scene (the others hidden); null shows every model again */
+	| { pj: 1; type: "model"; name: string | null }
 	/** paint the elements by the value of a property or attribute, with a legend; no property clears (viewer_colour) */
 	| { pj: 1; type: "colour"; property: string; guids?: string[] }
 	| { pj: 1; type: "compare"; a: { name: string; bytes: Uint8Array }; b: { name: string; bytes: Uint8Array } };
@@ -93,6 +97,10 @@ export type BimcraftToHost =
 	| { pj: 1; type: "meta"; info: IfcMeta }
 	/** the camera moved (only while the host watches it) */
 	| { pj: 1; type: "camera"; camera: PinCamera }
+	/** the scene is open: one entry per model BimCraft holds */
+	| { pj: 1; type: "scene"; models: { mi: number; name: string; elements: number | null }[] }
+	/** a model was shown alone (or all again) */
+	| { pj: 1; type: "modelShown"; name: string | null; shown: number; total: number }
 	/** isolate / show all done: how many of the asked elements were in the model */
 	| { pj: 1; type: "viewed"; action: "isolate" | "show_all" | "uncolour"; found: number; asked: number }
 	/** the model painted by a property: one row per value, with its colour and how many elements */
@@ -102,7 +110,7 @@ export type BimcraftToHost =
 	| { pj: 1; type: "compared"; added: number; removed: number; changed: number; same: number; changes: { guid: string; props: string[]; moved: number; reshaped: boolean }[] }
 	| { pj: 1; type: "error"; message: string };
 
-const TO_HOST = ["ready", "opened", "selection", "highlighted", "sketch", "captured", "marker", "markers", "compared", "properties", "tree", "meta", "camera", "viewed", "coloured", "error"];
+const TO_HOST = ["ready", "opened", "selection", "highlighted", "sketch", "captured", "marker", "markers", "compared", "properties", "tree", "meta", "camera", "viewed", "coloured", "scene", "modelShown", "error"];
 
 export function isBimcraftMessage(x: unknown): x is BimcraftToHost {
 	const m = x as { pj?: unknown; type?: unknown };
@@ -119,6 +127,9 @@ export function sketchFocus(items: BimcraftItem[], note: string, model: string) 
 	return { kind: "sketch" as const, id: `sketch:${Date.now().toString(36)}`, label: `skice: ${items.length} elementi${note ? ` — ${note.slice(0, 40)}` : ""}`, data: { model, note, elements: items.map((i) => ({ guid: i.guid, cls: i.cls, name: i.name })) } };
 }
 
+/** BimCraft keeps up to 63 models in a scene (its Models panel); the first goes through the importer, so 62 are added. */
+export const MAX_SCENE = 63;
+
 /** A message the app means to send, checked before it goes: the problem in words, or null when it is fine. */
 export function checkHostMessage(m: HostToBimcraft): string | null {
 	if (m.type === "props") {
@@ -126,6 +137,8 @@ export function checkHostMessage(m: HostToBimcraft): string | null {
 		const guidOk = typeof m.guid === "string" && m.guid.length > 0;
 		return idOk || guidOk ? null : "props needs an element id or a GlobalId";
 	}
+	if (m.type === "scene") return Array.isArray(m.models) && m.models.length >= 1 && m.models.length <= MAX_SCENE && m.models.every((x) => typeof x?.name === "string" && x.name && x.bytes instanceof Uint8Array && x.bytes.length > 0) ? null : `scene needs 1 to ${MAX_SCENE} models, each with a name and bytes`;
+	if (m.type === "model") return m.name === null || (typeof m.name === "string" && m.name) ? null : "model needs a file name, or null for all";
 	if (m.type === "isolate") return Array.isArray(m.guids) && m.guids.length <= 500 && m.guids.every((g) => typeof g === "string" && g) ? null : "isolate needs a list of up to 500 GlobalIds";
 	if (m.type === "colour") return typeof m.property === "string" && m.property.length <= 80 && (m.guids === undefined || (Array.isArray(m.guids) && m.guids.length > 0 && m.guids.length <= 500)) ? null : "colour needs a property name (up to 80 characters) and, if given, 1 to 500 GlobalIds";
 	if (m.type === "watch") return typeof m.on === "boolean" ? null : "watch needs on: true or false";

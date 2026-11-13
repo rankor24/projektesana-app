@@ -473,3 +473,10 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .textLayer .quote-hit { background: rgba(255, 196, 0, 0.5); border-radius: 2px; }
 .fact-card { position: absolute; top: 40px; right: 12px; width: 330px; max-height: 80%; overflow: auto; z-index: 9; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4); }
 .fact-value { font-size: 17px; font-weight: 600; }
+.coord-matrix td.cell { cursor: pointer; font-weight: 600; min-width: 90px; }
+.coord-matrix td.cell.ok { color: var(--ok); }
+.coord-matrix td.cell.fix { color: var(--warn); }
+.coord-matrix td.cell.none { color: var(--muted); cursor: default; }
+.coord-matrix td.cell.on { outline: 2px solid var(--accent); outline-offset: -2px; }
+.scene-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.scene-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }

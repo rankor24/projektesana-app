@@ -4,7 +4,7 @@
 // tabs docked on the right. Every panel is reachable from exactly one page, or is a global window (the project list, the
 // settings). Pure and node-free: the rail, the palette, the top bar's status pill and the tests use the same table.
 // BIM Crew reference: shell/NavRail.tsx and shell/items.tsx (grouped rail items, icon + name, collapse).
-import { DEFAULT_DOCK, dock, emptyLayout, open, resizeDock, setActive, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
+import { DEFAULT_DOCK, dock, emptyLayout, mergeInto, open, resizeDock, setActive, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
 
 export type PanelName = (typeof PANEL_IDS)[number];
 export type PageGroup = "projekts" | "dati" | "nodosana";
@@ -19,6 +19,8 @@ export interface PageDef {
 	hint: string;
 	/** a single glyph for the collapsed rail */
 	icon: string;
+	/** what fills the main area instead of the page's panel: the federated 3D scene of Koordinācija (9.8) */
+	canvas?: "scene";
 }
 
 export const GROUPS: { id: PageGroup; title: string }[] = [
@@ -39,7 +41,7 @@ export const PAGES: PageDef[] = [
 	{ id: "atmina", title: "Atmiņa", group: "dati", kind: "sidebar", hint: "lēmumi un atbildes", icon: "✎" },
 	{ id: "nodevumi", title: "Nodevumi", group: "nodosana", kind: "page", hint: "nodot projektu, termiņi", icon: "⇪" },
 	{ id: "versijas", title: "Versijas", group: "nodosana", kind: "page", hint: "kas mainījās starp datumiem", icon: "⇄" },
-	{ id: "koordinacija", title: "Koordinācija", group: "nodosana", kind: "page", hint: "modeļu pamatpunkts, hierarhija, stāvi", icon: "⊕" },
+	{ id: "koordinacija", title: "Koordinācija", group: "nodosana", kind: "page", hint: "modeļu pamatpunkts, hierarhija, stāvi", icon: "⊕", canvas: "scene" },
 ];
 
 /** Windows that belong to no page: the project list (the switcher in the top bar) and the settings. */
@@ -58,6 +60,7 @@ const FULL_PAGE_TABS: PanelName[] = ["faili", "avoti", "prasibas"];
 export const SIDEBAR_SIZE = 420;
 export const FULL_PAGE_CHAT = 300;
 export const FULL_PAGE_TABS_SIZE = 380;
+export const MATRIX_SIZE = 260;
 
 const NOMINAL: Vp = { w: 1600, h: 900 };
 
@@ -66,6 +69,14 @@ export function defaultLayout(page: string): Layout {
 	let l = emptyLayout();
 	const def = pageById(page);
 	if (!def) return l;
+	if (def.canvas === "scene") {
+		// the models in one 3D scene on the canvas; the matrix docked at the bottom; the reference a tab beside the chat (the
+		// chat stays the one in front); a cell click opens its lines in a window docked on the right (shell/KoordScene.tsx)
+		l = mergeInto(open(l, "coord.reference", NOMINAL), "coord.reference", "chat");
+		l = setActive(l, "chat");
+		l = dock(open(l, "coord.matrix", NOMINAL), "coord.matrix", "bottom", NOMINAL, { size: MATRIX_SIZE });
+		return { ...l, focused: "chat" };
+	}
 	if (def.kind === "sidebar") {
 		l = open(l, def.id, NOMINAL);
 		return dock(l, def.id, "right", NOMINAL, { size: SIDEBAR_SIZE });

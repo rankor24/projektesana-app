@@ -229,6 +229,8 @@ export interface CoordinationView {
 	audit: AuditReport | null;
 	warnings: string[];
 	models: number;
+	/** the models that are measured, each with what models.bytes opens it by: the federated 3D of Koordinācija (9.8) shows them all */
+	files: { file: string; key: string }[];
 	errors: { file: string; message: string }[];
 	revit: string | null;
 }
