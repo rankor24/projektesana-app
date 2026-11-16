@@ -133,13 +133,13 @@ export function stageCard(stage: Stage): string {
 	return [c.title, `Mērķis: ${c.goal}`, `Iesaistīti: ${c.involved}`, "Darbības:", ...c.actions.map((a) => `- ${a}`), `Izeja: ${c.output.join("; ")}`, c.gate].join("\n");
 }
 
-/** The process tools that write, by the agent that is given them (R35): added to that agent's own thread beside the mail tools, never listed in a spec, never offered
+/** The process tools of the two stage agents (R35; the write ones and, for eks, the read tool process_review_scope): added to that agent's own thread beside the mail tools, never listed in a spec, never offered
  *  to the lead, to other specialists or to a lane. The checks inside the tools stay the hard rule. */
 export const PROCESS_TOOLS_OF: Readonly<Record<string, readonly string[]>> = {
 	bpv: ["process_request_gate", "process_skip_stage", "process_set_profile"],
 	eks: ["process_request_gate", "process_review_done", "process_review_scope"],
 };
-export const PROCESS_WRITE_TOOLS: ReadonlySet<string> = new Set(Object.values(PROCESS_TOOLS_OF).flat());
+export const PROCESS_OWN_TOOLS: ReadonlySet<string> = new Set(Object.values(PROCESS_TOOLS_OF).flat());
 
 /** A returned stage may be repeated this many times; the next return goes to the human. */
 export const MAX_ITERATIONS = 3;

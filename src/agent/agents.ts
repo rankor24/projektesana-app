@@ -9,7 +9,7 @@ import type { OfficeMemory } from "../core/office-memory.js";
 import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
-import { LEADER, PROCESS_WRITE_TOOLS, STAGES, stageCard } from "../core/process-def.js";
+import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-def.js";
 import { STATUS_MAX } from "../core/process.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
@@ -114,7 +114,7 @@ export function validateSpec(
 	const cap = maxLevel === "confirm" ? "confirm" : SPECIALIST_CAP;
 	for (const t of tools) {
 		if (Object.hasOwn(MAIL_TOOL_LEVELS, t)) return { ok: false, error: `${t} ir dots katram aģentam automātiski; to nevajag norādīt.` };
-		if (PROCESS_WRITE_TOOLS.has(t)) return { ok: false, error: `${t} tiek dots aģentam bpv/eks automātiski; to nevajag norādīt.` };
+		if (PROCESS_OWN_TOOLS.has(t)) return { ok: false, error: `${t} tiek dots aģentam bpv/eks automātiski; to nevajag norādīt.` };
 		if (MAIN_TOOLS.has(t)) return { ok: false, error: `Speciālists nevar palaist citus aģentus (${t}).` };
 		if (!known.includes(t)) return { ok: false, error: `Nezināms rīks: ${t}.` };
 		const lv = levelOf(t);

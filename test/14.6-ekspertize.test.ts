@@ -6,13 +6,14 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { mailTools, type MailDeps } from "../src/agent/mail.ts";
+import type { PiRunOptions } from "../src/agent/pi/index.ts";
 import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
 import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { allTools } from "../src/agent/tools/defs.ts";
 import { addRemark, fixList, readRemarks } from "../src/core/expertise.ts";
 import { DEFAULT_LIMITS, Mailbox, canSend, mailDir, type Topic } from "../src/core/messages.ts";
-import { type ProcessState, decideGate, initial, readProcess, requestGate, switchMode, writeProcess } from "../src/core/process.ts";
+import { type ProcessState, decideGate, initial, readProcess, requestGate, statusText, switchMode, writeProcess } from "../src/core/process.ts";
 import { ProjectStore } from "../src/core/store.ts";
 import { ThreadStore, threadsDir } from "../src/core/threads.ts";
 import type { AgentSpec } from "../src/shared/agent-types.ts";
@@ -287,8 +288,8 @@ test("14.6 process_review_scope: no draft says so; co-work refuses; only eks is 
 	await assert.rejects(async () => c.call("eks", "process_review_scope", { changed: ["a.pdf"] }), /Procesa režīms nav ieslēgts/);
 	const tool = allTools().find((x) => x.name === "process_review_scope")!;
 	assert.equal(tool.level, "read");
-	const { PROCESS_TOOLS_OF, PROCESS_WRITE_TOOLS } = await import("../src/core/process-def.ts");
-	assert.deepEqual([PROCESS_TOOLS_OF.eks.includes("process_review_scope"), PROCESS_TOOLS_OF.bpv.includes("process_review_scope"), PROCESS_WRITE_TOOLS.has("process_review_scope")], [true, false, true]);
+	const { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } = await import("../src/core/process-def.ts");
+	assert.deepEqual([PROCESS_TOOLS_OF.eks.includes("process_review_scope"), PROCESS_TOOLS_OF.bpv.includes("process_review_scope"), PROCESS_OWN_TOOLS.has("process_review_scope")], [true, false, true]);
 });
 
 // ---- H5's fix ids ---------------------------------------------------------------------------------------------------------
@@ -309,13 +310,14 @@ test("14.6 process.gate (H5) refuses a fix id that is no remark: 'Nezināma piez
 
 const S5 = "S5 laikā sadaļas autors nelabo projektu.";
 
-function sessionRig() {
+function sessionRig(script?: (who: string, o: PiRunOptions) => Promise<void>) {
 	const dir = tmp();
 	mkdirSync(join(dir, "chat"), { recursive: true });
 	const store = ProjectStore.open(dir, { id: "BD999", name: "BD999 Testa iela 1", root: tmp(), createdAt: "2026-11-16T00:00:00Z" });
 	new AppSettings(dir, plainCrypto).saveAgentSpecs(IDS.map((id) => spec(id, { tools: ["set_fact", "write_note", "expert_add", "expert_import"] })));
 	switchMode(store, "process", IDS, "user");
 	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const prompts = new Map<string, string>();
 	const seen = new Map<string, { before: (name: string) => Promise<{ block?: boolean; reason?: string } | undefined>; after: () => Promise<unknown> }>();
 	const s = new AgentSession({
 		runtime: async () => rt,
@@ -329,11 +331,13 @@ function sessionRig() {
 		emit: () => undefined,
 		runAgent: async (o) => {
 			const who = /AGENT (\w+)\./.exec(o.systemPrompt ?? "")?.[1] ?? "lead";
+			prompts.set(who, o.systemPrompt ?? "");
 			seen.set(who, {
 				before: async (name) => (await o.beforeToolCall?.({ toolCall: { name, id: "t", arguments: {} }, args: {} } as never, new AbortController().signal)) as never,
 				// the call that was let through holds the project's write lock until its end: free it, as the real loop does
 				after: async () => o.afterToolCall?.({ toolCall: { id: "t" } } as never),
 			});
+			await script?.(who, o);
 			o.onEvent({ type: "done", text: "gatavs" });
 		},
 	});
@@ -347,7 +351,10 @@ function sessionRig() {
 		await seen.get(who)!.after();
 		return r;
 	};
-	return { start, stage, call, store };
+	const settle = async (until: () => boolean = () => true) => {
+		for (let i = 0; i < 200 && (s.queueView().running.length || s.queueView().queued.length || !until()); i++) await new Promise((r) => setTimeout(r, 5));
+	};
+	return { start, stage, call, store, dir, s, prompts, settle };
 }
 
 test("14.6 S5: an author's, the lead's and bpv's write tools are refused at the gate with the one text; in S4 they pass; read tools always pass", async () => {
@@ -395,4 +402,112 @@ test("14.6 process_review_scope is eks's own: the lead's and bpv's gates refuse 
 	for (const who of ["lead", "bpv", "eks"]) await r.start(who);
 	for (const who of ["lead", "bpv"]) assert.equal((await r.call(who, "process_review_scope"))?.block, true, who);
 	assert.equal((await r.call("eks", "process_review_scope"))?.block, undefined);
+});
+
+// ---- round 1: what eks's status shows, the S6 fix section, lanes, automatic replies --------------------------------------------
+
+const note = (o: Partial<import("../src/core/model.ts").Note> & { id: string }) => ({ type: "question" as const, title: "T", body: "b", refs: [], by: "agent" as const, at: "2026-11-16T10:00:00Z", status: "open" as const, ...o });
+const task = (id: string, from: string, to: string, goal: string, at: string) =>
+	({ id, wave: "w", topic: "tp", from, to, kind: "task", text: goal, refs: [], fromThread: "a", toThread: "b", depth: 1, state: "queued", at, task: { id: `u${id}`, stage: "S5", goal, context: [], expects: "x", iteration: 1 } }) as never;
+
+test("14.6 statusText for eks: only its own questions and the tasks it is a party of; the numbers stay the register's; others see everything", () => {
+	const s = proc({ stage: "S5" });
+	const notes = [
+		note({ id: "n1", title: "Ar jautā par sienu", agent: "ar", to: "bk", at: "2026-11-16T10:00:00Z" }),
+		note({ id: "n2", title: "Eks jautā par kāpnēm", agent: "eks", to: "ar", at: "2026-11-16T10:01:00Z" }),
+	];
+	const open = [task("m1", "bpv", "ar", "Sagatavot sienu sarakstu", "2026-11-16T10:00:00Z"), task("m2", "eks", "ar", "Pārbaudīt kāpnes", "2026-11-16T10:02:00Z")];
+	const eks = statusText(s, { notes, open, now: "x", viewer: "eks" });
+	assert.ok(eks.includes("Eks jautā par kāpnēm") && eks.includes("Pārbaudīt kāpnes"), eks);
+	assert.ok(eks.includes("J-2 ar:"), "numbered over all the questions, as the register does");
+	assert.ok(!eks.includes("Ar jautā par sienu") && !eks.includes("Sagatavot sienu sarakstu"), eks);
+	const ar = statusText(s, { notes, open, now: "x", viewer: "ar" });
+	for (const t of ["Ar jautā par sienu", "Eks jautā par kāpnēm", "Sagatavot sienu sarakstu", "Pārbaudīt kāpnes"]) assert.ok(ar.includes(t), t);
+	assert.equal(statusText(s, { notes, open, now: "x" }), ar, "no viewer: the user's page");
+});
+
+test("14.6 eks's standing text in S5 holds no other agent's question title or task goal; an author's does", async () => {
+	const r = sessionRig();
+	r.stage("S5");
+	r.store.writeNote(note({ id: "n1", title: "Ar jautā par sienu", agent: "ar", to: "bk" }));
+	r.store.writeNote(note({ id: "n2", title: "Eks jautā par kāpnēm", agent: "eks", to: "ar", at: "2026-11-16T10:01:00Z" }));
+	const mb = new Mailbox(mailDir(r.dir, r.dir, "BD999"));
+	const m = (o: { from: string; to: string; goal: string }) => mb.add({ wave: "w", topic: "tp", from: o.from, to: o.to, kind: "task", text: o.goal, refs: [], fromThread: "a", toThread: "b", depth: 1, task: { id: "u", stage: "S5", goal: o.goal, context: [], expects: "x", iteration: 1 } });
+	m({ from: "bpv", to: "ar", goal: "Sagatavot sienu sarakstu" });
+	m({ from: "eks", to: "bk", goal: "Pārbaudīt kāpnes" });
+	await r.start("eks");
+	await r.start("ar");
+	const eks = r.prompts.get("eks")!;
+	assert.ok(eks.includes("Eks jautā par kāpnēm") && eks.includes("Pārbaudīt kāpnes"), "its own are there");
+	assert.ok(!eks.includes("Ar jautā par sienu") && !eks.includes("Sagatavot sienu sarakstu"), "the others' are not");
+	assert.ok(r.prompts.get("ar")!.includes("Ar jautā par sienu") && r.prompts.get("ar")!.includes("Sagatavot sienu sarakstu"));
+});
+
+test("14.6 S6 status: 'Labojamās piezīmes:' lists each H5 fix id as '- id [class] daļa: first 100 characters'; an unknown id and a remark with no class or daļa are said", () => {
+	const long = "Nav norādīts evakuācijas ceļu platums 2. stāva plānā un nav parādīts, kā tas atbilst ugunsdrošības prasībām kāpņu telpā pie ieejas.";
+	const remarks = [{ id: "r1", class: "K", daļa: "AR", quote: "Nav norādīts evakuācijas ceļu platums 2. stāva plānā." }, { id: "r2", daļa: null, quote: `${long}\n  otrā rinda` }];
+	const gate = (fix: string[]) => ({ id: "H5" as const, stage: "S5" as const, iteration: 1, state: "approved" as const, noteId: "n", at: "2026-11-16T10:00:00Z", fix });
+	const s6 = proc({ stage: "S6", gates: [gate(["r1", "r2", "r9"])] });
+	const lines = statusText(s6, { notes: [], open: [], now: "x", remarks }).split("\n");
+	const at = lines.indexOf("Labojamās piezīmes:");
+	assert.ok(at > 0);
+	assert.deepEqual(lines.slice(at + 1), ["- r1 [K] AR: Nav norādīts evakuācijas ceļu platums 2. stāva plānā.", `- r2 [-] -: ${long.slice(0, 100)}`, "- r9 [-] -: (piezīme nav atrasta)"]);
+	// only S6 carries it, and only when H5 sent something
+	for (const p of [proc({ stage: "S5", gates: [gate(["r1"])] }), proc({ stage: "S7", gates: [gate(["r1"])] }), proc({ stage: "S6", gates: [gate([])] })]) assert.ok(!statusText(p, { notes: [], open: [], now: "x", remarks }).includes("Labojamās"), p.stage);
+	// the cut keeps the text under its limit and the heading
+	const many = Array.from({ length: 80 }, (_, i) => `r${i}`);
+	const cut = statusText(proc({ stage: "S6", gates: [gate(many)] }), { notes: [], open: [], now: "x", remarks }, 400);
+	assert.ok(cut.length <= 400 && cut.includes("Labojamās piezīmes:"));
+});
+
+test("14.6 S6: every profile agent's standing text carries the fix remarks from the real remark list", async () => {
+	const r = sessionRig();
+	withSource(r.store);
+	const rem = addRemark(r.store, { sourceId: "s_exp", page: 1, quote: "Eksplikācijā jāpārbauda telpu numuri.", class: "B", daļa: "AR" }, "agent");
+	r.stage("S5");
+	requestGate(r.store, "BD999", "eks", { result: ["Atzinums"], files: [], deviations: "", questions: [], risks: "", decisions: [], next: "S6" });
+	decideGate(r.store, { approve: true, fix: [rem.id] });
+	assert.equal(readProcess(r.store)!.stage, "S6");
+	for (const who of ["bpv", "ar"]) {
+		await r.start(who);
+		const p = r.prompts.get(who)!;
+		assert.ok(p.includes("Labojamās piezīmes:") && p.includes(`- ${rem.id} [B] AR: Eksplikācijā jāpārbauda telpu numuri.`), who);
+	}
+});
+
+test("14.6 a lane started in S4 and still running in S5 is stopped by the same block", async () => {
+	let ran = false;
+	const r = sessionRig(async (who, o) => {
+		if (who !== "lead" || ran) return;
+		ran = true;
+		const delegate = o.extraTools!.find((t) => t.name === "delegate")!;
+		await delegate.execute("d", { jobs: [{ agent: "ar", task: "dari" }] } as never, new AbortController().signal);
+	});
+	await r.start("lead");
+	await r.settle(() => ran);
+	// the lane's run (its prompt names AGENT ar) left its gate in `seen`
+	assert.equal((await r.call("ar", "set_fact"))?.reason, undefined, "S4: the lane writes");
+	r.stage("S5");
+	assert.deepEqual(await r.call("ar", "set_fact"), { block: true, reason: S5 });
+	assert.equal((await r.call("ar", "read_notes"))?.block, undefined, "reading stays");
+});
+
+test("14.6 the coordinator's automatic reply to eks's S5 ask closes eks's question note", async () => {
+	let asked = false;
+	const r = sessionRig(async (who, o) => {
+		if (who !== "eks" || asked) return;
+		asked = true;
+		const send = o.extraTools!.find((t) => t.name === "send_message")!;
+		const out = await send.execute("s", { to: "ar", title: "Evakuācija", kind: "ask", text: "Kur ir otrais ceļš?" } as never, new AbortController().signal);
+		assert.ok(!(out as { isError?: boolean }).isError, text(out as never));
+	});
+	r.stage("S5");
+	await r.start("eks");
+	// ar is woken, finishes without answering; the coordinator answers "daļēji" for it
+	await r.settle(() => r.store.notes("question").some((n) => n.agent === "eks" && n.status === "closed"));
+	const qs = r.store.notes("question").filter((n) => n.agent === "eks");
+	assert.equal(qs.length, 1);
+	assert.deepEqual([qs[0].status, qs[0].stage, qs[0].to], ["closed", "S5", "ar"]);
+	const last = new Mailbox(mailDir(r.dir, r.dir, "BD999")).messages().at(-1)!;
+	assert.deepEqual([last.from, last.to, last.reply?.status], ["ar", "eks", "daļēji"]);
 });

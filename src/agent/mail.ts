@@ -153,6 +153,11 @@ function processLeaderThread(d: MailDeps, topic: Topic): Thread {
 	);
 }
 
+/** Closes the open question notes eks wrote on a topic: the question has its answer (a real reply, or the coordinator's automatic one). */
+export function closeEksQuestions(store: { writeNote(n: Note): void; notes?(type: "question"): Note[] }, topic: string): void {
+	for (const q of store.notes?.("question") ?? []) if (q.agent === EKS && q.topic === topic && q.status === "open") store.writeNote({ ...q, status: "closed" });
+}
+
 /** S5 (14.6): what eks asks an author, and what the author answers, is also in Atmiņa, marked `agent: "eks"` (so eks reads it back and the user sees what was asked). The topic stays open:
  *  this is a record, not a pass-up. A write that fails leaves the mail as it is. */
 function recordEksExchange(d: MailDeps, process: ProcessState | null, m: { from: string; to: string; kind: MessageKind; text: string }, topic: Topic): void {
@@ -164,7 +169,7 @@ function recordEksExchange(d: MailDeps, process: ProcessState | null, m: { from:
 		const store = d.notes?.();
 		if (!store) return;
 		// the answer closes the question it answers, so the status page does not list it as open for ever
-		if (answer) for (const q of store.notes?.("question") ?? []) if (q.agent === EKS && q.topic === topic.id && q.status === "open") store.writeNote({ ...q, status: "closed" });
+		if (answer) closeEksQuestions(store, topic.id);
 		store.writeNote({
 			id: newId("n"), type: "question", title: `${ask ? "Jautājums" : "Atbilde"}: ${topic.title}`, body: m.text, refs: [topic.id], by: "agent", at: new Date().toISOString(),
 			agent: EKS, to: ask ? m.to : EKS, topic: topic.id, status: ask ? "open" : "closed", stage: process.stage,

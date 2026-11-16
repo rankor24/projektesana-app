@@ -18,7 +18,7 @@ import { TOOLS } from "../shared/activity.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import type { RunEvent } from "../shared/types.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
-import { PROCESS_TOOLS_OF, PROCESS_WRITE_TOOLS } from "../core/process-def.js";
+import { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
 import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
@@ -38,7 +38,7 @@ export const SPECIALIST_CAP: Level = "run";
 
 /** The tools a lane may be offered: listed ones whose level is within `cap`, not `never`, never this file's tools. */
 export function laneTools(listed: readonly string[], levelOf: LevelOf, cap: Level, wanted?: readonly string[]): string[] {
-	return listed.filter((n) => !MAIN_TOOLS.has(n) && !PROCESS_WRITE_TOOLS.has(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap] && (!wanted || wanted.includes(n)));
+	return listed.filter((n) => !MAIN_TOOLS.has(n) && !PROCESS_OWN_TOOLS.has(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap] && (!wanted || wanted.includes(n)));
 }
 
 // ---- specialists -------------------------------------------------------------------------------------------------------------
@@ -107,6 +107,8 @@ export interface LaneDeps {
 	/** the tool servers a lane needs for exactly these tool names (none for a server with no allowed tool) */
 	mcpFor(allowed: readonly string[]): Record<string, McpLaunchSpec & { allow: readonly string[] }>;
 	levelOf: LevelOf;
+	/** a call the project's state refuses right now (S5 in process mode, 14.6): the reason, or null; read at each call, so a lane that began before S5 is stopped when it comes */
+	refuse?: (tool: string) => string | null;
 	/** every tool name the main agent was offered */
 	listed: readonly string[];
 	revitTools: ReadonlySet<string>;
@@ -155,6 +157,8 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 	// the lane's own gate: the same levels, but only its tools; a confirm tool cannot be reached (the cap kept them out)
 	const gate = new Gate((n) => (allowed.has(n) ? deps.levelOf(n) : "never"), async () => false);
 	const before = async (ctx: BeforeToolCallContext, sig?: AbortSignal): Promise<BeforeToolCallResult | undefined> => {
+		const refused = deps.refuse?.(ctx.toolCall.name);
+		if (refused) return { block: true, reason: refused };
 		const blocked = await gate.before(ctx);
 		if (blocked) return blocked;
 		const key = lockKeyOf(ctx.toolCall.name, deps.levelOf(ctx.toolCall.name), deps.revitTools);

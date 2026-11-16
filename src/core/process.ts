@@ -3,7 +3,7 @@
 import { EXPERT_META } from "../shared/expert-types.js";
 import type { Message } from "../shared/message-types.js";
 import { type Fact, type Note, type NoteType, type Profile, type Who, newId, profileOf } from "./model.js";
-import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, LEADER, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
+import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, EKS, GATE_OF, LEADER, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
 
 export interface GateRecord {
 	id: GateId;
@@ -484,31 +484,57 @@ function fit(lines: readonly string[], budget: number): string[] {
 	return out;
 }
 
+/** What the expert may read of the notes (14.6): everything but the decisions and questions that are not its own, so it does not hear the authors' side of an argument. */
+export const eksMayRead = (n: { type: string; agent?: string }): boolean => !((n.type === "decision" || n.type === "question") && n.agent !== EKS);
+
+/** The remark fields the S6 section of the status needs. Structural: the remarks live in shared/expert-types.ts. */
+export interface FixRemark {
+	id: string;
+	class?: string;
+	daļa: string | null;
+	quote: string;
+}
+
+/** The ids H5 sent to S6, from the newest approved S5 gate that carried any. */
+const fixIdsOf = (s: ProcessState): string[] => [...s.gates].reverse().find((g) => g.stage === "S5" && g.state === "approved" && g.fix?.length)?.fix ?? [];
+
 /** The most characters the status page takes in an agent's standing text. */
 export const STATUS_MAX = 3000;
+
+/** One fix remark of the S6 section: id, class, daļa and the first 100 characters of its words on one line; an id with no remark is said. */
+function fixLine(id: string, remarks: readonly FixRemark[] | undefined): string {
+	const r = remarks?.find((x) => x.id === id);
+	return r ? `- ${id} [${r.class ?? "-"}] ${r.daļa ?? "-"}: ${oneLine(r.quote).slice(0, 100)}` : `- ${id} [-] -: (piezīme nav atrasta)`;
+}
 
 /** The project's status page, the short text every agent of the process carries (and the file projekta_statuss.md): the stage and its iteration, the gate that waits,
  *  the open questions and the open tasks, newest first. Cut at whole lines to stay under `maxChars`; each of the two lists keeps room for the other, so 200 questions
  *  do not push the tasks out. The text has no time in it (`now` is the caller's, kept in the signature for it): it must not change between two runs that saw the same work. */
-export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: readonly Message[]; now: string }, maxChars = STATUS_MAX): string {
+export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: readonly Message[]; now: string; viewer?: string; remarks?: readonly FixRemark[] }, maxChars = STATUS_MAX): string {
 	const head = [s.stage === "mācības" || s.stage === "done" ? `Stadija ${s.stage}` : `Stadija ${s.stage} (iterācija ${s.iteration[s.stage] + 1} no ${MAX_ITERATIONS})`];
 	const gate = [...s.gates].reverse().find((g) => g.state === "waiting");
 	if (gate) head.push(`Gaida gate ${gate.id}: lēmums cilvēkam.`);
 
 	const numbered = new Map(inTime(i.notes, "question").map((n, k) => [n.id, k + 1]));
+	// numbered over every question (the J- numbers are the register's), listed only what the viewer may read: the expert sees its own questions and its own tasks or those it is a party of
 	const questions = [...i.notes]
-		.filter((n) => n.type === "question" && n.status !== "closed")
+		.filter((n) => n.type === "question" && n.status !== "closed" && (i.viewer !== EKS || eksMayRead(n)))
 		.sort((a, b) => byTime(b, a))
 		.map((n) => `- ${idOf("J", numbered.get(n.id) ?? 0)} ${n.to || "-"}: ${oneLine(n.title)}`);
-	const tasks = [...i.open].sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).map((m) => `- ${m.id} → ${m.to}: ${oneLine(m.task?.goal ?? m.text)}`);
+	const tasks = [...i.open].filter((m) => i.viewer !== EKS || m.from === EKS || m.to === EKS).sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).map((m) => `- ${m.id} → ${m.to}: ${oneLine(m.task?.goal ?? m.text)}`);
 
 	// each line costs its length and a newline, so a total cost within maxChars leaves the text one character short of it. The headings are always there;
 	// each list takes what it needs of what is left, but never more than the half the other one leaves it
 	const cost = (xs: readonly string[]) => xs.reduce((n, l) => n + l.length + 1, 0);
 	const qHead = questions.length ? "Atvērtie jautājumi:" : "Atvērtie jautājumi: nav";
 	const tHead = tasks.length ? "Atvērtie uzdevumi:" : "Atvērtie uzdevumi: nav";
-	const left = maxChars - cost(head) - cost([qHead, tHead]);
-	const tasksShare = Math.min(cost(tasks), Math.floor(left / 2));
-	const questionsShare = Math.min(cost(questions), left - tasksShare);
-	return [...head, qHead, ...fit(questions, questionsShare), tHead, ...fit(tasks, left - questionsShare)].join("\n");
+	// S6 carries the remarks H5 sent to be fixed (R41), so bpv can task them and the authors see them; it keeps up to a third of the room
+	const fixes = s.stage === "S6" ? fixIdsOf(s).map((id) => fixLine(id, i.remarks)) : [];
+	const fHead = "Labojamās piezīmes:";
+	const left = maxChars - cost(head) - cost([qHead, tHead]) - (fixes.length ? cost([fHead]) : 0);
+	const fixShare = Math.min(cost(fixes), Math.floor(left / 3));
+	const rest = left - fixShare;
+	const tasksShare = Math.min(cost(tasks), Math.floor(rest / 2));
+	const questionsShare = Math.min(cost(questions), rest - tasksShare);
+	return [...head, qHead, ...fit(questions, questionsShare), tHead, ...fit(tasks, rest - questionsShare), ...(fixes.length ? [fHead, ...fit(fixes, fixShare)] : [])].join("\n");
 }

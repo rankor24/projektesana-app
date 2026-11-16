@@ -6,6 +6,7 @@ import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, ty
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { answered, inboxOf, limitsOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
+import { EKS } from "../core/process-def.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, waveCheck, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -38,6 +39,8 @@ export interface CoordinatorDeps {
 	gates?: () => Extract<WaitingItem, { kind: "gate" }>[];
 	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
 	mail?: (projectId: string | null) => Mailbox;
+	/** an answer was written for eks without eks being able to hear a real one (a run that ended, a recipient that could not run): its open question note on the topic closes (14.6) */
+	eksAnswered?: (projectId: string | null, topic: string) => void;
 	now?: () => string;
 }
 
@@ -535,6 +538,7 @@ export class Coordinator {
 						reply: { id: `a${m.id}`, status: "bloķēts", results: [], questions: [], decisions: [], risks: reason },
 					});
 					if (state === "stopped") mb.setState(r.id, "stopped");
+					if (m.from === EKS) this.d.eksAnswered?.(projectId, m.topic);
 				}
 				if (m.state === "queued") mb.setState(m.id, state === "stopped" ? "stopped" : "failed");
 			}
@@ -563,6 +567,7 @@ export class Coordinator {
 					wave: m.wave, topic: m.topic, from: m.to, to: m.from, kind: "reply", text, refs: [], fromThread: m.toThread, toThread: m.fromThread, depth: m.depth + 1,
 					reply: { id: `a${m.id}`, status: "daļēji", results: [text], questions: [], decisions: [], risks: "Atbilde ir aģenta gājiena beigu teksts: ziņu viņš neatsūtīja." },
 				});
+				if (m.from === EKS) this.d.eksAnswered?.(projectId, m.topic);
 			}
 		} catch {
 			// a locked file: the sender can be told by the next run

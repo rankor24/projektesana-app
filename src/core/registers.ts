@@ -4,7 +4,8 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Mailbox, openTasks } from "./messages.js";
-import { type ProcessState, decisionLog, noteLog, questionLog, statusText } from "./process.js";
+import { EXPERT_META } from "../shared/expert-types.js";
+import { type FixRemark, type ProcessState, decisionLog, noteLog, questionLog, statusText } from "./process.js";
 import { checkWrite } from "./guard.js";
 import type { ProjectStore } from "./store.js";
 
@@ -33,7 +34,7 @@ export function exportRegisters(store: ProjectStore, dir: string, s: ProcessStat
 			"izmainu_zurnals.md",
 			`${section("Izmaiņu žurnāls", noteLog(notes, "change"))}\n## Procesa profila izmaiņas\n\n${s.profile.changes.length ? s.profile.changes.map((c) => `- ${c.at.slice(0, 10)} ${c.what} (${c.why})`).join("\n") : "nav"}\n`,
 		],
-		["projekta_statuss.md", `${statusText(s, { notes, open, now: new Date().toISOString() })}\n`],
+		["projekta_statuss.md", `${statusText(s, { notes, open, now: new Date().toISOString(), remarks: store.readMeta<FixRemark[]>(EXPERT_META, []) })}\n`],
 	];
 	const latest = new Map<string, string>();
 	for (const g of s.gates) {

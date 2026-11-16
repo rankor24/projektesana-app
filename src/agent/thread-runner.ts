@@ -20,7 +20,8 @@ import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
 import { declarationTokens } from "./declarations.js";
 import { listSkills, officeSkillsDir } from "./skills.js";
-import { readProcess, statusText } from "../core/process.js";
+import { type FixRemark, readProcess, statusText } from "../core/process.js";
+import { EXPERT_META } from "../shared/expert-types.js";
 import { ProjectStore } from "../core/store.js";
 import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { ThreadStore } from "../core/threads.js";
@@ -31,7 +32,7 @@ import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
-import { EKS, LEADER, PROCESS_WRITE_TOOLS, stageCard } from "../core/process-def.js";
+import { EKS, LEADER, PROCESS_OWN_TOOLS, stageCard } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
@@ -129,7 +130,7 @@ export class ThreadRunner {
 			const p = readProcess(store);
 			if (!p || p.mode !== "process" || !p.profile.agents.includes(agent)) return {};
 			const open = openTasks(this.d.mail?.(projectId).messages() ?? []);
-			const status = statusText(p, { notes: store.notes(), open, now: new Date().toISOString() });
+			const status = statusText(p, { notes: store.notes(), open, now: new Date().toISOString(), viewer: agent, remarks: store.readMeta<FixRemark[]>(EXPERT_META, []) });
 			return { status, ...(p.stage !== "mācības" && p.stage !== "done" && LEADER[p.stage] === agent ? { processCard: stageCard(p.stage) } : {}) };
 		} catch {
 			return {};
@@ -244,11 +245,11 @@ export class ThreadRunner {
 					const theirs = [...own].filter((n) => revitTools.has(n));
 					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs };
 				} else {
-					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf).filter((n) => !PROCESS_WRITE_TOOLS.has(n)) };
+					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf).filter((n) => !PROCESS_OWN_TOOLS.has(n)) };
 					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
 				}
 
-				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : (n) => (PROCESS_WRITE_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
+				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : (n) => (PROCESS_OWN_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
@@ -289,11 +290,14 @@ export class ThreadRunner {
 						return false;
 					}
 				};
-				const beforeToolCall: NonNullable<Parameters<typeof runPi>[0]["beforeToolCall"]> = async (ctx, sig) => {
-					const name = ctx.toolCall.name;
+				// cheap tests first: only a write call of an agent other than eks reads the process file. The lanes of this run use it too: one started in S4 may still be running in S5
+				const s5Refusal = (name: string): string | null => {
 					const level = levelOf(name);
-					// cheap tests first: only a write call of an agent other than eks reads the process file
-					if (agentId !== EKS && level !== "never" && LEVEL_RANK[level] >= LEVEL_RANK.propose && !S5_OPEN(name) && inS5()) return { block: true, reason: S5_BLOCK };
+					return agentId !== EKS && level !== "never" && LEVEL_RANK[level] >= LEVEL_RANK.propose && !S5_OPEN(name) && inS5() ? S5_BLOCK : null;
+				};
+				const beforeToolCall: NonNullable<Parameters<typeof runPi>[0]["beforeToolCall"]> = async (ctx, sig) => {
+					const refused = s5Refusal(ctx.toolCall.name);
+					if (refused) return { block: true, reason: refused };
 					const blocked = await gate.before(ctx);
 					if (blocked) return blocked;
 					// run_subagent / delegate only start lanes; the lanes take the locks their writes need
@@ -375,6 +379,7 @@ export class ThreadRunner {
 							return m;
 						},
 						levelOf,
+						refuse: s5Refusal,
 						listed,
 						revitTools,
 						locks: locks.forProject(projectId),

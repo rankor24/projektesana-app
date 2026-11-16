@@ -4,7 +4,7 @@ import { z } from "zod";
 import { proposeFact } from "../../core/facts.js";
 import { newId, profileOf, type Note, type NoteType } from "../../core/model.js";
 import { OfficeMemory } from "../../core/office-memory.js";
-import { readProcess } from "../../core/process.js";
+import { eksMayRead, readProcess } from "../../core/process.js";
 import { EKS } from "../../core/process-def.js";
 import { Library } from "../../rules/library.js";
 import { EXTRACTION_PROMPT, extractFor } from "../../sources/extract/index.js";
@@ -23,7 +23,7 @@ function processStage(ctx: ToolCtx): string | undefined {
 
 /** In process mode the expert reads what is not the authors' working agreements: no decision or question note that is not its own (it must not hear their side of the argument). */
 function hiddenFromEks(ctx: ToolCtx, n: { type: string; agent?: string }): boolean {
-	return ctx.agent === EKS && (n.type === "decision" || n.type === "question") && n.agent !== EKS && !!ctx.projectId && readProcess(storeOf(ctx))?.mode === "process";
+	return ctx.agent === EKS && !eksMayRead(n) && !!ctx.projectId && readProcess(storeOf(ctx))?.mode === "process";
 }
 
 /** "1-3,5" → [1,2,3,5]; empty → all. */

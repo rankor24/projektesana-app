@@ -20,6 +20,8 @@ import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
 import { waitingQuestions } from "../core/notes.js";
 import { waitingGates } from "../core/process-waiting.js";
+import { ProjectStore } from "../core/store.js";
+import { closeEksQuestions } from "./mail.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
@@ -74,7 +76,17 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir) });
+	}
+
+	/** The coordinator answered eks's ask for the recipient: the question note closes. A project that cannot be read has no note to close. */
+	private eksAnswered(projectId: string | null, topic: string): void {
+		if (!projectId) return;
+		try {
+			closeEksQuestions(ProjectStore.load(this.d.ctx.projectsDir, projectId), topic);
+		} catch {
+			// the mail is written; the note stays open until the next answer
+		}
 	}
 
 	/** A project's mailbox (it reads the disk on every call, so one handle per project is enough). */
