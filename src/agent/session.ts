@@ -23,7 +23,7 @@ import { waitingGates } from "../core/process-waiting.js";
 import { ProjectStore } from "../core/store.js";
 import { closeEksQuestions } from "./mail.js";
 import { LockRegistry } from "./locks.js";
-import { Coordinator } from "./coordinator.js";
+import { Coordinator, type SystemPost } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
 
 export interface ToolServer extends McpLaunchSpec {
@@ -309,6 +309,11 @@ export class AgentSession {
 	/** A question for the user was written or closed (an agent's `close_topic`, the user's button) or a gate was decided: "Gaida tevi" is told. */
 	notesChanged(): void {
 		this.coordinator.notesChanged();
+	}
+
+	/** Messages the app writes between agents (a client change for bpv, the learning round): into the project's mailbox, the recipients woken as for any mail (14.7). Returns what was written. */
+	postSystem(projectId: string | null, items: readonly SystemPost[], o?: { once?: boolean }): { to: string }[] {
+		return this.coordinator.postSystem(projectId, items, o);
 	}
 
 	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */

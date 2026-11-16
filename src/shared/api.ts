@@ -512,6 +512,12 @@ export interface ApiSpec {
 	"process.gate": (projectId: string, d: { approve: boolean; comment?: string; fix?: string[] }) => ProcessState;
 	/** Writes the decision, question, risk and change registers, the status page and one file per gate into <project data>\export\00_vadiba (never the office folder); returns the paths. */
 	"process.export": (projectId: string) => string[];
+	/** The user records a change the client asked for (process mode): a `change` note at the stage that is on, and bpv is asked to judge its impact (process_change_impact). Refused in co-work. */
+	"process.change": (projectId: string, text: string) => Note;
+	/** After H7 (stage mācības): every agent of the profile is given one task, to write the project's lessons to the office memory as proposals. Returns the agents asked. Refused before H7. */
+	"process.learn": (projectId: string) => { asked: string[] };
+	/** "Pabeigt": the user has gone through the lessons; mācības → done. */
+	"process.finish": (projectId: string) => ProcessState;
 	"deliveries.openStaging": (id: string, deliveryId: string) => void;
 	/** Where "Kopēt uz 1.4_Nodevumi" would write and what stops it now (7.6). */
 	"deliveries.copyPlan": (id: string, deliveryId: string) => CopyPlan;
@@ -717,6 +723,9 @@ export const API_NAMES = [
 	"process.setProfile",
 	"process.gate",
 	"process.export",
+	"process.change",
+	"process.learn",
+	"process.finish",
 	"deliveries.openStaging",
 	"deliveries.copyPlan",
 	"deliveries.copy",

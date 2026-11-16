@@ -167,6 +167,9 @@ export function step(s: ProcessState, e: ProcessEvent): StepResult {
 				}
 				n.stage = "S3";
 				n.reviewed = false;
+				// S4 is left, so its escalation (a limit the user had to settle) no longer holds; the returns it counted stay in `iteration`, as history:
+				// the next time S4 is reached it still knows how many passes it had (the limit counts the passes of a stage, not of an approach)
+				if (n.escalated === "S4") n.escalated = null;
 			}
 			return { ok: true, state: n };
 		}
@@ -194,8 +197,9 @@ export const PROCESS_META = "process";
 
 export const readProcess = (store: ProcessStore): ProcessState | null => store.readMeta<ProcessState | null>(PROCESS_META, null);
 
-/** `what` names the change in the log: "process.mode", "process.profile", "process.gate" (a request or the user's decision), "process.skip" or "process.review". */
-export function writeProcess(store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" | "gate" | "skip" | "review" = "mode", expect?: { was: ProcessState | null }): void {
+/** `what` names the change in the log: "process.mode", "process.profile", "process.gate" (a request or the user's decision), "process.skip", "process.review",
+ *  "process.change" (a client change judged) or "process.learned" (the user closes the learning round). */
+export function writeProcess(store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" | "gate" | "skip" | "review" | "change" | "learned" = "mode", expect?: { was: ProcessState | null }): void {
 	if (expect) checkUnchanged(store, expect.was);
 	store.writeMeta(PROCESS_META, s, { kind: `process.${what}`, by });
 }
@@ -418,6 +422,72 @@ export function recordReview(store: ProcessStore, by: Who, now = new Date()): Pr
 	return r.state;
 }
 
+// ---- changes and learning (task 14.7) -----------------------------------------------------------------------------------------
+
+/** The user records a change the client asked for: a `change` note by the user at the stage that is on. Process mode only. Returns the note; the caller tells bpv. */
+export function recordClientChange(store: GateStore, text: string, now = new Date()): Note {
+	const cur = readProcess(store);
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	// after H7 no stage is left to send back: the judgement would be refused, so the change is too
+	if (cur.stage === "done") throw new Error("Process ir pabeigts.");
+	if (cur.stage === "mācības") throw new Error("Visas stadijas ir pabeigtas; atliek mācības.");
+	const body = (text ?? "").trim();
+	if (!body) throw new Error("Izmaiņas teksts ir tukšs.");
+	const note: Note = { id: newId("n"), type: "change", title: "Klienta izmaiņa", body, refs: [], by: "user", at: now.toISOString(), stage: cur.stage };
+	store.writeNote(note);
+	return note;
+}
+
+/** What bpv hands over when it has judged a change: the note, whether the basic solution changes, which sections it touches and why it thinks so. */
+export interface ChangeImpact {
+	noteId: string;
+	basic: boolean;
+	sections: string[];
+	note: string;
+}
+
+/** bpv's judgement of a client change (the tool of `bpv`): applies the `change` event (a basic change in S4 goes back to S3), logs it in the profile changes (so the next
+ *  gate summary lists it under "Atkāpes no profila") and adds the assessment to the change note as a new version of it. A change is judged once: the second judgement of the
+ *  same note would send a stage back that has been done again since. An agent cannot judge while the stage waits for the user (R36): the judgement could clear the escalation. */
+export function assessChange(store: GateStore, a: ChangeImpact, by: Who, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	const why = (a.note ?? "").trim();
+	if (!why) throw new Error("Ietekmes vērtējumam vajag pamatojumu.");
+	if (typeof a.basic !== "boolean") throw new Error("Norādi, vai mainās pamata risinājums.");
+	const sections = (Array.isArray(a.sections) ? a.sections : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim());
+	const change = store.notes().find((n) => n.id === a.noteId && n.type === "change");
+	if (!change) throw new Error(`Izmaiņas piezīme ${a.noteId} nav atrasta.`);
+	if (by === "agent" && cur.escalated !== null) throw new Error(`Stadija ${cur.escalated} gaida cilvēka lēmumu.`);
+	const label = `Klienta izmaiņa ${change.id}:`;
+	if (cur.profile.changes.some((c) => c.what.startsWith(label))) throw new Error("Šī izmaiņa jau ir novērtēta.");
+	const at = now.toISOString();
+	const r = step(cur, { type: "change", basic: a.basic, at });
+	if (!r.ok) throw new Error(r.error);
+	const words = a.basic ? "pamata risinājums mainās" : "pamata risinājums nemainās";
+	r.state.profile.changes.push({ at, what: `${label} ${words}; sadaļas: ${sections.join(", ") || "nav"}`, why });
+	writeProcess(store, r.state, by, "change", { was: cur });
+	store.writeNote({ ...change, body: `${change.body}\n\nIetekme ${at.slice(0, 10)}: ${words}. Sadaļas: ${sections.join(", ") || "nav"}. ${why}` });
+	return r.state;
+}
+
+/** The user closes the learning round ("Pabeigt"): `learned`, mācības → done. */
+export function finishLearning(store: ProcessStore, by: Who, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	const r = step(cur, { type: "learned", at: now.toISOString() });
+	if (!r.ok) throw new Error(r.error);
+	writeProcess(store, r.state, by, "learned", { was: cur });
+	return r.state;
+}
+
+/** Why `process.learn` is refused now, or null when the learning round may be asked for. */
+export function learnRefusal(s: ProcessState | null): string | null {
+	if (!s || s.mode !== "process") return "Procesa režīms nav ieslēgts.";
+	if (s.stage === "done") return "Process ir pabeigts.";
+	return s.stage === "mācības" ? null : "Mācības sākas pēc H7.";
+}
+
 // ---- the status page and the registers (task 14.5) ----------------------------------------------------------------------------
 
 const byTime = (a: Note, b: Note) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
@@ -484,8 +554,15 @@ function fit(lines: readonly string[], budget: number): string[] {
 	return out;
 }
 
-/** What the expert may read of the notes (14.6): everything but the decisions and questions that are not its own, so it does not hear the authors' side of an argument. */
-export const eksMayRead = (n: { type: string; agent?: string }): boolean => !((n.type === "decision" || n.type === "question") && n.agent !== EKS);
+/** What the expert may read of the notes (14.6, 14.7): everything but the decisions, questions, gate summaries and answers that are not its own, so it does not hear
+ *  the authors' side of an argument or what the user was told and answered. */
+const EKS_HIDDEN: readonly string[] = ["decision", "question", "gate", "answer"];
+export const eksMayRead = (n: { type: string; agent?: string }): boolean => !(EKS_HIDDEN.includes(n.type) && n.agent !== EKS);
+
+/** The process state as eks may see it: the user's comments on gates (the reason for a return, a word with an approval) are left out, like the notes they belong to. */
+export function stateForEks(s: ProcessState): ProcessState {
+	return { ...s, gates: s.gates.map(({ comment: _comment, ...g }) => g) };
+}
 
 /** The remark fields the S6 section of the status needs. Structural: the remarks live in shared/expert-types.ts. */
 export interface FixRemark {

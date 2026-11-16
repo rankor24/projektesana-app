@@ -191,7 +191,7 @@ test("14.6 write_note stamps the stage in process mode; in cowork, no stage", as
 	assert.equal(none.store.notes("learning")[0].stage, undefined);
 });
 
-test("14.6 read_notes: eks in process mode reads no decision or question that is not its own; others read everything", async () => {
+test("14.6 read_notes: eks in process mode reads no decision, question or answer that is not its own; others read everything", async () => {
 	const p = toolRig({ process: "process", stage: "S5" });
 	const mk = (type: "decision" | "question" | "learning" | "answer", agent: string | undefined, title: string) =>
 		p.store.writeNote({ id: `n_${title}`, type, title, body: "teksts", refs: [], by: "agent", at: "2026-11-16T10:00:00Z", ...(agent ? { agent } : {}) });
@@ -204,7 +204,8 @@ test("14.6 read_notes: eks in process mode reads no decision or question that is
 		const r = (await p.call(agent, "read_notes", a)) as string | { title: string }[];
 		return typeof r === "string" ? [] : r.map((n) => n.title).sort();
 	};
-	assert.deepEqual(await titles("eks"), ["Eks jautā", "Lietotāja atbilde", "Mācība"]);
+	// the user's answer note is hidden too since 14.7 (R42)
+	assert.deepEqual(await titles("eks"), ["Eks jautā", "Mācība"]);
 	assert.deepEqual(await titles("eks", { type: "decision" }), [], "asking for the type directly changes nothing");
 	assert.deepEqual(await titles("ar"), ["Eks jautā", "Jautājums ar bk", "Lietotāja atbilde", "Mācība", "Vienošanās ar bk"]);
 	// not in process mode: eks reads like anyone

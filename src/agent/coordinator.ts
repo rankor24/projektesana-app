@@ -58,6 +58,17 @@ interface Live {
 	silent?: boolean;
 }
 
+/** A message the app itself sends between two agents (`Coordinator.postSystem`). */
+export interface SystemPost {
+	from: string;
+	to: string;
+	kind: "task" | "ask";
+	/** the topic's title */
+	title: string;
+	text: string;
+	refs?: string[];
+}
+
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
 const NO_FILES = "[pielikumi pēc restartēšanas netika saglabāti]";
 
@@ -572,6 +583,38 @@ export class Coordinator {
 		} catch {
 			// a locked file: the sender can be told by the next run
 		}
+	}
+
+	/** System messages (14.7: a client change for bpv, the learning round): written straight into the project's mailbox, each on a topic of its own between the two parties,
+	 *  with no send rules and no part in any exchange count, like the "Nodots" notice. All of one call share a wave. The recipient gets a thread on the topic and is woken as for any mail.
+	 *  `once`: an item whose title is already open between the same two (a task or ask nobody has answered, not failed or stopped) is left out, so a double click asks once.
+	 *  Returns the messages written. */
+	postSystem(projectId: string | null, items: readonly SystemPost[], o: { once?: boolean } = {}): Message[] {
+		const mb = this.d.mail?.(projectId);
+		if (!mb) throw new Error("Pasta kaste nav pieejama.");
+		const threads = this.d.threads(projectId);
+		const wave = this.newWave();
+		const out: Message[] = [];
+		// the sender's side: the lead's open thread, else the agent's newest open one, else one made for it
+		const senderThread = (agent: string, title: string): Thread => (agent === LEAD_ID ? threads.lead(projectId, "") : (threads.list({ agent, open: true })[0] ?? threads.create({ projectId, agent, title, startedBy: "app" })));
+		try {
+			for (const it of items) {
+				if (o.once) {
+					const all = mb.messages();
+					const live = all.some((m) => m.from === it.from && m.to === it.to && (m.kind === "task" || m.kind === "ask") && m.state !== "failed" && m.state !== "stopped" && mb.topics().some((t) => t.id === m.topic && t.title === it.title) && !answered(m, all));
+					if (live) continue;
+				}
+				const topic = mb.openTopic({ title: it.title, parties: [it.from, it.to], parent: null });
+				const from = senderThread(it.from, it.title);
+				const to = threads.create({ projectId, agent: it.to, title: it.title, topic: topic.id, startedBy: it.from });
+				this.d.onThread?.(to);
+				out.push(mb.add({ wave, topic: topic.id, from: it.from, to: it.to, kind: it.kind, text: it.text, refs: it.refs ?? [], fromThread: from.id, toThread: to.id, depth: 1 }));
+			}
+		} finally {
+			// what was written is woken for, also when a later item failed
+			if (out.length) this.wake(projectId);
+		}
+		return out;
 	}
 
 	/** Starts a run for every thread of the project that has mail to read and no answer it still waits for (`shouldWake`), unless it is running or queued.

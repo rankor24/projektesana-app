@@ -3,8 +3,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { type ProcessState, type ProfilePatch, changeProfile, readProcess, recordReview, requestGate, reviewScope, skipStage } from "../../core/process.js";
-import { STAGE_CARD } from "../../core/process-def.js";
+import { type ProcessState, type ProfilePatch, assessChange, changeProfile, readProcess, recordReview, requestGate, reviewScope, skipStage, stateForEks } from "../../core/process.js";
+import { EKS, STAGE_CARD } from "../../core/process-def.js";
 import { activeDraft } from "../../sources/staging.js";
 import { type ToolCtx, storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
@@ -39,7 +39,8 @@ export const processTools: ToolDef[] = [
 		run: (ctx) => {
 			const s = readProcess(storeOf(ctx));
 			if (!s) return OFF;
-			return { state: s, card: s.stage === "mācības" || s.stage === "done" ? null : STAGE_CARD[s.stage] };
+			// the expert is independent: it does not read what the user said about a gate
+				return { state: ctx.agent === EKS ? stateForEks(s) : s, card: s.stage === "mācības" || s.stage === "done" ? null : STAGE_CARD[s.stage] };
 		},
 	}),
 	tool({
@@ -77,6 +78,18 @@ export const processTools: ToolDef[] = [
 			// the same function as the user's: the reason, bpv, S6 and S7 are checked there
 			const r = changeProfile(storeOf(ctx), a as ProfilePatch, existingAgents(ctx), "agent");
 			return { ok: true, profile: r.profile };
+		},
+	}),
+	tool({
+		name: "process_change_impact",
+		level: "run",
+		description: "Judge a client change note (bpv only): basic = the basic solution changes (S4 goes back to S3), sections it touches, note = why.",
+		input: { noteId: z.string(), basic: z.boolean(), sections: z.array(z.string()), note: z.string() },
+		run: (ctx, a) => {
+			active(ctx);
+			if (ctx.agent !== "bpv") throw new Error("Tikai bpv var novērtēt izmaiņas ietekmi.");
+			const r = assessChange(storeOf(ctx), a, "agent");
+			return { ok: true, stage: r.stage, message: a.basic && r.stage === "S3" ? "Pamata risinājums mainās: process atgriezts uz S3." : "Ietekme ierakstīta." };
 		},
 	}),
 	tool({

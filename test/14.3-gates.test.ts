@@ -190,13 +190,13 @@ test("14.3 H5 approval carries the remarks to fix into the decision line", async
 
 // ---- no tool passes a gate ---------------------------------------------------------------------------------------------------
 
-test("14.3 the process tools are the six named ones; none is named for approving, and no tool of any group can pass a gate", async () => {
+test("14.3 the process tools are the seven named ones; none is named for approving, and no tool of any group can pass a gate", async () => {
 	const names = allTools().map((t) => t.name);
-	assert.deepEqual(names.filter((n) => n.startsWith("process_")).sort(), ["process_request_gate", "process_review_done", "process_review_scope", "process_set_profile", "process_skip_stage", "process_status"]);
+	assert.deepEqual(names.filter((n) => n.startsWith("process_")).sort(), ["process_change_impact", "process_request_gate", "process_review_done", "process_review_scope", "process_set_profile", "process_skip_stage", "process_status"]);
 	assert.deepEqual(names.filter((n) => /gate|approve|return/.test(n)), ["process_request_gate"]);
 	const level = (n: string) => allTools().find((t) => t.name === n)!.level;
 	for (const n of ["process_status", "process_review_scope"]) assert.equal(level(n), "read");
-	for (const n of ["process_request_gate", "process_skip_stage", "process_set_profile", "process_review_done"]) assert.equal(level(n), "run");
+	for (const n of ["process_request_gate", "process_skip_stage", "process_set_profile", "process_review_done", "process_change_impact"]) assert.equal(level(n), "run");
 });
 
 test("14.3 every process tool run by every agent against a waiting gate leaves it waiting, in every stage that has a gate", async () => {
@@ -369,9 +369,9 @@ test("14.3 through a session: a process tool's result tells the window; the gate
 
 // ---- who is offered the write tools (R35) -------------------------------------------------------------------------------------
 
-const WRITE = ["process_request_gate", "process_skip_stage", "process_set_profile", "process_review_done"];
+const WRITE = ["process_request_gate", "process_skip_stage", "process_set_profile", "process_review_done", "process_change_impact"];
 
-test("14.3 offering: the lead gets no write-level process tool, bpv its three, eks its three (two writes and the 10% read), any other specialist none; process_status is the lead's like any read tool", async () => {
+test("14.3 offering: the lead gets no write-level process tool, bpv its four (14.7: and the change judgement), eks its three (two writes and the 10% read), any other specialist none; process_status is the lead's like any read tool", async () => {
 	const dir = tmp();
 	mkdirSync(join(dir, "chat"), { recursive: true });
 	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
@@ -398,11 +398,11 @@ test("14.3 offering: the lead gets no write-level process tool, bpv its three, e
 	}
 	const tools = (who: string) => seen.get(who)!.allow.filter((n) => n.startsWith("process_")).sort();
 	assert.deepEqual(tools("lead"), ["process_status"], "the lead keeps the read tool only");
-	assert.deepEqual(tools("bpv"), ["process_request_gate", "process_set_profile", "process_skip_stage", "process_status"]);
+	assert.deepEqual(tools("bpv"), ["process_change_impact", "process_request_gate", "process_set_profile", "process_skip_stage", "process_status"]);
 	assert.deepEqual(tools("eks"), ["process_request_gate", "process_review_done", "process_review_scope", "process_status"]);
 	assert.deepEqual(tools("ar"), ["process_status"]);
 	// the gate agrees with the allow list: a call the list does not offer is refused before it runs
-	for (const [who, own] of [["lead", []], ["bpv", ["process_request_gate", "process_skip_stage", "process_set_profile"]], ["eks", ["process_request_gate", "process_review_done"]], ["ar", []]] as const) {
+	for (const [who, own] of [["lead", []], ["bpv", ["process_request_gate", "process_skip_stage", "process_set_profile", "process_change_impact"]], ["eks", ["process_request_gate", "process_review_done"]], ["ar", []]] as const) {
 		// only the refusals are called: an allowed write would take the project's write lock, which this scripted run never frees
 		for (const n of WRITE.filter((x) => !(own as readonly string[]).includes(x))) {
 			const r = (await seen.get(who)!.gate(n)) as { block?: boolean } | undefined;
@@ -427,7 +427,7 @@ test("14.3 offering: a delegate lane of bpv or eks never gets the write tools; t
 	assert.ok(declarationTokens(spec("eks")) > declarationTokens(spec("ar")));
 });
 
-test("14.3 validateSpec refuses a spec that lists one of the four write tools: they come to bpv and eks by themselves", async () => {
+test("14.3 validateSpec refuses a spec that lists one of the own process write tools: they come to bpv and eks by themselves", async () => {
 	const { validateSpec } = await import("../src/agent/agents.ts");
 	const { MAIN_TOOL_LEVELS } = await import("../src/agent/subagents.ts");
 	const { appLevels } = await import("../src/agent/tools/defs.ts");
