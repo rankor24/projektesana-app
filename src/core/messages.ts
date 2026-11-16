@@ -1,6 +1,6 @@
 // Messages between agents: the shapes, the send rules (pure) and a small on-disk mailbox.
 // Nothing here runs an agent; delivery and waking are the coordinator's job (task 12.2).
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
@@ -147,6 +147,51 @@ export function renderReply(r: ReplyEnvelope): string {
 	].join("\n");
 }
 
+/** Where a project's mail lives: inside the project's data folder; with no project, under the app's data folder. */
+export function mailDir(appDir: string, projectsDir: string, projectId: string | null): string {
+	return projectId ? join(projectsDir, projectId, "mail") : join(appDir, "mail", "_");
+}
+
+/** The depth of a run a message starts: the deepest of the messages it reads (a message already counts its hop). A run the user starts has depth 0. */
+export function runDepth(ids: readonly string[], ms: readonly Message[]): number {
+	return Math.max(0, ...ms.filter((m) => ids.includes(m.id)).map((m) => m.depth));
+}
+
+/** The thread of `agent` that is on this topic, read from the mail itself: the newest message of the topic that `agent` sent or got names it.
+ *  A thread the user began has no `topic` of its own, so the thread's own field is not enough to find it again. */
+export function threadOnTopic(topicId: string, agent: string, ms: readonly Message[]): string | null {
+	for (let i = ms.length - 1; i >= 0; i--) {
+		const m = ms[i];
+		if (m.topic !== topicId) continue;
+		if (m.from === agent) return m.fromThread;
+		if (m.to === agent) return m.toThread;
+	}
+	return null;
+}
+
+/** The open topics a thread takes part in, for the line every run's prompt carries (a compacted thread must still know them). */
+export function openTopicsOf(thread: { id: string; topic: string | null }, topics: readonly Topic[], ms: readonly Message[]): Topic[] {
+	return topics.filter((t) => t.state === "open" && (t.id === thread.topic || ms.some((m) => m.topic === t.id && (m.fromThread === thread.id || m.toThread === thread.id))));
+}
+
+export function topicsLine(open: readonly Topic[]): string {
+	return open.length ? `Atvērti temati šajā sarunā: ${open.map((t) => `${t.id} «${t.title}»`).join("; ")}.` : "";
+}
+
+/** The text of a run a message starts: every message in order, headed with who wrote it, on what topic, of what kind. */
+export function deliveryText(inbox: readonly Message[], topics: readonly Topic[]): string {
+	return inbox
+		.map((m) => {
+			const head = `[no ${m.from} · ${topics.find((t) => t.id === m.topic)?.title ?? m.topic} · ${m.kind}]`;
+			// the envelope when there is one; the free text beside it only if the envelope does not already say it
+			const env = [m.task ? renderTask(m.task, m.to) : "", m.reply ? renderReply(m.reply) : ""].filter(Boolean).join("\n");
+			const text = m.text.trim();
+			const body = env ? (text && !env.includes(text) ? `${env}\n${text}` : env) : text;
+			return `${head}\n${body}`;
+		})
+		.join("\n\n");
+}
+
 function atomicWrite(file: string, body: string) {
 	const tmp = `${file}.${process.pid}.tmp`;
 	writeFileSync(tmp, body);
@@ -179,13 +224,20 @@ export class Mailbox {
 		return join(this.dir, "topics.json");
 	}
 
-	topics(): Topic[] {
+	/** A file that is missing is no topics; one that cannot be read as a list is `damaged` (and no topics) until `writeTopics` has kept a copy of it. */
+	private readTopics(): { topics: Topic[]; damaged: boolean } {
+		if (!existsSync(this.topicsFile)) return { topics: [], damaged: false };
 		try {
 			const raw: unknown = JSON.parse(readFileSync(this.topicsFile, "utf8"));
-			return Array.isArray(raw) ? (raw as Topic[]).filter((t) => typeof t?.id === "string") : [];
+			if (!Array.isArray(raw)) return { topics: [], damaged: true };
+			return { topics: (raw as Topic[]).filter((t) => typeof t?.id === "string"), damaged: false };
 		} catch {
-			return [];
+			return { topics: [], damaged: true };
 		}
+	}
+
+	topics(): Topic[] {
+		return this.readTopics().topics;
 	}
 
 	/** In the order each id first appeared, each as its last line left it. */
@@ -206,6 +258,12 @@ export class Mailbox {
 
 	private writeTopics(ts: Topic[]) {
 		mkdirSync(this.dir, { recursive: true });
+		// the rewrite would replace a file nobody could read: keep it first (never over an earlier copy), nothing is deleted
+		if (this.readTopics().damaged) {
+			let bad = `${this.topicsFile}.bad`;
+			for (let n = 2; existsSync(bad); n++) bad = `${this.topicsFile}.bad${n}`;
+			copyFileSync(this.topicsFile, bad);
+		}
 		atomicWrite(this.topicsFile, JSON.stringify(ts, null, 1));
 	}
 

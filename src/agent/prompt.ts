@@ -34,9 +34,9 @@ export function userLine(name: string | undefined): string {
 	return n ? `Lietotājs: ${n}.` : "";
 }
 
-/** The prompt of one turn: the user's open pins first (they are the task list), the plan when the user changed it, then the
- *  Fokuss, then their message. */
-export function buildPrompt(pins: Pin[], focus: FocusItem[], text: string, plan = ""): string {
+/** The prompt of one turn: the user's open pins first (they are the task list), the plan when the user changed it, the thread's open
+ *  topics (written by code, so a thread that was compacted still knows their ids), then the Fokuss, then the message. */
+export function buildPrompt(pins: Pin[], focus: FocusItem[], text: string, plan = "", topics = ""): string {
 	const p = pinsText(pins);
-	return [p, plan, focusText(focus), text].filter(Boolean).join("\n\n");
+	return [p, plan, topics, focusText(focus), text].filter(Boolean).join("\n\n");
 }

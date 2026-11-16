@@ -167,6 +167,7 @@ Every agent tool has a level: **auto** (runs, result shown), **confirm** (runs a
 | Propose | auto, as proposals | set a fact with a quote, add a requirement row, write an Atmiņa note, propose a justification for a failed check; each is marked "ierosināts" until the user confirms |
 | Annotate and show | auto | add a pin or comment, open or arrange a panel, highlight elements, draw a sketch in the viewer; fly the 3D camera, select, isolate, colour by a property, split the viewer (view only: no store is written) |
 | Run checks, export | auto | run any check, export a room table, export PDF or IFC from Revit, save a working copy |
+| Message another agent | auto (level run) | `send_message` (12.2: puts a message in the project's mailbox for another agent and returns at once; the recipient starts a run on it, and its reply wakes the sender) and `close_topic` (12.3). Tools of the main process, offered to the lead's and a specialist's threads, never to a lane. They change no project data; what the recipient then does goes through its own gate |
 | Revit: create and modify | confirm per batch | levels, grids, walls, doors, windows, rooms, dimensions, views, sheets; one batch becomes one revision the user reviews |
 | Revit: delete | never | `delete_element`; deletion is done by the user, or by the agent only after the user marks the element in the viewer |
 | Decide | never | approve a sheet, close a finding, mark a delivery sent, confirm a fact: only the user's click |

@@ -5,6 +5,7 @@ import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
+import { inboxOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -29,6 +30,8 @@ export interface CoordinatorDeps {
 	specs?: () => readonly AgentSpec[];
 	/** every project that has threads on disk (`knownProjects`), for `restore()`; without it restore finds no thread to mark */
 	projects?: () => (string | null)[];
+	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
+	mail?: (projectId: string | null) => Mailbox;
 	now?: () => string;
 }
 
@@ -42,6 +45,8 @@ interface Live {
 	wave: string;
 	abort: AbortController;
 	done: Promise<unknown>;
+	/** stopped by Stop (all or a wave): the sender of the message that started this run gets no "bloķēts" reply that would wake it */
+	silent?: boolean;
 }
 
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
@@ -63,6 +68,9 @@ export class Coordinator {
 	private restoreNotice: { interrupted: number; queued: number } | null = null;
 	private n = 0;
 	private waves = 0;
+	/** projects whose mail is to be looked at again; `waking` keeps a wake that comes from inside a wake from nesting */
+	private rewake = new Set<string | null>();
+	private waking = false;
 
 	constructor(private d: CoordinatorDeps) {}
 
@@ -166,6 +174,8 @@ export class Coordinator {
 				this.queue.push({ ...item, state: "stopped" });
 				if (item.id === own) failed.set(item.id, err);
 				else this.surface(item, files?.runId, err);
+				// a run that a message should have started: its senders hear that it cannot happen
+				if (item.input.cause.by === "message") this.blockMessages(item.projectId, item.input.cause.ids, `Aģents «${item.agent}» nevar sākt darbu: ${err.message}`, "queued");
 			}
 		}
 		this.changed();
@@ -186,6 +196,11 @@ export class Coordinator {
 
 	async start(i: StartRequest): Promise<{ runId: string | null; queued: boolean }> {
 		if (this.held) throw new Error(BUSY);
+		return this.submit(i);
+	}
+
+	/** `start` without the compaction guard: a run a message starts may wait in the queue behind a compaction. */
+	private submit(i: StartRequest): { runId: string | null; queued: boolean } {
 		const found = this.d.threads(i.projectId).get(i.threadId);
 		if (!found) throw new Error(`Saruna ${i.threadId} nav atrasta.`);
 		// the user's own messages never pile up unseen; a message from another agent may wait behind the run
@@ -223,6 +238,10 @@ export class Coordinator {
 		}
 		const runId = extra?.runId ?? this.newRunId();
 		const wave = item.wave;
+		const ids = item.input.cause.by === "message" ? item.input.cause.ids : [];
+		// 0 for a run the user started; else the hops of the messages that started it
+		const mail = this.d.mail?.(item.projectId);
+		const depth = mail && ids.length ? runDepth(ids, mail.messages()) : 0;
 		let thread: Thread;
 		try {
 			thread = this.setState(found, { state: "running", lastAt: this.now(), runs: found.runs + 1, wave });
@@ -231,11 +250,18 @@ export class Coordinator {
 			this.mark(found, { state: "idle" });
 			throw e;
 		}
+		// the run is going: the messages it reads are delivered
+		this.setMail(item.projectId, ids, "delivered");
 		const meta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId: thread.projectId, wave };
 		// a restored item lost its prepared files with the old process: it starts without them and says so
 		const text = item.hadFiles && !extra?.files ? `${item.input.text}\n${NO_FILES}` : item.input.text;
 		const abort = new AbortController();
-		const emit = (e: RunEvent) => this.d.emit(runId, e, meta);
+		let ok = false;
+		let lastError: string | null = null;
+		const emit = (e: RunEvent) => {
+			if (e.type === "error") lastError = e.message;
+			this.d.emit(runId, e, meta);
+		};
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
@@ -258,11 +284,27 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, wake: () => this.wake(thread.projectId) })
+			.then(
+				(r) => {
+					ok = r.ok;
+					return r;
+				},
+				(e: unknown) => {
+					lastError = e instanceof Error ? e.message : String(e);
+					throw e;
+				},
+			)
 			.finally(() => {
 				this.denyConfirms((c) => c.live === live, false);
 				this.live.delete(runId);
-				this.mark(thread, { state: "idle" });
+				// a run a message started that did not finish its work: the senders are told, so none waits for ever (a closing app keeps it all for the next start)
+				if (!this.closing && ids.length && (abort.signal.aborted || !ok)) {
+					const why = abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
+					this.blockMessages(thread.projectId, ids, `Aģents «${thread.agent}» nevarēja izpildīt: ${why}`, live.silent ? "stopped" : "queued");
+				}
+				this.settle(thread.projectId, thread.id);
+				if (!this.closing) this.wake(thread.projectId);
 				this.pump();
 			});
 		return runId;
@@ -294,30 +336,148 @@ export class Coordinator {
 		}
 	}
 
-	/** Aborts the runs that match, marks their queued items stopped (kept in the saved queue) and answers their confirmations with no. */
-	private stopWhere(match: (x: { wave: string; threadId: string }) => boolean): void {
+	/** Aborts the runs that match, marks their queued items stopped (kept in the saved queue) and answers their confirmations with no.
+	 *  The messages those items were to deliver are stopped with them. `silent`: Stop for everything or a wave, where no sender is to be woken. */
+	private stopWhere(match: (x: { wave: string; threadId: string }) => boolean, silent: boolean): void {
 		const lives = [...this.live.values()].filter((l) => match({ wave: l.wave, threadId: l.thread.id }));
-		for (const l of lives) l.abort.abort();
+		for (const l of lives) {
+			l.silent = silent;
+			l.abort.abort();
+		}
 		this.denyConfirms((c) => lives.includes(c.live), true);
+		const dropped: QueueItem[] = [];
 		this.queue = this.queue.map((q) => {
 			if (q.state !== "queued" || !match({ wave: q.wave, threadId: q.threadId })) return q;
 			this.prepared.delete(q.id);
-			// a thread that also has a run keeps the run's state
-			const t = [...this.live.values()].some((l) => l.thread.id === q.threadId) ? null : this.d.threads(q.projectId).get(q.threadId);
-			if (t) this.mark(t, { state: "idle" });
+			dropped.push(q);
 			return { ...q, state: "stopped" as const };
 		});
+		for (const q of dropped) {
+			if (q.input.cause.by === "message") this.setMail(q.projectId, q.input.cause.ids, "stopped");
+			// a thread that also has a run keeps the run's state
+			if (![...this.live.values()].some((l) => l.thread.id === q.threadId)) this.settle(q.projectId, q.threadId);
+		}
 		this.changed();
 	}
 
-	/** Without a wave: everything. With one: only that wave's runs and queued items. */
+	/** Without a wave: everything. With one: only that wave's runs and queued items; the messages of that wave still waiting are stopped and wake nobody. */
 	stopAll(wave?: string): void {
 		if (!wave) this.held?.abort();
-		this.stopWhere((x) => !wave || x.wave === wave);
+		this.stopWhere((x) => !wave || x.wave === wave, true);
+		for (const p of this.projectsInPlay()) {
+			const mb = this.d.mail?.(p);
+			if (!mb) continue;
+			this.setMail(p, mb.messages().filter((m) => !wave || m.wave === wave).map((m) => m.id), "stopped");
+			// a thread that waited for an answer that will not come is no longer waiting
+			for (const t of this.d.threads(p).list()) if (t.state === "waiting-reply") this.settle(p, t.id);
+		}
 	}
 
 	stopThread(threadId: string): void {
-		this.stopWhere((x) => x.threadId === threadId);
+		this.stopWhere((x) => x.threadId === threadId, false);
+	}
+
+	// ---- mail: delivery and waking --------------------------------------------------------------------------------------------------
+
+	/** Every project that has a run or a queued item, and every known one: where messages can be waiting. */
+	private projectsInPlay(): Set<string | null> {
+		return new Set<string | null>([...(this.d.projects?.() ?? []), ...[...this.live.values()].map((l) => l.thread.projectId), ...this.queue.map((q) => q.projectId)]);
+	}
+
+	/** Sets the state of those of `ids` that are still waiting (`queued`); a message already delivered, failed or stopped is left as it is. Never throws. */
+	private setMail(projectId: string | null, ids: readonly string[], state: Message["state"]): void {
+		const mb = this.d.mail?.(projectId);
+		if (!mb || !ids.length) return;
+		try {
+			for (const m of mb.messages()) if (ids.includes(m.id) && m.state === "queued") mb.setState(m.id, state);
+		} catch {
+			// a locked file: the message stays queued and the next wake looks at it again
+		}
+	}
+
+	/** The thread's state after its run ended or its wait was cut: waiting for answers it asked for, or idle. A thread with a run or a queued item keeps that state. */
+	private settle(projectId: string | null, threadId: string): void {
+		const t = this.d.threads(projectId).get(threadId);
+		if (!t || t.state === "closed" || this.threadBusy(threadId)) return;
+		const mb = this.d.mail?.(projectId);
+		let pending = 0;
+		try {
+			pending = mb ? pendingOf(threadId, mb.messages()).length : 0;
+		} catch {
+			// an unreadable mailbox: the thread is idle
+		}
+		const next = pending ? "waiting-reply" : "idle";
+		if (t.state !== next) this.mark(t, { state: next });
+	}
+
+	/** Tells the senders of these messages (tasks and asks only) that the work will not happen: a `reply` from the recipient with status "bloķēts" and the reason,
+	 *  written straight into the mailbox (no send rules, not an exchange), so each sender wakes. `stopped` writes them already stopped: the sender is told in
+	 *  the books but not woken. Messages of these ids that were never delivered are closed as failed. */
+	private blockMessages(projectId: string | null, ids: readonly string[], reason: string, state: "queued" | "stopped"): void {
+		const mb = this.d.mail?.(projectId);
+		if (!mb) return;
+		try {
+			for (const m of mb.messages()) {
+				if (!ids.includes(m.id)) continue;
+				if (m.kind !== "reply") {
+					const r = mb.add({
+						wave: m.wave, topic: m.topic, from: m.to, to: m.from, kind: "reply", text: reason, refs: [], fromThread: m.toThread, toThread: m.fromThread, depth: m.depth + 1,
+						reply: { id: `a${m.id}`, status: "bloķēts", results: [], questions: [], decisions: [], risks: reason },
+					});
+					if (state === "stopped") mb.setState(r.id, "stopped");
+				}
+				if (m.state === "queued") mb.setState(m.id, state === "stopped" ? "stopped" : "failed");
+			}
+		} catch {
+			// a locked file: nothing more can be done here
+		}
+		for (const t of this.d.threads(projectId).list()) if (t.state === "waiting-reply") this.settle(projectId, t.id);
+		// not at once: this may be called from inside `pump`, which must not be started again from within itself
+		if (state === "queued") queueMicrotask(() => this.wake(projectId));
+	}
+
+	/** Starts a run for every thread of the project that has mail to read and no answer it still waits for (`shouldWake`), unless it is running or queued.
+	 *  Called after every run ends and after every message is added. A wake from inside a wake only marks the project to be looked at again. */
+	wake(projectId: string | null): void {
+		this.rewake.add(projectId);
+		if (this.waking) return;
+		this.waking = true;
+		try {
+			for (let guard = 0; this.rewake.size && guard < 200; guard++) {
+				const p = [...this.rewake][0];
+				this.rewake.delete(p);
+				this.wakeProject(p);
+			}
+		} finally {
+			this.rewake.clear();
+			this.waking = false;
+		}
+	}
+
+	private wakeProject(projectId: string | null): void {
+		const mb = this.d.mail?.(projectId);
+		if (!mb || this.closing) return;
+		let ms: Message[];
+		try {
+			ms = mb.messages();
+		} catch {
+			return;
+		}
+		const topics = mb.topics();
+		for (const t of this.d.threads(projectId).list()) {
+			if (t.state === "closed" || !shouldWake(t.id, ms) || this.threadBusy(t.id)) continue;
+			const inbox = inboxOf(t.id, ms);
+			// a specialist removed from the settings before its mail came: the senders hear it now, they do not wait
+			if (this.d.specs && t.agent !== LEAD_ID && !this.d.specs().some((s) => s.id === t.agent)) {
+				this.blockMessages(projectId, inbox.map((m) => m.id), `Aģents «${t.agent}» nav atrasts: viņš ir noņemts iestatījumos.`, "queued");
+				continue;
+			}
+			try {
+				this.submit({ threadId: t.id, projectId, text: deliveryText(inbox, topics), focus: [], cause: { by: "message", ids: inbox.map((m) => m.id) }, wave: inbox[0].wave });
+			} catch {
+				// the thread is gone or its state could not be written: the messages stay queued for the next wake
+			}
+		}
 	}
 
 	/** What `restore()` found, until the user answers with `resumeInterrupted` or `discardInterrupted`; null when nothing waits for an answer. */
@@ -378,6 +538,8 @@ export class Coordinator {
 		this.settleInterrupted((r) => (this.queue.some((q) => q.state === "queued" && q.threadId === r.threadId) ? "queued" : "idle"));
 		this.paused = false;
 		this.pump();
+		// mail that arrived while the app was down or the queue was held
+		for (const p of this.projectsInPlay()) this.wake(p);
 	}
 
 	/** The user chose to drop it: queued items stay in the queue as `stopped`, the threads are idle, nothing starts. */

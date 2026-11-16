@@ -18,6 +18,7 @@ import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import type { RunEvent } from "../shared/types.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
+import { MAIL_TOOL_LEVELS } from "./mail.js";
 import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
@@ -25,8 +26,9 @@ import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
 export const LEVEL_RANK: Record<Level, number> = { read: 0, propose: 1, annotate: 2, run: 3, confirm: 4, never: 5 };
 
-/** The two tools of this file, as the gate sees them. Starting helpers is no change to the project; a lane's own tools carry their levels. */
-export const MAIN_TOOL_LEVELS: Record<string, Level> = { run_subagent: "read", delegate: "run" };
+/** The main process's own tools, as the gate sees them: the two of this file (starting helpers is no change to the project; a lane's own tools carry
+ *  their levels) and the mail tools. None of them is ever offered to a lane. */
+export const MAIN_TOOL_LEVELS: Record<string, Level> = { run_subagent: "read", delegate: "run", ...MAIL_TOOL_LEVELS };
 export const MAIN_TOOLS: ReadonlySet<string> = new Set(Object.keys(MAIN_TOOL_LEVELS));
 
 export const SUBAGENT_CAP: Level = "read";

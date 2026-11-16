@@ -16,6 +16,7 @@ import { parseMention } from "../shared/mention.js";
 import { LEAD_ID, type QueueView, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
 import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
+import { Mailbox, mailDir } from "../core/messages.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
@@ -63,10 +64,19 @@ export class AgentSession {
 	private runner: ThreadRunner;
 	private coordinator: Coordinator;
 	private stores = new Map<string, ThreadStore>();
+	private mailboxes = new Map<string, Mailbox>();
 
 	constructor(private d: SessionDeps) {
-		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir) });
+		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId) });
+	}
+
+	/** A project's mailbox (it reads the disk on every call, so one handle per project is enough). */
+	private mailbox(projectId: string | null): Mailbox {
+		const id = projectId ?? "_";
+		let m = this.mailboxes.get(id);
+		if (!m) this.mailboxes.set(id, (m = new Mailbox(mailDir(this.d.ctx.appDir, this.d.ctx.projectsDir, projectId))));
+		return m;
 	}
 
 	private threads(projectId: string | null): ThreadStore {

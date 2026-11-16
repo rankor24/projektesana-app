@@ -370,7 +370,7 @@ test("8.15 session: the run is handed both tools and the roster; the lanes show 
 	await finished;
 	assert.ok(parent, "the run was started");
 	const p = parent as PiRunOptions;
-	assert.deepEqual(p.extraTools!.map((t) => t.name), ["run_subagent", "delegate"]);
+	assert.deepEqual(p.extraTools!.map((t) => t.name), ["run_subagent", "delegate", "send_message", "close_topic"]);
 	assert.match(p.systemPrompt ?? "", /Speciālisti \(delegate/);
 	assert.match(p.systemPrompt ?? "", /- ekspertize: /);
 	// the main agent's own gate lets the two tools through

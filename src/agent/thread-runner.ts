@@ -29,12 +29,21 @@ import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, rosterText, specialistTools, subagentDeclarations, subagentTools } from "./subagents.js";
+import { MAIL_RULES, MAIL_TOOL_LEVELS, mailDeclarations, mailTools } from "./mail.js";
+import { DEFAULT_LIMITS, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps } from "./session.js";
 
-/** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected. */
+/** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected.
+ *  The schema is counted as pi sends it: without `$schema` (pi/mcp.ts drops it), which is about 14 tokens a tool. */
 let appToolTokens: number | null = null;
 function toolDeclarationTokens(): number {
-	if (appToolTokens === null) appToolTokens = estimateTextTokens(JSON.stringify([...allTools().map((t) => ({ name: t.name, description: t.description, parameters: z.toJSONSchema(z.object(t.input)) })), ...subagentDeclarations()]));
+	if (appToolTokens === null) {
+		const params = (t: { input: Parameters<typeof z.object>[0] }) => {
+			const { $schema: _drop, ...rest } = z.toJSONSchema(z.object(t.input)) as Record<string, unknown>;
+			return rest;
+		};
+		appToolTokens = estimateTextTokens(JSON.stringify([...allTools().map((t) => ({ name: t.name, description: t.description, parameters: params(t) })), ...subagentDeclarations(), ...mailDeclarations()]));
+	}
 	return appToolTokens;
 }
 
@@ -54,6 +63,10 @@ export interface RunInput {
 	emit: (e: RunEvent) => void;
 	/** the coordinator routes a batch confirmation to the user */
 	ask: (req: ConfirmRequest) => Promise<boolean>;
+	/** how many hops of messages brought this run about: 0 for a run the user started */
+	depth?: number;
+	/** a message was added to the mailbox: the coordinator delivers it */
+	wake?: () => void;
 }
 
 export interface Conversation {
@@ -69,7 +82,7 @@ export class ThreadRunner {
 	/** compactions per thread since the app started */
 	private compactions = new Map<string, number>();
 
-	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry }) {}
+	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox }) {}
 
 	private store(thread: Thread): ThreadStore {
 		return this.d.threads(thread.projectId);
@@ -90,8 +103,9 @@ export class ThreadRunner {
 	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. A specialist gets its own prompt and the shared rules,
 	 *  the user line, and Revit's rules only when one of its tools is Revit's; no roster and no skills list. */
 	private standing(s: Settings, spec: AgentSpec | null = null, hasRevitTool = false): string {
-		if (spec) return [spec.prompt + RULES, userLine(s.userName), hasRevitTool ? REVIT_RULES : ""].filter(Boolean).join("\n\n");
-		return [SYSTEM_PROMPT, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
+		const mail = this.d.mail ? MAIL_RULES : "";
+		if (spec) return [spec.prompt + RULES, mail, userLine(s.userName), hasRevitTool ? REVIT_RULES : ""].filter(Boolean).join("\n\n");
+		return [SYSTEM_PROMPT, mail, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -188,7 +202,7 @@ export class ThreadRunner {
 					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
 				}
 
-				const gate = new Gate(own ? (n) => (own.has(n) ? levelOf(n) : "never") : levelOf, async (req: ConfirmRequest) => {
+				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : levelOf, async (req: ConfirmRequest) => {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
@@ -238,7 +252,10 @@ export class ThreadRunner {
 				const rt = await this.d.runtime();
 				const model = lookupPiModel(rt, s.provider, s.model);
 				// the plan lines the user changed belong to the lead: a specialist neither carries nor clears them
-				const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true));
+				// this project's mailbox: the thread's open topics go into every prompt, and the mail tools write into it
+				const mailbox = this.d.mail?.(projectId);
+				const topics = mailbox ? topicsLine(openTopicsOf(thread, mailbox.topics(), mailbox.messages())) : "";
+				const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics);
 				const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
 				const keepRecent = keepRecentFor(model.contextWindow);
 
@@ -279,7 +296,7 @@ export class ThreadRunner {
 						emit(e);
 					};
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
-					const extraTools = spec ? undefined : subagentTools({
+					const lanes = spec ? [] : subagentTools({
 						run: this.d.runAgent ?? runPi,
 						base: { runtime: rt, provider: s.provider, modelId: s.model, effort: (s.effort || undefined) as PiEffort | undefined },
 						mcpFor: (allowed) => {
@@ -299,6 +316,19 @@ export class ThreadRunner {
 						maxParallel: () => this.d.settings().maxParallelAgents,
 						specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
 					});
+					// send_message and close_topic: the lead's threads and a specialist's alike, never a lane
+					const mail = mailbox
+						? mailTools({
+								mailbox,
+								threads: this.store(thread),
+								agents: () => this.d.agents?.() ?? DEFAULT_AGENTS,
+								limits: () => DEFAULT_LIMITS,
+								self: { agent: spec ? spec.id : LEAD_ID, threadId: thread.id, projectId, wave: i.wave, depth: i.depth ?? 0 },
+								enqueue: () => i.wake?.(),
+								note: (line) => emit({ type: "text", text: line }),
+							})
+						: [];
+					const extraTools = [...lanes, ...mail];
 					await (this.d.runAgent ?? runPi)({
 						runtime: rt,
 						provider: s.provider,
@@ -314,7 +344,7 @@ export class ThreadRunner {
 						history: h,
 						onMessages: (messages) => this.conversations.set(thread.id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }),
 						onEvent: handle,
-						extraTools,
+						extraTools: extraTools.length ? extraTools : undefined,
 					});
 				};
 				await attempt(history);
