@@ -42,10 +42,6 @@ export type SendCheck =
 	| { ok: true }
 	| { ok: false; code: "self" | "unknown-agent" | "acl" | "closed" | "exchanges" | "depth" | "iterations" | "process"; reason: string; passUp: boolean };
 
-// `mayMessage` / `acceptsFrom` arrive with the spec v2 (task 13.1); until then they are absent and every pair is allowed.
-type Acl = { mayMessage?: string[]; acceptsFrom?: string[] };
-const aclOf = (s: AgentSpec | undefined): Acl => (s ?? {}) as Acl;
-
 const refuse = (code: Exclude<SendCheck, { ok: true }>["code"], reason: string, passUp = false): SendCheck => ({ ok: false, code, reason, passUp });
 
 const STATE_WORD: Record<Topic["state"], string> = { open: "atvērts", agreed: "vienošanās panākta", "passed-up": "nodots tālāk" };
@@ -71,9 +67,9 @@ export function canSend(
 	const t = m.topic;
 	const answersOwnTopic = m.kind === "reply" && !!t && t.state === "open" && t.parties.includes(m.from) && t.parties.includes(m.to);
 	if (!answersOwnTopic) {
-		const may = aclOf(spec(m.from)).mayMessage;
+		const may = spec(m.from)?.mayMessage;
 		if (may && !may.includes(m.to)) return refuse("acl", `Aģentam «${m.from}» nav atļauts sūtīt ziņas aģentam «${m.to}».`);
-		const accepts = aclOf(spec(m.to)).acceptsFrom;
+		const accepts = spec(m.to)?.acceptsFrom;
 		if (accepts && !accepts.includes(m.from)) return refuse("acl", `Aģents «${m.to}» nepieņem ziņas no aģenta «${m.from}».`);
 	}
 

@@ -5,6 +5,7 @@ import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
 import { makeLevelOf } from "../../agent/tools/levels.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOL_LEVELS, SPECIALIST_CAP, validateSpec } from "../../agent/subagents.js";
+import { readRole } from "../../agent/agents.js";
 import type { AgentSpec, AgentToolRow } from "../../shared/agent-types.js";
 import type { Handlers } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
@@ -26,8 +27,11 @@ export function agentHandlers(d: { settings: AppSettings }): Pick<Handlers, K> {
 		},
 		"agents.save": (specs: AgentSpec[]) => {
 			const out: AgentSpec[] = [];
+			// the names in mayMessage / acceptsFrom are checked against the list being saved (and the lead)
+			const ids = specs.map((s) => (typeof s?.id === "string" ? s.id.trim() : ""));
+			const roleExists = (id: string) => readRole(d.settings.dir, id) !== null;
 			for (const raw of specs) {
-				const v = validateSpec(raw, levelOf, known);
+				const v = validateSpec(raw, levelOf, known, ids, roleExists);
 				if (!v.ok) throw new Error(`${(raw as { name?: string })?.name || (raw as { id?: string })?.id || "speciālists"}: ${v.error}`);
 				if (out.some((o) => o.id === v.spec.id)) throw new Error(`Identifikators ${v.spec.id} atkārtojas.`);
 				out.push(v.spec);

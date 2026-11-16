@@ -15,7 +15,6 @@ import type { AgentTool, BeforeToolCallContext, BeforeToolCallResult } from "@ea
 import { Type, type Static } from "@earendil-works/pi-ai";
 import { TOOLS } from "../shared/activity.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID } from "../shared/thread-types.js";
 import type { RunEvent } from "../shared/types.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
@@ -68,32 +67,7 @@ export const DEFAULT_AGENTS: AgentSpec[] = [
 	},
 ];
 
-const ID = /^[a-z][a-z0-9-]{1,30}$/;
-
-/** A specialist from the settings page: checked against the tools that exist and their levels. */
-export function validateSpec(raw: unknown, levelOf: LevelOf, known: readonly string[]): { ok: true; spec: AgentSpec } | { ok: false; error: string } {
-	const r = (raw ?? {}) as Partial<AgentSpec>;
-	const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-	const id = str(r.id);
-	const name = str(r.name);
-	const description = str(r.description);
-	const prompt = str(r.prompt);
-	if (id === LEAD_ID) return { ok: false, error: `Identifikators ${LEAD_ID} ir rezervēts galvenajam aģentam.` };
-	if (!ID.test(id)) return { ok: false, error: "Identifikators: mazie burti, cipari un domuzīme, 2–31 zīmes (piem. dokumenti)." };
-	if (name.length < 2 || name.length > 60) return { ok: false, error: "Nosaukums: 2–60 zīmes." };
-	if (description.length > 200) return { ok: false, error: "Apraksts: līdz 200 zīmēm." };
-	if (prompt.length < 10 || prompt.length > 4000) return { ok: false, error: "Norādījums: 10–4000 zīmes." };
-	if (!Array.isArray(r.tools)) return { ok: false, error: "Rīku saraksts nav derīgs." };
-	const tools = [...new Set(r.tools.map(str).filter(Boolean))];
-	for (const t of tools) {
-		if (Object.hasOwn(MAIL_TOOL_LEVELS, t)) return { ok: false, error: `${t} ir dots katram aģentam automātiski; to nevajag norādīt.` };
-		if (MAIN_TOOLS.has(t)) return { ok: false, error: `Speciālists nevar palaist citus aģentus (${t}).` };
-		if (!known.includes(t)) return { ok: false, error: `Nezināms rīks: ${t}.` };
-		const lv = levelOf(t);
-		if (lv === "never" || LEVEL_RANK[lv] > LEVEL_RANK[SPECIALIST_CAP]) return { ok: false, error: `Rīks ${t} prasa lietotāja apstiprinājumu (${lv}); speciālistam to dot nevar.` };
-	}
-	return { ok: true, spec: { id, name, description, prompt, tools } };
-}
+export { validateSpec } from "./agents.js";
 
 export { findSpec };
 

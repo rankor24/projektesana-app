@@ -493,7 +493,7 @@ Validation adds: `prompt` may be empty when `roleFile` is true; tools up to `con
 
 **Tests:** an old spec validates as before; a `confirm` tool without `maxLevel: "confirm"` is refused with the existing Latvian text, with it accepted; `delete_element` refused always; unknown id in `mayMessage` refused; a role of 16 001 characters refused, 16 000 accepted; `writeRole` twice keeps the first text under `versions`; `canSend` (12.1) now refuses `acl` both ways.
 
-- [ ] Tests failing → implemented → checks pass → commit `13.1 agent spec v2, role files` (and the phase 13 rows)
+- [x] Tests failing → implemented → checks pass → commit `13.1 agent spec v2, role files` (and the phase 13 rows)
 
 ### Task 13.2: Standing text per agent, measured
 
