@@ -5,6 +5,7 @@
 // Rules that hold for every lane:
 //   - a lane is never offered a tool above its cap (run_subagent: read; delegate: run, so never one that needs the user's batch
 //     confirmation) or above what the main agent itself was offered, and never run_subagent / delegate: no nesting
+//   - a lane never gets a Revit tool or a Revit server: one Revit takes one MCP connection, and the run that started the lane holds it
 //   - at most `maxParallel` lanes run at once; the rest wait their turn
 //   - writes take turns through WriteLocks (locks.ts), keyed by staging / project data / Revit
 //   - Stop reaches every lane: a lane's signal is the main run's signal
@@ -258,11 +259,13 @@ export function subagentTools(deps: LaneDeps): AgentTool<any>[] {
 			}
 			const jobs: Job[] = params.jobs.map((j) => {
 				const spec = findSpec(specs, j.agent)!;
+				const model = spec.model?.trim(); // as the run's modelFor does: a stray space in the settings is not part of the id
 				return {
 					id: newJobId(), label: j.label?.trim() || spec.name, agent: spec.name, task: j.task,
 					system: (deps.standing ? deps.standing(spec) : spec.prompt) + RULES,
-					allowed: specialistTools(deps.listed, deps.levelOf, deps.revitTools, spec),
-					...(spec.model ? { model: spec.model } : {}),
+					// no Revit in a lane: the one Revit takes one MCP connection, and the parent run holds it (a lane's Revit work is the parent's)
+					allowed: specialistTools(deps.listed, deps.levelOf, deps.revitTools, spec).filter((n) => !deps.revitTools.has(n)),
+					...(model ? { model } : {}),
 					...(spec.effort ? { effort: spec.effort } : {}),
 				};
 			});

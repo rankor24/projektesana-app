@@ -16,7 +16,8 @@ import { breakdown, compactLine, countImages, estimateContext, estimateTextToken
 import { focusText } from "./focus.js";
 import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
-import { fixedTokens, standingFor } from "./agents.js";
+import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
+import { OfficeMemory } from "../core/office-memory.js";
 import { declarationTokens } from "./declarations.js";
 import { listSkills } from "./skills.js";
 import { ProjectStore } from "../core/store.js";
@@ -101,12 +102,14 @@ export class ThreadRunner {
 
 	/** What every request starts with, built by standingFor (agents.ts): the lead's rules, roster and skills, or a specialist's shared rules, role,
 	 *  own roster and own skills. `revitTools` are the Revit tools this run really has. */
-	private standing(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>): string {
-		return standingFor(spec, this.standingDeps(s, revitTools));
+	private standing(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>, lane = false): string {
+		return standingFor(spec, { ...this.standingDeps(s, spec, revitTools), lane });
 	}
 
-	private standingDeps(s: Settings, revitTools?: ReadonlySet<string>): Parameters<typeof standingFor>[1] {
-		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? ""), knowledge: "", revitTools };
+	private standingDeps(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>): Parameters<typeof standingFor>[1] {
+		// a specialist carries what the office wrote down for it (13.4); the lead's text stays as the 0.6 guard measures it: it reads office memory with read_notes
+		const knowledge = spec ? knowledgeFor(new OfficeMemory(join(this.d.ctx.appDir, "memory")), spec.id) : "";
+		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? ""), knowledge, revitTools };
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -313,13 +316,12 @@ export class ThreadRunner {
 					const lanes = spec ? [] : subagentTools({
 						run: this.d.runAgent ?? runPi,
 						base: { runtime: rt, provider, modelId, effort },
-						standing: (sp) => this.standing(s, sp, revitTools),
+						// a lane has no Revit (a second connection to the one Revit): no Revit rules in its text, no Revit server below
+						standing: (sp) => this.standing(s, sp, new Set(), true),
 						mcpFor: (allowed) => {
 							const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
 							const mine = allowed.filter((n) => appSet.has(n));
 							if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
-							const theirs = allowed.filter((n) => revitTools.has(n));
-							if (revit && theirs.length) m.revit = { ...revit, allow: theirs };
 							return m;
 						},
 						levelOf,
@@ -401,10 +403,13 @@ export class ThreadRunner {
 				}
 			}
 		} finally {
-			if (batchOpen) this.d.locks.endBatch(owner);
-			this.d.locks.releaseOwner(owner);
-			// after afterBatch: the next run may take Revit only when this one is done with it
+			// the seat first (after afterBatch, which ran above): a throw in endBatch or releaseOwner must not keep the next run off Revit for good
 			this.d.locks.releaseSeat(owner);
+			try {
+				if (batchOpen) this.d.locks.endBatch(owner);
+			} finally {
+				this.d.locks.releaseOwner(owner);
+			}
 		}
 		return { ok: !failed && !signal.aborted, answer, confirmedBatches };
 	}
@@ -454,7 +459,7 @@ export class ThreadRunner {
 			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
 			imageCount: b?.imageCount ?? 0,
 			messages: live?.messages.length ?? 0,
-			fixedEstimate: fixedTokens(agent, this.standingDeps(s), declarationTokens(agent)),
+			fixedEstimate: fixedTokens(agent, this.standingDeps(s, agent), declarationTokens(agent)),
 			lastAdded: live?.lastAdded ?? null,
 			compactions: this.compactions.get(thread.id) ?? 0,
 			// the Fokuss line is sent with every message, "Fokuss: nekas" included

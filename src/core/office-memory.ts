@@ -19,14 +19,15 @@ export class OfficeMemory {
 		appendLog(join(this.dir, "log.jsonl"), { kind, by, data });
 	}
 
-	/** Notes newest first. The agent asks for `standing` only; the user sees the proposals too. */
-	list(opts: { type?: NoteType; standing?: boolean } = {}): Note[] {
-		return readNotes(this.dir, opts.type).filter((n) => !opts.standing || n.state !== "proposed");
+	/** Notes newest first. The agent asks for `standing` only; the user sees the proposals too. `agent`: only the notes that agent wrote (13.4). */
+	list(opts: { type?: NoteType; standing?: boolean; agent?: string } = {}): Note[] {
+		return readNotes(this.dir, opts.type).filter((n) => (!opts.standing || n.state !== "proposed") && (!opts.agent || n.agent === opts.agent));
 	}
 
-	write(input: { type: NoteType; title: string; body: string; refs?: string[] }, by: Who): Note {
+	/** `agent`: which agent's tool call wrote it; the note stays proposed until the user accepts, and a note without it belongs to no agent. */
+	write(input: { type: NoteType; title: string; body: string; refs?: string[]; agent?: string }, by: Who): Note {
 		if (input.title.trim().length < 3) throw new Error("Virsraksts ir pārāk īss.");
-		const note: Note = { id: newId("o"), type: input.type, title: input.title.trim(), body: input.body, refs: input.refs ?? [], by, at: new Date().toISOString(), ...(by === "agent" ? { state: "proposed" as const } : {}) };
+		const note: Note = { id: newId("o"), type: input.type, title: input.title.trim(), body: input.body, refs: input.refs ?? [], by, at: new Date().toISOString(), ...(input.agent ? { agent: input.agent } : {}), ...(by === "agent" ? { state: "proposed" as const } : {}) };
 		writeNoteFile(this.dir, note, join(this.dir, "versions"));
 		this.log("memory.written", by, { id: note.id, type: note.type, proposed: by === "agent" });
 		return note;

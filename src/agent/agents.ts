@@ -5,6 +5,7 @@
 // Plain text on disk, so the user can open and edit it in any editor; the app only reads it at run time.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { OfficeMemory } from "../core/office-memory.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
@@ -150,6 +151,25 @@ export function validateSpec(
 	return { ok: true, spec };
 }
 
+// ---- knowledge (13.4) ----------------------------------------------------------------------------------------------------------
+
+/** What the office has written down for one agent: its accepted `learning` notes, newest first, each as "### title" and the body, cut at whole notes
+ *  under `maxChars`. A proposal is not knowledge until the user accepts it, and a note without `agent` (written before 13.4, or by the user) belongs
+ *  to no agent; it stays in the shared office memory the agents read with read_notes. */
+export function knowledgeFor(mem: OfficeMemory, agent: string, maxChars = 4000): string {
+	const blocks: string[] = [];
+	let used = 0;
+	for (const n of mem.list({ type: "learning", standing: true, agent })) {
+		const block = `### ${n.title}\n${n.body}`;
+		const cost = block.length + (blocks.length ? 2 : 0); // the blank line between notes
+		// newest first: the first note that does not fit ends the text, so an older short note never jumps the queue
+		if (used + cost > maxChars) break;
+		blocks.push(block);
+		used += cost;
+	}
+	return blocks.join("\n\n");
+}
+
 // ---- standing text -------------------------------------------------------------------------------------------------------------
 
 export interface StandingDeps {
@@ -166,6 +186,9 @@ export interface StandingDeps {
 	status?: string;
 	/** the Revit tools this run really has (connected); absent = every Revit tool counts, which is the worst case for a measurement */
 	revitTools?: ReadonlySet<string>;
+	/** a `delegate` lane of a specialist (13.3 review): it has no mail tools and nobody to write to, and `delegate` adds the common rules itself,
+	 *  so the text leaves out the rules, the mail lines and the roster */
+	lane?: boolean;
 }
 
 /** Whom an agent may write to, one line each. The lead's is the specialists' list as before (it delegates to them); a specialist's holds the agents
@@ -179,14 +202,15 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
 
 /** What every request of this agent starts with. The lead (`spec` null): SYSTEM_PROMPT, mail lines, user line, Revit rules, roster, the skills list.
  *  A specialist: the shared rules, its role file (or prompt), RULES, the mail lines, the user line, Revit rules only with a Revit tool, its roster,
- *  its own skills (those it names that are synced), then knowledge, the process card and the status. */
+ *  its own skills (those it names that are synced), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
 	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills)].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? (readRole(d.appDir, spec.id) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
 	const skills = d.skills.filter((s) => spec.skills?.includes(s.name));
-	return [readShared(d.appDir).trim(), own, RULES.trim(), MAIL_RULES, userLine(d.userName), hasRevit ? REVIT_RULES : "", rosterFor(spec, d.specs), skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	const talk = !d.lane;
+	return [readShared(d.appDir).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }
 
 /** The standing text plus the tool declarations (`toolDeclarations`, from declarations.ts): what the agent's request weighs before anyone speaks. */

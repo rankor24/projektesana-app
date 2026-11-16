@@ -16,13 +16,16 @@ export function Atmina() {
 	const { projectId } = useUi();
 	const [scope, setScope] = useState<"project" | "office">(projectId ? "project" : "office");
 	const [type, setType] = useState<NoteType | "">("");
+	const [agent, setAgent] = useState("");
 	const [draft, setDraft] = useState({ type: "decision" as NoteType, title: "", body: "" });
 	const [err, setErr] = useState<string | null>(null);
 	const [cancelling, setCancelling] = useState<{ id: string; reason: string } | null>(null);
 	const office = scope === "office";
 	const notes = useLoad<Note[]>(() => (office ? call("memory.list") : projectId ? call("notes.list", projectId) : Promise.resolve([])), [projectId, scope]);
 	const fail = (e: unknown) => setErr(errText(e));
-	const rows = (notes.data ?? []).filter((n) => !type || n.type === type);
+	// the office memory by agent (13.4): the ids that wrote a note there; a note with no agent (the user's, or older) shows under "Visi" only
+	const agentIds = office ? [...new Set((notes.data ?? []).map((n) => n.agent).filter((a): a is string => !!a))].sort() : [];
+	const rows = (notes.data ?? []).filter((n) => (!type || n.type === type) && (!office || !agent || n.agent === agent));
 	const proposals = rows.filter((n) => n.state === "proposed");
 	const standing = rows.filter((n) => n.state !== "proposed");
 	// a decision is cancelled only by a note of the user's that says so (`cancels`); an agent's note with a similar title does not count
@@ -47,6 +50,7 @@ export function Atmina() {
 				<b className="grow">{n.title}</b>
 				{n.from && <Badge tone="info" title={`Pacelts no projekta ${n.from.project}`}>no {n.from.project}</Badge>}
 				{n.agent && n.to && <Badge tone="info" title="Kas ar ko">{n.agent} → {n.to}</Badge>}
+				{office && n.agent && <Badge tone="info" title="Šī aģenta rakstīts; pēc pieņemšanas tas to nes līdzi savā instrukcijā">{n.agent}</Badge>}
 				{n.type === "decision" && n.agent && n.reviewed === false && !cancelled.has(n.id) && <Badge tone="warn">nepārskatīts</Badge>}
 				{cancelled.has(n.id) && <Badge>atcelts</Badge>}
 				{n.type === "question" && n.status && <Badge>{n.status === "open" ? "atvērts" : "slēgts"}</Badge>}
@@ -106,6 +110,16 @@ export function Atmina() {
 					</button>
 				))}
 			</div>
+			{office && agentIds.length > 0 && (
+				<div className="row">
+					<span className="dim small">Aģents:</span>
+					{["", ...agentIds].map((a) => (
+						<button key={a} className={`small ${agent === a ? "primary" : ""}`} onClick={() => setAgent(a)}>
+							{a || "Visi"}
+						</button>
+					))}
+				</div>
+			)}
 			{!office && !projectId ? (
 				<Empty title="nav projekta">Atver projektu vai skaties biroja atmiņu.</Empty>
 			) : (

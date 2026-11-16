@@ -198,7 +198,7 @@ test("ThreadStore.get: a parseable thread.json of the wrong shape is no thread, 
 	assert.deepEqual(s.list().map((t) => t.id), [ok.id]);
 });
 
-test("a lane of the run shares its confirmed Revit batch; another owner still waits", async () => {
+test("a lane of the run has no Revit while the run holds a confirmed batch; another owner still waits (13.4: lanes never get Revit)", async () => {
 	const locks = new LockRegistry({ waitMs: 60 });
 	const got: Record<string, boolean | undefined> = {};
 	const t = setup(
@@ -212,17 +212,17 @@ test("a lane of the run shares its confirmed Revit batch; another owner still wa
 				o.onEvent({ type: "done", text: "gatavs" });
 				return;
 			}
-			// the lane's own run: a Revit write passes the batch gate at once (a wait would be refused after 60 ms)
-			const b = await o.beforeToolCall!(ctxFor("revit_edit", "l1"));
-			got.laneWrite = b === undefined;
-			await o.afterToolCall!({ toolCall: { id: "l1" } } as never);
+			// the lane's own run: no Revit server, and its gate refuses a Revit tool the model names anyway
+			got.laneServer = !!o.mcp?.revit;
+			got.laneWrite = (await o.beforeToolCall!(ctxFor("revit_edit", "l1")))?.block === true;
 			o.onEvent({ type: "done", text: "lane" });
 		},
 		{ revit: true, locks },
 	);
 	await t.run(t.store.create({ projectId: "p1", agent: LEAD_ID, title: "A", startedBy: "user" }), "izmaini");
 	assert.equal(got.other, false, "another owner waits for the batch");
-	assert.equal(got.laneWrite, true, "the run's lane writes inside the batch");
+	assert.equal(got.laneServer, false, "no second connection to the one Revit");
+	assert.equal(got.laneWrite, true, "a Revit tool is refused in the lane");
 	assert.equal(got.lane, true);
 	locks.beginBatch("run:q", "galvenais aģents");
 	assert.equal((await locks.acquire("p1", "revit", "run:qq", "y2")).ok, false, "a longer owner name is not a lane of it");

@@ -162,7 +162,7 @@ test("13.3 the seat is freed after afterBatch, not before", async () => {
 
 // ---- a specialist that may confirm ---------------------------------------------------------------------------------------------
 
-test("13.3 a run-level specialist is not offered create_level; a confirm-level one is, and a lane of it is not", async () => {
+test("13.3 a run-level specialist is not offered create_level; a confirm-level one is; a lane of it has no Revit at all (13.4)", async () => {
 	const allow: Record<string, readonly string[] | undefined> = {};
 	const tag = (prompt: string) => (prompt.includes("confirm") ? "confirm" : "run");
 	const run = mk("lim");
@@ -172,20 +172,21 @@ test("13.3 a run-level specialist is not offered create_level; a confirm-level o
 	await t.run(t.of(conf), "confirm", { spec: conf });
 	assert.deepEqual(allow.run, ["revit_edit"]);
 	assert.deepEqual(allow.confirm, ["revit_edit", "create_level"]);
-	// delegate gives a lane the run cap whatever the spec says: nobody looks at a lane's confirmation
-	const lane: Record<string, readonly string[] | undefined> = {};
+	// delegate gives a lane no Revit tool at all (13.4, R29): not even the run-level ones; the lead holds the one connection
+	const lane: { ran: number; revit: unknown } = { ran: 0, revit: "unset" };
 	const t2 = setup(
 		async (o) => {
 			if (o.extraTools) {
 				const r = await o.extraTools.find((x) => x.name === "delegate")!.execute("d1", { jobs: [{ agent: "conf", task: "lane" }] }, o.signal);
 				assert.ok(!r.isError);
-			} else lane.revit = o.mcp?.revit?.allow;
+			} else (lane.ran++, (lane.revit = o.mcp?.revit));
 			o.onEvent({ type: "done", text: "ok" });
 		},
 		{ specs: [conf] },
 	);
 	await t2.run(t2.lead(), "deleģē");
-	assert.deepEqual(lane.revit, ["revit_edit"]);
+	assert.equal(lane.ran, 1);
+	assert.equal(lane.revit, undefined);
 });
 
 test("13.3 a confirm-level call waits for the user; yes lets it through, no blocks it with today's text", async () => {
@@ -332,12 +333,12 @@ test("13.3 a lane of a specialist gets its model, effort and usage name; its sys
 	assert.equal(lanes[0].effort, "high");
 	assert.match(lanes[0].system, /ROLE-TEKSTS-IZ-FAILA/);
 	assert.ok(lanes[0].system.endsWith(RULES), "the lane's RULES suffix is kept");
-	assert.ok(lanes[0].revit, "the lead holds the seat: its lane has Revit");
+	assert.ok(!lanes[0].revit, "the lead holds the seat, and its lane still has no Revit (13.4)");
 	const rows = readFileSync(join(t.dir, "usage.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { model: string });
 	assert.equal(rows[0].model, `${DEFAULT_SETTINGS.provider}/${ownModel}`, "the lane's turn is logged under the lane's model");
 });
 
-test("13.3 a lane uses its parent's seat: without it the lane has no Revit tools", async () => {
+test("13.3 a lane never takes the seat: with another run holding it the lane has no Revit tools either", async () => {
 	const sp = mk("rv");
 	const seen: { revit: boolean }[] = [];
 	const locks = new LockRegistry({ waitMs: 60 });

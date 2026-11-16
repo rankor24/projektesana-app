@@ -177,7 +177,7 @@ export const sourceTools: ToolDef[] = [
 		input: { type: z.enum(["decision", "answer", "learning", "question"]), title: z.string().min(3), body: z.string(), refs: z.array(z.string()).optional(), scope: z.enum(["projekts", "birojs"]).optional() },
 		run: (ctx, a) => {
 			if (a.scope === "birojs") {
-				const n = new OfficeMemory(join(ctx.appDir, "memory")).write({ type: a.type, title: a.title, body: a.body, refs: a.refs }, "agent");
+				const n = new OfficeMemory(join(ctx.appDir, "memory")).write({ type: a.type, title: a.title, body: a.body, refs: a.refs, ...(ctx.agent ? { agent: ctx.agent } : {}) }, "agent");
 				return { ok: true, note: n.id, state: n.state, message: "Priekšlikums biroja atmiņai. Lietotājs to pieņem: Atmiņa → Birojs." };
 			}
 			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString(), ...(ctx.agent ? { agent: ctx.agent } : {}) };
