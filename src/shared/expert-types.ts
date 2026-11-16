@@ -2,6 +2,13 @@
 
 export type RemarkState = "open" | "done" | "na";
 
+/** The name in the project's meta files that the remarks live in; process.ts checks H5's fix ids against it without importing the node-side module. */
+export const EXPERT_META = "expertise";
+
+/** The class the expert gives a remark (task 14.6); the fix list groups by it. A remark with none is unclassed. */
+export type RemarkClass = "K" | "B" | "I";
+export const REMARK_CLASSES: readonly RemarkClass[] = ["K", "B", "I"];
+
 /** One remark of a review: where it is, its words, and what the user has done with it. */
 export interface ExpertRemark {
 	/** stable: the source, the page and a hash of the quote, so reading the same review again adds nothing */
@@ -17,6 +24,8 @@ export interface ExpertRemark {
 	/** the review's words, verbatim from the page (whitespace normalised) */
 	quote: string;
 	critical: boolean;
+	/** the class the review gives it, when it gives one */
+	class?: RemarkClass;
 	/** who has to answer it, only when the review or the user says so; never guessed */
 	responsible: string | null;
 	/** the designer's reply written in the review document itself (a table's comment column), when there is one */

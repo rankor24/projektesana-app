@@ -27,8 +27,8 @@ export const expertTools: ToolDef[] = [
 		name: "expert_add",
 		level: "propose",
 		description:
-			"Add a remark you read in a review: sourceId, page, verbatim quote (refused if not on that page), daļa mark only if the text says (AR, BK, AVK, UK, EL, ESS, GP …), the review's number, critical if the review says so, responsible only if the document names one. Never invent daļa or person.",
-		input: { sourceId: z.string(), page: z.number().int().min(1), quote: z.string().min(8), daļa: z.string().optional(), code: z.string().optional(), section: z.string().optional(), critical: z.boolean().optional(), responsible: z.string().optional() },
+			"Add a remark you read in a review: sourceId, page, verbatim quote (refused if not on that page), daļa mark only if the text says (AR, BK, AVK, UK, EL, ESS, GP …), the review's number, critical if the review says so, class K / B / I only if the review gives one, responsible only if the document names one. Never invent daļa or person.",
+		input: { sourceId: z.string(), page: z.number().int().min(1), quote: z.string().min(8), daļa: z.string().optional(), code: z.string().optional(), section: z.string().optional(), critical: z.boolean().optional(), class: z.enum(["K", "B", "I"]).optional(), responsible: z.string().optional() },
 		run: async (ctx, a) => {
 			const r = addRemark(storeOf(ctx), a, "agent");
 			await refresh(ctx);
@@ -44,13 +44,13 @@ export const expertTools: ToolDef[] = [
 			const all = readRemarks(storeOf(ctx));
 			if (!all.length) return "no data: ekspertīzes piezīmju nav (expert_import).";
 			const rows = all.filter((r) => (!a.daļa || (r.daļa ?? "nenoteikta") === a.daļa.toUpperCase() || (r.daļa ?? "nenoteikta") === a.daļa) && (!a.state || r.state === a.state) && (!a.sourceId || r.sourceId === a.sourceId));
-			return { summary: summarize(all), remarks: rows.map((r) => ({ id: r.id, daļa: r.daļa, code: r.code, page: r.page, quote: r.quote, critical: r.critical, responsible: r.responsible, state: r.state, note: r.note })) };
+			return { summary: summarize(all), remarks: rows.map((r) => ({ id: r.id, daļa: r.daļa, code: r.code, page: r.page, quote: r.quote, critical: r.critical, class: r.class, responsible: r.responsible, state: r.state, note: r.note })) };
 		},
 	}),
 	tool({
 		name: "expert_fix_list",
 		level: "read",
-		description: "Fix list of one daļa as markdown: open remarks, critical first, with page, words, responsible, checkbox. daļa 'nenoteikta' = remarks with no daļa. Can go into a document via write_document.",
+		description: "Fix list of one daļa as markdown: open remarks grouped by class (K, B, I, then none), critical first, with page, words, responsible, checkbox. daļa 'nenoteikta' = remarks with no daļa. Can go into a document via write_document.",
 		input: { daļa: z.string() },
 		run: (ctx, { daļa }) => {
 			const store = storeOf(ctx);

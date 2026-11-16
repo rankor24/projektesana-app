@@ -3,8 +3,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { type ProcessState, type ProfilePatch, changeProfile, readProcess, recordReview, requestGate, skipStage } from "../../core/process.js";
+import { type ProcessState, type ProfilePatch, changeProfile, readProcess, recordReview, requestGate, reviewScope, skipStage } from "../../core/process.js";
 import { STAGE_CARD } from "../../core/process-def.js";
+import { activeDraft } from "../../sources/staging.js";
 import { type ToolCtx, storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -76,6 +77,31 @@ export const processTools: ToolDef[] = [
 			// the same function as the user's: the reason, bpv, S6 and S7 are checked there
 			const r = changeProfile(storeOf(ctx), a as ProfilePatch, existingAgents(ctx), "agent");
 			return { ok: true, profile: r.profile };
+		},
+	}),
+	tool({
+		name: "process_review_scope",
+		level: "read",
+		description: "After S6: how much of the delivery draft was changed (the 10% rule). changed = the files that changed, by path or file name. Returns partial (check the changed ones and their linked documents) or full (check everything again).",
+		input: { changed: z.array(z.string()) },
+		run: (ctx, { changed }) => {
+			active(ctx);
+			const d = activeDraft(storeOf(ctx));
+			if (!d) return "nav aktīva nodevuma";
+			const files = d.items.map((i) => i.file);
+			const base = (f: string) => (f.split(/[\\/]/).pop() ?? f).toLowerCase();
+			const byName = new Map(files.map((f) => [base(f), f] as const));
+			// the agent has file names from the checklist as often as full paths; a name the draft does not have still counts as a changed document
+			const mapped = changed.map((c) => (files.includes(c) ? c : byName.get(base(c))));
+			const unmatched = [...new Set(changed.filter((_, i) => mapped[i] === undefined))];
+			const scope = reviewScope(changed.map((c, i) => mapped[i] ?? c), files);
+			return {
+				...scope,
+				changed: new Set(changed.map((c, i) => mapped[i] ?? c)).size,
+				of: new Set(files).size,
+				unmatched,
+				note: scope.mode === "full" ? "Virs 10%: ekspertīze pārbauda visu atkārtoti." : "Līdz 10%: ekspertīze pārbauda labotos un ar tiem saistītos dokumentus.",
+			};
 		},
 	}),
 	tool({

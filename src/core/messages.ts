@@ -6,7 +6,7 @@ import type { AgentSpec } from "../shared/agent-types.js";
 import type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic } from "../shared/message-types.js";
 import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
 import { newId } from "./model.js";
-import { LEADER } from "./process-def.js";
+import { EKS, LEADER } from "./process-def.js";
 import type { ProcessState } from "./process.js";
 
 // the shapes live in shared/message-types.ts (the room feed of the window reads them); everything that imported them from here still can
@@ -56,6 +56,10 @@ export const closedReason = (t: Topic): string => `Temats «${t.title}» jau ir 
  *  The lead is a party only when the profile lists it. `answersOwnTopic` (R38): a reply on an open topic between its two parties passes the profile rule, so an agent
  *  that was asked something (before the profile was narrowed, say) can still answer; a new ask or task to or from an agent outside the profile stays refused. */
 function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState, answersOwnTopic: boolean): SendCheck | null {
+	// The ekspertīze wall (14.6, R7): nobody asks or tasks eks, whatever the profile; it asks authors (and, as the leader of S5, tasks them), and it answers only on a topic
+	// it is a party of. Replies to its own questions are the one way in. Code keyed on the id, since no spec of eks ships.
+	if (m.to === EKS && !answersOwnTopic) return refuse("acl", "Ekspertīzes aģentam raksta tikai atbildes uz tā jautājumiem.");
+	if (m.from === EKS && m.kind === "reply" && !answersOwnTopic) return refuse("acl", "Ekspertīzes aģents atbild tikai uz savām tēmām.");
 	if (!answersOwnTopic) {
 		for (const id of [m.from, m.to]) {
 			if (!p.profile.agents.includes(id)) return refuse("process", `Aģents ${id} nav procesa profilā.`);

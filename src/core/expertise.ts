@@ -5,11 +5,11 @@
 import { createHash } from "node:crypto";
 import { quoteOnPage } from "../sources/extract/common.js";
 import { parseExpertReview } from "../sources/extract/expert.js";
-import type { ExpertRemark, ExpertSummary, GroupRow, RemarkState, ReviewMeta, ImportResult } from "../shared/expert-types.js";
+import { EXPERT_META, REMARK_CLASSES, type ExpertRemark, type ExpertSummary, type GroupRow, type ImportResult, type RemarkClass, type RemarkState } from "../shared/expert-types.js";
 import type { ProjectStore } from "./store.js";
 import type { Who } from "./model.js";
 
-export const EXPERT_META = "expertise";
+export { EXPERT_META };
 
 export const readRemarks = (store: ProjectStore): ExpertRemark[] => store.readMeta<ExpertRemark[]>(EXPERT_META, []);
 
@@ -69,6 +69,7 @@ export interface AddInput {
 	code?: string | null;
 	section?: string | null;
 	critical?: boolean;
+	class?: RemarkClass;
 	responsible?: string | null;
 }
 
@@ -81,12 +82,13 @@ export function addRemark(store: ProjectStore, a: AddInput, by: Who, now = new D
 		const elsewhere = pages.findIndex((p) => quoteOnPage(p, a.quote));
 		throw new Error(elsewhere >= 0 ? `Citāts nav ${a.page}. lapā; tas ir ${elsewhere + 1}. lapā.` : `Citāts nav atrodams avotā ${title} (burtiski, atstarpes neskaitot).`);
 	}
+	if (a.class !== undefined && !REMARK_CLASSES.includes(a.class)) throw new Error(`Piezīmes klase: ${REMARK_CLASSES.join(", ")}.`);
 	const quote = norm(a.quote);
 	const id = remarkId(a.sourceId, a.page, quote);
 	const all = readRemarks(store);
 	const same = all.find((r) => r.id === id);
 	if (same) return same;
-	const r: ExpertRemark = { id, sourceId: a.sourceId, page: a.page, code: a.code ?? null, daļa: a.daļa?.trim().toUpperCase() || null, section: a.section ?? null, quote, critical: !!a.critical, responsible: a.responsible?.trim() || null, reply: null, state: "open", note: null, by: by === "user" ? "user" : by === "agent" ? "agent" : "app", at: now.toISOString(), decidedAt: null };
+	const r: ExpertRemark = { id, sourceId: a.sourceId, page: a.page, code: a.code ?? null, daļa: a.daļa?.trim().toUpperCase() || null, section: a.section ?? null, quote, critical: !!a.critical, ...(a.class ? { class: a.class } : {}), responsible: a.responsible?.trim() || null, reply: null, state: "open", note: null, by: by === "user" ? "user" : by === "agent" ? "agent" : "app", at: now.toISOString(), decidedAt: null };
 	write(store, [...all, r], "expert.added", by, { id });
 	return r;
 }
@@ -144,10 +146,15 @@ export function summarize(rs: ExpertRemark[]): ExpertSummary {
 
 /** The open remarks of one daļa (null = those with no daļa) as a fix list: ported from BIM Crew generate_discipline_instructions. */
 export function fixList(rs: ExpertRemark[], daļa: string | null, opts: { project?: string; date?: string; titleOf?: (sourceId: string) => string } = {}): string {
-	const mine = rs.filter((r) => r.state === "open" && (r.daļa ?? null) === daļa).sort((a, b) => Number(b.critical) - Number(a.critical) || a.page - b.page);
+	// K, B, I, then the unclassed; inside a class the critical first, then by page
+	const rank = (r: ExpertRemark) => (r.class ? REMARK_CLASSES.indexOf(r.class) : REMARK_CLASSES.length);
+	const mine = rs.filter((r) => r.state === "open" && (r.daļa ?? null) === daļa).sort((a, b) => rank(a) - rank(b) || Number(b.critical) - Number(a.critical) || a.page - b.page);
+	// class headings only when some remark has a class: a list without any reads as it always did
+	const classed = mine.some((r) => r.class);
 	const lines = [`# Labojumu saraksts — ${daļa ?? "daļa nav norādīta"}`, "", ...(opts.project ? [`**Projekts:** ${opts.project}`] : []), `**Sagatavots:** ${opts.date ?? new Date().toISOString().slice(0, 10)}`, "", `## Veicamie labojumi (${mine.length})`, ""];
 	if (!mine.length) lines.push("Atvērtu piezīmju nav.");
 	mine.forEach((r, i) => {
+		if (classed && (i === 0 || rank(mine[i - 1]) !== rank(r))) lines.push(r.class ? `## Klase ${r.class}` : "## Bez klases", "");
 		lines.push(`### ${i + 1}.${r.code ? ` ${r.code}` : ""}${r.critical ? " — KRITISKS" : ""}`, "");
 		lines.push(`**Atzinumā (${opts.titleOf?.(r.sourceId) ?? r.sourceId}, ${r.page}. lpp.):** ${r.quote}`, "");
 		if (r.section) lines.push(`**Sadaļa:** ${r.section}`, "");

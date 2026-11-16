@@ -1,5 +1,6 @@
 // The process state machine (design: "Process mode"). Pure: `step` takes a state and an event and returns a new state or a Latvian refusal; it never
 // mutates its input and never reads the clock (times come from the event). Flow of chapter 5: S1 → H1 → … → S7 → H7 → mācības → done.
+import { EXPERT_META } from "../shared/expert-types.js";
 import type { Message } from "../shared/message-types.js";
 import { type Fact, type Note, type NoteType, type Profile, type Who, newId, profileOf } from "./model.js";
 import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, LEADER, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
@@ -378,6 +379,12 @@ export function decideGate(store: GateStore, d: { approve: boolean; comment?: st
 	const comment = (d.comment ?? "").trim();
 	if (!d.approve && !comment) throw new Error("Atgriešanai vajag komentāru.");
 	const fix = Array.isArray(d.fix) ? d.fix.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];
+	// H5's fix list names remarks of the project: an id nobody has would send S6 after a remark that does not exist
+	if (d.approve && cur.stage === "S5" && fix.length) {
+		const known = new Set(store.readMeta<{ id: string }[]>(EXPERT_META, []).map((r) => r.id));
+		const bad = fix.find((x) => !known.has(x));
+		if (bad !== undefined) throw new Error(`Nezināma piezīme: ${bad}`);
+	}
 	const at = now.toISOString();
 	const waiting = cur.stage === "mācības" || cur.stage === "done" ? undefined : [...cur.gates].reverse().find((g) => g.stage === cur.stage && g.state === "waiting");
 	const r = step(cur, d.approve ? { type: "gate.approve", at, ...(comment ? { comment } : {}), fix } : { type: "gate.return", at, comment });

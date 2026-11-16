@@ -112,7 +112,8 @@ test("11.4 a specialist thread's run: the spec's prompt, read tools plus its own
 	const { o, env } = t.runs[0];
 	const lv = appLevels();
 	const allow = o.mcp["projektesana-tools"].allow;
-	const read = Object.keys(lv).filter((n) => lv[n] === "read");
+	// process_review_scope (14.6) is a read tool given to eks alone
+	const read = Object.keys(lv).filter((n) => lv[n] === "read" && n !== "process_review_scope");
 	for (const n of read) assert.ok(allow.includes(n), `read tool ${n} is offered`);
 	assert.ok(allow.includes("expert_import"), "its own tool");
 	assert.deepEqual(allow.filter((n) => lv[n] !== "read").sort(), ["expert_import"], "nothing else beyond reading");

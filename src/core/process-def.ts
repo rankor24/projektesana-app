@@ -8,6 +8,9 @@ export type GateId = "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "H7";
 /** The human gate that closes each stage. */
 export const GATE_OF: Record<Stage, GateId> = { S1: "H1", S2: "H2", S3: "H3", S4: "H4", S5: "H5", S6: "H6", S7: "H7" };
 
+/** The ekspertīze agent. No spec of it ships: the rules around it are code keyed on this id (R7). */
+export const EKS = "eks";
+
 /** Who leads the stage: the project leader (BPV) or the ekspertīze agent (S5). */
 export const LEADER: Record<Stage, "bpv" | "eks"> = { S1: "bpv", S2: "bpv", S3: "bpv", S4: "bpv", S5: "eks", S6: "bpv", S7: "bpv" };
 
@@ -134,7 +137,7 @@ export function stageCard(stage: Stage): string {
  *  to the lead, to other specialists or to a lane. The checks inside the tools stay the hard rule. */
 export const PROCESS_TOOLS_OF: Readonly<Record<string, readonly string[]>> = {
 	bpv: ["process_request_gate", "process_skip_stage", "process_set_profile"],
-	eks: ["process_request_gate", "process_review_done"],
+	eks: ["process_request_gate", "process_review_done", "process_review_scope"],
 };
 export const PROCESS_WRITE_TOOLS: ReadonlySet<string> = new Set(Object.values(PROCESS_TOOLS_OF).flat());
 

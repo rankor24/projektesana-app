@@ -4,6 +4,8 @@ import { z } from "zod";
 import { proposeFact } from "../../core/facts.js";
 import { newId, profileOf, type Note, type NoteType } from "../../core/model.js";
 import { OfficeMemory } from "../../core/office-memory.js";
+import { readProcess } from "../../core/process.js";
+import { EKS } from "../../core/process-def.js";
 import { Library } from "../../rules/library.js";
 import { EXTRACTION_PROMPT, extractFor } from "../../sources/extract/index.js";
 import { norm } from "../../sources/extract/common.js";
@@ -11,6 +13,18 @@ import { storeOf, type ToolCtx } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
 const MAX_READ = 60_000;
+
+/** The stage that is on, when the project is in process mode: stamped on the notes an agent writes (R39). */
+function processStage(ctx: ToolCtx): string | undefined {
+	if (!ctx.projectId) return undefined;
+	const p = readProcess(storeOf(ctx));
+	return p?.mode === "process" ? p.stage : undefined;
+}
+
+/** In process mode the expert reads what is not the authors' working agreements: no decision or question note that is not its own (it must not hear their side of the argument). */
+function hiddenFromEks(ctx: ToolCtx, n: { type: string; agent?: string }): boolean {
+	return ctx.agent === EKS && (n.type === "decision" || n.type === "question") && n.agent !== EKS && !!ctx.projectId && readProcess(storeOf(ctx))?.mode === "process";
+}
 
 /** "1-3,5" → [1,2,3,5]; empty → all. */
 export function pageList(spec: string | undefined, n: number): number[] {
@@ -163,9 +177,9 @@ export const sourceTools: ToolDef[] = [
 		run: (ctx, { type, scope, topic, agent, status }) => {
 			const s = scope ?? "visi";
 			const mailOnly = !!(topic || agent || status); // these fields exist on project notes only: the office memory has none
-			const keep = (n: Note) => (!topic || n.topic === topic) && (!agent || n.agent === agent) && (!status || n.status === status);
+			const keep = (n: Note) => (!topic || n.topic === topic) && (!agent || n.agent === agent) && (!status || n.status === status) && !hiddenFromEks(ctx, n);
 			const mine = s !== "birojs" && ctx.projectId ? storeOf(ctx).notes(type as NoteType | undefined).filter(keep).map((n) => ({ scope: "projekts", ...n })) : [];
-			const office = s !== "projekts" && !mailOnly ? new OfficeMemory(join(ctx.appDir, "memory")).list({ type: type as NoteType | undefined, standing: true }).map((n) => ({ scope: "birojs", ...n })) : [];
+			const office = s !== "projekts" && !mailOnly ? new OfficeMemory(join(ctx.appDir, "memory")).list({ type: type as NoteType | undefined, standing: true }).filter((n) => !hiddenFromEks(ctx, n)).map((n) => ({ scope: "birojs", ...n })) : [];
 			const all = [...mine, ...office];
 			return all.length ? all : "no data: atmiņā nav ierakstu.";
 		},
@@ -180,7 +194,8 @@ export const sourceTools: ToolDef[] = [
 				const n = new OfficeMemory(join(ctx.appDir, "memory")).write({ type: a.type, title: a.title, body: a.body, refs: a.refs, ...(ctx.agent ? { agent: ctx.agent } : {}) }, "agent");
 				return { ok: true, note: n.id, state: n.state, message: "Priekšlikums biroja atmiņai. Lietotājs to pieņem: Atmiņa → Birojs." };
 			}
-			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString(), ...(ctx.agent ? { agent: ctx.agent } : {}) };
+			const stage = processStage(ctx);
+			const note = { id: newId("n"), type: a.type, title: a.title, body: a.body, refs: a.refs ?? [], by: "agent" as const, at: new Date().toISOString(), ...(ctx.agent ? { agent: ctx.agent } : {}), ...(stage ? { stage } : {}) };
 			storeOf(ctx).writeNote(note);
 			return { ok: true, note: note.id };
 		},

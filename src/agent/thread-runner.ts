@@ -30,14 +30,20 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
-import { LEADER, PROCESS_WRITE_TOOLS, stageCard } from "../core/process-def.js";
+import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
+import { EKS, LEADER, PROCESS_WRITE_TOOLS, stageCard } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
 /** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
 const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done)$/;
+
+/** What a write tool of an author gets during S5 (14.6): the expert is reading the project, so nobody but eks changes it. */
+export const S5_BLOCK = "S5 laikā sadaļas autors nelabo projektu.";
+
+/** Tools that stay open to the authors in S5 though they are above `read`: mail (they answer eks), the process tools, and the expert_* ones (remarks are the expert's record, not the project). */
+const S5_OPEN = (name: string) => Object.hasOwn(MAIL_TOOL_LEVELS, name) || name.startsWith("process_") || name.startsWith("expert_");
 
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
@@ -272,7 +278,22 @@ export class ThreadRunner {
 				});
 				// the lead's own writes take their lock after the gate has let them through, and free it when the call is done
 				const locks = this.d.locks;
+				const agentId = spec ? spec.id : LEAD_ID;
+				// the stage is read at the call, not at the run's start: a gate the user passes mid-run opens or closes the block for the next call
+				const inS5 = (): boolean => {
+					if (!projectId) return false;
+					try {
+						const p = readProcess(ProjectStore.load(this.d.ctx.projectsDir, projectId));
+						return p?.mode === "process" && p.stage === "S5";
+					} catch {
+						return false;
+					}
+				};
 				const beforeToolCall: NonNullable<Parameters<typeof runPi>[0]["beforeToolCall"]> = async (ctx, sig) => {
+					const name = ctx.toolCall.name;
+					const level = levelOf(name);
+					// cheap tests first: only a write call of an agent other than eks reads the process file
+					if (agentId !== EKS && level !== "never" && LEVEL_RANK[level] >= LEVEL_RANK.propose && !S5_OPEN(name) && inS5()) return { block: true, reason: S5_BLOCK };
 					const blocked = await gate.before(ctx);
 					if (blocked) return blocked;
 					// run_subagent / delegate only start lanes; the lanes take the locks their writes need

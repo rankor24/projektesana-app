@@ -4,9 +4,10 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, type Static } from "@earendil-works/pi-ai";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type Topic } from "../core/messages.js";
+import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type MessageKind, type Topic } from "../core/messages.js";
 import { newId, type Note } from "../core/model.js";
 import type { ProcessState } from "../core/process.js";
+import { EKS } from "../core/process-def.js";
 import type { ThreadStore } from "../core/threads.js";
 import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
@@ -33,7 +34,7 @@ export interface MailDeps {
 	/** a line for the run's feed */
 	note: (line: string) => void;
 	/** the project's Atmiņa (its `ProjectStore`); returns null when the thread has no open project, and then no topic can be closed or passed up */
-	notes?: () => { writeNote(n: Note): void } | null;
+	notes?: () => { writeNote(n: Note): void; notes?(type: "question"): Note[] } | null;
 	/** a question for the user was written: "Gaida tevi" changed */
 	notesChanged?: () => void;
 	/** the lead's current thread in this project (made when there is none); without it the project's thread store is asked */
@@ -51,6 +52,12 @@ function processNow(d: MailDeps): ProcessState | null {
 		return null;
 	}
 }
+
+/** `stage` for a note written now: the stage that is on in process mode (R39), nothing in co-work. */
+const stageOf = (d: MailDeps): { stage?: string } => {
+	const p = processNow(d);
+	return p ? { stage: p.stage } : {};
+};
 
 /** Who takes a pass-up in process mode (in co-work: the lead). */
 const PROCESS_LEADER = "bpv";
@@ -99,7 +106,7 @@ const topicRefs = (d: MailDeps, topic: Topic) => d.mailbox.messages().filter((m)
 function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic, q: { to: string; title: string; body: string }): Note {
 	const note: Note = {
 		id: newId("n"), type: "question", title: q.title, body: q.body, refs: topicRefs(d, topic), by: "agent", at: new Date().toISOString(),
-		agent: d.self.agent, to: q.to, topic: topic.id, status: "open",
+		agent: d.self.agent, to: q.to, topic: topic.id, status: "open", ...stageOf(d),
 	};
 	store.writeNote(note);
 	d.mailbox.closeTopic(topic.id, "passed-up", note.id);
@@ -144,6 +151,27 @@ function processLeaderThread(d: MailDeps, topic: Topic): Thread {
 		d.threads.list({ agent: PROCESS_LEADER, open: true })[0] ??
 		d.threads.create({ projectId: d.self.projectId, agent: PROCESS_LEADER, title: `Nodots: ${topic.title}`, startedBy: d.self.agent })
 	);
+}
+
+/** S5 (14.6): what eks asks an author, and what the author answers, is also in Atmiņa, marked `agent: "eks"` (so eks reads it back and the user sees what was asked). The topic stays open:
+ *  this is a record, not a pass-up. A write that fails leaves the mail as it is. */
+function recordEksExchange(d: MailDeps, process: ProcessState | null, m: { from: string; to: string; kind: MessageKind; text: string }, topic: Topic): void {
+	if (!process || process.stage !== "S5") return;
+	const ask = m.from === EKS && m.kind === "ask";
+	const answer = m.to === EKS && m.kind === "reply";
+	if (!ask && !answer) return;
+	try {
+		const store = d.notes?.();
+		if (!store) return;
+		// the answer closes the question it answers, so the status page does not list it as open for ever
+		if (answer) for (const q of store.notes?.("question") ?? []) if (q.agent === EKS && q.topic === topic.id && q.status === "open") store.writeNote({ ...q, status: "closed" });
+		store.writeNote({
+			id: newId("n"), type: "question", title: `${ask ? "Jautājums" : "Atbilde"}: ${topic.title}`, body: m.text, refs: [topic.id], by: "agent", at: new Date().toISOString(),
+			agent: EKS, to: ask ? m.to : EKS, topic: topic.id, status: ask ? "open" : "closed", stage: process.stage,
+		});
+	} catch {
+		// the message is sent; the record is a convenience
+	}
 }
 
 /** send_message and close_topic, for pi (`extraTools` of the run). */
@@ -197,6 +225,7 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 				...(p.reply ? { reply: { id: newId("a"), status: p.reply.status, results: p.reply.results ?? [], questions: p.reply.questions ?? [], decisions: p.reply.decisions ?? [], risks: p.reply.risks } } : {}),
 			};
 			const added = mailbox.add(msg);
+			recordEksExchange(d, process, msg, topic);
 			d.note(`\n[lietotne] Ziņa → ${p.to}: ${topic.title}`);
 			d.enqueue();
 			return result(`Ziņa nosūtīta (${added.id}). Atbilde pienāks vēlāk; tagad pabeidz savu gājienu.`);
@@ -235,7 +264,7 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 				const other = topic.parties.find((x) => x !== d.self.agent) ?? topic.parties[0];
 				const note: Note = {
 					id: newId("n"), type: "decision", title: topic.title, body: p.decision, refs: topicRefs(d, topic), by: "agent", at: new Date().toISOString(),
-					agent: d.self.agent, to: other, topic: topic.id, reviewed: false,
+					agent: d.self.agent, to: other, topic: topic.id, reviewed: false, ...stageOf(d),
 				};
 				store.writeNote(note);
 				d.mailbox.closeTopic(topic.id, "agreed", note.id);
