@@ -306,7 +306,8 @@ export interface Pin {
 	markup?: Markup[];
 }
 
-export type NoteType = "decision" | "answer" | "learning" | "question";
+/** `gate`, `risk` and `change` belong to process mode (14.3 on): agents and code write them, the notes form does not offer them. */
+export type NoteType = "decision" | "answer" | "learning" | "question" | "gate" | "risk" | "change";
 
 export interface Note {
 	id: string;

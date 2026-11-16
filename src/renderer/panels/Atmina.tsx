@@ -10,7 +10,9 @@ import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 
-const TYPE: Record<NoteType, string> = { decision: "lēmums", answer: "atbilde", learning: "mācība", question: "jautājums" };
+const TYPE: Record<NoteType, string> = { decision: "lēmums", answer: "atbilde", learning: "mācība", question: "jautājums", gate: "gate", risk: "risks", change: "izmaiņa" };
+/** what the notes form offers: the process notes are written by the process, not typed */
+const TYPED: NoteType[] = ["decision", "answer", "learning", "question"];
 
 export function Atmina() {
 	const { projectId } = useUi();
@@ -104,7 +106,7 @@ export function Atmina() {
 				<button className={scope === "project" ? "primary" : ""} disabled={!projectId} onClick={() => setScope("project")}>Projekts{projectId ? ` ${projectId}` : ""}</button>
 				<button className={scope === "office" ? "primary" : ""} onClick={() => setScope("office")} title="Mācības, kas der visiem projektiem; aģents tās lasa katrā projektā">Birojs</button>
 				<span className="grow" />
-				{(["", "decision", "answer", "learning", "question"] as const).map((t) => (
+				{(["", "decision", "answer", "learning", "question", "gate"] as const).map((t) => (
 					<button key={t} className={type === t ? "primary" : ""} onClick={() => setType(t)}>
 						{t ? TYPE[t] : "visi"}
 					</button>
@@ -127,8 +129,8 @@ export function Atmina() {
 					<div className="confirm">
 						<div className="row">
 							<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value as NoteType })}>
-								{Object.entries(TYPE).map(([k, v]) => (
-									<option key={k} value={k}>{v}</option>
+								{TYPED.map((k) => (
+									<option key={k} value={k}>{TYPE[k]}</option>
 								))}
 							</select>
 							<input className="grow" placeholder={office ? "Virsraksts (noteikums, kas der visiem projektiem)" : "Virsraksts"} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />

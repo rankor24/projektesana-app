@@ -508,6 +508,8 @@ export interface ApiSpec {
 	"process.setMode": (projectId: string, mode: "cowork" | "process") => ProcessState;
 	/** Changes doc type, depth per stage or agents. Needs a `why`; `bpv` must stay, ids must exist, S6 and S7 cannot be skipped. Each change is logged in profile.changes. */
 	"process.setProfile": (projectId: string, p: { docType?: DocType; depth?: Partial<Record<Stage, Depth>>; agents?: string[]; why: string }) => ProcessState;
+	/** The user decides the waiting gate: approve (H5: `fix` = the remark ids to correct) or return (a comment is required). The only way a gate is passed; no agent tool does it. */
+	"process.gate": (projectId: string, d: { approve: boolean; comment?: string; fix?: string[] }) => ProcessState;
 	"deliveries.openStaging": (id: string, deliveryId: string) => void;
 	/** Where "Kopēt uz 1.4_Nodevumi" would write and what stops it now (7.6). */
 	"deliveries.copyPlan": (id: string, deliveryId: string) => CopyPlan;
@@ -711,6 +713,7 @@ export const API_NAMES = [
 	"process.get",
 	"process.setMode",
 	"process.setProfile",
+	"process.gate",
 	"deliveries.openStaging",
 	"deliveries.copyPlan",
 	"deliveries.copy",

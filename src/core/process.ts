@@ -1,6 +1,6 @@
 // The process state machine (design: "Process mode"). Pure: `step` takes a state and an event and returns a new state or a Latvian refusal; it never
 // mutates its input and never reads the clock (times come from the event). Flow of chapter 5: S1 → H1 → … → S7 → H7 → mācības → done.
-import { type Fact, type Profile, type Who, profileOf } from "./model.js";
+import { type Fact, type Note, type Profile, type Who, newId, profileOf } from "./model.js";
 import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
 
 export interface GateRecord {
@@ -190,8 +190,8 @@ export const PROCESS_META = "process";
 
 export const readProcess = (store: ProcessStore): ProcessState | null => store.readMeta<ProcessState | null>(PROCESS_META, null);
 
-/** `what` names the change in the log: "process.mode" or "process.profile". */
-export const writeProcess = (store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" = "mode"): void => store.writeMeta(PROCESS_META, s, { kind: `process.${what}`, by });
+/** `what` names the change in the log: "process.mode", "process.profile", "process.gate" (a request or the user's decision), "process.skip" or "process.review". */
+export const writeProcess = (store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" | "gate" | "skip" | "review" = "mode"): void => store.writeMeta(PROCESS_META, s, { kind: `process.${what}`, by });
 
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
@@ -283,4 +283,88 @@ export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: re
 	if (n.escalated && depthChanged.includes(n.escalated)) n.escalated = null;
 	writeProcess(store, n, by, "profile");
 	return n;
+}
+
+// ---- gates (task 14.3) --------------------------------------------------------------------------------------------------------
+
+/** What the leader hands over with a gate request: the lines of the template of process chapter 13. */
+export interface GateArgs {
+	result: string[];
+	files: string[];
+	deviations: string;
+	questions: string[];
+	risks: string;
+	decisions: string[];
+	next: string;
+}
+
+const items = (xs: readonly string[]): string => {
+	const v = xs.map((x) => x.trim()).filter(Boolean);
+	return v.length ? v.join("; ") : "nav";
+};
+
+/** The gate summary of chapter 13, for the gate the stage is about to ask for. "Atkāpes no profila" is the leader's own words and then every profile
+ *  change made since the previous gate was requested (the earlier ones were in that gate's summary). */
+export function gateSummary(s: ProcessState, project: string, a: GateArgs): string {
+	const stage = s.stage;
+	if (stage === "mācības" || stage === "done") throw new Error("Šajā stadijā gate nav.");
+	const prev = s.gates.at(-1);
+	const changes = s.profile.changes.filter((c) => !prev || c.at > prev.at).map((c) => `${c.what} (${c.why})`);
+	return [
+		`GATE ${GATE_OF[stage]} | Projekts: ${project} | Stadija: ${stage} | Iterācija: ${s.iteration[stage] + 1}`,
+		"",
+		`Rezultāts: ${items(a.result)}`,
+		`Faili: ${items(a.files)}`,
+		`Atkāpes no profila: ${items([a.deviations, ...changes])}`,
+		`Atvērtie jautājumi cilvēkam: ${items(a.questions)}`,
+		`Riski un pieņēmumi: ${items([a.risks])}`,
+		`Lēmumi, kas vajadzīgi no cilvēka: ${items(a.decisions)}`,
+		`Nākamā stadija: ${items([a.next])}`,
+		"",
+		"Lūdzu atļauju turpināt.",
+	].join("\n");
+}
+
+/** What the gate helpers need of a project: its process file and its notes. Structural, like `ProcessStore`. */
+export interface GateStore extends ProcessStore {
+	notes(): Note[];
+	writeNote(n: Note): void;
+}
+
+/** The leader's request: the process decides first, the note is written only for a request it accepts, then the state keeps the note's id. */
+export function requestGate(store: GateStore, project: string, agent: string, a: GateArgs, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");
+	const noteId = newId("n");
+	const at = now.toISOString();
+	const r = step(cur, { type: "gate.request", noteId, at });
+	if (!r.ok) throw new Error(r.error);
+	// step accepted, so the stage is a real one
+	const stage = cur.stage as Stage;
+	store.writeNote({ id: noteId, type: "gate", title: `GATE ${GATE_OF[stage]} · ${stage}`, body: gateSummary(cur, project, a), refs: [], by: "agent", at, agent });
+	writeProcess(store, r.state, "agent", "gate");
+	return r.state;
+}
+
+/** The user's decision on the waiting gate: `gate.approve` or `gate.return` (a comment is required). The decision line is added to the gate note as a new
+ *  version of it; the earlier one stays in the project's versions. Only the user's IPC handler calls this: no tool does. */
+export function decideGate(store: GateStore, d: { approve: boolean; comment?: string; fix?: string[] }, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");
+	// the decision comes over IPC: check it at runtime
+	if (typeof d?.approve !== "boolean") throw new Error("Lēmums: apstiprināt vai atgriezt.");
+	const comment = (d.comment ?? "").trim();
+	if (!d.approve && !comment) throw new Error("Atgriešanai vajag komentāru.");
+	const fix = Array.isArray(d.fix) ? d.fix.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];
+	const at = now.toISOString();
+	const waiting = cur.stage === "mācības" || cur.stage === "done" ? undefined : [...cur.gates].reverse().find((g) => g.stage === cur.stage && g.state === "waiting");
+	const r = step(cur, d.approve ? { type: "gate.approve", at, ...(comment ? { comment } : {}), fix } : { type: "gate.return", at, comment });
+	if (!r.ok) throw new Error(r.error);
+	writeProcess(store, r.state, "user", "gate");
+	const note = waiting?.noteId ? store.notes().find((n) => n.id === waiting.noteId) : undefined;
+	if (note) {
+		const line = d.approve ? `apstiprināts.${comment ? ` Komentārs: ${comment}` : ""}${fix.length ? ` Labot: ${fix.join(", ")}.` : ""}` : `atgriezts. Komentārs: ${comment}`;
+		store.writeNote({ ...note, body: `${note.body}\n\nLēmums ${at.slice(0, 10)}: ${line}` });
+	}
+	return r.state;
 }

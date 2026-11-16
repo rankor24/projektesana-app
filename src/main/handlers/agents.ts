@@ -4,6 +4,7 @@
 // shared rules the Aģenti page edits.
 import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
+import { PROCESS_WRITE_TOOLS } from "../../core/process-def.js";
 import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
 import { makeLevelOf } from "../../agent/tools/levels.js";
@@ -23,8 +24,9 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 	const rows = (): AgentToolRow[] => {
 		const app = allTools().map((t) => ({ name: t.name, level: t.level as string, description: t.description.split(/(?<=\.)\s/)[0] ?? "" }));
 		const rv = Object.entries(REVIT_LEVELS).map(([name, level]) => ({ name, level: level as string, description: "Revit" }));
+		// the process write tools are given to bpv and eks by themselves (R35): not a row to tick
 		// confirm tools are listed too (13.5): the page offers them only to an agent with maxLevel "confirm", validateSpec holds the line on save
-		return [...app, ...rv].filter((r) => LEVEL_RANK[levelOf(r.name)] > 0 && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
+		return [...app, ...rv].filter((r) => !PROCESS_WRITE_TOOLS.has(r.name) && LEVEL_RANK[levelOf(r.name)] > 0 && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
 	};
 	/** what the agent's requests carry before the conversation starts, measured with the settings, the specs and the skills as they are now */
 	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[]) => fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(spec));

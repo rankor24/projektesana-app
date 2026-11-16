@@ -18,6 +18,7 @@ import { TOOLS } from "../shared/activity.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import type { RunEvent } from "../shared/types.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
+import { PROCESS_TOOLS_OF, PROCESS_WRITE_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
 import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
@@ -37,7 +38,7 @@ export const SPECIALIST_CAP: Level = "run";
 
 /** The tools a lane may be offered: listed ones whose level is within `cap`, not `never`, never this file's tools. */
 export function laneTools(listed: readonly string[], levelOf: LevelOf, cap: Level, wanted?: readonly string[]): string[] {
-	return listed.filter((n) => !MAIN_TOOLS.has(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap] && (!wanted || wanted.includes(n)));
+	return listed.filter((n) => !MAIN_TOOLS.has(n) && !PROCESS_WRITE_TOOLS.has(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap] && (!wanted || wanted.includes(n)));
 }
 
 // ---- specialists -------------------------------------------------------------------------------------------------------------
@@ -91,6 +92,12 @@ export const capOf = (spec: AgentSpec): Level => (spec.maxLevel === "confirm" ? 
  *  (`run` unless the caller is the agent's own thread and the spec allows `confirm`). Never run_subagent / delegate. */
 export function specialistTools(listed: readonly string[], levelOf: LevelOf, revitTools: ReadonlySet<string>, spec: AgentSpec, cap: Level = SPECIALIST_CAP): string[] {
 	return laneTools(listed, levelOf, cap).filter((n) => (levelOf(n) === "read" && !revitTools.has(n)) || spec.tools.includes(n));
+}
+
+/** What the agent's own thread may use: `specialistTools` and, for `bpv` and `eks`, their process tools (R35). A lane (`delegate`) uses `specialistTools`, so it never has them. */
+export function ownTools(listed: readonly string[], levelOf: LevelOf, revitTools: ReadonlySet<string>, spec: AgentSpec, cap: Level = SPECIALIST_CAP): string[] {
+	const process = (PROCESS_TOOLS_OF[spec.id] ?? []).filter((n) => listed.includes(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap]);
+	return [...specialistTools(listed, levelOf, revitTools, spec, cap), ...process];
 }
 
 export interface LaneDeps {

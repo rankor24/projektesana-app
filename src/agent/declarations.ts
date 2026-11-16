@@ -5,7 +5,8 @@ import { z } from "zod";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { estimateTextTokens } from "./context.js";
 import { mailDeclarations } from "./mail.js";
-import { MAIN_TOOL_LEVELS, specialistTools, subagentDeclarations } from "./subagents.js";
+import { PROCESS_WRITE_TOOLS } from "../core/process-def.js";
+import { MAIN_TOOL_LEVELS, ownTools, subagentDeclarations } from "./subagents.js";
 import { allTools, appLevels } from "./tools/defs.js";
 import { makeLevelOf, offered } from "./tools/levels.js";
 import { REVIT_LEVELS } from "./tools/revit-levels.js";
@@ -29,8 +30,8 @@ let leadTokens: number | null = null;
 /** What the agent's requests carry as tool declarations: the lead's own, run_subagent, delegate and the mail tools; a specialist's are its
  *  read tools, its own tools and the mail tools (no helpers). */
 export function declarationTokens(spec: AgentSpec | null): number {
-	if (!spec) return (leadTokens ??= estimateTextTokens(JSON.stringify([...appDeclarations(), ...subagentDeclarations(), ...mailDeclarations()])));
+	if (!spec) return (leadTokens ??= estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => !PROCESS_WRITE_TOOLS.has(d.name)), ...subagentDeclarations(), ...mailDeclarations()])));
 	const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, appLevels(), REVIT_LEVELS);
-	const mine = new Set(specialistTools(offered(appDeclarations().map((d) => d.name), levelOf), levelOf, new Set(), spec));
+	const mine = new Set(ownTools(offered(appDeclarations().map((d) => d.name), levelOf), levelOf, new Set(), spec));
 	return estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => mine.has(d.name)), ...mailDeclarations()]));
 }

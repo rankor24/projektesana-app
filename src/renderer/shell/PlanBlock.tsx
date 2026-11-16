@@ -9,7 +9,7 @@ import { call, errText } from "../bridge";
 import { useLoad } from "../ui";
 
 type Tab = "plan" | "tasks" | "notes";
-const NOTE_TYPE: Record<NoteType, string> = { decision: "lēmums", answer: "atbilde", learning: "mācība", question: "jautājums" };
+const NOTE_TYPE: Record<NoteType, string> = { decision: "lēmums", answer: "atbilde", learning: "mācība", question: "jautājums", gate: "gate", risk: "risks", change: "izmaiņa" };
 const newStepId = () => `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export function PlanBlock({ projectId }: { projectId: string | null }) {
@@ -187,7 +187,7 @@ function NotesTab({ projectId, onErr }: { projectId: string; onErr: (e: unknown)
 			<textarea rows={2} placeholder="ātra piezīme — kļūs par Atmiņas ierakstu" value={text} onChange={(e) => (setText(e.target.value), setSaved(false))} />
 			<div className="row">
 				<select value={type} onChange={(e) => setType(e.target.value as NoteType)}>
-					{(Object.keys(NOTE_TYPE) as NoteType[]).map((t) => (
+					{(["decision", "answer", "learning", "question"] as NoteType[]).map((t) => (
 						<option key={t} value={t}>
 							{NOTE_TYPE[t]}
 						</option>

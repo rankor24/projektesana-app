@@ -29,12 +29,16 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, specialistTools, subagentTools } from "./subagents.js";
+import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
+import { PROCESS_WRITE_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
+/** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
+const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done)$/;
+
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
 
 export interface RunInput {
@@ -195,7 +199,7 @@ export class ThreadRunner {
 					const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, rv?.levels ?? {});
 					const revitTools = new Set(rv?.tools ?? []);
 					const listed = [...offered(appTools, levelOf), ...(rv ? offered(rv.tools, levelOf) : [])];
-					const own = spec ? new Set(specialistTools(listed, levelOf, revitTools, spec, capOf(spec))) : null;
+					const own = spec ? new Set(ownTools(listed, levelOf, revitTools, spec, capOf(spec))) : null;
 					return { revit: rv, levelOf, revitTools, listed, own };
 				};
 				let plan = planFor(this.d.revit());
@@ -214,11 +218,11 @@ export class ThreadRunner {
 					const theirs = [...own].filter((n) => revitTools.has(n));
 					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs };
 				} else {
-					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) };
+					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf).filter((n) => !PROCESS_WRITE_TOOLS.has(n)) };
 					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
 				}
 
-				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : levelOf, async (req: ConfirmRequest) => {
+				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : (n) => (PROCESS_WRITE_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
@@ -293,6 +297,8 @@ export class ThreadRunner {
 					const base = estimateContext(h).tokens;
 					const handle = (e: RunEvent): void => {
 						if (e.type === "tool") st.toolsRan = true;
+						// the tools server writes the process file in its own process: a process tool's result is how the main process learns a gate may be waiting
+						if (e.type === "tool_result" && PROCESS_TOOL.test(e.name)) i.notesChanged?.();
 						if (e.type === "usage") {
 							try {
 								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });

@@ -32,6 +32,8 @@ export interface CoordinatorDeps {
 	projects?: () => (string | null)[];
 	/** the open questions for the user, of every project (Atmiņa); without it none are listed */
 	questions?: () => Extract<WaitingItem, { kind: "question" }>[];
+	/** the gates that wait for the user, of every project (process mode); without it none are listed */
+	gates?: () => Extract<WaitingItem, { kind: "gate" }>[];
 	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
 	mail?: (projectId: string | null) => Mailbox;
 	now?: () => string;
@@ -178,7 +180,7 @@ export class Coordinator {
 		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: this.liveWaves() };
 	}
 
-	/** Everything that waits for the user, of every project: open confirmations first, then the questions in Atmiņa, then the unanswered restart. */
+	/** Everything that waits for the user, of every project: open confirmations first, then the gates of process mode, then the questions in Atmiņa, then the unanswered restart. */
 	waiting(): WaitingItem[] {
 		let questions: Extract<WaitingItem, { kind: "question" }>[] = [];
 		try {
@@ -186,8 +188,14 @@ export class Coordinator {
 		} catch {
 			// unreadable notes: the list shows the rest
 		}
+		let gates: Extract<WaitingItem, { kind: "gate" }>[] = [];
+		try {
+			gates = this.d.gates?.() ?? [];
+		} catch {
+			// unreadable process files: the list shows the rest
+		}
 		const paused = [...this.waves.values()].filter((w) => w.paused).map((w) => ({ kind: "wave-paused" as const, wave: w.id, projectId: w.projectId, reason: w.paused! }));
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates: [] });
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates });
 	}
 
 	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */
