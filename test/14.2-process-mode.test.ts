@@ -138,7 +138,12 @@ test("14.2 setProfile changes depth, agents and doc type, and each change is log
 	const s2 = await h["process.setProfile"]("BD999", { docType: "pazinojums", why: "tomēr paziņojums" });
 	assert.equal(s2.docType, "pazinojums");
 	assert.deepEqual(s2.profile.depth, DEFAULT_DEPTH.pazinojums, "a new doc type brings its own depth row");
-	assert.equal(s2.profile.changes.length, 4);
+	// the reset overwrites S1, S3, S4 and S5 (S2 was already "izlaiž"): each has its own entry beside the doc type line
+	const moved = s2.profile.changes.slice(3);
+	assert.equal(moved.length, 5);
+	assert.match(moved[0].what, /dokumenta veids/);
+	assert.deepEqual(moved.slice(1).map((c) => c.what), ["S1 dziļums: pilna → vienkāršota (jauns dokumenta veids)", "S3 dziļums: vienkāršota → izlaiž (jauns dokumenta veids)", "S4 dziļums: pilna → vienkāršota (jauns dokumenta veids)", "S5 dziļums: pilna → vienkāršota (jauns dokumenta veids)"]);
+	assert.ok(moved.every((c) => c.why === "tomēr paziņojums"));
 });
 
 test("14.2 changing the depth of the escalated stage clears escalated; another stage does not", async () => {
@@ -151,4 +156,38 @@ test("14.2 changing the depth of the escalated stage clears escalated; another s
 	assert.equal(same.escalated, "S4", "agents alone do not clear it");
 	const cleared = await h["process.setProfile"]("BD999", { depth: { S4: "vienkāršota" }, why: "vienkāršojam" });
 	assert.equal(cleared.escalated, null);
+});
+
+test("14.2 a doc type reset clears escalated when the escalated stage's depth moves, and keeps it when it does not", async () => {
+	const { h, store } = setup();
+	const s = await h["process.setMode"]("BD999", "process");
+	store.writeMeta(PROCESS_META, { ...s, stage: "S4", escalated: "S4" }, { kind: "process.test", by: "app" });
+	// būvprojekts → paziņojums moves S4 (pilna → vienkāršota)
+	assert.equal((await h["process.setProfile"]("BD999", { docType: "pazinojums", why: "cits veids" })).escalated, null);
+	store.writeMeta(PROCESS_META, { ...readProcess(store)!, stage: "S6", escalated: "S6" }, { kind: "process.test", by: "app" });
+	// paziņojums → paskaidrojuma raksts leaves S6 on "pilna"
+	const kept = await h["process.setProfile"]("BD999", { docType: "paskaidrojuma-raksts", why: "vēlreiz" });
+	assert.equal(kept.escalated, "S6");
+});
+
+test("14.2 a mode that is already set changes nothing: no write, no log entry, no event; an unknown mode is refused", async () => {
+	const { h, store, events } = setup();
+	await h["process.setMode"]("BD999", "process");
+	const logged = store.events().length;
+	const sent = events.length;
+	const again = await h["process.setMode"]("BD999", "process");
+	assert.equal(again.mode, "process");
+	assert.equal(store.events().length, logged);
+	assert.equal(events.length, sent);
+	await assert.rejects(async () => h["process.setMode"]("BD999", "x" as never), /Nezināms režīms/);
+	const noop = await h["process.setProfile"]("BD999", { agents: again.profile.agents, why: "nekas nemainās" });
+	assert.deepEqual(noop, again);
+	assert.equal(events.length, sent, "a profile change that changes nothing announces nothing");
+});
+
+test("14.2 setProfile refuses agents that are not an array of strings or repeat an id", async () => {
+	const { h, store } = setup();
+	const s = await h["process.setMode"]("BD999", "process");
+	for (const agents of ["bpv", [1, "bpv"], ["bpv", "bpv"], ["bpv", "ar", "ar"]]) await assert.rejects(async () => h["process.setProfile"]("BD999", { agents: agents as never, why: "pārbaude" }), /Aģentu saraksts|atkārtojumi/);
+	assert.deepEqual(readProcess(store), s);
 });

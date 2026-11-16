@@ -208,7 +208,11 @@ const NEED_BPV = "Procesa režīmam vajag aģentu bpv (Iestatījumi → Aģenti)
 /** Switches the mode. The first switch to process builds the state from the profile and every existing agent (the user narrows it with
  *  `changeProfile`); a later switch only flips `mode`, so stage, gates and profile stay. Throws a Latvian refusal. */
 export function switchMode(store: ProcessStore, mode: "cowork" | "process", existing: readonly string[], by: Who): ProcessState {
+	// the mode comes over IPC: check it at runtime
+	if (mode !== "cowork" && mode !== "process") throw new Error(`Nezināms režīms: ${String(mode)}.`);
 	const cur = readProcess(store);
+	// already there: nothing to write, log or announce
+	if (cur?.mode === mode) return cur;
 	if (mode === "process" && !existing.includes("bpv")) throw new Error(NEED_BPV);
 	if (!cur && mode === "cowork") throw new Error("Procesa režīms nav ieslēgts: nav ko saglabāt.");
 	const next = cur ? { ...cur, mode } : initial(docTypeFromProfile(profileOf(store.read("facts"))), existing);
@@ -227,7 +231,7 @@ const DEPTHS: readonly Depth[] = ["pilna", "vienkāršota", "pēc vajadzības", 
 const DOC_TYPES = Object.keys(DEFAULT_DEPTH) as DocType[];
 
 /** Applies a profile change: needs a why, keeps `bpv` among existing agents, never skips S6 or S7. Each real difference is one entry in
- *  `profile.changes`; a new doc type brings its own depth row before the patch's depth is laid over it. Changing the depth of the
+ *  `profile.changes`; a new doc type brings its own depth row (each cell that moves is logged) before the patch's depth is laid over it. Changing the depth of the
  *  escalated stage clears `escalated` (the user has taken the decision). A patch that changes nothing writes nothing. */
 export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: readonly string[], by: Who, now = new Date()): ProcessState {
 	const cur = readProcess(store);
@@ -235,7 +239,9 @@ export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: re
 	const why = (p.why ?? "").trim();
 	if (!why) throw new Error("Profila maiņai vajag pamatojumu.");
 	if (p.docType !== undefined && !DOC_TYPES.includes(p.docType)) throw new Error(`Nezināms dokumenta veids: ${p.docType}.`);
-	if (p.agents) {
+	if (p.agents !== undefined) {
+		if (!Array.isArray(p.agents) || p.agents.some((a) => typeof a !== "string")) throw new Error("Aģentu saraksts: teksta identifikatori.");
+		if (new Set(p.agents).size !== p.agents.length) throw new Error("Aģentu sarakstā ir atkārtojumi.");
 		if (!p.agents.includes("bpv")) throw new Error("Profilā jābūt aģentam bpv.");
 		const unknown = p.agents.filter((a) => !existing.includes(a));
 		if (unknown.length) throw new Error(`Nav tādu aģentu: ${unknown.join(", ")}.`);
@@ -253,9 +259,13 @@ export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: re
 	if (p.docType !== undefined && p.docType !== cur.docType) {
 		log(`dokumenta veids: ${cur.docType} → ${p.docType}`);
 		n.docType = p.docType;
+		// the reset overwrites earlier per-stage choices, so each cell that moves gets its own entry
 		for (const st of STAGES) {
-			if (n.profile.depth[st] !== DEFAULT_DEPTH[p.docType][st]) depthChanged.push(st);
-			n.profile.depth[st] = DEFAULT_DEPTH[p.docType][st];
+			const to = DEFAULT_DEPTH[p.docType][st];
+			if (n.profile.depth[st] === to) continue;
+			log(`${st} dziļums: ${n.profile.depth[st]} → ${to} (jauns dokumenta veids)`);
+			n.profile.depth[st] = to;
+			depthChanged.push(st);
 		}
 	}
 	for (const st of STAGES) {
