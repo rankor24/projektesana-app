@@ -160,6 +160,7 @@ const session = new AgentSession({
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 	onQueue: (v) => emit("queue.changed", v),
 	onWaiting: (items) => emit("waiting.changed", items),
+	onData: (projectId, what) => emit("data.changed", { projectId, what }),
 	onRoom: (projectId, line) => emit("room.line", { projectId, line }),
 });
 // threads a dead process left in flight are marked interrupted and the saved queue waits paused; nothing starts until the user answers

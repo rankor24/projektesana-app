@@ -51,6 +51,7 @@ export interface SessionDeps {
 	onQueue?: (v: QueueView) => void;
 	/** what waits for the user changed (Gaida tevi) */
 	onWaiting?: (items: WaitingItem[]) => void;
+	onData?: (projectId: string | null, what: string[]) => void;
 	/** a message was added to a project's mailbox or a topic closed: one more line of the room */
 	onRoom?: (projectId: string | null, line: RoomLine) => void;
 	/** one model call for the summaries; the app streams through pi, tests inject a fake */
@@ -73,7 +74,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir) });
 	}
 
 	/** A project's mailbox (it reads the disk on every call, so one handle per project is enough). */

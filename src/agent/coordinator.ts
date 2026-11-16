@@ -23,6 +23,8 @@ export interface CoordinatorDeps {
 	onQueue?: (v: QueueView) => void;
 	/** what waits for the user changed: a confirmation opened or was answered, the restart question was answered */
 	onWaiting?: (items: WaitingItem[]) => void;
+	/** a run's tool changed a project's data in the tools server's process (the process file): the window reloads it */
+	onData?: (projectId: string | null, what: string[]) => void;
 	/** where the queue is saved on every change and loaded from by `restore()` */
 	queueFile: string;
 	/** the specialists that exist now, read at every start: a thread of any other agent than the lead runs only while its specialist is in the list.
@@ -381,7 +383,7 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged() })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what) })
 			.then(
 				(r) => {
 					ok = r.ok;

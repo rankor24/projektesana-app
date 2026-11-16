@@ -1,7 +1,7 @@
 // The process state machine (design: "Process mode"). Pure: `step` takes a state and an event and returns a new state or a Latvian refusal; it never
 // mutates its input and never reads the clock (times come from the event). Flow of chapter 5: S1 → H1 → … → S7 → H7 → mācības → done.
 import { type Fact, type Note, type Profile, type Who, newId, profileOf } from "./model.js";
-import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
+import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, LEADER, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
 
 export interface GateRecord {
 	id: GateId;
@@ -33,7 +33,7 @@ export type ProcessEvent =
 	| { type: "gate.request"; noteId: string; at: string }
 	| { type: "gate.approve"; at: string; comment?: string; fix?: string[] } // fix: remark ids to fix, H5 only
 	| { type: "gate.return"; at: string; comment: string }
-	| { type: "stage.skip"; why: string; at: string }
+	| { type: "stage.skip"; why: string; at: string; /** who asks: an agent cannot skip a stage the process has escalated to the user (R36) */ by?: Who }
 	| { type: "review.done"; at: string } // S6: the ekspertīze re-check is recorded
 	| { type: "change"; basic: boolean; at: string }
 	| { type: "learned"; at: string };
@@ -140,6 +140,8 @@ export function step(s: ProcessState, e: ProcessEvent): StepResult {
 		}
 		case "stage.skip": {
 			if (stage === "S6" || stage === "S7") return fail(`${stage} nedrīkst izlaist.`);
+			// escalation is cleared by the user only: skipping the stage would clear it
+			if (e.by === "agent" && s.escalated === stage) return fail(`Stadija ${stage} gaida cilvēka lēmumu.`);
 			if (waiting) return fail("Gate jau gaida lēmumu.");
 			if (!e.why.trim()) return fail("Stadijas izlaišanai jānorāda pamatojums.");
 			n.profile.changes.push({ at: e.at, what: `${stage} izlaista`, why: e.why });
@@ -191,7 +193,18 @@ export const PROCESS_META = "process";
 export const readProcess = (store: ProcessStore): ProcessState | null => store.readMeta<ProcessState | null>(PROCESS_META, null);
 
 /** `what` names the change in the log: "process.mode", "process.profile", "process.gate" (a request or the user's decision), "process.skip" or "process.review". */
-export const writeProcess = (store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" | "gate" | "skip" | "review" = "mode"): void => store.writeMeta(PROCESS_META, s, { kind: `process.${what}`, by });
+export function writeProcess(store: ProcessStore, s: ProcessState, by: Who, what: "mode" | "profile" | "gate" | "skip" | "review" = "mode", expect?: { was: ProcessState | null }): void {
+	if (expect) checkUnchanged(store, expect.was);
+	store.writeMeta(PROCESS_META, s, { kind: `process.${what}`, by });
+}
+
+export const CHANGED = "Procesa stāvoklis mainījās; mēģini vēlreiz.";
+
+/** The tools server and the main process each read, change and write process.json. A write that carries what its caller read compares it with the file
+ *  just before writing and refuses when it moved (R36), so one side's change is not silently lost. A small window between the compare and the write remains. */
+export function checkUnchanged(store: ProcessStore, was: ProcessState | null): void {
+	if (JSON.stringify(readProcess(store)) !== JSON.stringify(was)) throw new Error(CHANGED);
+}
 
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
@@ -216,7 +229,7 @@ export function switchMode(store: ProcessStore, mode: "cowork" | "process", exis
 	if (mode === "process" && !existing.includes("bpv")) throw new Error(NEED_BPV);
 	if (!cur && mode === "cowork") throw new Error("Procesa režīms nav ieslēgts: nav ko saglabāt.");
 	const next = cur ? { ...cur, mode } : initial(docTypeFromProfile(profileOf(store.read("facts"))), existing);
-	writeProcess(store, next, by, "mode");
+	writeProcess(store, next, by, "mode", { was: cur });
 	return next;
 }
 
@@ -280,8 +293,12 @@ export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: re
 		n.profile.agents = [...p.agents];
 	}
 	if (n.profile.changes.length === cur.profile.changes.length) return cur;
-	if (n.escalated && depthChanged.includes(n.escalated)) n.escalated = null;
-	writeProcess(store, n, by, "profile");
+	if (n.escalated && depthChanged.includes(n.escalated)) {
+		// escalation is cleared by the user only (R36); the user's own change clears it
+		if (by === "agent") throw new Error(`Stadija ${n.escalated} gaida cilvēka lēmumu.`);
+		n.escalated = null;
+	}
+	writeProcess(store, n, by, "profile", { was: cur });
 	return n;
 }
 
@@ -334,15 +351,19 @@ export interface GateStore extends ProcessStore {
 /** The leader's request: the process decides first, the note is written only for a request it accepts, then the state keeps the note's id. */
 export function requestGate(store: GateStore, project: string, agent: string, a: GateArgs, now = new Date()): ProcessState {
 	const cur = readProcess(store);
-	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	// the leader is read from the same state the request is applied to
+	if ((STAGES as readonly string[]).includes(cur.stage) && agent !== LEADER[cur.stage as Stage]) throw new Error(`Gate pieprasa tikai stadijas vadītājs (${LEADER[cur.stage as Stage]}).`);
 	const noteId = newId("n");
 	const at = now.toISOString();
 	const r = step(cur, { type: "gate.request", noteId, at });
 	if (!r.ok) throw new Error(r.error);
 	// step accepted, so the stage is a real one
 	const stage = cur.stage as Stage;
+	// no note for a request whose state has moved on since it was read
+	checkUnchanged(store, cur);
 	store.writeNote({ id: noteId, type: "gate", title: `GATE ${GATE_OF[stage]} · ${stage}`, body: gateSummary(cur, project, a), refs: [], by: "agent", at, agent });
-	writeProcess(store, r.state, "agent", "gate");
+	writeProcess(store, r.state, "agent", "gate", { was: cur });
 	return r.state;
 }
 
@@ -360,11 +381,31 @@ export function decideGate(store: GateStore, d: { approve: boolean; comment?: st
 	const waiting = cur.stage === "mācības" || cur.stage === "done" ? undefined : [...cur.gates].reverse().find((g) => g.stage === cur.stage && g.state === "waiting");
 	const r = step(cur, d.approve ? { type: "gate.approve", at, ...(comment ? { comment } : {}), fix } : { type: "gate.return", at, comment });
 	if (!r.ok) throw new Error(r.error);
-	writeProcess(store, r.state, "user", "gate");
+	writeProcess(store, r.state, "user", "gate", { was: cur });
 	const note = waiting?.noteId ? store.notes().find((n) => n.id === waiting.noteId) : undefined;
 	if (note) {
 		const line = d.approve ? `apstiprināts.${comment ? ` Komentārs: ${comment}` : ""}${fix.length ? ` Labot: ${fix.join(", ")}.` : ""}` : `atgriezts. Komentārs: ${comment}`;
 		store.writeNote({ ...note, body: `${note.body}\n\nLēmums ${at.slice(0, 10)}: ${line}` });
 	}
+	return r.state;
+}
+
+/** The leader skips the current stage (the tool of `bpv`). `by` "agent" cannot skip a stage escalated to the user. */
+export function skipStage(store: ProcessStore, why: string, by: Who, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	const r = step(cur, { type: "stage.skip", why, at: now.toISOString(), by });
+	if (!r.ok) throw new Error(r.error);
+	writeProcess(store, r.state, by, "skip", { was: cur });
+	return r.state;
+}
+
+/** The ekspertīze re-check of S6 is recorded (the tool of `eks`). */
+export function recordReview(store: ProcessStore, by: Who, now = new Date()): ProcessState {
+	const cur = readProcess(store);
+	if (!cur || cur.mode !== "process") throw new Error("Procesa režīms nav ieslēgts.");
+	const r = step(cur, { type: "review.done", at: now.toISOString() });
+	if (!r.ok) throw new Error(r.error);
+	writeProcess(store, r.state, by, "review", { was: cur });
 	return r.state;
 }

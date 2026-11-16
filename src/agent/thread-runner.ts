@@ -35,10 +35,10 @@ import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
-/** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 /** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
 const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done)$/;
 
+/** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
 
 export interface RunInput {
@@ -60,6 +60,8 @@ export interface RunInput {
 	wake?: () => void;
 	/** a question for the user was written into Atmiņa: "Gaida tevi" changed */
 	notesChanged?: () => void;
+	/** project data changed in the tools server's process (a process tool's result): the window reloads what shows it */
+	dataChanged?: (what: string[]) => void;
 }
 
 export interface Conversation {
@@ -298,7 +300,10 @@ export class ThreadRunner {
 					const handle = (e: RunEvent): void => {
 						if (e.type === "tool") st.toolsRan = true;
 						// the tools server writes the process file in its own process: a process tool's result is how the main process learns a gate may be waiting
-						if (e.type === "tool_result" && PROCESS_TOOL.test(e.name)) i.notesChanged?.();
+						if (e.type === "tool_result" && e.ok && PROCESS_TOOL.test(e.name)) {
+							i.notesChanged?.();
+							i.dataChanged?.(["process"]);
+						}
 						if (e.type === "usage") {
 							try {
 								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });

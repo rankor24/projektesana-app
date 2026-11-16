@@ -3,8 +3,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { type ProcessState, type ProfilePatch, changeProfile, readProcess, requestGate, step, writeProcess } from "../../core/process.js";
-import { LEADER, STAGES, STAGE_CARD, type Stage } from "../../core/process-def.js";
+import { type ProcessState, type ProfilePatch, changeProfile, readProcess, recordReview, requestGate, skipStage } from "../../core/process.js";
+import { STAGE_CARD } from "../../core/process-def.js";
 import { type ToolCtx, storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -48,12 +48,8 @@ export const processTools: ToolDef[] = [
 		input: { result: z.array(z.string()), files: z.array(z.string()), deviations: z.string(), questions: z.array(z.string()), risks: z.string(), decisions: z.array(z.string()), next: z.string() },
 		run: (ctx, a) => {
 			const store = storeOf(ctx);
-			const s = active(ctx);
-			if ((STAGES as readonly string[]).includes(s.stage)) {
-				const leader = LEADER[s.stage as Stage];
-				if (ctx.agent !== leader) throw new Error(`Gate pieprasa tikai stadijas vadītājs (${leader}).`);
-			}
-			const r = requestGate(store, store.project.id, ctx.agent as string, a);
+			// the mode and the leader are checked inside, on the state the request is applied to
+			const r = requestGate(store, store.project.id, ctx.agent ?? "", a);
 			const g = r.gates.at(-1)!;
 			return { ok: true, gate: g.id, note: g.noteId, message: "Gate gaida lietotāja lēmumu (Gaida tevi). Nepārej uz nākamo stadiju, kamēr tas nav apstiprināts." };
 		},
@@ -64,12 +60,9 @@ export const processTools: ToolDef[] = [
 		description: "Skip the current stage, with a reason (bpv only).",
 		input: { why: z.string() },
 		run: (ctx, { why }) => {
-			const s = active(ctx);
+			active(ctx);
 			if (ctx.agent !== "bpv") throw new Error("Tikai bpv var izlaist stadiju.");
-			const r = step(s, { type: "stage.skip", why, at: new Date().toISOString() });
-			if (!r.ok) throw new Error(r.error);
-			writeProcess(storeOf(ctx), r.state, "agent", "skip");
-			return { ok: true, stage: r.state.stage };
+			return { ok: true, stage: skipStage(storeOf(ctx), why, "agent").stage };
 		},
 	}),
 	tool({
@@ -91,11 +84,9 @@ export const processTools: ToolDef[] = [
 		description: "Record the ekspertīze re-check of S6 (eks only); H6 needs it.",
 		input: {},
 		run: (ctx) => {
-			const s = active(ctx);
+			active(ctx);
 			if (ctx.agent !== "eks") throw new Error("Tikai eks var atzīmēt ekspertīzes atkārtotu pārbaudi.");
-			const r = step(s, { type: "review.done", at: new Date().toISOString() });
-			if (!r.ok) throw new Error(r.error);
-			writeProcess(storeOf(ctx), r.state, "agent", "review");
+			recordReview(storeOf(ctx), "agent");
 			return { ok: true };
 		},
 	}),

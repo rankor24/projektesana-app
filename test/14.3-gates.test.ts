@@ -8,7 +8,7 @@ import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
 import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { allTools } from "../src/agent/tools/defs.ts";
-import { type GateArgs, type ProcessState, gateSummary, readProcess, switchMode, writeProcess } from "../src/core/process.ts";
+import { type GateArgs, type ProcessState, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
 import { STAGE_CARD } from "../src/core/process-def.ts";
 import { waitingGates } from "../src/core/process-waiting.ts";
 import { ProjectStore } from "../src/core/store.ts";
@@ -261,7 +261,7 @@ test("14.3 process_skip_stage: bpv only, with a reason; the stage is passed over
 	await r.call("bpv", "process_skip_stage", { why: "izpētes nav vajadzīgas" });
 	assert.equal(r.state().stage, "S2");
 	assert.equal(r.state().profile.changes.at(-1)!.what, "S1 izlaista");
-	assert.equal(r.store.events().some((e) => e.kind === "process.gate" || e.kind === "process.skip"), true, "the write is logged");
+	assert.equal(r.store.events().some((e) => e.kind === "process.skip" && e.by === "agent"), true, "the write is logged as the agent's skip");
 });
 
 test("14.3 process_set_profile: bpv only, through changeProfile (a reason, bpv stays, S6 and S7 stay), changes logged", async () => {
@@ -317,6 +317,9 @@ test("14.3 through a session: a process tool's result tells the window; the gate
 	switchMode(store, "process", AGENTS, "user");
 	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
 	const told: WaitingItem[][] = [];
+	const data: { projectId: string | null; what: string[] }[] = [];
+	let dataAfterStatus = -1;
+	let dataAfterError = -1;
 	let toldByTool = false;
 	let readOnlyTold = -1;
 	const ctx: ToolCtx = { projectsDir: dir, projectId: "BD999", dataDir: dir, appDir: dir, runDir: null, agent: "bpv", thread: null };
@@ -331,11 +334,15 @@ test("14.3 through a session: a process tool's result tells the window; the gate
 		chatDir: join(dir, "chat"),
 		emit: () => undefined,
 		onWaiting: (items) => told.push(items),
+		onData: (projectId, what) => data.push({ projectId, what }),
 		runAgent: async (o) => {
 			// the tools server writes in its own process; the main process learns of it from the tool's result
 			const before = told.length;
 			o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_status", ok: true });
 			readOnlyTold = told.length - before;
+			dataAfterStatus = data.length;
+			o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_skip_stage", ok: false, detail: "Tikai bpv var izlaist stadiju." });
+			dataAfterError = data.length;
 			await allTools().find((t) => t.name === "process_request_gate")!.run(ctx, ARGS as never);
 			o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_request_gate", ok: true });
 			toldByTool = told.some((l) => l.some((x) => x.kind === "gate"));
@@ -348,6 +355,8 @@ test("14.3 through a session: a process tool's result tells the window; the gate
 	assert.deepEqual(s.waiting().filter((x) => x.kind === "gate"), [{ kind: "gate", gate: "H1", projectId: "BD999", noteId: n.id }]);
 	assert.equal(toldByTool, true, "the result of the request tool carried the gate to the window, before the run ended");
 	assert.equal(readOnlyTold, 0, "process_status changes nothing and tells nothing");
+	assert.deepEqual([dataAfterStatus, dataAfterError], [0, 0], "neither a read tool nor a refused write refreshes the window");
+	assert.deepEqual(data, [{ projectId: "BD999", what: ["process"] }], "the successful request refreshes an open process view, once");
 	// the user decides (what the IPC handler does), then tells the session
 	const settings = new AppSettings(dir, plainCrypto);
 	const h = processHandlers({ registry: { store: () => store } as never, settings, emit: () => undefined, session: s });
@@ -437,4 +446,103 @@ test("14.3 the settings page does not offer the four write tools as rows to tick
 	const rows = agentHandlers({ settings: new AppSettings(tmp(), plainCrypto) })["agents.list"]().tools.map((r) => r.name);
 	for (const n of WRITE) assert.ok(!rows.includes(n), n);
 	assert.ok(rows.length > 10, "the other tools are still there");
+});
+
+// ---- R36: escalation is the user's; compare-and-write ----------------------------------------------------------------------
+
+/** The project's process escalated at S3: three returns went past the limit. */
+const escalate = (r: ReturnType<typeof rig>) => moveTo(r.store, { stage: "S3", escalated: "S3", iteration: { ...r.state().iteration, S3: 4 } });
+const ESC = { message: "Stadija S3 gaida cilvēka lēmumu." };
+
+test("14.3 an escalated stage cannot be skipped by an agent: the tool refuses, the state keeps the escalation; the user's own skip still works", async () => {
+	const r = rig({ mode: "process" });
+	escalate(r);
+	const before = JSON.stringify(r.state());
+	await assert.rejects(r.call("bpv", "process_skip_stage", { why: "ātrāk" }), ESC);
+	assert.equal(JSON.stringify(r.state()), before, "nothing written");
+	assert.throws(() => skipStage(r.store, "ātrāk", "agent"), ESC, "the core refuses an agent whatever path calls it");
+	const s = skipStage(r.store, "lietotājs izlemj", "user");
+	assert.equal(s.stage, "S4");
+	assert.equal(s.escalated, null, "the user's decision clears it");
+});
+
+test("14.3 an agent cannot change the depth of the escalated stage; other profile changes still go through; the user's change clears the escalation", async () => {
+	const r = rig({ mode: "process" });
+	escalate(r);
+	const before = JSON.stringify(r.state());
+	await assert.rejects(r.call("bpv", "process_set_profile", { why: "vienkāršot", depth: { S3: "vienkāršota" } }), ESC);
+	await assert.rejects(r.call("bpv", "process_set_profile", { why: "izlaist", depth: { S3: "izlaiž" } }), ESC);
+	assert.equal(JSON.stringify(r.state()), before, "nothing written");
+	// a doc type whose table moves the S3 cell is the same thing
+	await assert.rejects(r.call("bpv", "process_set_profile", { why: "cits veids", docType: "pazinojums" }), ESC);
+	assert.equal(JSON.stringify(r.state()), before);
+	await r.call("bpv", "process_set_profile", { why: "cits dziļums", depth: { S4: "vienkāršota" } });
+	assert.equal(r.state().escalated, "S3", "a change elsewhere leaves the escalation as it is");
+	const s = changeProfile(r.store, { why: "lietotājs izlemj", depth: { S3: "vienkāršota" } }, AGENTS, "user");
+	assert.equal(s.escalated, null);
+});
+
+/** A store whose process file is changed by someone else right after the caller reads it. */
+/** `after`: how many reads pass before the slip (the IPC handlers read once for their own announcement). */
+function slipping(store: ProjectStore, slip: (cur: ProcessState) => ProcessState, after = 0) {
+	let done = false;
+	let reads = 0;
+	return new Proxy(store, {
+		get(t, k) {
+			if (k === "readMeta") {
+				return (name: string, fallback: unknown) => {
+					const v = t.readMeta(name, fallback);
+					if (!done && name === "process" && reads++ >= after) {
+						done = true;
+						t.writeMeta("process", slip(v as ProcessState), { kind: "process.other", by: "app" });
+					}
+					return v;
+				};
+			}
+			const v = (t as never as Record<string | symbol, unknown>)[k];
+			return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+		},
+	});
+}
+const CHANGED = { message: "Procesa stāvoklis mainījās; mēģini vēlreiz." };
+
+test("14.3 compare-and-write: a write slipped in after the read makes every process write refuse, and nothing of the stale one lands", async () => {
+	const touch = (s: ProcessState): ProcessState => ({ ...s, reviewed: !s.reviewed });
+	// the leader's request: no gate, and no note left behind
+	let r = rig({ mode: "process" });
+	assert.throws(() => requestGate(slipping(r.store, touch) as never, "BD999", "bpv", ARGS), CHANGED);
+	assert.deepEqual(r.state().gates, []);
+	assert.deepEqual(gateNotes(r.store), []);
+	// skip
+	r = rig({ mode: "process" });
+	assert.throws(() => skipStage(slipping(r.store, touch) as never, "x", "agent"), CHANGED);
+	assert.equal(r.state().stage, "S1");
+	// profile
+	r = rig({ mode: "process" });
+	assert.throws(() => changeProfile(slipping(r.store, touch) as never, { why: "x", depth: { S2: "izlaiž" } }, AGENTS, "agent"), CHANGED);
+	assert.deepEqual(r.state().profile.changes, []);
+	// the user's mode switch
+	r = rig({ mode: "process" });
+	assert.throws(() => switchMode(slipping(r.store, touch) as never, "cowork", AGENTS, "user"), CHANGED);
+	assert.equal(r.state().mode, "process");
+	// the user's decision
+	r = rig({ mode: "process" });
+	await r.call("bpv", "process_request_gate", ARGS as never);
+	assert.throws(() => decideGate(slipping(r.store, touch) as never, { approve: true }), CHANGED);
+	assert.equal(r.state().gates[0].state, "waiting");
+	assert.match(gateNotes(r.store)[0].body, /Lūdzu atļauju turpināt.$/, "the note has no decision line either");
+	// the first mode switch (no file yet) is guarded too
+	const none = rig();
+	assert.throws(() => switchMode(slipping(none.store, () => initialState("buvprojekts", AGENTS)) as never, "process", AGENTS, "user"), CHANGED);
+});
+
+test("14.3 compare-and-write: with nothing slipped in every write goes through, and the IPC handlers carry the same refusal", async () => {
+	const r = rig({ mode: "process" });
+	await r.call("bpv", "process_request_gate", ARGS as never);
+	assert.equal(r.state().gates.length, 1);
+	r.h["process.gate"]("BD999", { approve: true });
+	assert.equal(r.state().stage, "S2");
+	const h = processHandlers({ registry: { store: () => slipping(r.store, (s) => ({ ...s, reviewed: true }), 1) } as never, settings: new AppSettings(r.dir, plainCrypto), emit: () => undefined });
+	assert.throws(() => h["process.setProfile"]("BD999", { why: "x", depth: { S4: "vienkāršota" } }), CHANGED);
+	assert.equal(r.state().profile.depth.S4, "pilna");
 });
