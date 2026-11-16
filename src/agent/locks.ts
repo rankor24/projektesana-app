@@ -136,6 +136,8 @@ export class LockRegistry {
 	private perProject = new Map<string, WriteLocks>();
 	private revit: WriteLocks;
 	private batch: { owner: string; label: string } | null = null;
+	/** the Revit seat: one Revit takes one MCP connection, so one run at a time has the Revit server and its tools */
+	private seat: { owner: string; label: string } | null = null;
 	private batchWaiters: BatchWaiter[] = [];
 	private waitMs: number;
 
@@ -230,6 +232,27 @@ export class LockRegistry {
 		if (this.batch?.owner !== owner) return;
 		this.batch = null;
 		for (const w of [...this.batchWaiters]) w.go();
+	}
+
+	/** A run asks for the Revit seat at its start. True = it has it (also when it already had it); false = another run has it. */
+	takeSeat(owner: string, label: string): boolean {
+		if (this.seat && this.seat.owner !== owner) return false;
+		this.seat = { owner, label };
+		return true;
+	}
+
+	/** Frees the seat when `owner` holds it; any other owner frees nothing. */
+	releaseSeat(owner: string): void {
+		if (this.seat?.owner === owner) this.seat = null;
+	}
+
+	seatHeldBy(): string | null {
+		return this.seat?.owner ?? null;
+	}
+
+	/** How the holder is named to a run that did not get the seat. */
+	seatLabel(): string | null {
+		return this.seat?.label ?? null;
 	}
 
 	revitHeldBy(): string | null {

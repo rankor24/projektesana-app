@@ -28,10 +28,10 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, specialistTools, subagentTools } from "./subagents.js";
+import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, specialistTools, subagentTools } from "./subagents.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
-import type { SessionDeps } from "./session.js";
+import type { SessionDeps, ToolServer } from "./session.js";
 
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
@@ -81,11 +81,22 @@ export class ThreadRunner {
 		if (text.trim() || attachments?.length) this.store(thread).append(thread.id, entry);
 	}
 
+	/** The specialist a thread belongs to; null for the lead (and for one removed from the settings). */
+	private specOf(thread: Thread): AgentSpec | null {
+		return thread.agent === LEAD_ID ? null : ((this.d.agents?.() ?? DEFAULT_AGENTS).find((a) => a.id === thread.agent) ?? null);
+	}
+
+	/** The model a run of this agent uses: the spec's own model and effort when it has them, else the settings'. `key` names the conversation and the usage rows. */
+	private modelFor(s: Settings, spec: AgentSpec | null): { provider: string; modelId: string; effort: PiEffort | undefined; key: string } {
+		const modelId = spec?.model?.trim() || s.model;
+		return { provider: s.provider, modelId, effort: ((spec?.effort || s.effort) || undefined) as PiEffort | undefined, key: `${s.provider}/${modelId}` };
+	}
+
 	/** Images the thread's live conversation holds, for the attachment limits (0 when it is not in memory or the model changed). */
 	imagesInContext(thread: Thread): number {
 		const s = this.d.settings();
 		const conv = this.conversations.get(thread.id);
-		return conv && conv.key === `${s.provider}/${s.model}` ? countImages(this.shrink(conv.messages)) : 0;
+		return conv && conv.key === this.modelFor(s, this.specOf(thread)).key ? countImages(this.shrink(conv.messages)) : 0;
 	}
 
 	/** What every request starts with, built by standingFor (agents.ts): the lead's rules, roster and skills, or a specialist's shared rules, role,
@@ -174,13 +185,25 @@ export class ThreadRunner {
 				const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: spec ? spec.id : LEAD_ID, thread: thread.id });
 				const appTools = allTools().map((t) => t.name);
 				const app = appLevels();
-				const revit = this.d.revit();
-				const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, revit?.levels ?? {});
 				const appSet = new Set(appTools);
-				const revitTools = new Set(revit?.tools ?? []);
-				const listed = [...offered(appTools, levelOf), ...(revit ? offered(revit.tools, levelOf) : [])];
-				// a specialist's own tool list: what `delegate` gives its lanes. Its gate lets only these through; no confirm tool is in it (the cap keeps them out)
-				const own = spec ? new Set(specialistTools(listed, levelOf, revitTools, spec)) : null;
+				// what this run is offered, with the Revit server or without it. A specialist's own tool list is what `delegate` gives its lanes plus,
+				// when its spec says maxLevel "confirm", its confirm tools (its gate asks the user); `never` and the main process's tools stay out.
+				const planFor = (rv: ToolServer | null) => {
+					const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, rv?.levels ?? {});
+					const revitTools = new Set(rv?.tools ?? []);
+					const listed = [...offered(appTools, levelOf), ...(rv ? offered(rv.tools, levelOf) : [])];
+					const own = spec ? new Set(specialistTools(listed, levelOf, revitTools, spec, capOf(spec))) : null;
+					return { revit: rv, levelOf, revitTools, listed, own };
+				};
+				let plan = planFor(this.d.revit());
+				// One Revit takes one MCP connection: a run that would be offered a Revit tool takes the seat, and with it gets the Revit server. Without it
+				// the run has no Revit server and no Revit tool, and its prompt says who has Revit. The run's finally frees the seat.
+				let seatLine = "";
+				if (plan.revit && (plan.own ? [...plan.own] : plan.listed).some((n) => plan.revitTools.has(n)) && !this.d.locks.takeSeat(owner, label)) {
+					seatLine = `Revit šobrīd lieto ${this.d.locks.seatLabel() ?? "cits aģents"}; Revit darbu atstāj vai jautā lietotājam.`;
+					plan = planFor(null);
+				}
+				const { revit, levelOf, revitTools, listed, own } = plan;
 				const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
 				if (own) {
 					const mine = [...own].filter((n) => appSet.has(n));
@@ -237,15 +260,16 @@ export class ThreadRunner {
 					return undefined;
 				};
 
-				const key = `${s.provider}/${s.model}`;
+				// the agent's own model and effort (13.3); an unknown model fails here with the provider's own error
+				const { provider, modelId, effort, key } = this.modelFor(s, spec);
 				const conv = this.conversations.get(thread.id);
 				const rt = await this.d.runtime();
-				const model = lookupPiModel(rt, s.provider, s.model);
+				const model = lookupPiModel(rt, provider, modelId);
 				// the plan lines the user changed belong to the lead: a specialist neither carries nor clears them
 				// this project's mailbox: the thread's open topics go into every prompt, and the mail tools write into it
 				const mailbox = this.d.mail?.(projectId);
 				const topics = mailbox ? topicsLine(openTopicsOf(thread, mailbox.topics(), mailbox.messages())) : "";
-				const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics);
+				const prompt = [buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics), seatLine].filter(Boolean).join("\n\n");
 				const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
 				const keepRecent = keepRecentFor(model.contextWindow);
 
@@ -268,7 +292,7 @@ export class ThreadRunner {
 						if (e.type === "tool") st.toolsRan = true;
 						if (e.type === "usage") {
 							try {
-								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
+								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
 							} catch {
 								// the log is a convenience: a full disk must not stop the run
 							}
@@ -288,7 +312,8 @@ export class ThreadRunner {
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
 					const lanes = spec ? [] : subagentTools({
 						run: this.d.runAgent ?? runPi,
-						base: { runtime: rt, provider: s.provider, modelId: s.model, effort: (s.effort || undefined) as PiEffort | undefined },
+						base: { runtime: rt, provider, modelId, effort },
+						standing: (sp) => this.standing(s, sp, revitTools),
 						mcpFor: (allowed) => {
 							const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
 							const mine = allowed.filter((n) => appSet.has(n));
@@ -332,9 +357,9 @@ export class ThreadRunner {
 					const extraTools = [...lanes, ...mail];
 					await (this.d.runAgent ?? runPi)({
 						runtime: rt,
-						provider: s.provider,
-						modelId: s.model,
-						effort: (s.effort || undefined) as PiEffort | undefined,
+						provider,
+						modelId,
+						effort,
 						prompt,
 						images: files.images,
 						systemPrompt: h.length ? standing : withEarlier(seeded, seed.earlier),
@@ -378,6 +403,8 @@ export class ThreadRunner {
 		} finally {
 			if (batchOpen) this.d.locks.endBatch(owner);
 			this.d.locks.releaseOwner(owner);
+			// after afterBatch: the next run may take Revit only when this one is done with it
+			this.d.locks.releaseSeat(owner);
 		}
 		return { ok: !failed && !signal.aborted, answer, confirmedBatches };
 	}
@@ -411,11 +438,12 @@ export class ThreadRunner {
 	/** What the next request carries, where the limits are, and what the message being typed would add. */
 	async context(thread: Thread, draft?: { text: string; focus: FocusItem[] }): Promise<ContextInfo> {
 		const s = this.d.settings();
-		const model = lookupPiModel(await this.d.runtime(), s.provider, s.model);
-		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text and declarations
-		const agent = thread.agent === LEAD_ID ? null : ((this.d.agents?.() ?? DEFAULT_AGENTS).find((a) => a.id === thread.agent) ?? null);
+		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text, declarations and model
+		const agent = this.specOf(thread);
+		const mf = this.modelFor(s, agent);
+		const model = lookupPiModel(await this.d.runtime(), mf.provider, mf.modelId);
 		const conv = this.conversations.get(thread.id);
-		const live = conv && conv.key === `${s.provider}/${s.model}` && conv.messages.length > 0 ? conv : null;
+		const live = conv && conv.key === mf.key && conv.messages.length > 0 ? conv : null;
 		const est = live ? estimateContext(live.messages) : null;
 		const b = live ? breakdown(live.messages) : null;
 		return {
@@ -436,11 +464,11 @@ export class ThreadRunner {
 
 	/** Summarizes the thread's in-memory conversation now; the caller guards against a run going on. */
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
-		const s = this.d.settings();
+		const mf = this.modelFor(this.d.settings(), this.specOf(thread));
 		const conv = this.conversations.get(thread.id);
-		if (!conv || conv.key !== `${s.provider}/${s.model}` || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
+		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();
-		const model = lookupPiModel(rt, s.provider, s.model);
+		const model = lookupPiModel(rt, mf.provider, mf.modelId);
 		const history = this.shrink(conv.messages);
 		const before = estimateContext(conv.messages).tokens;
 		const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });

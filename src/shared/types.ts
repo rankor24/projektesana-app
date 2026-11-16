@@ -14,7 +14,7 @@ export type RunEvent =
 	| { type: "confirm"; id: string; tool: string; batch: string }
 	| { type: "done"; text: string }
 	/** One model turn's token counts (and its price at the catalogue, null when the provider gives none). Task 8.7. */
-	| { type: "usage"; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
+	| { type: "usage"; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null; /** `provider/model` when a lane ran on a model other than its run's (13.3) */ model?: string }
 	/** A model turn failed on the wire (fetch failed, 429, 5xx…); the run waits `delayMs` and restarts it. Not the end of the run. */
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** A helper or specialist working beside the main run (task 8.15): one lane per job. `step` replaces the lane's current action; `end` carries its report. */
