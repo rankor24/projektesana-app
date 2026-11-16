@@ -11,14 +11,18 @@ const at = () => T(clock++ % 60);
 /** Applies the events in order; any refusal fails the test with its text. */
 function run(s: ProcessState, ...events: ProcessEvent[]): ProcessState {
 	for (const e of events) {
+		const before = JSON.stringify(s);
 		const r = step(s, e);
+		assert.equal(JSON.stringify(s), before, `${e.type} mutated its input`);
 		assert.ok(r.ok, r.ok ? "" : `${e.type}: ${r.error}`);
 		s = r.state;
 	}
 	return s;
 }
 const refused = (s: ProcessState, e: ProcessEvent): string => {
+	const before = JSON.stringify(s);
 	const r = step(s, e);
+	assert.equal(JSON.stringify(s), before, `${e.type} mutated its input`);
 	assert.equal(r.ok, false, `${e.type} should be refused`);
 	return r.ok ? "" : r.error;
 };
@@ -187,6 +191,25 @@ test("change: basic in S4 returns to S3, otherwise the stage stays", () => {
 	assert.equal(moved.stage, "S3");
 	assert.equal(moved.gates.at(-1)?.state, "returned");
 	assert.equal(run(initial("buvprojekts", []), { type: "change", basic: true, at: at() }).stage, "S1");
+});
+
+test("a profile that skips S5, S6 and S7 still passes S6, H6, S7 and H7", () => {
+	let s = initial("buvprojekts", []);
+	s = { ...s, profile: { ...s.profile, depth: { ...s.profile.depth, S5: "izlaiž", S6: "izlaiž", S7: "izlaiž" } } };
+	for (let i = 0; i < 3; i++) s = run(s, request(), approve());
+	s = run(s, request(), approve());
+	assert.equal(s.stage, "S6");
+	assert.deepEqual(s.profile.changes.map((c) => [c.what, c.why]), [["S5 izlaista", "izlaists pēc profila"]]);
+	assert.match(refused(s, { type: "learned", at: at() }), /Mācības/);
+	s = run(s, { type: "review.done", at: at() }, request(), approve());
+	assert.equal(s.stage, "S7");
+	s = run(s, request(), approve());
+	assert.equal(s.stage, "mācības");
+	assert.deepEqual(s.gates.map((g) => g.id), ["H1", "H2", "H3", "H4", "H6", "H7"]);
+	// the same through a manual skip of S4: S5 is passed, S6 is not
+	const t = { ...initial("buvprojekts", []), stage: "S4" as const };
+	const u = { ...t, profile: { ...t.profile, depth: { ...t.profile.depth, S5: "izlaiž" as const, S6: "izlaiž" as const } } };
+	assert.equal(run(u, { type: "stage.skip", why: "x", at: at() }).stage, "S6");
 });
 
 test("learned only after H7; nothing moves a finished process; co-work refuses every event", () => {

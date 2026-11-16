@@ -25,7 +25,7 @@ export const DEFAULT_DEPTH: Record<DocType, Record<Stage, Depth>> = {
 export const STAGE_CARD: Record<Stage, { title: string; goal: string; involved: string; actions: string[]; output: string[]; gate: string }> = {
 	S1: {
 		title: "S1 Izejas datu analīze",
-		goal: "Saprast, kas ir dots, kas trūkst un kas ir pretrunā.",
+		goal: "Pārredzēt saņemtos datus: ko tie satur, ko vēl vajag un kur tie pretrunā.",
 		involved: "BPV un AR vienmēr; pārējie tikai tad, ja izejas datos ir viņu sadaļas dokumenti.",
 		actions: [
 			"Sastādīt izejas datu sarakstu ar statusu: ir, trūkst, nepilnīgs.",
@@ -65,7 +65,7 @@ export const STAGE_CARD: Record<Stage, { title: string; goal: string; involved: 
 			"Katrs iesaistītais ar BPV sagatavo savu darba uzdevumu S4.",
 		],
 		output: ["Apstiprināta koncepcija", "Provizoriskais izmaksu novērtējums", "Darba uzdevumi sadaļām"],
-		gate: "H3: cilvēks saskaņo koncepciju ar pasūtītāju un apstiprina.",
+		gate: "H3: koncepciju pēc saskaņošanas ar pasūtītāju apstiprina cilvēks.",
 	},
 	S4: {
 		title: "S4 Projekta izstrāde",
@@ -80,11 +80,11 @@ export const STAGE_CARD: Record<Stage, { title: string; goal: string; involved: 
 			"BPV gala pārbaude: Solibri, PU, normatīvi, sadaļu konsekvence, sastāva pilnīgums.",
 		],
 		output: ["Revit un IFC modeļi", "PDF rasējumi un dokumenti", "Tāme", "BPV pārbaudes protokols"],
-		gate: "H4: cilvēks atļauj nodot projektu ekspertīzei.",
+		gate: "H4: tikai cilvēks drīkst projektu nodot ekspertīzes pārbaudei.",
 	},
 	S5: {
 		title: "S5 Ekspertīze",
-		goal: "Neatkarīgs ziņojums cilvēkam par projekta atbilstību likumam, normatīviem un uzdevumam.",
+		goal: "Cilvēkam adresēts, no projekta autoriem neatkarīgs vērtējums, vai projekts atbilst normām un projektēšanas uzdevumam.",
 		involved: "Ekspertīzes aģents; sadaļu autori tikai atbild uz tā jautājumiem.",
 		actions: [
 			"Pārbaudīt projektu pa sadaļām, tikai lasot.",
@@ -107,7 +107,7 @@ export const STAGE_CARD: Record<Stage, { title: string; goal: string; involved: 
 			"Virs 10% ekspertīze pārbauda visu atkārtoti, citādi labotos un ar tiem saistītos dokumentus.",
 		],
 		output: ["Piezīmju atbilžu tabula", "Atjaunoti modeļi un dokumenti", "Ekspertīzes atkārtotas pārbaudes ziņojums"],
-		gate: "H6: cilvēks atļauj gatavot nodevumu (prasa atkārtotu ekspertīzes pārbaudi).",
+		gate: "H6: cilvēks dod zaļo gaismu nodevuma gatavošanai; iepriekš jābūt ekspertīzes atkārtotai pārbaudei.",
 	},
 	S7: {
 		title: "S7 Nodevuma sagatavošana",

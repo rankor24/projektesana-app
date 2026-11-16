@@ -59,15 +59,16 @@ const clone = (s: ProcessState): ProcessState => ({
 	...s,
 	profile: { ...s.profile, depth: { ...s.profile.depth }, agents: [...s.profile.agents], changes: s.profile.changes.map((c) => ({ ...c })) },
 	iteration: { ...s.iteration },
-	gates: s.gates.map((g) => ({ ...g, fix: g.fix ? [...g.fix] : undefined })),
+	gates: s.gates.map((g) => ({ ...g, ...(g.fix ? { fix: [...g.fix] } : {}) })),
 });
 
-/** The stage after `from` whose depth is not `izlaiž`; stages passed over are returned so the caller can record them. */
+/** The stage after `from` whose depth is not `izlaiž`; stages passed over are returned so the caller can record them.
+ *  S6 and S7 are never passed over whatever the profile says (stage.skip refuses them too): no process ends without H6 and H7. */
 function nextStage(depth: Record<Stage, Depth>, from: Stage): { next: Stage | "mācības"; skipped: Stage[] } {
 	const skipped: Stage[] = [];
 	for (let i = STAGES.indexOf(from) + 1; i < STAGES.length; i++) {
 		const st = STAGES[i];
-		if (depth[st] !== "izlaiž") return { next: st, skipped };
+		if (depth[st] !== "izlaiž" || st === "S6" || st === "S7") return { next: st, skipped };
 		skipped.push(st);
 	}
 	return { next: "mācības", skipped };
