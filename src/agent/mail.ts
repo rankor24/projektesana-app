@@ -94,14 +94,15 @@ function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic
 /** The topic goes up: an open question for the lead (or for the user, when the caller is the lead) whose body is `why`; the topic closes `passed-up`.
  *  A question for the lead is also put in the mailbox as an `ask` from the caller on a new topic "Nodots: …", so the lead's thread is woken and reads it
  *  (a note alone wakes nobody). It is a system notice: written straight into the mailbox, no send rules, not an exchange of the old topic.
- *  Past the chain depth no notice is sent: the notices skip `canSend`, so without this an agent that keeps answering would pass up for ever; the note stays in Atmiņa.
+ *  Past the chain depth no notice is sent (the notices skip `canSend`, so an agent that keeps answering would pass up for ever); the question goes to the user instead,
+ *  so a pass-up always reaches someone.
  *  Used by `close_topic` (passed-up) and by a send refused at a limit. Throws NO_PROJECT when the thread has no Atmiņa to write into. */
 export function passUp(d: MailDeps, topic: Topic, why: string): Note {
 	const store = d.notes?.();
 	if (!store) throw new Error(NO_PROJECT);
-	const toUser = d.self.agent === LEAD_ID;
+	const toUser = d.self.agent === LEAD_ID || d.self.depth + 1 > d.limits().chainDepth;
 	const note = askAbout(d, store, topic, { to: toUser ? "user" : LEAD_ID, title: `Nodots tālāk: ${topic.title}`, body: why });
-	if (!toUser && d.self.depth + 1 <= d.limits().chainDepth) {
+	if (!toUser) {
 		try {
 			const lead = d.leadThread ? d.leadThread() : d.threads.lead(d.self.projectId, "");
 			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, LEAD_ID], parent: topic.id });

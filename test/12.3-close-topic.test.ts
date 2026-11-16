@@ -397,13 +397,17 @@ test("12.3 fix: write_note never sets `cancels`, and notes.setStatus takes quest
 	assert.equal(s.notes().find((n) => n.id === "n1")!.status, undefined, "the decision is untouched");
 });
 
-test("12.3 fix: past the chain depth a pass-up writes its question but sends no notice (the chain would never end)", async () => {
-	for (const [depth, notices] of [[5, 1], [6, 0]] as const) {
+test("12.3 fix: past the chain depth a pass-up sends no notice (the chain would never end); its question goes to the user instead", async () => {
+	for (const [depth, notices, to, told] of [[5, 1, "lead", 0], [6, 0, "user", 1]] as const) {
 		const r = rig({ agent: "ar", depth });
 		const topic = r.mailbox.openTopic({ title: "Sienas biezums", parties: ["ar", "bk"], parent: null }).id; // opened directly: a send at this depth would be refused
 		const out = await r.closeTopic({ topic, outcome: "passed-up", decision: "Nevaram.", impact: NONE });
 		assert.ok(!out.isError, text(out));
-		assert.equal(r.store.notes("question").length, 1);
+		const qs = r.store.notes("question");
+		assert.equal(qs.length, 1);
+		assert.deepEqual([qs[0].to, qs[0].status], [to, "open"], `depth ${depth}`);
 		assert.equal(r.mailbox.messages().filter((m) => m.to === "lead").length, notices, `depth ${depth}`);
+		assert.equal(r.changed(), told, `depth ${depth}: the window hears of a question for the user`);
+		assert.equal(waitingQuestions(r.dir).length, told);
 	}
 });
