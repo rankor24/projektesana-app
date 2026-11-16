@@ -490,3 +490,35 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .popout { grid-template-rows: auto minmax(0, 1fr); }
 .popout-head { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .popout-body { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+
+/* threads in the chat: the list under the header, Gaida tevi, one lane per running thread, the "@" completion */
+.threads > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 12px; min-width: 0; }
+.threads > summary::-webkit-details-marker { display: none; }
+.threads > summary > .dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-height: 40vh; overflow: auto; }
+.tl-head { gap: 6px; }
+.tl-thread { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; min-width: 0; }
+.tl-thread:hover { background: var(--elev); }
+.tl-thread.on { background: var(--elev2); border-color: var(--border-strong); box-shadow: inset 2px 0 0 var(--accent); }
+.tl-thread.closed .tl-title { text-decoration: line-through; color: var(--muted); }
+.tl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-none { padding-left: 6px; }
+.tl-closed { display: flex; align-items: center; gap: 4px; }
+.tdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--border-strong); }
+.tdot.running { background: var(--info); }
+.tdot.queued { background: transparent; border: 1.5px solid var(--info); }
+.tdot.waiting { background: var(--warn); }
+.tdot.interrupted { background: var(--bad); }
+.tdot.closed { background: transparent; border: 1px solid var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+	.tdot.running { animation: act-pulse 1.4s ease-in-out infinite; }
+}
+.waiting-block { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); max-height: 45vh; overflow: auto; }
+.run-lanes { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; border-top: 1px solid var(--border); }
+.run-lane { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--elev); cursor: pointer; min-width: 0; }
+.run-lane:hover { border-color: var(--border-strong); }
+.run-lane-step { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-pop { display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--elev); max-height: 160px; overflow: auto; }
+.mention-pop button { text-align: left; border-radius: 0; }
+.mention-pop button.on { background: var(--elev2); }
+.notice { padding: 2px 10px; border-top: 1px solid var(--border); }

@@ -1,6 +1,8 @@
 // "Gaida tevi": everything that waits for the user, in one list. Pure; the coordinator and later tasks hand in their parts, the renderer reads the result.
 import type { WaitingItem } from "./thread-types.js";
 
+export type { WaitingItem } from "./thread-types.js";
+
 type Of<K extends WaitingItem["kind"]> = Extract<WaitingItem, { kind: K }>;
 
 /** What needs an answer first comes first: a run parked on a confirmation holds a slot of the user's attention, an interrupted restart can wait. */

@@ -19,6 +19,11 @@ import { windows, type PanelId } from "../windows";
 import { readUi } from "../../shared/ui-instruction";
 import { runUi } from "../run-ui";
 import { bimcraft } from "../preview/IfcView";
+import { parseMention } from "../../shared/mention";
+import { LaneBar } from "./Lane";
+import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
+import { agentName, mentionOptions, useThreads } from "./useThreads";
+import { Waiting } from "./Waiting";
 
 type Line =
 	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
@@ -32,6 +37,8 @@ type Line =
 
 export function AgentDock() {
 	const { projectId, focus, view, viewChoice } = useUi();
+	const T = useThreads(projectId);
+	const { selId, viewId, viewThread, leadPath, viewKey } = T;
 	// Auto adds one item built from the viewer to every message (the 3D tab); Manual sends only the Fokuss (documents)
 	const mode = effectiveMode(viewChoice, view.kind);
 	const sendFocus = useMemo(() => focusForSend(focus, mode, view), [focus, mode, view]);
@@ -55,7 +62,12 @@ export function AgentDock() {
 	const acts = useActivity();
 	const runs = useMemo(() => new Map(groupRuns(acts).map((g) => [g.run, g.lines])), [acts]);
 	// the project whose history is on screen, and whether a send is under way (a run then belongs to that send)
-	const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
+	const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
+	/** bumps to read the shown thread again (the one on screen was closed) */
+	const [viewN, setViewN] = useState(0);
+	/** a message went to another agent's thread: where it is, one click away */
+	const [notice, setNotice] = useState<{ agent: string } | null>(null);
+	const [pick, setPick] = useState(0);
 	const sending = useRef(false);
 
 	// the text is measured a moment after typing stops, not on every key
@@ -109,11 +121,21 @@ export function AgentDock() {
 		return () => document.removeEventListener("paste", onPaste);
 	}, []);
 
-	// conversation of the open project
+	// conversation of the thread on screen: the lead's current one by `agent.history` as before, any other by `threads.history`
 	useEffect(() => {
 		let live = true;
-		call("agent.history", projectId).then((h) => {
+		// what belongs to the thread that was on screen goes: its lines and its run (a run goes on in main; its lane stays)
+		setLines([]);
+		setLoadedFor(undefined);
+		setErr(null);
+		setNotice(null);
+		runRef.current = null;
+		queuedRef.current = false;
+		setRunId(null);
+		(selId ? call("threads.history", selId, projectId) : call("agent.history", projectId)).then((h) => {
 			if (!live) return;
+			// reading the lead's chat can make its thread in main (first use, or after Jauna saruna): the list learns of it now
+			if (!selId) T.reload();
 			setLines(
 				h.map((m): Line =>
 					m.kind === "compaction"
@@ -123,24 +145,24 @@ export function AgentDock() {
 							: { kind: "assistant", text: m.text },
 				),
 			);
-			setLoadedFor(projectId);
+			setLoadedFor(viewKey);
 		});
 		return () => {
 			live = false;
 		};
-	}, [projectId]);
+	}, [projectId, selId, viewN]);
 
-	// a run of this project that is still going (the window reloaded, or the project was opened again mid-run):
+	// a run of this thread that is still going (the window reloaded, the thread was opened again mid-run, or a lane was clicked):
 	// show its card and follow its events, so the answer arrives and Apturēt works
 	useEffect(() => {
-		if (loadedFor !== projectId || runRef.current || sending.current) return;
-		const going = [...runs].find(([, ls]) => ls[0].who === "agent" && ls[0].project === projectId && isRunning(ls));
+		if (loadedFor !== viewKey || runRef.current || sending.current) return;
+		const going = [...runs].find(([, ls]) => ls[0].who === "agent" && ls[0].thread === viewId && isRunning(ls));
 		if (!going) return;
 		const [id] = going;
 		runRef.current = id;
 		setRunId(id);
 		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, { kind: "run", runId: id }]));
-	}, [runs, loadedFor, projectId]);
+	}, [runs, loadedFor, viewKey, viewId]);
 
 	useEffect(
 		() =>
@@ -162,7 +184,8 @@ export function AgentDock() {
 		endRef.current?.scrollIntoView({ block: "end" });
 	}, [lines]);
 
-	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0;
+	const closedView = viewThread?.state === "closed";
+	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0 && !closedView;
 	const send = async () => {
 		if (!canSend || runId) return;
 		setErr(null);
@@ -175,15 +198,23 @@ export function AgentDock() {
 				bimcraft.send({ pj: 1, type: "capture" });
 				await ui.nextView();
 			}
-			const r = await call(
-				"agent.send",
-				projectId,
-				t,
-				focusForSend(ui.get().focus, mode, ui.get().view),
-				files.map(({ name, mimeType, data, thumb }) => ({ name, mimeType, data, thumb })),
-			);
+			const focus = focusForSend(ui.get().focus, mode, ui.get().view);
+			const atts = files.map(({ name, mimeType, data, thumb }) => ({ name, mimeType, data, thumb }));
+			// "@ar …" names an agent: for another agent than this thread's, main routes it (`agent.send`) and the answer shows in that agent's thread
+			const m = parseMention(t, T.specs);
+			const here = m && viewThread && m.agent === viewThread.agent ? m : null;
+			if (m && !here) {
+				await call("agent.send", projectId, t, focus, atts);
+				setText("");
+				setPending([]);
+				setNotice({ agent: m.agent });
+				T.reload();
+				return;
+			}
+			const body = here ? here.text : t;
+			const r = leadPath ? await call("agent.send", projectId, t, focus, atts) : await call("threads.send", viewId!, projectId, body, focus, atts);
 			const refs: ChatAttachmentRef[] = files.map((f) => ({ name: f.name, kind: f.kind, thumb: f.thumb }));
-			const user = { kind: "user" as const, text: t, attachments: refs.length ? refs : undefined };
+			const user = { kind: "user" as const, text: body, attachments: refs.length ? refs : undefined };
 			// a queued start has the id its run will have; its card says "Gaida rindā" until the first event
 			const id = r.runId!;
 			runRef.current = id;
@@ -200,16 +231,27 @@ export function AgentDock() {
 		}
 	};
 
+	/** a queued start has no events that would end it: clear it here */
+	const dropQueued = () => {
+		if (!queuedRef.current) return;
+		queuedRef.current = false;
+		setRunId(null);
+		const id = runRef.current;
+		runRef.current = null;
+		setLines((ls) => ls.filter((l) => !(l.kind === "run" && l.runId === id)));
+	};
+	// this thread only; the lanes' Apturēt visu stops everything
 	const stop = () => {
-		call("agent.stop");
-		// a queued start has no events that would end it: clear it here
-		if (queuedRef.current) {
-			queuedRef.current = false;
-			setRunId(null);
-			const id = runRef.current;
-			runRef.current = null;
-			setLines((ls) => ls.filter((l) => !(l.kind === "run" && l.runId === id)));
-		}
+		void (viewId ? call("threads.stop", viewId) : call("agent.stop"));
+		dropQueued();
+	};
+	const stopAll = () => {
+		void call("agent.stop");
+		dropQueued();
+	};
+	const stopLane = (id: string) => {
+		void call("threads.stop", id);
+		if (id === viewId) dropQueued();
 	};
 
 	const compactNow = async () => {
@@ -229,11 +271,30 @@ export function AgentDock() {
 
 	const answer = async (id: string, allow: boolean) => {
 		try {
-			await call("agent.confirm", id, allow);
+			await T.confirm(id, allow);
 			setLines((ls) => ls.map((l) => (l.kind === "confirm" && l.id === id ? { ...l, answered: true, allow } : l)));
 		} catch (e) {
 			setErr(errText(e));
 		}
+	};
+
+	const closeThread = async (id: string) => {
+		try {
+			await T.close(id);
+			// the thread on screen is gone: back to the lead's current one
+			if (id === viewId) {
+				ui.selectThread(null);
+				setViewN((n) => n + 1);
+			}
+		} catch (e) {
+			setErr(errText(e));
+		}
+	};
+	// "@" at the very start offers the agents; picking one writes "@id "
+	const options = mentionOptions(text, T.specs);
+	const choose = (id: string) => {
+		setText((x) => x.replace(/^(\s*)@\S*$/, `$1@${id} `));
+		inputRef.current?.focus();
 	};
 
 	const st = status.data;
@@ -282,9 +343,20 @@ export function AgentDock() {
 					)}
 					<span className="badge dim" title="Revit MCP">Revit: {st?.revit ?? "…"}</span>
 					<span className="grow" />
-					<button className="ghost small" title="Sākt jaunu sarunu (pieraksts paliek)" onClick={() => call("agent.reset", projectId).then(() => setLines([]))}>
-						jauna saruna
-					</button>
+					{leadPath && (
+						<button
+							className="ghost small"
+							title="Sākt jaunu sarunu ar vadošo aģentu (pieraksts paliek)"
+							onClick={() =>
+								call("agent.reset", projectId).then(() => {
+									ui.selectThread(null);
+									setViewN((n) => n + 1);
+								})
+							}
+						>
+							jauna saruna
+						</button>
+					)}
 				</div>
 				<div className="focus-head">
 					<span className="dim">Fokuss:</span>
@@ -302,10 +374,13 @@ export function AgentDock() {
 						</>
 					)}
 				</div>
-				{ctx.data && <ContextMeter c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} />}
+				{/* the meter and compaction are the lead's conversation; another thread has no meter of its own yet */}
+				{ctx.data && leadPath && <ContextMeter c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} />}
+				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} onSelect={T.select} onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))} onClose={closeThread} />
 			</div>
+			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
 			<div className="chat">
-				{lines.length === 0 && <div className="dim small chat-empty">{projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
+				{lines.length === 0 && loadedFor === viewKey && <div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? "Saruna vēl nav sākta." : projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
 				{lines.map((l, i) =>
 					l.kind === "run" ? (
 						runs.get(l.runId) ? (
@@ -314,12 +389,32 @@ export function AgentDock() {
 							<div key={l.runId} className="dim small">{l.queued ? "Gaida rindā" : "strādā…"}</div>
 						)
 					) : (
-						<ChatLine key={i} line={l} onAnswer={answer} />
+						<ChatLine key={i} line={l.kind === "confirm" && T.answered.has(l.id) ? { ...l, answered: true, allow: T.answered.get(l.id) } : l} onAnswer={answer} />
 					),
 				)}
 				<div ref={endRef} />
 			</div>
 			{err && <div className="err">{err}</div>}
+			{notice && (
+				<SentNotice
+					name={agentName(notice.agent, T.specs)}
+					onOpen={() => {
+						const t = T.threads.find((x) => x.agent === notice.agent && x.state !== "closed");
+						if (t) T.select(t.id);
+					}}
+					onClose={() => setNotice(null)}
+				/>
+			)}
+			<LaneBar
+				lanes={T.lanes}
+				specs={T.specs}
+				paused={T.queue.paused}
+				elsewhere={T.elsewhere}
+				onOpen={T.select}
+				onStop={stopLane}
+				onStopAll={stopAll}
+				onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
+			/>
 			<div className="chat-input">
 				<PlanBlock projectId={projectId} />
 				<div className="row">
@@ -346,7 +441,7 @@ export function AgentDock() {
 						{reading > 0 && <span className="dim small">sagatavo {reading}…</span>}
 					</div>
 				)}
-				{draftCost && (
+				{leadPath && draftCost && (
 					<div className={`draft-cost small ${draftCost.over ? "warn" : "dim"}`} title="Aptuvens: teksts + Fokuss + atvērtās piezīmes + pielikumi. Precīzu skaitu pēc atbildes dod modelis.">
 						Šī ziņa pievienos ≈{fmtTokens(draftCost.total)}: teksts {fmtTokens(draftCost.text)} · fokuss {fmtTokens(draftCost.focus)} · piezīmes {fmtTokens(draftCost.pins)}{draftCost.plan > 0 && ` · plāns ${fmtTokens(draftCost.plan)}`}
 						{draftCost.files > 0 && ` · pielikumi ${fmtTokens(draftCost.files)}`}
@@ -354,14 +449,27 @@ export function AgentDock() {
 					</div>
 				)}
 				{blind && <div className="attach-warn small">Modelis {st?.model} neredz attēlus — Iestatījumos izvēlies citu modeli vai noņem attēlu.</div>}
+				<MentionPop options={options} active={Math.min(pick, options.length - 1)} onPick={choose} />
 				<textarea
 					ref={inputRef}
 					rows={3}
 					value={text}
-					placeholder={st && !st.signedIn ? "nav pieslēgts — atver Iestatījumi" : "Raksti aģentam… (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu"}
-					onChange={(e) => setText(e.target.value)}
+					placeholder={closedView ? "Saruna ir slēgta" : st && !st.signedIn ? "nav pieslēgts — atver Iestatījumi" : "Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu"}
+					onChange={(e) => {
+						setText(e.target.value);
+						setPick(0);
+					}}
 					onKeyDown={(e) => {
-						if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void send();
+						if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) return void send();
+						if (options.length === 0) return;
+						const at = Math.min(pick, options.length - 1);
+						if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+							e.preventDefault();
+							setPick((at + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
+						} else if (e.key === "Tab" || e.key === "Enter") {
+							e.preventDefault();
+							choose(options[at].id);
+						}
 					}}
 				/>
 				<div className="row">

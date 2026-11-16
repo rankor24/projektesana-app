@@ -19,13 +19,15 @@ interface UiState {
 	view: ViewState;
 	/** the user's choice of Auto / Manual for the tab kind it was made on; null = the default of the tab */
 	viewChoice: { kind: ViewKind; mode: ViewMode } | null;
+	/** the thread the chat shows; null = the lead's current thread (today's chat) */
+	thread: string | null;
 	/** bumps when main says data changed, so panels reload */
 	tick: number;
 }
 
 const KEY = "projektesana:ui";
 const NO_VIEW: ViewState = { kind: null, selection: [] };
-let state: UiState = { projectId: null, preview: null, focus: [], draft: null, highlight: null, view: NO_VIEW, viewChoice: null, tick: 0 };
+let state: UiState = { projectId: null, preview: null, focus: [], draft: null, highlight: null, view: NO_VIEW, viewChoice: null, thread: null, tick: 0 };
 
 /** The files the user opened lately, per project, for the command palette: a source or an IFC, newest first. */
 export type RecentTarget = { kind: "source"; sourceId: string } | { kind: "ifc"; path: string; label: string };
@@ -71,7 +73,7 @@ export const ui = {
 	get: () => state,
 	setProject: (projectId: string | null) => {
 		showHook?.(null);
-		set({ projectId, preview: null, focus: [], view: NO_VIEW });
+		set({ projectId, preview: null, focus: [], view: NO_VIEW, thread: null });
 	},
 	/** Opens a file in the viewer (a tab; the same file again brings its tab forward). The viewer mirrors it back as `preview`. */
 	show: (preview: PreviewTarget) => {
@@ -87,6 +89,8 @@ export const ui = {
 	},
 	recent: (projectId: string | null): RecentTarget[] => (projectId ? readRecent()[projectId] ?? [] : []),
 	draft: (text: string | null) => set({ draft: text }),
+	/** Which thread the chat shows; null goes back to the lead's current thread. */
+	selectThread: (thread: string | null) => set({ thread }),
 	highlightNext: (guids: string[] | null) => set({ highlight: guids }),
 	/** Adds to the Fokuss, replacing an item with the same kind and id. */
 	focusAdd: (item: FocusItem) => set({ focus: [...state.focus.filter((f) => !(f.kind === item.kind && f.id === item.id)), item] }),
@@ -102,7 +106,7 @@ export const ui = {
 		for (const w of viewWaiters.splice(0)) w();
 	},
 	/** The other window changed the open project (a pop-out follows the main window): adopted without closing anything here. */
-	adoptProject: (projectId: string | null) => set({ projectId, focus: [] }),
+	adoptProject: (projectId: string | null) => set({ projectId, focus: [], thread: null }),
 	setViewMode: (mode: ViewMode) => set({ viewChoice: { kind: state.view.kind, mode } }),
 	/** Resolves when the viewer next reports (the camera it was asked for), or after `ms`. */
 	nextView: (ms = 600) =>
