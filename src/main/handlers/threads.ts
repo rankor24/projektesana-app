@@ -9,7 +9,7 @@ export interface ThreadDeps {
 	activity?: ActivityLog;
 }
 
-type K = `threads.${string}` | "queue.view" | "queue.pause" | "queue.resume" | "queue.resumeWave" | "waiting.list";
+type K = `threads.${string}` | "queue.view" | "queue.pause" | "queue.resume" | "queue.resumeWave" | "waiting.list" | "room.lines";
 
 /** Starts a run under the activity log's title: named by the run's id before the run starts, dropped again when the start is refused. */
 export async function titled(d: ThreadDeps, projectId: string | null, start: (onRunId: (runId: string, sent: string) => void) => Promise<{ runId: string | null; queued: boolean }>): Promise<{ runId: string | null; queued: boolean }> {
@@ -41,5 +41,6 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 		"queue.resume": () => d.session.resumeQueue(),
 		"queue.resumeWave": (wave) => d.session.resumeWave(wave),
 		"waiting.list": () => d.session.waiting(),
+		"room.lines": (projectId) => d.session.roomLines(projectId),
 	};
 }

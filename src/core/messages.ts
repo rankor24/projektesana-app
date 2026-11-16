@@ -3,46 +3,12 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
+import type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic } from "../shared/message-types.js";
 import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
 import { newId } from "./model.js";
 
-export type MessageKind = "task" | "reply" | "ask";
-
-/** The office's UZDEVUMS (process 7.1) as data. */
-export interface TaskEnvelope { id: string; stage?: string; goal: string; context: string[]; expects: string; iteration: number; limits?: string }
-/** The office's ATBILDE (process 7.2) as data. */
-export interface ReplyEnvelope { id: string; status: "izpildīts" | "daļēji" | "bloķēts"; results: string[]; questions: string[]; decisions: string[]; risks?: string }
-
-export interface Message {
-	id: string;
-	at: string;
-	wave: string;
-	topic: string;
-	from: string;
-	to: string;
-	kind: MessageKind;
-	text: string;
-	refs: string[];
-	fromThread: string;
-	toThread: string;
-	depth: number;
-	state: "queued" | "delivered" | "failed" | "stopped";
-	task?: TaskEnvelope;
-	reply?: ReplyEnvelope;
-}
-
-export interface Topic {
-	id: string;
-	title: string;
-	parties: [string, string];
-	parent: string | null;
-	state: "open" | "agreed" | "passed-up";
-	openedAt: string;
-	closedAt?: string;
-	noteId?: string;
-	/** a "Nodots:" system notice to the lead: only the lead may close it */
-	notice?: true;
-}
+// the shapes live in shared/message-types.ts (the room feed of the window reads them); everything that imported them from here still can
+export type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic };
 
 // the shapes live in shared/thread-types.ts (Settings carries them); everything that imported them from here still can
 export { DEFAULT_LIMITS, type Limits };
@@ -255,7 +221,11 @@ function endsWithoutNewline(file: string): boolean {
 /** One project's mail: `messages.jsonl` (append-only; a state change is a new line with the same id, the last line of an id wins; a torn line is skipped)
  *  and `topics.json` (rewritten atomically). Everything is read from disk on each call, so two handles on one folder agree. */
 export class Mailbox {
-	constructor(private readonly dir: string) {}
+	/** `on` hears each message added and each topic closed (the room feed, task 12.5); it never breaks a write */
+	constructor(
+		private readonly dir: string,
+		private readonly on: { added?: (m: Message) => void; closed?: (t: Topic) => void } = {},
+	) {}
 
 	private get messagesFile() {
 		return join(this.dir, "messages.jsonl");
@@ -320,7 +290,17 @@ export class Mailbox {
 		if (t.state !== "open") throw new Error(`Temats ${id} jau ir slēgts.`);
 		const next: Topic = { ...t, state, noteId, closedAt: new Date().toISOString() };
 		this.writeTopics(all.map((x) => (x.id === id ? next : x)));
+		this.tell(() => this.on.closed?.(next));
 		return next;
+	}
+
+	/** The write is done; whoever listens (a window already gone, say) must not undo it by throwing. */
+	private tell(f: () => void) {
+		try {
+			f();
+		} catch {
+			// the line is also in the mailbox: the next read has it
+		}
 	}
 
 	private append(m: Message) {
@@ -332,6 +312,7 @@ export class Mailbox {
 	add(m: Omit<Message, "id" | "at" | "state">): Message {
 		const msg: Message = { ...m, id: newId("m"), at: new Date().toISOString(), state: "queued" };
 		this.append(msg);
+		this.tell(() => this.on.added?.(msg));
 		return msg;
 	}
 

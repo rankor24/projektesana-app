@@ -24,6 +24,7 @@ import { LaneBar } from "./Lane";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
+import { RoomFeed } from "./RoomFeed";
 import { Waiting } from "./Waiting";
 
 type Line =
@@ -69,6 +70,8 @@ export function AgentDock() {
 	/** a message went to another agent's thread: where it is, one click away */
 	const [notice, setNotice] = useState<{ agent: string } | null>(null);
 	const [pick, setPick] = useState(0);
+	/** Saruna = the thread on screen; Telpa = what the agents say to each other */
+	const [tab, setTab] = useState<"chat" | "room">("chat");
 	const sending = useRef(false);
 
 	// the text is measured a moment after typing stops, not on every key
@@ -380,7 +383,20 @@ export function AgentDock() {
 				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} onSelect={T.select} onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))} onClose={closeThread} />
 			</div>
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
-			<div className="chat">
+			<div className="tabs">
+				<button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>Saruna</button>
+				<button className={tab === "room" ? "on" : ""} onClick={() => setTab("room")} title="Ko aģenti saka viens otram">Telpa</button>
+			</div>
+			{tab === "room" && (
+				<RoomFeed
+					projectId={projectId}
+					onOpen={(id) => {
+						T.select(id);
+						setTab("chat");
+					}}
+				/>
+			)}
+			<div className="chat" hidden={tab === "room"}>
 				{lines.length === 0 && loadedFor === viewKey && <div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? "Saruna vēl nav sākta." : projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
 				{lines.map((l, i) =>
 					l.kind === "run" ? (

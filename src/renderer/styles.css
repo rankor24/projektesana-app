@@ -514,6 +514,12 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 	.tdot.running { animation: act-pulse 1.4s ease-in-out infinite; }
 }
 .waiting-block { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); max-height: 45vh; overflow: auto; }
+.room-line { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; border-radius: 4px; min-width: 0; }
+.room-line.link { cursor: pointer; }
+.room-line.link:hover { background: var(--elev); }
+.room-time { flex: none; }
+.room-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chat[hidden] { display: none; }
 .run-lanes { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; border-top: 1px solid var(--border); }
 .run-lane { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--elev); cursor: pointer; min-width: 0; }
 .run-lane:hover { border-color: var(--border-strong); }

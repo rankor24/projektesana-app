@@ -13,7 +13,8 @@ import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { parseMention } from "../shared/mention.js";
-import { LEAD_ID, type QueueView, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
+import { LEAD_ID, type QueueView, type RoomLine, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
+import { messageLine, roomLines, topicLine } from "../shared/room.js";
 import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
@@ -49,6 +50,8 @@ export interface SessionDeps {
 	onQueue?: (v: QueueView) => void;
 	/** what waits for the user changed (Gaida tevi) */
 	onWaiting?: (items: WaitingItem[]) => void;
+	/** a message was added to a project's mailbox or a topic closed: one more line of the room */
+	onRoom?: (projectId: string | null, line: RoomLine) => void;
 	/** one model call for the summaries; the app streams through pi, tests inject a fake */
 	complete?: Complete;
 	/** the agent loop; defaults to pi's, tests inject a scripted one */
@@ -76,8 +79,29 @@ export class AgentSession {
 	private mailbox(projectId: string | null): Mailbox {
 		const id = projectId ?? "_";
 		let m = this.mailboxes.get(id);
-		if (!m) this.mailboxes.set(id, (m = new Mailbox(mailDir(this.d.ctx.appDir, this.d.ctx.projectsDir, projectId))));
+		if (!m) {
+			const box: Mailbox = (m = new Mailbox(mailDir(this.d.ctx.appDir, this.d.ctx.projectsDir, projectId), {
+				added: (msg) => this.d.onRoom?.(projectId, messageLine(msg, box.topics(), this.names())),
+				closed: (t) => {
+					const line = topicLine(t, box.messages(), this.threads(projectId).list(), this.names());
+					if (line) this.d.onRoom?.(projectId, line);
+				},
+			}));
+			this.mailboxes.set(id, box);
+		}
 		return m;
+	}
+
+	/** Agent id to the name the room shows. */
+	private names(): Record<string, string> {
+		return { [LEAD_ID]: "Vadošais aģents", ...Object.fromEntries(this.specs().map((s) => [s.id, s.name])) };
+	}
+
+	/** The room of a project: its mail and its threads as lines, with the project's paused waves. */
+	roomLines(projectId: string | null): RoomLine[] {
+		const box = this.mailbox(projectId);
+		const waves = this.queueView().waves.filter((w) => w.projectId === projectId);
+		return roomLines({ messages: box.messages(), topics: box.topics(), threads: this.threads(projectId).list(), names: this.names(), waves });
 	}
 
 	private threads(projectId: string | null): ThreadStore {

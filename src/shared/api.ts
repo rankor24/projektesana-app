@@ -12,7 +12,7 @@ import type { AgentSpec, AgentsView } from "./agent-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
-import type { QueueView, Thread, WaitingItem } from "./thread-types.js";
+import type { QueueView, RoomLine, Thread, WaitingItem } from "./thread-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
@@ -413,6 +413,8 @@ export interface ApiSpec {
 	"queue.resumeWave": (wave: string) => void;
 	/** Everything that waits for the user, of every project, not only the open one (Gaida tevi). */
 	"waiting.list": () => WaitingItem[];
+	/** The room (Telpa) of the project: one line per message, agreement, pass-up and paused wave, oldest first, the newest 300. */
+	"room.lines": (projectId: string | null) => RoomLine[];
 	/** Every thread of the project, newest first. */
 	"threads.list": (projectId: string | null) => Thread[];
 	/** A new thread with an agent: "lead" or a specialist's id. The title defaults to the specialist's name. */
@@ -621,6 +623,7 @@ export const API_NAMES = [
 	"queue.resume",
 	"queue.resumeWave",
 	"waiting.list",
+	"room.lines",
 	"threads.list",
 	"threads.open",
 	"threads.send",
@@ -770,6 +773,8 @@ export interface EventSpec {
 	"queue.changed": QueueView;
 	/** a confirmation opened or was answered, or the restart question was answered: the whole list as it is now (task 11.5) */
 	"waiting.changed": WaitingItem[];
+	/** a message was added to a project's mailbox or a topic was closed: the line it adds to the room (task 12.5) */
+	"room.line": { projectId: string | null; line: RoomLine };
 	"agent.login": LoginNotice;
 	/** the layout file was saved (by `origin`): every window adopts it (task 9.11) */
 	"layout.changed": { store: LayoutStore; origin: string };
@@ -783,6 +788,6 @@ export interface EventSpec {
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed", "waiting.changed", "room.line"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };
