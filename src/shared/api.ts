@@ -510,6 +510,8 @@ export interface ApiSpec {
 	"process.setProfile": (projectId: string, p: { docType?: DocType; depth?: Partial<Record<Stage, Depth>>; agents?: string[]; why: string }) => ProcessState;
 	/** The user decides the waiting gate: approve (H5: `fix` = the remark ids to correct) or return (a comment is required). The only way a gate is passed; no agent tool does it. */
 	"process.gate": (projectId: string, d: { approve: boolean; comment?: string; fix?: string[] }) => ProcessState;
+	/** Writes the decision, question, risk and change registers, the status page and one file per gate into <project data>\export\00_vadiba (never the office folder); returns the paths. */
+	"process.export": (projectId: string) => string[];
 	"deliveries.openStaging": (id: string, deliveryId: string) => void;
 	/** Where "Kopēt uz 1.4_Nodevumi" would write and what stops it now (7.6). */
 	"deliveries.copyPlan": (id: string, deliveryId: string) => CopyPlan;
@@ -714,6 +716,7 @@ export const API_NAMES = [
 	"process.setMode",
 	"process.setProfile",
 	"process.gate",
+	"process.export",
 	"deliveries.openStaging",
 	"deliveries.copyPlan",
 	"deliveries.copy",

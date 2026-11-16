@@ -53,10 +53,13 @@ export const closedReason = (t: Topic): string => `Temats «${t.title}» jau ir 
 
 /** The process rules of process mode (process 7.3); the caller has already seen that `process.mode` is "process". Tasks are the leader's alone, for the
  *  stage that is on, and not while a gate waits or the stage waits for the user; asks and replies between agents of the profile are free.
- *  The lead is a party only when the profile lists it. */
-function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState): SendCheck | null {
-	for (const id of [m.from, m.to]) {
-		if (!p.profile.agents.includes(id)) return refuse("process", `Aģents ${id} nav procesa profilā.`);
+ *  The lead is a party only when the profile lists it. `answersOwnTopic` (R38): a reply on an open topic between its two parties passes the profile rule, so an agent
+ *  that was asked something (before the profile was narrowed, say) can still answer; a new ask or task to or from an agent outside the profile stays refused. */
+function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState, answersOwnTopic: boolean): SendCheck | null {
+	if (!answersOwnTopic) {
+		for (const id of [m.from, m.to]) {
+			if (!p.profile.agents.includes(id)) return refuse("process", `Aģents ${id} nav procesa profilā.`);
+		}
 	}
 	if (m.kind !== "task") return null;
 	if (p.stage === "done") return refuse("process", "Process ir pabeigts; uzdevumus vairs nedod.");
@@ -96,7 +99,7 @@ export function canSend(
 	}
 
 	if (c.process?.mode === "process") {
-		const r = processCheck(m, c.process);
+		const r = processCheck(m, c.process, answersOwnTopic);
 		if (r) return r;
 	}
 
@@ -149,6 +152,11 @@ export function shouldWake(threadId: string, ms: readonly Message[]): boolean {
 export function answered(m: Message, ms: readonly Message[]): boolean {
 	const i = ms.findIndex((x) => x.id === m.id);
 	return ms.some((r, j) => j > i && r.topic === m.topic && r.toThread === m.fromThread);
+}
+
+/** The tasks nobody has answered yet and that are not dead (failed, stopped): the status page's open tasks. */
+export function openTasks(ms: readonly Message[]): Message[] {
+	return ms.filter((m) => m.kind === "task" && m.state !== "failed" && m.state !== "stopped" && !answered(m, ms));
 }
 
 const list = (xs: readonly string[]) => (xs.length ? xs.join("; ") : "nav");

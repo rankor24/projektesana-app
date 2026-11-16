@@ -20,7 +20,7 @@ import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
 import { declarationTokens } from "./declarations.js";
 import { listSkills, officeSkillsDir } from "./skills.js";
-import { readProcess } from "../core/process.js";
+import { readProcess, statusText } from "../core/process.js";
 import { ProjectStore } from "../core/store.js";
 import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { ThreadStore } from "../core/threads.js";
@@ -31,9 +31,9 @@ import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
-import { PROCESS_WRITE_TOOLS } from "../core/process-def.js";
+import { LEADER, PROCESS_WRITE_TOOLS, stageCard } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
-import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
+import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
 /** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
@@ -109,14 +109,31 @@ export class ThreadRunner {
 
 	/** What every request starts with, built by standingFor (agents.ts): the lead's rules, roster and skills, or a specialist's shared rules, role,
 	 *  own roster and own skills. `revitTools` are the Revit tools this run really has. */
-	private standing(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>, lane = false): string {
-		return standingFor(spec, { ...this.standingDeps(s, spec, revitTools), lane });
+	private standing(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>, lane = false, projectId: string | null = null): string {
+		// a delegate lane has nobody to write to and no part in the process: no status for it
+		return standingFor(spec, { ...this.standingDeps(s, spec, revitTools, lane ? null : projectId), lane });
 	}
 
-	private standingDeps(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>): Parameters<typeof standingFor>[1] {
+	/** Process mode (14.5): an agent of the profile carries the project's status, the stage's leader also the stage card. Read at each run, so a gate or a mode switch shows in
+	 *  the next one. Co-work, no process file, an agent outside the profile (the lead unless the profile lists it) and a project without data have neither. */
+	private processText(projectId: string | null, agent: string): { processCard?: string; status?: string } {
+		if (!projectId) return {};
+		try {
+			const store = ProjectStore.load(this.d.ctx.projectsDir, projectId);
+			const p = readProcess(store);
+			if (!p || p.mode !== "process" || !p.profile.agents.includes(agent)) return {};
+			const open = openTasks(this.d.mail?.(projectId).messages() ?? []);
+			const status = statusText(p, { notes: store.notes(), open, now: new Date().toISOString() });
+			return { status, ...(p.stage !== "mācības" && p.stage !== "done" && LEADER[p.stage] === agent ? { processCard: stageCard(p.stage) } : {}) };
+		} catch {
+			return {};
+		}
+	}
+
+	private standingDeps(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>, projectId: string | null = null): Parameters<typeof standingFor>[1] {
 		// a specialist carries what the office wrote down for it (13.4); the lead's text stays as the 0.6 guard measures it: it reads office memory with read_notes
 		const knowledge = spec ? knowledgeFor(new OfficeMemory(join(this.d.ctx.appDir, "memory")), spec.id) : "";
-		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? "", officeSkillsDir(this.d.ctx.appDir)), knowledge, revitTools };
+		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? "", officeSkillsDir(this.d.ctx.appDir)), knowledge, revitTools, ...this.processText(projectId, spec ? spec.id : LEAD_ID) };
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -290,7 +307,7 @@ export class ThreadRunner {
 					history = (await this.compactHistory({ thread, rt, model, history, signal, emit, keepRecent })) ?? history;
 				}
 
-				const standing = this.standing(s, spec, revitTools);
+				const standing = this.standing(s, spec, revitTools, false, projectId);
 				const seed = this.transcriptSeed(thread);
 				const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
@@ -480,7 +497,7 @@ export class ThreadRunner {
 			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
 			imageCount: b?.imageCount ?? 0,
 			messages: live?.messages.length ?? 0,
-			fixedEstimate: fixedTokens(agent, this.standingDeps(s, agent), declarationTokens(agent)),
+			fixedEstimate: fixedTokens(agent, this.standingDeps(s, agent, undefined, thread.projectId), declarationTokens(agent)),
 			lastAdded: live?.lastAdded ?? null,
 			compactions: this.compactions.get(thread.id) ?? 0,
 			// the Fokuss line is sent with every message, "Fokuss: nekas" included

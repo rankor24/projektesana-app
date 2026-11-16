@@ -124,6 +124,12 @@ export const STAGE_CARD: Record<Stage, { title: string; goal: string; involved: 
 	},
 };
 
+/** A stage's card as the plain text of the leader's standing text: what the stage is for, who works in it, the steps, the output and the gate. */
+export function stageCard(stage: Stage): string {
+	const c = STAGE_CARD[stage];
+	return [c.title, `Mērķis: ${c.goal}`, `Iesaistīti: ${c.involved}`, "Darbības:", ...c.actions.map((a) => `- ${a}`), `Izeja: ${c.output.join("; ")}`, c.gate].join("\n");
+}
+
 /** The process tools that write, by the agent that is given them (R35): added to that agent's own thread beside the mail tools, never listed in a spec, never offered
  *  to the lead, to other specialists or to a lane. The checks inside the tools stay the hard rule. */
 export const PROCESS_TOOLS_OF: Readonly<Record<string, readonly string[]>> = {

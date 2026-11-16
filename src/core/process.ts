@@ -1,6 +1,7 @@
 // The process state machine (design: "Process mode"). Pure: `step` takes a state and an event and returns a new state or a Latvian refusal; it never
 // mutates its input and never reads the clock (times come from the event). Flow of chapter 5: S1 → H1 → … → S7 → H7 → mācības → done.
-import { type Fact, type Note, type Profile, type Who, newId, profileOf } from "./model.js";
+import type { Message } from "../shared/message-types.js";
+import { type Fact, type Note, type NoteType, type Profile, type Who, newId, profileOf } from "./model.js";
 import { type Depth, type DocType, type GateId, DEFAULT_DEPTH, GATE_OF, LEADER, MAX_ITERATIONS, STAGES, type Stage } from "./process-def.js";
 
 export interface GateRecord {
@@ -408,4 +409,92 @@ export function recordReview(store: ProcessStore, by: Who, now = new Date()): Pr
 	if (!r.ok) throw new Error(r.error);
 	writeProcess(store, r.state, by, "review", { was: cur });
 	return r.state;
+}
+
+// ---- the status page and the registers (task 14.5) ----------------------------------------------------------------------------
+
+const byTime = (a: Note, b: Note) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
+
+/** The notes of one type, oldest first: the order that numbers them. */
+const inTime = (notes: readonly Note[], type: NoteType): Note[] => notes.filter((n) => n.type === type).sort(byTime);
+
+/** `L-<n>` for decisions and `J-<n>` for questions: n counts the notes of that type by time, from 1. A cancellation is a decision note and is numbered like one. */
+const idOf = (prefix: string, n: number) => `${prefix}-${n}`;
+
+const day = (n: Note) => n.at.slice(0, 10);
+
+/** One decision as the block of process 7.4. The parties come from the note's `agent` and `to` (the two sides of the topic), the sections it touches are those
+ *  parties' own, and "BPV pārskatīts" is whether the user has seen it. */
+function decisionEntry(n: Note, nr: number): string {
+	const parties = [n.agent, n.to].filter((x): x is string => !!x);
+	return [
+		`${idOf("L", nr)} | ${day(n)} | ${n.stage || "-"} | Puses: ${[...parties].sort().join(", ") || "-"}`,
+		`Temats: ${n.title}`,
+		`Lēmums: ${n.body}`,
+		`Ietekme: ${parties.map((x) => x.toUpperCase()).join(", ") || "-"}`,
+		`BPV pārskatīts: ${n.reviewed ? "jā" : "nē"}`,
+	].join("\n");
+}
+
+/** One question as the block of process 7.5. The answer is the title of the answer note that refers to the question. */
+function questionEntry(n: Note, nr: number, notes: readonly Note[]): string {
+	const answer = notes.filter((a) => a.type === "answer" && a.refs.includes(n.id)).sort(byTime).at(-1);
+	return [
+		`${idOf("J", nr)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"} | Kam: ${n.to || "-"}`,
+		`Jautājums: ${n.title}`,
+		"Ietekme, ja neatbild: nav",
+		`Atbilde: ${answer?.title ?? "-"}`,
+		`Statuss: ${n.status === "closed" ? "slēgts" : "atvērts"}`,
+	].join("\n");
+}
+
+/** Every decision note of the project as an L- block, oldest first (cancellations included). */
+export const decisionLog = (notes: readonly Note[]): string[] => inTime(notes, "decision").map((n, i) => decisionEntry(n, i + 1));
+
+/** Every question note of the project as a J- block, oldest first. */
+export const questionLog = (notes: readonly Note[]): string[] => inTime(notes, "question").map((n, i) => questionEntry(n, i + 1, notes));
+
+/** Risks and changes have no block in the process document; the same head line and a title and description keep them readable beside the others. */
+export function noteLog(notes: readonly Note[], type: "risk" | "change"): string[] {
+	const [prefix, label] = type === "risk" ? ["R", "Risks"] : ["I", "Izmaiņa"];
+	return inTime(notes, type).map((n, i) => [`${idOf(prefix, i + 1)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"}`, `${label}: ${n.title}`, `Apraksts: ${n.body}`].join("\n"));
+}
+
+/** Whole lines of `lines` that fit in `budget` characters (a newline between lines counts). */
+function fit(lines: readonly string[], budget: number): string[] {
+	const out: string[] = [];
+	let used = 0;
+	for (const l of lines) {
+		const cost = l.length + 1;
+		if (used + cost > budget) break;
+		out.push(l);
+		used += cost;
+	}
+	return out;
+}
+
+/** The project's status page, the short text every agent of the process carries (and the file projekta_statuss.md): the stage and its iteration, the gate that waits,
+ *  the open questions and the open tasks, newest first. Cut at whole lines to stay under `maxChars`; each of the two lists keeps room for the other, so 200 questions
+ *  do not push the tasks out. The text has no time in it (`now` is the caller's, kept in the signature for it): it must not change between two runs that saw the same work. */
+export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: readonly Message[]; now: string }, maxChars = 3000): string {
+	const head = [s.stage === "mācības" || s.stage === "done" ? `Stadija ${s.stage}` : `Stadija ${s.stage} (iterācija ${s.iteration[s.stage] + 1} no ${MAX_ITERATIONS})`];
+	const gate = [...s.gates].reverse().find((g) => g.state === "waiting");
+	if (gate) head.push(`Gaida gate ${gate.id}: lēmums cilvēkam.`);
+
+	const numbered = new Map(inTime(i.notes, "question").map((n, k) => [n.id, k + 1]));
+	const questions = [...i.notes]
+		.filter((n) => n.type === "question" && n.status !== "closed")
+		.sort((a, b) => byTime(b, a))
+		.map((n) => `- ${idOf("J", numbered.get(n.id) ?? 0)} ${n.to || "-"}: ${n.title}`);
+	const tasks = [...i.open].sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).map((m) => `- ${m.id} → ${m.to}: ${m.task?.goal ?? m.text.split("\n")[0]}`);
+
+	// each line costs its length and a newline, so a total cost within maxChars leaves the text one character short of it. The headings are always there;
+	// each list takes what it needs of what is left, but never more than the half the other one leaves it
+	const cost = (xs: readonly string[]) => xs.reduce((n, l) => n + l.length + 1, 0);
+	const qHead = questions.length ? "Atvērtie jautājumi:" : "Atvērtie jautājumi: nav";
+	const tHead = tasks.length ? "Atvērtie uzdevumi:" : "Atvērtie uzdevumi: nav";
+	const left = maxChars - cost(head) - cost([qHead, tHead]);
+	const tasksShare = Math.min(cost(tasks), Math.floor(left / 2));
+	const questionsShare = Math.min(cost(questions), left - tasksShare);
+	return [...head, qHead, ...fit(questions, questionsShare), tHead, ...fit(tasks, left - questionsShare)].join("\n");
 }

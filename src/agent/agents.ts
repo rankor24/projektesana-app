@@ -203,7 +203,8 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
  *  A specialist: the shared rules, its role file (or prompt), RULES, the mail lines, the user line, Revit rules only with a Revit tool, its roster,
  *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
-	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"))].filter(Boolean).join("\n\n");
+	// the lead's process text is empty unless it is in the profile (the caller decides), so a co-work text stays byte for byte what it was
+	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced")), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? (readRole(d.appDir, spec.id) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
