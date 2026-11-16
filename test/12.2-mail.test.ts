@@ -726,3 +726,92 @@ test("12.2 fix: a specialist that lists send_message or close_topic is told they
 	const d = validateSpec({ id: "ar", name: "Arhitektūra", description: "", prompt: "You read the AR part.", tools: ["delegate"] }, levelOf, ["read_notes"]);
 	assert.ok(!d.ok && /nevar palaist citus aģentus/.test(d.error), "the old text for the helpers' tools");
 });
+
+// ---- fix round 2 -------------------------------------------------------------------------------------------------------------
+
+/** Counts the passes `wake` makes over a project. After `cap` of them the pass is skipped, so a loop shows as a failed count instead of starving the event loop. */
+function countWakes(coordinator: Coordinator, cap = 50) {
+	const c = coordinator as unknown as { wakeProject: (p: string | null) => void };
+	const real = c.wakeProject.bind(coordinator);
+	const seen = { n: 0 };
+	c.wakeProject = (p) => {
+		if (++seen.n <= cap) real(p);
+	};
+	return seen;
+}
+
+test("12.2 fix 2: a queued second ask on a closed thread that the recipient already answered still leaves the inbox: no wake loop", async () => {
+	const t = setup();
+	const wakes = countWakes(t.coordinator);
+	const a = t.threads.create({ projectId: null, agent: "lead", title: "Saruna", startedBy: "user" });
+	const b = t.threads.create({ projectId: null, agent: "ekspertize", title: "Atzinums", startedBy: "user" });
+	const tp = t.mail.openTopic({ title: "Jautājums", parties: ["lead", "ekspertize"], parent: null });
+	const base = { wave: "w1", refs: [], topic: tp.id, fromThread: a.id, toThread: b.id };
+	const first = t.mail.add({ ...base, depth: 1, from: "lead", to: "ekspertize", kind: "ask", text: "viens?" });
+	t.mail.setState(first.id, "delivered");
+	const second = t.mail.add({ ...base, depth: 1, from: "lead", to: "ekspertize", kind: "ask", text: "un otrs?" });
+	// the recipient answered the first ask after the second was sent: `answered` counts it for the second too
+	const reply = t.mail.add({ wave: "w1", refs: [], topic: tp.id, depth: 2, from: "ekspertize", to: "lead", kind: "reply", text: "jā.", fromThread: b.id, toThread: a.id });
+	t.mail.setState(reply.id, "delivered");
+	t.threads.patch(b.id, { state: "closed" });
+	t.coordinator.wake(null);
+	await t.settle();
+	assert.ok(wakes.n < 5, `wake passes stay bounded (${wakes.n})`);
+	assert.equal(t.mail.messages().find((m) => m.id === second.id)!.state, "failed", "the answered ask still leaves the inbox");
+	assert.equal(t.mail.messages().filter((m) => m.reply?.status === "bloķēts").length, 0, "no 'bloķēts' on top of the real reply");
+	assert.equal(t.callsOf("ekspertize").length, 0);
+	assert.equal(t.callsOf("lead").length, 0, "the reply was already delivered: nobody is woken");
+});
+
+test("12.2 fix 2: stopThread on a queued recipient whose ask was already answered does not submit the thread again", async () => {
+	const hold = gate();
+	const t = setup({
+		cap: 1,
+		scripts: {
+			lead: async (c) => {
+				if (c.n > 1) return;
+				await t.send(c, { to: "ekspertize", title: "Jautājums", kind: "ask", text: "vai ir?" });
+				await hold.p;
+			},
+		},
+	});
+	const wakes = countWakes(t.coordinator);
+	await t.s.send(null, "jautā", []);
+	await tick(30);
+	const th = t.threads.list({ agent: "ekspertize" })[0];
+	assert.equal(th.state, "queued");
+	const ask = t.mail.messages()[0];
+	// an answer exists for the ask that is still waiting to be delivered
+	const reply = t.mail.add({ wave: ask.wave, refs: [], topic: ask.topic, depth: 2, from: "ekspertize", to: "lead", kind: "reply", text: "jau atbildēju.", fromThread: th.id, toThread: ask.fromThread });
+	t.mail.setState(reply.id, "delivered");
+	t.s.stopThread(th.id);
+	assert.equal(t.mail.messages().find((m) => m.id === ask.id)!.state, "failed", "the stopped ask is closed even though it was answered");
+	hold.open();
+	await t.settle();
+	assert.ok(wakes.n < 10, `wake passes stay bounded (${wakes.n})`);
+	assert.equal(t.callsOf("ekspertize").length, 0, "the thread the user stopped is not run again");
+	assert.equal(t.mail.messages().filter((m) => m.reply?.status === "bloķēts").length, 0);
+});
+
+test("12.2 fix 2: a Mailbox that throws on add and setState does not make the closed-thread branch repeat on every microtask", async () => {
+	const t = setup();
+	const wakes = countWakes(t.coordinator);
+	const a = t.threads.create({ projectId: null, agent: "lead", title: "Saruna", startedBy: "user" });
+	const b = t.threads.create({ projectId: null, agent: "ekspertize", title: "Atzinums", startedBy: "user" });
+	const tp = t.mail.openTopic({ title: "Jautājums", parties: ["lead", "ekspertize"], parent: null });
+	const m = t.mail.add({ wave: "w1", refs: [], depth: 1, topic: tp.id, from: "lead", to: "ekspertize", kind: "ask", text: "vai ir?", fromThread: a.id, toThread: b.id });
+	t.threads.patch(b.id, { state: "closed" });
+	// the session's own Mailbox for the project: its file is "locked"
+	const box = (t.s as unknown as { mailbox: (p: string | null) => Mailbox }).mailbox(null);
+	box.add = () => {
+		throw new Error("EBUSY");
+	};
+	box.setState = () => {
+		throw new Error("EBUSY");
+	};
+	t.coordinator.wake(null);
+	await t.settle();
+	assert.ok(wakes.n <= 2, `after a failed write nothing wakes the project again (${wakes.n})`);
+	assert.equal(t.mail.messages().find((x) => x.id === m.id)!.state, "queued", "nothing was written");
+	assert.equal(t.callsOf("ekspertize").length, 0);
+});

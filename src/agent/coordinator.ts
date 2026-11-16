@@ -424,12 +424,14 @@ export class Coordinator {
 	private blockMessages(projectId: string | null, ids: readonly string[], reason: string, state: "queued" | "stopped"): void {
 		const mb = this.d.mail?.(projectId);
 		if (!mb) return;
+		let written = true;
 		try {
 			const all = mb.messages();
 			for (const m of all) {
-				// one the recipient already answered for real needs no "bloķēts" on top of it
-				if (!ids.includes(m.id) || (m.kind !== "reply" && answered(m, all))) continue;
-				if (m.kind !== "reply") {
+				if (!ids.includes(m.id)) continue;
+				// one the recipient already answered for real needs no "bloķēts" on top of it, but it still leaves the inbox below:
+				// left queued it would be found again by every wake (a closed thread: for ever)
+				if (m.kind !== "reply" && !answered(m, all)) {
 					const r = mb.add({
 						wave: m.wave, topic: m.topic, from: m.to, to: m.from, kind: "reply", text: reason, refs: [], fromThread: m.toThread, toThread: m.fromThread, depth: m.depth + 1,
 						reply: { id: `a${m.id}`, status: "bloķēts", results: [], questions: [], decisions: [], risks: reason },
@@ -440,10 +442,13 @@ export class Coordinator {
 			}
 		} catch {
 			// a locked file: nothing more can be done here
+			written = false;
 		}
 		for (const t of this.d.threads(projectId).list()) if (t.state === "waiting-reply") this.settle(projectId, t.id);
-		// not at once: this may be called from inside `pump`, which must not be started again from within itself
-		if (state === "queued") queueMicrotask(() => this.wake(projectId));
+		// not at once: this may be called from inside `pump`, which must not be started again from within itself.
+		// Not after a failed write either: the messages are still queued, so the wake would come straight back here, every microtask, while the file stays locked.
+		// The next run end or message wakes the project again.
+		if (state === "queued" && written) queueMicrotask(() => this.wake(projectId));
 	}
 
 	/** The tasks and asks that started a run which ended without answering them: a `reply` "daļēji" from the recipient, its text the run's final answer (cut at 2000),
