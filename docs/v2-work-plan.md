@@ -305,6 +305,18 @@ Why: the user co-works with two specialists at once, each in its own conversatio
 | 11.5 | **Gaida tevi.** One list of what waits for the user, across projects. | `src/shared/waiting.ts`, `src/shared/thread-types.ts`, `src/agent/coordinator.ts`, `src/main/handlers/threads.ts`, `src/shared/api.ts`, `test/11.5-waiting.test.ts` | order of kinds, two projects, answered confirmation leaves | tests pass |
 | 11.6 | **Minimum UI for threads.** Thread list, lanes, Gaida tevi block, Stop. | `src/renderer/shell/ThreadList.tsx`, `Lane.tsx`, `Waiting.tsx`, `src/renderer/shell/AgentDock.tsx`, `src/renderer/state.ts`, `src/renderer/styles.css` | none (components); `parseMention` and `waitingItems` already tested | the user opens a thread with a specialist, writes to it while the lead works on something else, confirms a batch from Gaida tevi, and stops one of the two |
 
+## Phase 12 — Messages
+
+Why: agents work out details with each other on topics of their own instead of through the user, within limits, and what they agree lands in Atmiņa. Plan: `docs/agent-sessions-plan.md`.
+
+| Task | Build | Files | Tests | Done when |
+|---|---|---|---|---|
+| 12.1 | **Messages, topics and the send rules (pure).** `Message`, `Topic`, `canSend`, inbox / pending / wake, the office's UZDEVUMS and ATBILDE text, and a small on-disk `Mailbox`. | `src/core/messages.ts`, `test/12.1-messages.test.ts` | each refusal code with its Latvian reason, three exchanges per sender, depth 6 / 7, inbox / pending / wake cases, `renderTask`, `renderReply`, torn last line, last state wins | tests pass |
+| 12.2 | **`send_message`, delivery and waking.** The tool of the main process; the coordinator delivers queued messages and wakes the recipient once its replies are in. | `src/agent/mail.ts`, `src/agent/coordinator.ts`, `src/agent/thread-runner.ts`, `src/agent/subagents.ts`, `src/agent/prompt.ts`, `docs/v2-design.md`, `docs/v2-work-plan.md`, `test/12.2-mail.test.ts` | ask and reply, five asks one wake, reply while running, recipient cannot run, `stopAll(wave)`, 4th message refused | tests pass |
+| 12.3 | **`close_topic` and the registers in Atmiņa.** An agreement becomes a decision note, a pass-up an open question; impact flags make an agreement a question to the user. | `src/agent/mail.ts`, `src/core/model.ts`, `src/agent/tools/sources.ts`, `src/renderer/panels/Atmina.tsx`, `test/12.3-close-topic.test.ts` | agreed, impact flag, non-party refused, second close refused, automatic pass-up, `read_notes({ topic })` | tests pass |
+| 12.4 | **Wave limits.** Runs and cost per wave; a paused wave waits for the user. | `src/core/queue.ts`, `src/agent/coordinator.ts`, `src/shared/types.ts`, `src/main/settings.ts`, `src/renderer/panels/Iestatijumi.tsx`, `test/12.4-wave-limits.test.ts` | 21st run not started, other waves go on, `resumeWave`, cost limit, settings clamps | tests pass |
+| 12.5 | **Room feed.** One line per message, agreement and pass-up, in a tab beside the thread view. | `src/shared/room.ts`, `src/renderer/shell/RoomFeed.tsx`, `src/shared/thread-types.ts`, `src/main/handlers/threads.ts`, `src/shared/api.ts`, `test/12.5-room.test.ts` | time order, 120-character cut, agreed line with note, `max` | the user watches two agents settle a detail and finds the agreement in Atmiņa |
+
 ## Later (after phase 8)
 
 From BIM Crew, picked "later" on 2026-11-12: **meeting notes** (audio → transcript → Atmiņa decisions, requirements and tasks; BIM Crew `meetings/transcription.ts`, `core/meeting_notes.py`; needs a local whisper) and the **scheduler** (scheduled agent runs: law re-read, TN clock reminders; `server/src/scheduler.ts`, `scheduled-runner.ts`).
