@@ -476,6 +476,14 @@ export interface ApiSpec {
 	/** the specialists the agent can delegate to (8.15), edited in Iestatījumi → Aģenti */
 	"agents.list": () => AgentsView;
 	"agents.save": (specs: AgentSpec[]) => AgentSpec[];
+	/** the role text of an agent (agents\<id>.md), null without a file; set keeps the replaced text under versions (16 000 characters at most) */
+	"agents.role.get": (id: string) => string | null;
+	"agents.role.set": (id: string, text: string) => void;
+	/** a UTF-8 .md the user picked becomes the role file (the replaced text kept); `roleFile` on the spec is set only by the user's save */
+	"agents.role.import": (id: string, path: string) => { chars: number };
+	/** the rules every agent gets (agents\_kopejie.md, 6 000 characters at most) */
+	"agents.shared.get": () => string;
+	"agents.shared.set": (text: string) => void;
 	/** expert reviews (8.14): the remarks, the counts, and the documents that can be read as a review */
 	"expert.list": (id: string) => { remarks: ExpertRemark[]; summary: ExpertSummary; sources: ReviewSource[] };
 	"expert.read": (id: string, sourceId: string) => ImportResult;
@@ -669,6 +677,11 @@ export const API_NAMES = [
 	"deliveries.renameUndo",
 	"agents.list",
 	"agents.save",
+	"agents.role.get",
+	"agents.role.set",
+	"agents.role.import",
+	"agents.shared.get",
+	"agents.shared.set",
 	"expert.list",
 	"expert.read",
 	"expert.setState",

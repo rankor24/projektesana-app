@@ -1,6 +1,12 @@
 // Specialists and the settings page that edits them (task 8.15; spec v2 in 13.1). Node-free: the renderer imports this file.
 import type { Effort } from "./types.js";
 
+/** Limits the settings page shows and src/agent/agents.ts enforces (one place, so the two cannot drift). */
+export const ROLE_MAX = 16_000; // characters of a role text
+export const SHARED_MAX = 6_000; // characters of the shared rules
+/** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
+export const SPECIALIST_FIXED_MAX = 16_000; // tokens
+
 export interface AgentSpec {
 	id: string;
 	name: string;
@@ -47,7 +53,7 @@ export interface AgentsView {
 	/** the shipped list is in use (nothing saved yet) */
 	shipped: boolean;
 	defaults: AgentSpec[];
-	/** every tool that is not read-only and needs no batch confirmation: what can be ticked */
+	/** every tool a specialist can be given, with its level: `run` ones always, `confirm` ones only for an agent with maxLevel "confirm" (the page filters) */
 	tools: AgentToolRow[];
 	maxParallel: number;
 }

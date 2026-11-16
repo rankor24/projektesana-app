@@ -168,3 +168,94 @@ test("13.1 the agents handler passes the ids being saved plus lead, and checks t
 	assert.equal(h["agents.save"]([{ ...a, prompt: "", roleFile: true }, b])[0].roleFile, true);
 	assert.equal(settings.agentSpecs().specs[0].roleFile, true);
 });
+
+// ---- 13.5 Aģenti page: the handlers behind the role and shared-rule editors ----
+
+async function pageHandlers() {
+	const { agentHandlers } = await import("../src/main/handlers/agents.ts");
+	const dir = tmp();
+	const settings = new AppSettings(dir, { available: () => false, encrypt: () => Buffer.alloc(0), decrypt: () => "" });
+	return { dir, settings, h: agentHandlers({ settings }) };
+}
+
+test("13.5 agents.role.get / set: null without a file, text back, ROLE_MAX enforced, the replaced text kept, a bad id refused", async () => {
+	const { dir, h } = await pageHandlers();
+	assert.equal(h["agents.role.get"]("aa"), null);
+	h["agents.role.set"]("aa", "Pirmais teksts.");
+	assert.equal(h["agents.role.get"]("aa"), "Pirmais teksts.");
+	h["agents.role.set"]("aa", "Otrais teksts.");
+	assert.equal(h["agents.role.get"]("aa"), "Otrais teksts.");
+	const kept = readdirSync(join(roleDir(dir), "versions")).map((f) => readFileSync(join(roleDir(dir), "versions", f), "utf8"));
+	assert.ok(kept.includes("Pirmais teksts."), "the replaced text is under versions");
+	assert.throws(() => h["agents.role.set"]("aa", "x".repeat(ROLE_MAX + 1)), /16000|16 000/);
+	assert.equal(h["agents.role.get"]("aa"), "Otrais teksts.", "a refused write changes nothing");
+	assert.throws(() => h["agents.role.set"]("../x", "t"), /Identifikators/);
+	assert.throws(() => h["agents.role.get"]("..\\x"), /Identifikators/);
+	assert.throws(() => h["agents.role.set"]("aa", 5 as unknown as string), /teksts/i);
+});
+
+test("13.5 agents.role.import: reads a UTF-8 .md into the role file (the old text kept), returns its length; roleFile only comes with a spec save", async () => {
+	const { dir, settings, h } = await pageHandlers();
+	const src = join(tmp(), "loma.md");
+	const text = "# Loma\nTu esi ēkas inženieris. Atbildi īsi.\n";
+	writeFileSync(src, "﻿" + text, "utf8"); // an editor's byte order mark is not part of the role
+	h["agents.role.set"]("aa", "veca loma");
+	assert.deepEqual(h["agents.role.import"]("aa", src), { chars: text.length });
+	assert.equal(h["agents.role.get"]("aa"), text);
+	const kept = readdirSync(join(roleDir(dir), "versions")).map((f) => readFileSync(join(roleDir(dir), "versions", f), "utf8"));
+	assert.ok(kept.includes("veca loma"));
+	assert.equal(settings.agentSpecs().shipped, true, "importing saves no spec");
+	// the spec save is what sets roleFile
+	const spec = { ...old, id: "aa", prompt: "", roleFile: true };
+	assert.equal(h["agents.save"]([spec])[0].roleFile, true);
+});
+
+test("13.5 agents.role.import: over ROLE_MAX, not .md, not UTF-8, missing, or a bad id are refused and change nothing", async () => {
+	const { h } = await pageHandlers();
+	const d = tmp();
+	h["agents.role.set"]("aa", "paliek");
+	const big = join(d, "liela.md");
+	writeFileSync(big, "x".repeat(ROLE_MAX + 1), "utf8");
+	assert.throws(() => h["agents.role.import"]("aa", big), /16000|16 000/);
+	const exactly = join(d, "tieši.md");
+	writeFileSync(exactly, "x".repeat(ROLE_MAX), "utf8");
+	assert.deepEqual(h["agents.role.import"]("aa", exactly), { chars: ROLE_MAX });
+	h["agents.role.set"]("aa", "paliek");
+	const exe = join(d, "loma.docx");
+	writeFileSync(exe, "teksts", "utf8");
+	assert.throws(() => h["agents.role.import"]("aa", exe), /\.md/);
+	const bin = join(d, "bin.md");
+	writeFileSync(bin, Buffer.from([0x41, 0xff, 0xfe, 0x42]));
+	assert.throws(() => h["agents.role.import"]("aa", bin), /UTF-8/);
+	assert.throws(() => h["agents.role.import"]("aa", join(d, "nav.md")), /nav atrasts|nevar nolasīt/i);
+	assert.throws(() => h["agents.role.import"]("../x", exactly), /Identifikators/);
+	assert.equal(h["agents.role.get"]("aa"), "paliek");
+});
+
+test("13.5 agents.shared.get / set: empty without a file, 6 000 characters, the replaced text kept", async () => {
+	const { dir, h } = await pageHandlers();
+	assert.equal(h["agents.shared.get"](), "");
+	h["agents.shared.set"]("Rakstām latviski.");
+	h["agents.shared.set"]("Rakstām īsi.");
+	assert.equal(h["agents.shared.get"](), "Rakstām īsi.");
+	assert.equal(readShared(dir), "Rakstām īsi.");
+	assert.throws(() => h["agents.shared.set"]("x".repeat(SHARED_MAX + 1)), /6000|6 000/);
+	assert.equal(h["agents.shared.get"](), "Rakstām īsi.");
+	const kept = readdirSync(join(roleDir(dir), "versions")).filter((f) => f.startsWith("_kopejie."));
+	assert.ok(kept.some((f) => readFileSync(join(roleDir(dir), "versions", f), "utf8") === "Rakstām latviski."));
+});
+
+test("13.5 agents.list tools: confirm-level tools are listed with their level (the page filters by the agent's maxLevel); never and main-process tools stay out", async () => {
+	const { h } = await pageHandlers();
+	const rows = h["agents.list"]().tools;
+	const byName = new Map(rows.map((r) => [r.name, r]));
+	assert.equal(byName.get(confirmTool)?.level, "confirm");
+	assert.ok(rows.some((r) => r.level === "run"), "run tools are still there");
+	assert.ok(rows.every((r) => r.level !== "never" && r.level !== "read"));
+	for (const n of ["delete_element", "send_code_to_revit", "delegate", "run_subagent", "send_message"]) assert.ok(!byName.has(n), n);
+	// every row the page may show ticked under maxLevel confirm validates with maxLevel confirm; under run only the run rows do
+	for (const r of rows) {
+		assert.ok(validateSpec({ ...old, tools: [r.name], maxLevel: "confirm" }, levelOf, known).ok, r.name);
+		assert.equal(validateSpec({ ...old, tools: [r.name] }, levelOf, known).ok, r.level !== "confirm", r.name);
+	}
+});

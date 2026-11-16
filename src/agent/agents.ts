@@ -6,7 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OfficeMemory } from "../core/office-memory.js";
-import type { AgentSpec } from "../shared/agent-types.js";
+import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
@@ -20,10 +20,7 @@ import { REVIT_LEVELS } from "./tools/revit-levels.js";
 
 // subagents.ts re-exports validateSpec from here and this file reads its level tables: the bindings are only used inside functions, so the cycle is safe.
 
-export const ROLE_MAX = 16_000; // characters
-export const SHARED_MAX = 6_000; // characters
-/** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
-export const SPECIALIST_FIXED_MAX = 16_000; // tokens
+export { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX };
 
 const ID = /^[a-z][a-z0-9-]{1,30}$/;
 const SHARED_FILE = "_kopejie.md";
