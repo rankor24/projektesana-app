@@ -15,6 +15,7 @@ import type { AgentTool, BeforeToolCallContext, BeforeToolCallResult } from "@ea
 import { Type, type Static } from "@earendil-works/pi-ai";
 import { TOOLS } from "../shared/activity.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
+import { LEAD_ID } from "../shared/thread-types.js";
 import type { RunEvent } from "../shared/types.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
@@ -75,6 +76,7 @@ export function validateSpec(raw: unknown, levelOf: LevelOf, known: readonly str
 	const name = str(r.name);
 	const description = str(r.description);
 	const prompt = str(r.prompt);
+	if (id === LEAD_ID) return { ok: false, error: `Identifikators ${LEAD_ID} ir rezervēts galvenajam aģentam.` };
 	if (!ID.test(id)) return { ok: false, error: "Identifikators: mazie burti, cipari un domuzīme, 2–31 zīmes (piem. dokumenti)." };
 	if (name.length < 2 || name.length > 60) return { ok: false, error: "Nosaukums: 2–60 zīmes." };
 	if (description.length > 200) return { ok: false, error: "Apraksts: līdz 200 zīmēm." };

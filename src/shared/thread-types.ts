@@ -78,3 +78,11 @@ export interface QueueView {
 	paused: boolean;
 	waves: Wave[];
 }
+
+/** One thing that waits for the user (Gaida tevi). Items of every project, not only the open one. `wave-paused`, `question` and `gate` are filled by 12.4, 12.3 and 14.3. */
+export type WaitingItem =
+	| { kind: "confirm"; id: string; threadId: string; agent: string; projectId: string | null; tool: string; batch: string }
+	| { kind: "interrupted"; interrupted: number; queued: number }
+	| { kind: "wave-paused"; wave: string; projectId: string | null; reason: "runs" | "cost" }
+	| { kind: "question"; noteId: string; projectId: string; from: string; title: string }
+	| { kind: "gate"; gate: string; projectId: string; noteId: string };

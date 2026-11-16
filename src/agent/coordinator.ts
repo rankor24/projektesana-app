@@ -2,7 +2,8 @@
 // Every event of a run leaves with its envelope (thread, agent, project, wave) and the thread's state follows the run.
 // No Electron imports: the runner, the stores and the sink are injected.
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView } from "../shared/thread-types.js";
+import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem } from "../shared/thread-types.js";
+import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
@@ -19,6 +20,8 @@ export interface CoordinatorDeps {
 	onThread?: (t: Thread) => void;
 	/** the run table or the queue changed */
 	onQueue?: (v: QueueView) => void;
+	/** what waits for the user changed: a confirmation opened or was answered, the restart question was answered */
+	onWaiting?: (items: WaitingItem[]) => void;
 	/** where the queue is saved on every change and loaded from by `restore()` */
 	queueFile: string;
 	/** the specialists that exist now, read at every start: a thread of any other agent than the lead runs only while its specialist is in the list.
@@ -55,7 +58,9 @@ export class Coordinator {
 	private prepared = new Map<string, { files?: PreparedAttachments; runId?: string }>();
 	/** a job that is not a run but holds the slot (the user's own "saspiest") */
 	private held: AbortController | null = null;
-	private confirms = new Map<string, { resolve: (ok: boolean) => void; live: Live; waiting: () => void; resume: () => void }>();
+	private confirms = new Map<string, { resolve: (ok: boolean) => void; live: Live; waiting: () => void; resume: () => void; item: Extract<WaitingItem, { kind: "confirm" }> }>();
+	/** what `restore()` found, until the user answers it; the same lifetime as the window's `queue.restored` */
+	private restoreNotice: { interrupted: number; queued: number } | null = null;
 	private n = 0;
 	private waves = 0;
 
@@ -105,6 +110,26 @@ export class Coordinator {
 
 	view(): QueueView {
 		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: [] };
+	}
+
+	/** Everything that waits for the user, of every project: open confirmations first, then the unanswered restart. */
+	waiting(): WaitingItem[] {
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused: [], questions: [], gates: [] });
+	}
+
+	/** Tells the window the list changed. Never breaks a run (a window already gone). */
+	private waitingChanged(): void {
+		try {
+			this.d.onWaiting?.(this.waiting());
+		} catch {
+			// a window already gone
+		}
+	}
+
+	/** The restart question is answered: it leaves the list. */
+	private answerRestore(): void {
+		this.restoreNotice = null;
+		this.waitingChanged();
 	}
 
 	/** Every change of the view: save the queue, tell the window. Neither may break a run. */
@@ -214,14 +239,18 @@ export class Coordinator {
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
+				// the list shows the same text the `confirm` event carries
+				const item: Extract<WaitingItem, { kind: "confirm" }> = { kind: "confirm", id: req.id, threadId: thread.id, agent: thread.agent, projectId: thread.projectId, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) };
 				this.confirms.set(req.id, {
 					resolve,
 					live,
 					waiting: () => this.mark(thread, { state: "waiting-confirm" }),
 					resume: () => this.mark(thread, { state: "running" }),
+					item,
 				});
 				this.confirms.get(req.id)!.waiting();
-				emit({ type: "confirm", id: req.id, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) });
+				emit({ type: "confirm", id: req.id, tool: item.tool, batch: item.batch });
+				this.waitingChanged();
 				// a run parked on a confirmation frees its slot
 				this.pump();
 			});
@@ -239,12 +268,15 @@ export class Coordinator {
 
 	/** Answers the open confirmations that match with no (or the given answer) and returns their runs to `running`. */
 	private denyConfirms(match: (c: { live: Live }) => boolean, resume: boolean): void {
+		let any = false;
 		for (const [id, c] of [...this.confirms]) {
 			if (!match(c)) continue;
+			any = true;
 			this.confirms.delete(id);
 			c.resolve(false);
 			if (resume) c.resume();
 		}
+		if (any) this.waitingChanged();
 	}
 
 	/** Holds the slot for a job that is not a run; Stop aborts it too. Refused while anything runs. */
@@ -286,6 +318,11 @@ export class Coordinator {
 		this.stopWhere((x) => x.threadId === threadId);
 	}
 
+	/** What `restore()` found, until the user answers with `resumeInterrupted` or `discardInterrupted`; null when nothing waits for an answer. */
+	restoreFound(): { interrupted: number; queued: number } | null {
+		return this.restoreNotice;
+	}
+
 	/** Called once at start-up, before anything can start. Marks the threads a dead process left in flight as `interrupted`, loads the saved queue
 	 *  (every item kept, stopped ones too) and holds it paused until the user answers with `resumeInterrupted` or `discardInterrupted`.
 	 *  A clean start (nothing in flight, nothing queued, a file that was not paused) stays unpaused. Never throws, never starts a run. */
@@ -317,7 +354,11 @@ export class Coordinator {
 		this.prepared.clear();
 		const queued = this.queue.filter((q) => q.state === "queued").length;
 		this.paused = loaded.paused || this.interrupted.length > 0 || queued > 0;
-		return { interrupted: this.interrupted.length, queued };
+		const found = { interrupted: this.interrupted.length, queued };
+		// a clean start is not paused and has nothing to ask
+		this.restoreNotice = this.paused ? found : null;
+		this.waitingChanged();
+		return found;
 	}
 
 	/** The thread is still `interrupted` (the user may have sent it a message while the queue was paused): give it its next state. */
@@ -331,6 +372,7 @@ export class Coordinator {
 
 	/** The user chose to go on: threads with a queued item wait for their turn, the others are idle, and the queue starts. */
 	resumeInterrupted(): void {
+		this.answerRestore();
 		this.settleInterrupted((r) => (this.queue.some((q) => q.state === "queued" && q.threadId === r.threadId) ? "queued" : "idle"));
 		this.paused = false;
 		this.pump();
@@ -338,6 +380,7 @@ export class Coordinator {
 
 	/** The user chose to drop it: queued items stay in the queue as `stopped`, the threads are idle, nothing starts. */
 	discardInterrupted(): void {
+		this.answerRestore();
 		this.queue = this.queue.map((q) => {
 			if (q.state !== "queued") return q;
 			this.prepared.delete(q.id);
@@ -369,6 +412,7 @@ export class Coordinator {
 		this.confirms.delete(id);
 		c.resolve(allow);
 		c.resume();
+		this.waitingChanged();
 		this.pump();
 	}
 
