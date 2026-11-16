@@ -153,7 +153,7 @@ function findSkillDirs(src: string, depth = 1): string[] {
 /** Windows device names: a folder of that name cannot be made reliably, so such a skill name is refused up front. */
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
 
-/** Moves the old folder of a skill to <officeDir>ersions\<name>.<timestamp>; never deletes it. */
+/** Moves the old folder of a skill to <officeDir>\versions\<name>.<timestamp>; never deletes it. */
 function keepOld(officeDir: string, name: string, target: string): string {
 	mkdirSync(join(officeDir, VERSIONS), { recursive: true });
 	const stamp = new Date(Date.now()).toISOString().replace(/[:.]/g, "-");
@@ -165,7 +165,7 @@ function keepOld(officeDir: string, name: string, target: string): string {
 }
 
 /** Copies every <group>/<name>/SKILL.md tree under `src` to <officeDir>\<name>, the group kept in skills.json. A name that exists is replaced and the old
- *  folder moved to <officeDir>ersions\<name>.<timestamp> (never deleted). `syncedDir`: a name equal to a synced skill is refused.
+ *  folder moved to <officeDir>\versions\<name>.<timestamp> (never deleted). `syncedDir`: a name equal to a synced skill is refused.
  *  Each skill stands alone: one that fails (a locked folder, a long path) is refused with the reason and the rest go on. The new text has not been tested,
  *  so skills.json (the group, no tested mark) is written BEFORE the folder is swapped: whatever fails after that can leave an old text, never an untested
  *  one marked tested. A staging folder a failure leaves behind is named in the reason and never deleted. */
@@ -200,8 +200,14 @@ export function importSkills(src: string, officeDir: string, syncedDir?: string)
 				try {
 					renameSync(staging, target);
 				} catch (e) {
-					// the old text goes back where it was
-					if (kept) renameSync(kept, target);
+					// the old text goes back where it was; if that fails too, the refusal names the kept copy so the user can put it back
+					if (kept) {
+						try {
+							renameSync(kept, target);
+						} catch {
+							throw new Error(`${e instanceof Error ? e.message : String(e)}. Vecā versija palikusi: ${kept}`);
+						}
+					}
 					throw e;
 				}
 				imported.push(name);
