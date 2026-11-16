@@ -528,3 +528,28 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .mention-pop button { text-align: left; border-radius: 0; }
 .mention-pop button.on { background: var(--elev2); }
 .notice { padding: 2px 10px; border-top: 1px solid var(--border); }
+/* process mode (task 14.8): the strip in the chat, the block on Pārskats, the gate card */
+.pstrip { display: flex; flex-direction: column; gap: 3px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.pstrip-stages { display: flex; gap: 4px; flex-wrap: wrap; }
+.pstrip-stage { padding: 0 7px; border: 1px solid var(--border); border-radius: 10px; font-size: 11.5px; color: var(--dim); }
+.pstrip-stage.current { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.pstrip-stage.done { color: var(--ok); }
+.pstrip-stage.skipped { opacity: 0.45; text-decoration: line-through; }
+.pblock { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--elev); }
+.pblock-msg { margin: 0; }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pprofile, .pactions, .pchange, .phistory { display: flex; flex-direction: column; gap: 6px; }
+.pdepth { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.pdepth-cell { display: flex; align-items: center; gap: 6px; }
+.pagent { display: inline-flex; align-items: center; gap: 4px; }
+.pwhy { display: flex; flex-direction: column; gap: 2px; }
+.pfolder { overflow-wrap: anywhere; }
+.pchange textarea { width: 100%; }
+.gate-comment { width: 100%; }
+.gate-remarks { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow: auto; }
+.gate-remark { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.gate-quote { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

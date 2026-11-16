@@ -21,6 +21,7 @@ import { runUi } from "../run-ui";
 import { bimcraft } from "../preview/IfcView";
 import { parseMention } from "../../shared/mention";
 import { LaneBar } from "./Lane";
+import { ProcessStrip } from "./ProcessStrip";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
@@ -385,6 +386,7 @@ export function AgentDock() {
 				{ctx.data && leadPath && <ContextMeter c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} />}
 				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} onSelect={T.select} onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))} onClose={closeThread} />
 			</div>
+			<ProcessStrip projectId={projectId} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
 			<div className="tabs">
 				<button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>Saruna</button>

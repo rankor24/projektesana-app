@@ -1,8 +1,10 @@
 // App-wide renderer state: the open project, what the preview shows, and the Fokuss (what the agent is pointed at).
 // A small external store, same pattern as windows.ts.
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { FocusItem } from "../shared/api";
 import type { PinCamera } from "../core/model";
+import type { ProcessState } from "../core/process";
+import { call, on } from "./bridge";
 import type { ViewKind, ViewMode, ViewState } from "../shared/view-context";
 
 export type PreviewTarget = { kind: "source"; sourceId: string; page?: number; quote?: string } | { kind: "ifc"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc"; only?: boolean } | { kind: "law"; sourceId: string; quote?: string } | null;
@@ -126,4 +128,33 @@ const subscribe = (l: () => void) => {
 
 export function useUi(): UiState {
 	return useSyncExternalStore(subscribe, () => state);
+}
+
+/** The open project's process state (null: not in process mode yet, no project, or not read yet). Main pushes `data.changed` with "process" after every change of it, and
+ *  `waiting.changed` when a gate is asked for or decided; the last answer asked for wins. */
+export function useProcess(projectId: string | null): ProcessState | null {
+	const [s, setS] = useState<ProcessState | null>(null);
+	useEffect(() => {
+		setS(null);
+		if (!projectId) return;
+		let live = true;
+		let seq = 0;
+		const load = () => {
+			const mine = ++seq;
+			call("process.get", projectId)
+				.then((v) => live && mine === seq && setS(v))
+				.catch(() => undefined);
+		};
+		load();
+		const a = on("data.changed", (e) => {
+			if (e.projectId === projectId && e.what.includes("process")) load();
+		});
+		const b = on("waiting.changed", load);
+		return () => {
+			live = false;
+			a();
+			b();
+		};
+	}, [projectId]);
+	return s;
 }
