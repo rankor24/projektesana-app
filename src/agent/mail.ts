@@ -6,6 +6,7 @@ import { Type, type Static } from "@earendil-works/pi-ai";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type Topic } from "../core/messages.js";
 import { newId, type Note } from "../core/model.js";
+import type { ProcessState } from "../core/process.js";
 import type { ThreadStore } from "../core/threads.js";
 import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
@@ -37,14 +38,29 @@ export interface MailDeps {
 	notesChanged?: () => void;
 	/** the lead's current thread in this project (made when there is none); without it the project's thread store is asked */
 	leadThread?: () => Thread;
+	/** the project's process state, read at each call (the user may switch the mode between two); without it, or null, nothing of process mode applies */
+	process?: () => ProcessState | null;
 }
+
+/** The state of process mode as it is now; null in co-work, with no state, or when it cannot be read (then the co-work rules hold). */
+function processNow(d: MailDeps): ProcessState | null {
+	try {
+		const p = d.process?.() ?? null;
+		return p?.mode === "process" ? p : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Who takes a pass-up in process mode (in co-work: the lead). */
+const PROCESS_LEADER = "bpv";
 
 export const NO_PROJECT = "Temata slēgšanai vajag atvērtu projektu.";
 
 // a plain `enum` is a third the size of a union of literals in the declaration every request carries
 const oneOf = <T extends string>(...v: T[]) => Type.Unsafe<T>(Type.String({ enum: v }));
 const strs = Type.Array(Type.String());
-const taskEnvelope = Type.Object({ goal: Type.String(), context: Type.Optional(strs), expects: Type.String(), iteration: Type.Optional(Type.Number()) });
+const taskEnvelope = Type.Object({ stage: Type.Optional(Type.String()), goal: Type.String(), context: Type.Optional(strs), expects: Type.String(), iteration: Type.Optional(Type.Number()) });
 const replyEnvelope = Type.Object({
 	status: oneOf("izpildīts", "daļēji", "bloķēts"),
 	results: Type.Optional(strs),
@@ -92,23 +108,27 @@ function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic
 }
 
 /** The topic goes up: an open question for the lead (or for the user, when the caller is the lead) whose body is `why`; the topic closes `passed-up`.
- *  A question for the lead is also put in the mailbox as an `ask` from the caller on a new topic "Nodots: …", so the lead's thread is woken and reads it
+ *  In process mode the question goes to bpv instead of the lead (to the user when the caller is bpv itself or the lead, who is no party of the process);
+ *  `toUser` sends it to the user whoever the caller is (an iteration overflow: the user decides, not bpv).
+ *  A question for the lead or bpv is also put in the mailbox as an `ask` from the caller on a new topic "Nodots: …", so that thread is woken and reads it
  *  (a note alone wakes nobody). It is a system notice: written straight into the mailbox, no send rules, not an exchange of the old topic.
  *  Past the chain depth no notice is sent (the notices skip `canSend`, so an agent that keeps answering would pass up for ever); the question goes to the user instead,
  *  so a pass-up always reaches someone.
  *  Used by `close_topic` (passed-up) and by a send refused at a limit. Throws NO_PROJECT when the thread has no Atmiņa to write into. */
-export function passUp(d: MailDeps, topic: Topic, why: string): Note {
+export function passUp(d: MailDeps, topic: Topic, why: string, o: { toUser?: boolean } = {}): Note {
 	const store = d.notes?.();
 	if (!store) throw new Error(NO_PROJECT);
-	const toUser = d.self.agent === LEAD_ID || d.self.depth + 1 > d.limits().chainDepth;
-	const note = askAbout(d, store, topic, { to: toUser ? "user" : LEAD_ID, title: `Nodots tālāk: ${topic.title}`, body: why });
+	const inProcess = processNow(d) !== null;
+	const addressee = inProcess ? PROCESS_LEADER : LEAD_ID;
+	const toUser = !!o.toUser || d.self.agent === LEAD_ID || d.self.agent === addressee || d.self.depth + 1 > d.limits().chainDepth;
+	const note = askAbout(d, store, topic, { to: toUser ? "user" : addressee, title: `Nodots tālāk: ${topic.title}`, body: why });
 	if (!toUser) {
 		try {
-			const lead = d.leadThread ? d.leadThread() : d.threads.lead(d.self.projectId, "");
-			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, LEAD_ID], parent: topic.id, notice: true });
+			const thread = inProcess ? processLeaderThread(d, topic) : d.leadThread ? d.leadThread() : d.threads.lead(d.self.projectId, "");
+			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, addressee], parent: topic.id, notice: true });
 			d.mailbox.add({
-				wave: d.self.wave, topic: notice.id, from: d.self.agent, to: LEAD_ID, kind: "ask", text: why, refs: [note.id],
-				fromThread: d.self.threadId, toThread: lead.id, depth: d.self.depth + 1,
+				wave: d.self.wave, topic: notice.id, from: d.self.agent, to: addressee, kind: "ask", text: why, refs: [note.id],
+				fromThread: d.self.threadId, toThread: thread.id, depth: d.self.depth + 1,
 			});
 			d.enqueue();
 		} catch {
@@ -116,6 +136,14 @@ export function passUp(d: MailDeps, topic: Topic, why: string): Note {
 		}
 	}
 	return note;
+}
+
+/** bpv's newest open thread in this project; made, started by the caller, when it has none. */
+function processLeaderThread(d: MailDeps, topic: Topic): Thread {
+	return (
+		d.threads.list({ agent: PROCESS_LEADER, open: true })[0] ??
+		d.threads.create({ projectId: d.self.projectId, agent: PROCESS_LEADER, title: `Nodots: ${topic.title}`, startedBy: d.self.agent })
+	);
 }
 
 /** send_message and close_topic, for pi (`extraTools` of the run). */
@@ -133,16 +161,17 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 			if (existing && !(existing.parties.includes(d.self.agent) && existing.parties.includes(p.to))) {
 				return result(`Temats «${existing.title}» ir starp ${existing.parties.join(" un ")}; ziņu uz to var sūtīt tikai viens no viņiem otram.`, true);
 			}
+			const process = processNow(d);
 			const check = canSend(
-				{ from: d.self.agent, to: p.to, kind: p.kind, topic: existing ?? null, depth: d.self.depth + 1, iteration: p.task?.iteration },
-				{ agents: d.agents(), limits: d.limits(), messages: mailbox.messages() },
+				{ from: d.self.agent, to: p.to, kind: p.kind, topic: existing ?? null, depth: d.self.depth + 1, iteration: p.task?.iteration, stage: p.task?.stage },
+				{ agents: d.agents(), limits: d.limits(), messages: mailbox.messages(), process },
 			);
 			if (!check.ok) {
 				// a limit was reached: the topic goes up with the message that was not sent (a new topic is opened just to record that)
 				if (check.passUp && d.notes?.()) {
 					try {
 						const topic = existing ?? mailbox.openTopic({ title: p.title!.trim(), parties: [d.self.agent, p.to], parent: null });
-						const q = passUp(d, topic, `${check.reason}\nNeizsūtītā ziņa (${p.kind} → ${p.to}): ${p.text}`);
+						const q = passUp(d, topic, `${check.reason}\nNeizsūtītā ziņa (${p.kind} → ${p.to}): ${p.text}`, { toUser: !!process && check.code === "iterations" });
 						return result(`${check.reason} Jautājums ierakstīts Atmiņā (${q.id}).`, true);
 					} catch {
 						// the note could not be written: the plain refusal below
@@ -163,7 +192,8 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 			const msg: Omit<Message, "id" | "at" | "state"> = {
 				wave: d.self.wave, topic: topic.id, from: d.self.agent, to: p.to, kind: p.kind, text: p.text, refs: p.refs ?? [],
 				fromThread: d.self.threadId, toThread, depth: d.self.depth + 1,
-				...(p.task ? { task: { id: newId("u"), goal: p.task.goal, context: p.task.context ?? [], expects: p.task.expects, iteration: p.task.iteration ?? 1 } } : {}),
+				// in process mode a task is for the stage that is on unless it says otherwise (and then it was refused above)
+				...(p.task ? { task: { id: newId("u"), ...((p.task.stage ?? process?.stage) ? { stage: p.task.stage ?? process!.stage } : {}), goal: p.task.goal, context: p.task.context ?? [], expects: p.task.expects, iteration: p.task.iteration ?? 1 } } : {}),
 				...(p.reply ? { reply: { id: newId("a"), status: p.reply.status, results: p.reply.results ?? [], questions: p.reply.questions ?? [], decisions: p.reply.decisions ?? [], risks: p.reply.risks } } : {}),
 			};
 			const added = mailbox.add(msg);

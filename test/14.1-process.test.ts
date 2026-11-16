@@ -167,15 +167,15 @@ test("a return in S6 clears the re-check", () => {
 
 test("stage.skip: S6 and S7 refused, others move on and record the reason", () => {
 	let s = initial("buvprojekts", []);
-	s = run(s, { type: "stage.skip", why: "vienkāršs projekts", at: at() });
+	s = run(s, { type: "stage.skip", why: "vienkāršs projekts", at: at(), by: "user" });
 	assert.equal(s.stage, "S2");
 	assert.deepEqual(s.profile.changes.map((c) => [c.what, c.why]), [["S1 izlaista", "vienkāršs projekts"]]);
-	assert.match(refused(s, { type: "stage.skip", why: "", at: at() }), /pamatojum/);
+	assert.match(refused(s, { type: "stage.skip", why: "", at: at(), by: "user" }), /pamatojum/);
 	const atStage = (st: Stage): ProcessState => ({ ...s, stage: st });
-	assert.equal(refused(atStage("S6"), { type: "stage.skip", why: "x", at: at() }), "S6 nedrīkst izlaist.");
-	assert.equal(refused(atStage("S7"), { type: "stage.skip", why: "x", at: at() }), "S7 nedrīkst izlaist.");
+	assert.equal(refused(atStage("S6"), { type: "stage.skip", why: "x", at: at(), by: "user" }), "S6 nedrīkst izlaist.");
+	assert.equal(refused(atStage("S7"), { type: "stage.skip", why: "x", at: at(), by: "user" }), "S7 nedrīkst izlaist.");
 	const waiting = run(s, request());
-	assert.equal(refused(waiting, { type: "stage.skip", why: "x", at: at() }), "Gate jau gaida lēmumu.");
+	assert.equal(refused(waiting, { type: "stage.skip", why: "x", at: at(), by: "user" }), "Gate jau gaida lēmumu.");
 });
 
 test("change: basic in S4 returns to S3, otherwise the stage stays", () => {
@@ -209,7 +209,7 @@ test("a profile that skips S5, S6 and S7 still passes S6, H6, S7 and H7", () => 
 	// the same through a manual skip of S4: S5 is passed, S6 is not
 	const t = { ...initial("buvprojekts", []), stage: "S4" as const };
 	const u = { ...t, profile: { ...t.profile, depth: { ...t.profile.depth, S5: "izlaiž" as const, S6: "izlaiž" as const } } };
-	assert.equal(run(u, { type: "stage.skip", why: "x", at: at() }).stage, "S6");
+	assert.equal(run(u, { type: "stage.skip", why: "x", at: at(), by: "user" }).stage, "S6");
 });
 
 test("learned only after H7; nothing moves a finished process; co-work refuses every event", () => {
@@ -223,7 +223,7 @@ test("learned only after H7; nothing moves a finished process; co-work refuses e
 	assert.equal(s.stage, "done");
 	assert.ok(!step(s, request()).ok);
 	const cowork: ProcessState = { ...initial("buvprojekts", []), mode: "cowork" };
-	for (const e of [request(), approve(), ret(), { type: "stage.skip", why: "x", at: at() }, { type: "review.done", at: at() }, { type: "change", basic: true, at: at() }, { type: "learned", at: at() }] as ProcessEvent[]) {
+	for (const e of [request(), approve(), ret(), { type: "stage.skip", why: "x", at: at(), by: "user" }, { type: "review.done", at: at() }, { type: "change", basic: true, at: at() }, { type: "learned", at: at() }] as ProcessEvent[]) {
 		assert.equal(refused(cowork, e), "Procesa režīms nav ieslēgts.");
 	}
 });

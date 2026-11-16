@@ -20,6 +20,7 @@ import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
 import { declarationTokens } from "./declarations.js";
 import { listSkills, officeSkillsDir } from "./skills.js";
+import { readProcess } from "../core/process.js";
 import { ProjectStore } from "../core/store.js";
 import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { ThreadStore } from "../core/threads.js";
@@ -359,6 +360,15 @@ export class ThreadRunner {
 									if (!projectId) return null;
 									try {
 										return ProjectStore.load(this.d.ctx.projectsDir, projectId);
+									} catch {
+										return null;
+									}
+								},
+								// read at each call: the user may switch the mode while a run goes on
+								process: () => {
+									if (!projectId) return null;
+									try {
+										return readProcess(ProjectStore.load(this.d.ctx.projectsDir, projectId));
 									} catch {
 										return null;
 									}

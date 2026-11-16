@@ -33,7 +33,7 @@ export type ProcessEvent =
 	| { type: "gate.request"; noteId: string; at: string }
 	| { type: "gate.approve"; at: string; comment?: string; fix?: string[] } // fix: remark ids to fix, H5 only
 	| { type: "gate.return"; at: string; comment: string }
-	| { type: "stage.skip"; why: string; at: string; /** who asks: an agent cannot skip a stage the process has escalated to the user (R36) */ by?: Who }
+	| { type: "stage.skip"; why: string; at: string; /** who asks: an agent cannot skip a stage the process has escalated to the user (R36) */ by: Who }
 	| { type: "review.done"; at: string } // S6: the ekspertīze re-check is recorded
 	| { type: "change"; basic: boolean; at: string }
 	| { type: "learned"; at: string };
@@ -245,7 +245,7 @@ const DOC_TYPES = Object.keys(DEFAULT_DEPTH) as DocType[];
 
 /** Applies a profile change: needs a why, keeps `bpv` among existing agents, never skips S6 or S7. Each real difference is one entry in
  *  `profile.changes`; a new doc type brings its own depth row (each cell that moves is logged) before the patch's depth is laid over it. Changing the depth of the
- *  escalated stage clears `escalated` (the user has taken the decision). A patch that changes nothing writes nothing. */
+ *  escalated stage clears `escalated` only when the user makes the change; an agent's change that would move it is refused (R36). A patch that changes nothing writes nothing. */
 export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: readonly string[], by: Who, now = new Date()): ProcessState {
 	const cur = readProcess(store);
 	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");

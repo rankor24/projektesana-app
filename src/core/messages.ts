@@ -6,6 +6,8 @@ import type { AgentSpec } from "../shared/agent-types.js";
 import type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic } from "../shared/message-types.js";
 import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
 import { newId } from "./model.js";
+import { LEADER } from "./process-def.js";
+import type { ProcessState } from "./process.js";
 
 // the shapes live in shared/message-types.ts (the room feed of the window reads them); everything that imported them from here still can
 export type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic };
@@ -49,10 +51,30 @@ const STATE_WORD: Record<Topic["state"], string> = { open: "atvērts", agreed: "
 /** The refusal for a topic that is no longer open (a send onto it, or a second close). */
 export const closedReason = (t: Topic): string => `Temats «${t.title}» jau ir slēgts (${STATE_WORD[t.state]}).`;
 
-/** The send rules, in this order: self, unknown-agent, acl, closed, exchanges, depth, iterations. The first that fails decides. */
+/** The process rules of process mode (process 7.3); the caller has already seen that `process.mode` is "process". Tasks are the leader's alone, for the
+ *  stage that is on, and not while a gate waits or the stage waits for the user; asks and replies between agents of the profile are free.
+ *  The lead is a party only when the profile lists it. */
+function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState): SendCheck | null {
+	for (const id of [m.from, m.to]) {
+		if (!p.profile.agents.includes(id)) return refuse("process", `Aģents ${id} nav procesa profilā.`);
+	}
+	if (m.kind !== "task") return null;
+	if (p.stage === "done") return refuse("process", "Process ir pabeigts; uzdevumus vairs nedod.");
+	// the learning round after H7 has no stage of its own: the project leader runs it
+	const leader = p.stage === "mācības" ? "bpv" : LEADER[p.stage];
+	if (m.from !== leader) return refuse("process", `Procesa režīmā uzdevumus dod tikai stadijas vadītājs (${leader}).`);
+	if (m.stage !== undefined && m.stage !== p.stage) return refuse("process", `Uzdevums ir stadijai ${m.stage}, bet pašlaik ir ${p.stage}.`);
+	if (p.escalated) return refuse("process", `Stadija ${p.escalated} eskalēta; gaida cilvēka lēmumu.`);
+	const gate = p.gates.find((g) => g.state === "waiting");
+	if (gate) return refuse("process", `Kamēr gaida gate ${gate.id}, jaunus uzdevumus nedod.`);
+	return null;
+}
+
+/** The send rules, in this order: self, unknown-agent, acl, process (only in process mode), closed, exchanges, depth, iterations. The first that fails decides.
+ *  `m.stage` is the stage a task is for; without it a task counts as meant for the stage that is on. */
 export function canSend(
-	m: { from: string; to: string; kind: MessageKind; topic: Topic | null; depth: number; iteration?: number },
-	c: { agents: readonly AgentSpec[]; limits: Limits; messages: readonly Message[] },
+	m: { from: string; to: string; kind: MessageKind; topic: Topic | null; depth: number; iteration?: number; stage?: string },
+	c: { agents: readonly AgentSpec[]; limits: Limits; messages: readonly Message[]; process?: ProcessState | null },
 ): SendCheck {
 	if (m.from === m.to) return refuse("self", `Aģents «${m.from}» nevar sūtīt ziņu pats sev.`);
 
@@ -71,6 +93,11 @@ export function canSend(
 		if (may && !may.includes(m.to)) return refuse("acl", `Aģentam «${m.from}» nav atļauts sūtīt ziņas aģentam «${m.to}».`);
 		const accepts = spec(m.to)?.acceptsFrom;
 		if (accepts && !accepts.includes(m.from)) return refuse("acl", `Aģents «${m.to}» nepieņem ziņas no aģenta «${m.from}».`);
+	}
+
+	if (c.process?.mode === "process") {
+		const r = processCheck(m, c.process);
+		if (r) return r;
 	}
 
 	if (t && t.state !== "open") return refuse("closed", closedReason(t));
