@@ -7,15 +7,22 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFil
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
-import { MAIL_TOOL_LEVELS } from "./mail.js";
+import { estimateTextTokens } from "./context.js";
+import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
-import { LEVEL_RANK, MAIN_TOOLS, SPECIALIST_CAP } from "./subagents.js";
+import { SYSTEM_PROMPT, userLine } from "./prompt.js";
+import { skillsText, type SkillInfo } from "./skills.js";
+import { LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
 import type { LevelOf } from "./tools/levels.js";
+import { REVIT_RULES } from "./tools/revit.js";
+import { REVIT_LEVELS } from "./tools/revit-levels.js";
 
 // subagents.ts re-exports validateSpec from here and this file reads its level tables: the bindings are only used inside functions, so the cycle is safe.
 
 export const ROLE_MAX = 16_000; // characters
 export const SHARED_MAX = 6_000; // characters
+/** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
+export const SPECIALIST_FIXED_MAX = 16_000; // tokens
 
 const ID = /^[a-z][a-z0-9-]{1,30}$/;
 const SHARED_FILE = "_kopejie.md";
@@ -128,6 +135,8 @@ export function validateSpec(
 		if (v === undefined) continue;
 		if (!Array.isArray(v)) return { ok: false, error: `${key}: saraksts ar aģentu identifikatoriem.` };
 		const list = [...new Set((v as unknown[]).map(str).filter(Boolean))];
+		// `[]` means nobody; a list of blanks is a form left half filled, not that choice
+		if (v.length > 0 && list.length === 0) return { ok: false, error: `Saraksts ${key} ir tukšs; atstāj to neiestatītu, ja drīkst visi, vai ieraksti ids.` };
 		const bad = ids ? list.find((x) => x !== LEAD_ID && !ids.includes(x)) : undefined;
 		if (bad) return { ok: false, error: `${key}: nezināms aģents ${bad}.` };
 		spec[key] = list;
@@ -139,4 +148,48 @@ export function validateSpec(
 		spec.skills = [...new Set((r.skills as unknown[]).map(str).filter(Boolean))];
 	}
 	return { ok: true, spec };
+}
+
+// ---- standing text -------------------------------------------------------------------------------------------------------------
+
+export interface StandingDeps {
+	appDir: string;
+	userName: string;
+	/** the specialists as they are now: the roster is made from them */
+	specs: readonly AgentSpec[];
+	/** the synced skills; a specialist lists only those it names */
+	skills: SkillInfo[];
+	/** 13.4: what the office has written down for this agent; "" until then */
+	knowledge: string;
+	/** 14.x: the card of the stage this agent works in, and the project's status line */
+	processCard?: string;
+	status?: string;
+	/** the Revit tools this run really has (connected); absent = every Revit tool counts, which is the worst case for a measurement */
+	revitTools?: ReadonlySet<string>;
+}
+
+/** Whom an agent may write to, one line each. The lead's is the specialists' list as before (it delegates to them); a specialist's holds the agents
+ *  its `mayMessage` allows (absent = everyone), never itself, and `lead`. "" when it may write to nobody. */
+export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): string {
+	if (!spec) return rosterText(specs);
+	const may = (id: string) => !spec.mayMessage || spec.mayMessage.includes(id);
+	const lines = [...specs.filter((s) => s.id !== spec.id && may(s.id)).map((s) => `- ${s.id}: ${s.description || s.name}`), ...(may(LEAD_ID) ? [`- ${LEAD_ID}: galvenais aģents`] : [])];
+	return lines.length ? `Aģenti, kuriem vari rakstīt ar send_message (id: apraksts):\n${lines.join("\n")}` : "";
+}
+
+/** What every request of this agent starts with. The lead (`spec` null): SYSTEM_PROMPT, mail lines, user line, Revit rules, roster, the skills list.
+ *  A specialist: the shared rules, its role file (or prompt), RULES, the mail lines, the user line, Revit rules only with a Revit tool, its roster,
+ *  its own skills (those it names that are synced), then knowledge, the process card and the status. */
+export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
+	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills)].filter(Boolean).join("\n\n");
+	const role = spec.roleFile ? (readRole(d.appDir, spec.id) ?? "").trim() : "";
+	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
+	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
+	const skills = d.skills.filter((s) => spec.skills?.includes(s.name));
+	return [readShared(d.appDir).trim(), own, RULES.trim(), MAIL_RULES, userLine(d.userName), hasRevit ? REVIT_RULES : "", rosterFor(spec, d.specs), skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+}
+
+/** The standing text plus the tool declarations (`toolDeclarations`, from declarations.ts): what the agent's request weighs before anyone speaks. */
+export function fixedTokens(spec: AgentSpec | null, d: StandingDeps, toolDeclarations: number): number {
+	return estimateTextTokens(standingFor(spec, d)) + toolDeclarations;
 }

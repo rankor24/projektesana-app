@@ -5,7 +5,6 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { isContextOverflow, normalizeContext, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { z } from "zod";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type Thread } from "../shared/thread-types.js";
@@ -16,9 +15,10 @@ import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
 import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
-import { SYSTEM_PROMPT, buildPrompt, userLine, withEarlier } from "./prompt.js";
-import { REVIT_RULES } from "./tools/revit.js";
-import { listSkills, skillsText } from "./skills.js";
+import { buildPrompt, withEarlier } from "./prompt.js";
+import { fixedTokens, standingFor } from "./agents.js";
+import { declarationTokens } from "./declarations.js";
+import { listSkills } from "./skills.js";
 import { ProjectStore } from "../core/store.js";
 import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { ThreadStore } from "../core/threads.js";
@@ -28,24 +28,10 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, rosterText, specialistTools, subagentDeclarations, subagentTools } from "./subagents.js";
-import { MAIL_RULES, MAIL_TOOL_LEVELS, mailDeclarations, mailTools } from "./mail.js";
+import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, specialistTools, subagentTools } from "./subagents.js";
+import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps } from "./session.js";
-
-/** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected.
- *  The schema is counted as pi sends it: without `$schema` (pi/mcp.ts drops it), which is about 14 tokens a tool. */
-let appToolTokens: number | null = null;
-function toolDeclarationTokens(): number {
-	if (appToolTokens === null) {
-		const params = (t: { input: Parameters<typeof z.object>[0] }) => {
-			const { $schema: _drop, ...rest } = z.toJSONSchema(z.object(t.input)) as Record<string, unknown>;
-			return rest;
-		};
-		appToolTokens = estimateTextTokens(JSON.stringify([...allTools().map((t) => ({ name: t.name, description: t.description, parameters: params(t) })), ...subagentDeclarations(), ...mailDeclarations()]));
-	}
-	return appToolTokens;
-}
 
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
@@ -102,12 +88,14 @@ export class ThreadRunner {
 		return conv && conv.key === `${s.provider}/${s.model}` ? countImages(this.shrink(conv.messages)) : 0;
 	}
 
-	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. A specialist gets its own prompt and the shared rules,
-	 *  the user line, and Revit's rules only when one of its tools is Revit's; no roster and no skills list. */
-	private standing(s: Settings, spec: AgentSpec | null = null, hasRevitTool = false): string {
-		const mail = this.d.mail ? MAIL_RULES : "";
-		if (spec) return [spec.prompt + RULES, mail, userLine(s.userName), hasRevitTool ? REVIT_RULES : ""].filter(Boolean).join("\n\n");
-		return [SYSTEM_PROMPT, mail, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
+	/** What every request starts with, built by standingFor (agents.ts): the lead's rules, roster and skills, or a specialist's shared rules, role,
+	 *  own roster and own skills. `revitTools` are the Revit tools this run really has. */
+	private standing(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>): string {
+		return standingFor(spec, this.standingDeps(s, revitTools));
+	}
+
+	private standingDeps(s: Settings, revitTools?: ReadonlySet<string>): Parameters<typeof standingFor>[1] {
+		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? ""), knowledge: "", revitTools };
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -268,7 +256,7 @@ export class ThreadRunner {
 					history = (await this.compactHistory({ thread, rt, model, history, signal, emit, keepRecent })) ?? history;
 				}
 
-				const standing = this.standing(s, spec, !!own && [...own].some((n) => revitTools.has(n)));
+				const standing = this.standing(s, spec, revitTools);
 				const seed = this.transcriptSeed(thread);
 				const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
@@ -424,6 +412,8 @@ export class ThreadRunner {
 	async context(thread: Thread, draft?: { text: string; focus: FocusItem[] }): Promise<ContextInfo> {
 		const s = this.d.settings();
 		const model = lookupPiModel(await this.d.runtime(), s.provider, s.model);
+		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text and declarations
+		const agent = thread.agent === LEAD_ID ? null : ((this.d.agents?.() ?? DEFAULT_AGENTS).find((a) => a.id === thread.agent) ?? null);
 		const conv = this.conversations.get(thread.id);
 		const live = conv && conv.key === `${s.provider}/${s.model}` && conv.messages.length > 0 ? conv : null;
 		const est = live ? estimateContext(live.messages) : null;
@@ -436,7 +426,7 @@ export class ThreadRunner {
 			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
 			imageCount: b?.imageCount ?? 0,
 			messages: live?.messages.length ?? 0,
-			fixedEstimate: estimateTextTokens(this.standing(s)) + toolDeclarationTokens(),
+			fixedEstimate: fixedTokens(agent, this.standingDeps(s), declarationTokens(agent)),
 			lastAdded: live?.lastAdded ?? null,
 			compactions: this.compactions.get(thread.id) ?? 0,
 			// the Fokuss line is sent with every message, "Fokuss: nekas" included

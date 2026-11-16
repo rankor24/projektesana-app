@@ -39,8 +39,11 @@ export interface AgentToolRow {
 	description: string;
 }
 
+/** A spec as the settings page lists it: with what its requests carry before the conversation starts (standing text + tool declarations, estimated tokens). */
+export type AgentSpecRow = AgentSpec & { fixedTokens: number };
+
 export interface AgentsView {
-	specs: AgentSpec[];
+	specs: AgentSpecRow[];
 	/** the shipped list is in use (nothing saved yet) */
 	shipped: boolean;
 	defaults: AgentSpec[];

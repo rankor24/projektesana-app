@@ -22,7 +22,7 @@ import { threadHandlers } from "./handlers/threads.js";
 import type { RevitClient } from "../revit/client.js";
 import type { PopoutManager } from "./windows.js";
 
-export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string; popouts?: PopoutManager } & Pick<LibraryDeps, "fetchPage">;
+export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string; popouts?: PopoutManager; /** the synced skills folder, for the settings page's measure of an agent's standing text */ skillsDir?: string } & Pick<LibraryDeps, "fetchPage">;
 
 export function createHandlers(d: AppDeps): Handlers {
 	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);

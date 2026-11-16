@@ -125,6 +125,7 @@ const pi = () =>
 
 // The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
 const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
+const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills");
 const session = new AgentSession({
 	runtime: pi,
 	settings: () => settings.get(),
@@ -136,7 +137,7 @@ const session = new AgentSession({
 		const l = resolveRevitLaunch(settings.get());
 		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;
 	},
-	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir, skillsDir: join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills") },
+	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir, skillsDir },
 	revitWork: async (projectId) => {
 		if (!projectId) return { ok: false, title: "nav projekta" };
 		const doc = await revitExport.docInfo(revit);
@@ -184,6 +185,7 @@ const engine = new ProjectEngine({
 });
 
 const handlers = createHandlers({
+	skillsDir,
 	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	engine,
 	revit,
