@@ -28,6 +28,9 @@ const slug = (s: string) =>
 		.replace(/^-+|-+$/g, "")
 		.slice(0, 30);
 
+/** A new id for an agent: its loaded role text then belongs to the new file name, so it is marked to be written there (the old file stays on disk). */
+const withId = (a: Draft, id: string): Partial<Draft> => ({ id, ...(a.role !== undefined && id !== a.id ? { roleDirty: true } : {}) });
+
 function Counter({ n, max }: { n: number; max: number }) {
 	return <span className={`counter ${n > max ? "bad" : ""}`}>{nf(n)} / {nf(max)}</span>;
 }
@@ -149,10 +152,14 @@ export function Agenti() {
 		try {
 			// a role file is written first: saving the spec checks that the file of an agent with roleFile exists
 			const specs: AgentSpec[] = [];
-			for (const a of list) {
+			for (const [idx, a] of list.entries()) {
 				// what the editor shows is what the agent gets: a role text that was read (or typed) switches roleFile on, an empty one off
 				const roleFile = a.role !== undefined ? a.role.trim() !== "" : a.roleFile === true;
-				if (a.roleDirty && a.role !== undefined) await call("agents.role.set", a.id, a.role);
+				if (a.roleDirty && a.role !== undefined) {
+					await call("agents.role.set", a.id, a.role);
+					// written: a retry after a failed agents.save must not write (and keep a version of) the same text again
+					setList((l) => l.map((x, k) => (k === idx ? { ...x, roleDirty: false } : x)));
+				}
 				specs.push(plain({ ...a, roleFile: roleFile || undefined }));
 			}
 			const saved = await call("agents.save", specs);
@@ -236,11 +243,11 @@ export function Agenti() {
 							<div className="pane">
 								<label className="row">
 									<span style={{ width: 110 }}>Nosaukums</span>
-									<input className="grow" value={a.name} onChange={(e) => patch(i, { name: e.target.value, ...(a.id === "" || a.id === slug(a.name) ? { id: slug(e.target.value) } : {}) })} />
+									<input className="grow" value={a.name} onChange={(e) => patch(i, { name: e.target.value, ...(a.id === "" || a.id === slug(a.name) ? withId(a, slug(e.target.value)) : {}) })} />
 								</label>
 								<label className="row">
 									<span style={{ width: 110 }}>Identifikators</span>
-									<input className="grow mono" value={a.id} onChange={(e) => patch(i, { id: e.target.value })} />
+									<input className="grow mono" value={a.id} onChange={(e) => patch(i, withId(a, e.target.value))} />
 								</label>
 								<label className="row">
 									<span style={{ width: 110 }}>Kam paredzēts</span>
