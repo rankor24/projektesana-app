@@ -8,7 +8,7 @@ import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
 import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { allTools } from "../src/agent/tools/defs.ts";
-import { type GateArgs, type ProcessState, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
+import { type GateArgs, type ProcessState, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, recordClientChange, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
 import { STAGE_CARD } from "../src/core/process-def.ts";
 import { waitingGates } from "../src/core/process-waiting.ts";
 import { ProjectStore } from "../src/core/store.ts";
@@ -207,16 +207,24 @@ test("14.3 every process tool run by every agent against a waiting gate leaves i
 		const gate = () => r.state().gates.find((g) => g.state === "waiting");
 		assert.ok(gate(), `${stage}: waiting`);
 		const noteId = gate()!.noteId;
+		const changeNote = recordClientChange(r.store, "Pasūtītājs maina kāpņu telpu.").id;
 		const args: Record<string, Record<string, unknown>> = {
 			process_status: {},
 			process_request_gate: ARGS as never,
 			process_skip_stage: { why: "mēģinājums" },
 			process_set_profile: { why: "mēģinājums", depth: { S1: "vienkāršota" } },
 			process_review_done: {},
+			// a basic judgement is what would return a waiting gate: the tool must refuse it
+			process_change_impact: { noteId: changeNote, basic: true, sections: ["ar"], note: "mēģinājums" },
+			process_review_scope: { changed: [] },
 		};
 		for (const t of allTools().filter((x) => x.name.startsWith("process_"))) {
+			assert.ok(args[t.name], `${t.name} has real arguments in this loop`);
 			for (const who of ["bpv", "eks", "ar", "lead", null]) {
-				await (async () => t.run(r.ctx(who), args[t.name] as never))().catch(() => undefined);
+				// a refusal is an Error with its Latvian text; anything else (bad arguments, a crash) is a failure of the test
+				await (async () => t.run(r.ctx(who), args[t.name] as never))().catch((e: unknown) => {
+					assert.ok(e instanceof Error && !(e instanceof TypeError), `${stage}: ${t.name} by ${who}: ${String(e)}`);
+				});
 				assert.equal(gate()?.state, "waiting", `${stage}: ${t.name} by ${who} did not touch the gate`);
 				assert.equal(r.state().stage, stage, `${stage}: ${t.name} by ${who} did not move the stage`);
 				assert.equal(gate()?.noteId, noteId);

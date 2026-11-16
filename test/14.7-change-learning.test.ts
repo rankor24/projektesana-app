@@ -43,6 +43,7 @@ function rig(o: { mode?: "process" | "cowork"; stage?: ProcessState["stage"] } =
 		if (o.mode === "cowork") switchMode(store, "cowork", IDS, "user");
 	}
 	const prompts: { who: string; prompt: string }[] = [];
+	const data: { projectId: string | null; what: string[] }[] = [];
 	const s = new AgentSession({
 		runtime: async () => createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null }),
 		settings: () => ({ ...DEFAULT_SETTINGS, maxParallelAgents: 4 }),
@@ -53,6 +54,7 @@ function rig(o: { mode?: "process" | "cowork"; stage?: ProcessState["stage"] } =
 		runsDir: join(dir, "runs"),
 		chatDir: join(dir, "chat"),
 		emit: () => undefined,
+		onData: (projectId, what) => data.push({ projectId, what }),
 		runAgent: async (r) => {
 			const who = /AGENT (\w+)\./.exec(r.systemPrompt ?? "")?.[1] ?? "lead";
 			prompts.push({ who, prompt: r.prompt });
@@ -70,7 +72,7 @@ function rig(o: { mode?: "process" | "cowork"; stage?: ProcessState["stage"] } =
 	const settle = async (until: () => boolean = () => true) => {
 		for (let i = 0; i < 400 && (s.queueView().running.length || s.queueView().queued.length || !until()); i++) await new Promise((r) => setTimeout(r, 5));
 	};
-	return { dir, store, s, h, ctx, call, mail, state, to, told, prompts, settle };
+	return { dir, store, s, h, ctx, call, mail, state, to, told, prompts, settle, data };
 }
 
 const withState = (p: Partial<ProcessState>): ProcessState => ({ ...initial("buvprojekts", IDS), ...p });
@@ -318,4 +320,36 @@ test("14.7 process_status for eks leaves out the user's gate comments and no not
 	}
 	// the stored state itself is whole
 	assert.equal(r.state().gates[0].comment, "Atgriežu, jo trūkst TN.");
+});
+
+// ---- gates stay the user's (R43) and the window hears of a judgement ---------------------------------------------------------------
+
+test("14.7 an agent's basic judgement is refused while a gate waits, with the gate named; the gate stays and nothing is logged; a non-basic one goes through", async () => {
+	const r = rig({ mode: "process", stage: "S4" });
+	const id = await change(r);
+	requestGate(r.store, "BD999", "bpv", ARGS);
+	const before = JSON.stringify(r.state());
+	await assert.rejects(r.call("bpv", "process_change_impact", { noteId: id, basic: true, sections: ["ar"], note: "Mainās." }), { message: "Gate H4 gaida lietotāja lēmumu; to vispirms atgriež lietotājs." });
+	assert.equal(JSON.stringify(r.state()), before, "stage, gate and profile untouched");
+	assert.equal(r.store.notes("change").find((n) => n.id === id)!.body, CHANGE, "the note too");
+	// a judgement that moves nothing may go on while the gate waits
+	const ok = (await r.call("bpv", "process_change_impact", { noteId: id, basic: false, sections: [], note: "Detaļa." })) as { stage: string };
+	assert.equal(ok.stage, "S4");
+	assert.equal(r.state().gates.find((g) => g.state === "waiting")?.id, "H4");
+	// the user returns the gate, then the same judgement of another change moves the stage
+	r.h["process.gate"]("BD999", { approve: false, comment: "Gaidu klienta izmaiņu vērtējumu." });
+	const id2 = await change(r, "Klients grib papildu lifta šahtu.");
+	assert.equal(((await r.call("bpv", "process_change_impact", { noteId: id2, basic: true, sections: ["bk"], note: "Mainās konstrukcija." })) as { stage: string }).stage, "S3");
+});
+
+test("14.7 through a session: a successful process_change_impact result tells the window; a refused one and process_status do not", async () => {
+	const r = rig({ mode: "process", stage: "S4" }, async (_who, o) => {
+		o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_status", ok: true });
+		o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_change_impact", ok: false, detail: "Šī izmaiņa jau ir novērtēta." });
+		assert.deepEqual(r.data, [], "neither a read tool nor a refused judgement refreshes the window");
+		o.onEvent({ type: "tool_result", name: "mcp__projektesana-tools__process_change_impact", ok: true });
+	});
+	await r.s.send("BD999", "sāc", []);
+	await r.settle(() => r.data.length > 0);
+	assert.deepEqual(r.data, [{ projectId: "BD999", what: ["process"] }]);
 });

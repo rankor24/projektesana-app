@@ -38,7 +38,7 @@ import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../
 import type { SessionDeps, ToolServer } from "./session.js";
 
 /** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
-const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done)$/;
+const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done|change_impact)$/;
 
 /** What a write tool of an author gets during S5 (14.6): the expert is reading the project, so nobody but eks changes it. */
 export const S5_BLOCK = "S5 laikā sadaļas autors nelabo projektu.";

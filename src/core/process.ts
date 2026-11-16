@@ -459,6 +459,9 @@ export function assessChange(store: GateStore, a: ChangeImpact, by: Who, now = n
 	const change = store.notes().find((n) => n.id === a.noteId && n.type === "change");
 	if (!change) throw new Error(`Izmaiņas piezīme ${a.noteId} nav atrasta.`);
 	if (by === "agent" && cur.escalated !== null) throw new Error(`Stadija ${cur.escalated} gaida cilvēka lēmumu.`);
+	// gates are the user's: a basic judgement in S4 would return the waiting H4, so the user returns it first (a non-basic one moves nothing and may go on)
+	const waiting = cur.gates.find((g) => g.state === "waiting");
+	if (by === "agent" && a.basic && waiting) throw new Error(`Gate ${waiting.id} gaida lietotāja lēmumu; to vispirms atgriež lietotājs.`);
 	const label = `Klienta izmaiņa ${change.id}:`;
 	if (cur.profile.changes.some((c) => c.what.startsWith(label))) throw new Error("Šī izmaiņa jau ir novērtēta.");
 	const at = now.toISOString();

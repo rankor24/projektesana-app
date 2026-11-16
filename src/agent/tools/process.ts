@@ -40,7 +40,7 @@ export const processTools: ToolDef[] = [
 			const s = readProcess(storeOf(ctx));
 			if (!s) return OFF;
 			// the expert is independent: it does not read what the user said about a gate
-				return { state: ctx.agent === EKS ? stateForEks(s) : s, card: s.stage === "mācības" || s.stage === "done" ? null : STAGE_CARD[s.stage] };
+			return { state: ctx.agent === EKS ? stateForEks(s) : s, card: s.stage === "mācības" || s.stage === "done" ? null : STAGE_CARD[s.stage] };
 		},
 	}),
 	tool({
