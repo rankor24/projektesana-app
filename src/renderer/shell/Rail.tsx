@@ -38,6 +38,10 @@ export function Rail() {
 				</div>
 			))}
 			<div className="rail-grow" />
+			<button className="rail-item" title="Prasmes — biroja prasmju bibliotēka" onClick={() => windows.go("prasmes")}>
+				<span className="rail-icon">✦</span>
+				{!collapsed && <span>Prasmes</span>}
+			</button>
 			<button className="rail-item" title="Iestatījumi" onClick={() => windows.go("iestatijumi")}>
 				<span className="rail-icon">⚙</span>
 				{!collapsed && <span>Iestatījumi</span>}

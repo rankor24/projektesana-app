@@ -16,6 +16,7 @@ import { todoHandlers } from "./handlers/todos.js";
 import { coordinationHandlers } from "./handlers/coordination.js";
 import { expertHandlers } from "./handlers/expert.js";
 import { agentHandlers } from "./handlers/agents.js";
+import { skillHandlers } from "./handlers/skills.js";
 import { layoutHandlers } from "./handlers/layout.js";
 import { planHandlers } from "./handlers/plan.js";
 import { threadHandlers } from "./handlers/threads.js";
@@ -29,5 +30,5 @@ export function createHandlers(d: AppDeps): Handlers {
 	const userName = () => d.settings.get().userName.trim() || undefined;
 	const e = { ...d, afterChange, userName };
 	const projects = projectHandlers(e);
-	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d) };
+	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d) };
 }

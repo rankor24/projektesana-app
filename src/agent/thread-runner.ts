@@ -19,7 +19,7 @@ import { buildPrompt, withEarlier } from "./prompt.js";
 import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
 import { declarationTokens } from "./declarations.js";
-import { listSkills } from "./skills.js";
+import { listSkills, officeSkillsDir } from "./skills.js";
 import { ProjectStore } from "../core/store.js";
 import { peekPendingPlanText, takePendingPlanText } from "../core/plan.js";
 import type { ThreadStore } from "../core/threads.js";
@@ -109,7 +109,7 @@ export class ThreadRunner {
 	private standingDeps(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>): Parameters<typeof standingFor>[1] {
 		// a specialist carries what the office wrote down for it (13.4); the lead's text stays as the 0.6 guard measures it: it reads office memory with read_notes
 		const knowledge = spec ? knowledgeFor(new OfficeMemory(join(this.d.ctx.appDir, "memory")), spec.id) : "";
-		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? ""), knowledge, revitTools };
+		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? "", officeSkillsDir(this.d.ctx.appDir)), knowledge, revitTools };
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */

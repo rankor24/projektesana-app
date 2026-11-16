@@ -12,7 +12,7 @@ import { estimateTextTokens } from "./context.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
-import { skillsText, type SkillInfo } from "./skills.js";
+import { skillsFor, skillsText, type SkillInfo } from "./skills.js";
 import { LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
 import type { LevelOf } from "./tools/levels.js";
 import { REVIT_RULES } from "./tools/revit.js";
@@ -142,7 +142,7 @@ export function validateSpec(
 
 	if (r.skills !== undefined) {
 		if (!Array.isArray(r.skills)) return { ok: false, error: "skills: saraksts ar prasmju nosaukumiem." };
-		// stored as given; 13.6 checks the names against the library
+		// stored as given: a name the library lacks (yet), or a draft, is simply not listed to the agent (skillsFor), so assigning ahead is allowed
 		spec.skills = [...new Set((r.skills as unknown[]).map(str).filter(Boolean))];
 	}
 	return { ok: true, spec };
@@ -174,7 +174,7 @@ export interface StandingDeps {
 	userName: string;
 	/** the specialists as they are now: the roster is made from them */
 	specs: readonly AgentSpec[];
-	/** the synced skills; a specialist lists only those it names */
+	/** the library as it is now (synced and the office's, `listSkills`); a specialist lists only the ready ones it names, the lead the synced ones */
 	skills: SkillInfo[];
 	/** 13.4: what the office has written down for this agent; "" until then */
 	knowledge: string;
@@ -199,13 +199,13 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
 
 /** What every request of this agent starts with. The lead (`spec` null): SYSTEM_PROMPT, mail lines, user line, Revit rules, roster, the skills list.
  *  A specialist: the shared rules, its role file (or prompt), RULES, the mail lines, the user line, Revit rules only with a Revit tool, its roster,
- *  its own skills (those it names that are synced), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
+ *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
-	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills)].filter(Boolean).join("\n\n");
+	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"))].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? (readRole(d.appDir, spec.id) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
-	const skills = d.skills.filter((s) => spec.skills?.includes(s.name));
+	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
 	return [readShared(d.appDir).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }

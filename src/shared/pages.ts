@@ -48,10 +48,11 @@ export const PAGES: PageDef[] = [
 ];
 
 /** Windows that belong to no page: the project list (the switcher in the top bar) and the settings. */
-export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi"];
+export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi", "prasmes"];
 export const GLOBAL_TITLE: Record<string, { title: string; hint: string }> = {
 	projekts: { title: "Projekti", hint: "projektu saraksts, nolasīšana" },
 	iestatijumi: { title: "Iestatījumi", hint: "ceļi, modelis, Revit" },
+	prasmes: { title: "Prasmes", hint: "biroja prasmju bibliotēka, aģentiem" },
 };
 export const START_PAGE: PanelName = "parskats";
 

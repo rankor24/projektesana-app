@@ -7,6 +7,7 @@ import type { ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
 import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
+import { windows } from "../windows";
 import { Agenti } from "./Agenti";
 
 export function Iestatijumi() {
@@ -170,6 +171,12 @@ export function Iestatijumi() {
 			)}
 			<div className="section-title">Aģenti</div>
 			<Agenti />
+			<div className="row">
+				<button className="ghost" onClick={() => windows.open("prasmes")}>
+					Prasmes…
+				</button>
+				<span className="dim small">Biroja prasmju bibliotēka un tas, kuras prasmes kuram aģentam.</span>
+			</div>
 			<div className="section-title">Aģentu ierobežojumi</div>
 			{s && <LimitInputs limits={s.limits} save={(limits) => act(() => call("settings.set", { limits }))} />}
 			<div className="dim small">Cik tālu aģenti drīkst sarunāties savā starpā. Vilnis ir viss, ko izraisa viena tava darbība; tam sasniedzot robežu, rindā gaidošie darbi apstājas un “Gaida tevi” piedāvā turpināt.</div>

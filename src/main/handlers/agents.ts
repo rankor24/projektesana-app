@@ -10,7 +10,7 @@ import { makeLevelOf } from "../../agent/tools/levels.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOL_LEVELS, validateSpec } from "../../agent/subagents.js";
 import { ROLE_MAX, SPECIALIST_FIXED_MAX, fixedTokens, readRole, readShared, writeRole, writeShared } from "../../agent/agents.js";
 import { declarationTokens } from "../../agent/declarations.js";
-import { listSkills } from "../../agent/skills.js";
+import { listSkills, officeSkillsDir } from "../../agent/skills.js";
 import type { AgentSpec, AgentSpecRow, AgentToolRow } from "../../shared/agent-types.js";
 import type { Handlers } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
@@ -27,7 +27,7 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 		return [...app, ...rv].filter((r) => LEVEL_RANK[levelOf(r.name)] > 0 && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
 	};
 	/** what the agent's requests carry before the conversation starts, measured with the settings, the specs and the skills as they are now */
-	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[]) => fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills: listSkills(d.skillsDir ?? ""), knowledge: "" }, declarationTokens(spec));
+	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[]) => fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(spec));
 	return {
 		"agents.list": () => {
 			const { specs, shipped } = d.settings.agentSpecs();

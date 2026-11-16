@@ -9,6 +9,7 @@ import type { UndoRow } from "../core/undo-types.js";
 import type { TraceView } from "./trace-types.js";
 import type { RenameMode, RenameResult, RenameRow } from "./rename.js";
 import type { AgentSpec, AgentsView } from "./agent-types.js";
+import type { SkillInfo } from "./skill-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
@@ -484,6 +485,14 @@ export interface ApiSpec {
 	/** the rules every agent gets (agents\_kopejie.md, 6 000 characters at most) */
 	"agents.shared.get": () => string;
 	"agents.shared.set": (text: string) => void;
+	/** the skills library (13.6): the synced Revit skills and the office's own, with state and placeholder count; assignment to an agent is agents.save (spec.skills) */
+	"skills.list": () => SkillInfo[];
+	/** every <group>/<name>/SKILL.md under the folder is copied into <appDir>\skills; a name that exists is replaced and the old one kept under versions */
+	"skills.import": (folder: string) => { imported: string[]; refused: { name: string; why: string }[] };
+	/** the user's mark that a skill's test example was checked; refused while the skill has placeholders */
+	"skills.tested": (name: string, tested: boolean) => SkillInfo;
+	/** a skill's SKILL.md (or one of its files) for the page's read-only view; a draft is readable here */
+	"skills.read": (name: string, path?: string) => string;
 	/** expert reviews (8.14): the remarks, the counts, and the documents that can be read as a review */
 	"expert.list": (id: string) => { remarks: ExpertRemark[]; summary: ExpertSummary; sources: ReviewSource[] };
 	"expert.read": (id: string, sourceId: string) => ImportResult;
@@ -682,6 +691,10 @@ export const API_NAMES = [
 	"agents.role.import",
 	"agents.shared.get",
 	"agents.shared.set",
+	"skills.list",
+	"skills.import",
+	"skills.tested",
+	"skills.read",
 	"expert.list",
 	"expert.read",
 	"expert.setState",

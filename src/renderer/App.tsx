@@ -20,6 +20,7 @@ import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
 import { Empty } from "./ui";
 import { Iestatijumi } from "./panels/Iestatijumi";
+import { Prasmes } from "./panels/Prasmes";
 import { Projekts } from "./panels/Projekts";
 import { Avoti } from "./panels/Avoti";
 import { Faili } from "./panels/Faili";
@@ -80,6 +81,7 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 
 function PanelBody({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
+	if (id === "prasmes") return <Prasmes />;
 	if (id === "projekts") return <Projekts />;
 	if (id === "faili") return <Faili />;
 	if (id === "grafiks") return <Grafiks />;

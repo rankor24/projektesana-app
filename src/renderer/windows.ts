@@ -26,6 +26,7 @@ export const PANEL_TITLE: Record<PanelId, string> = {
 	atmina: "Atmiņa",
 	versijas: "Versijas",
 	iestatijumi: "Iestatījumi",
+	prasmes: "Prasmes",
 };
 export const WINDOW_TITLE: Record<string, string> = {
 	...PANEL_TITLE,

@@ -3,7 +3,7 @@
 // Here: the user's modelling rules as standing text, the skill tools, and the rule that a batch only runs on the project's
 // working copy.
 import { z } from "zod";
-import { listSkills, readSkill } from "../skills.js";
+import { listSkills, officeSkillsDir, readSkillAny } from "../skills.js";
 import { tool, type ToolDef } from "./tool.js";
 
 /** The user's rules for modelling through the agent (design doc, work plan 6.3). */
@@ -33,8 +33,8 @@ export const skillTools: ToolDef[] = [
 			description: "Read a skill's SKILL.md (default) or one of its files (path relative to the skill). Follow it for the matching task.",
 			input: { name: z.string(), path: z.string().optional() },
 			run: (ctx, { name, path }) => {
-				if (!ctx.skillsDir) throw new Error("Prasmes nav sinhronizētas.");
-				return readSkill(ctx.skillsDir, name, path);
+				// the synced skills and the office's own (<appDir>\skills): a draft office skill answers with the refusal, not its text
+				return readSkillAny(ctx.skillsDir ?? "", officeSkillsDir(ctx.appDir), name, path);
 			},
 		}),
 ];
