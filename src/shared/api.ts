@@ -549,7 +549,7 @@ export interface ApiSpec {
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
 	/** the user closes (or reopens) a question the agents left (task 12.3); "Gaida tevi" is sent again */
-	"notes.setStatus": (id: string, noteId: string, status: "open" | "closed") => Note;
+	"notes.setStatus": (id: string, noteId: string, status: "open" | "closed", answer?: string) => Note;
 	/** the user has seen an agents' decision */
 	"notes.review": (id: string, noteId: string) => Note;
 	/** the user cancels a decision: a new decision note that names it; nothing is deleted */

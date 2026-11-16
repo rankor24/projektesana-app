@@ -14,7 +14,7 @@ import { STATUS_MAX } from "../core/process.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
-import { skillsFor, skillsText, type SkillInfo } from "./skills.js";
+import { LEAD_SKILL_DESC_MAX, skillsFor, skillsText, type SkillInfo } from "./skills.js";
 import { LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
 import type { LevelOf } from "./tools/levels.js";
 import { REVIT_RULES } from "./tools/revit.js";
@@ -151,12 +151,17 @@ export function validateSpec(
 	return { ok: true, spec };
 }
 
-// ---- knowledge (13.4) ----------------------------------------------------------------------------------------------------------
+// ---- knowledge (13.4) ----
+
+/** The most characters of an agent's office knowledge a run carries. */
+export const KNOWLEDGE_MAX = 4000;
+/** What one Revit tool's declaration is counted at in a save (R47): the declarations come from the Revit MCP at run time, so the settings page cannot read them. */
+export const REVIT_DECLARATION_TOKENS = 150;
 
 /** What the office has written down for one agent: its accepted `learning` notes, newest first, each as "### title" and the body, cut at whole notes
  *  under `maxChars`. A proposal is not knowledge until the user accepts it, and a note without `agent` (written before 13.4, or by the user) belongs
  *  to no agent; it stays in the shared office memory the agents read with read_notes. */
-export function knowledgeFor(mem: OfficeMemory, agent: string, maxChars = 4000): string {
+export function knowledgeFor(mem: OfficeMemory, agent: string, maxChars = KNOWLEDGE_MAX): string {
 	const blocks: string[] = [];
 	let used = 0;
 	for (const n of mem.list({ type: "learning", standing: true, agent })) {
@@ -186,6 +191,9 @@ export interface StandingDeps {
 	status?: string;
 	/** the Revit tools this run really has (connected); absent = every Revit tool counts, which is the worst case for a measurement */
 	revitTools?: ReadonlySet<string>;
+	/** a role text or the shared rules that are not saved yet: a measurement of what a save would do (R47). Without them the files are read. */
+	roleText?: { id: string; text: string };
+	sharedText?: string;
 	/** a `delegate` lane of a specialist (13.3 review): it has no mail tools and nobody to write to, and `delegate` adds the common rules itself,
 	 *  so the text leaves out the rules, the mail lines and the roster */
 	lane?: boolean;
@@ -205,21 +213,27 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
  *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
 	// the lead's process text is empty unless it is in the profile (the caller decides), so a co-work text stays byte for byte what it was
-	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced")), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
-	const role = spec.roleFile ? (readRole(d.appDir, spec.id) ?? "").trim() : "";
+	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	const role = spec.roleFile ? ((d.roleText?.id === spec.id ? d.roleText.text : readRole(d.appDir, spec.id)) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
-	return [readShared(d.appDir).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }
 
-/** What process mode adds to an agent's standing text, at its largest: a status of STATUS_MAX characters and, for a stage leader, the longest card of the stages it leads.
- *  The save limit (SPECIALIST_FIXED_MAX) is measured with it, so an agent that fits today cannot run over the limit once a process fills its status. */
-export function processReserve(spec: AgentSpec): Pick<StandingDeps, "processCard" | "status"> {
+/** What a run adds to an agent's standing text later, at its largest: the office knowledge (KNOWLEDGE_MAX characters) and, in process mode, a status of STATUS_MAX characters
+ *  and, for a stage leader, the longest card of the stages it leads. The save limit (SPECIALIST_FIXED_MAX) is measured with it, so an agent that fits today cannot run over
+ *  the limit once the office has taught it or a process fills its status. */
+export function processReserve(spec: AgentSpec): Pick<StandingDeps, "processCard" | "status" | "knowledge"> {
 	const cards = STAGES.filter((st) => LEADER[st] === spec.id).map(stageCard);
 	const longest = cards.reduce((a, b) => (b.length > a.length ? b : a), "");
-	return { status: "x".repeat(STATUS_MAX), ...(longest ? { processCard: longest } : {}) };
+	return { knowledge: "x".repeat(KNOWLEDGE_MAX), status: "x".repeat(STATUS_MAX), ...(longest ? { processCard: longest } : {}) };
+}
+
+/** The declarations of the Revit tools a spec names, which `declarationTokens` does not count (they come from the Revit MCP when it is connected): REVIT_DECLARATION_TOKENS each. */
+export function revitReserve(spec: AgentSpec): number {
+	return spec.tools.filter((n) => Object.hasOwn(REVIT_LEVELS, n)).length * REVIT_DECLARATION_TOKENS;
 }
 
 /** The standing text plus the tool declarations (`toolDeclarations`, from declarations.ts): what the agent's request weighs before anyone speaks. */

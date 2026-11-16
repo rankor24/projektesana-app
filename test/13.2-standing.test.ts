@@ -203,8 +203,8 @@ test("14.5 agents.save counts the process text: an agent that fits without it bu
 	assert.ok((processReserve(spec("bpv")).processCard ?? "").length > 0 && (processReserve(spec("eks")).processCard ?? "").length > 0);
 	assert.equal(processReserve(spec("ar")).processCard, undefined);
 	assert.equal(processReserve(spec("ar")).status?.length, 3000);
-	// two skills fewer and it saves
-	assert.equal(h["agents.save"]([withSkills(k - 12)]).length, 1);
+	// fewer skills and it saves: the save also reserves the 4000 characters of knowledge, so a dozen fewer no longer make room
+	assert.equal(h["agents.save"]([withSkills(k - 24)]).length, 1);
 });
 
 // ---- from the 13.1 review ----------------------------------------------------------------------------------------------------

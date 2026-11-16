@@ -2,7 +2,7 @@
 // Every write of a collection keeps the previous file as versions\<name>.<seq>.json, where <seq> is the log entry of the
 // write that replaced it — so "what did facts.json look like before event 41" is one file away (design doc 4.4).
 // Writes are atomic (temp file + rename); the office project folder is never written (guard).
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkWrite, isInside } from "./guard.js";
 import { appendLog, readLog, type StoredEntry } from "./log.js";
@@ -141,7 +141,8 @@ export class ProjectStore {
 		const f = join(this.dir, `${name}.json`);
 		if (e) {
 			const entry = this.log(e);
-			if (existsSync(f)) renameSync(f, join(this.dir, "versions", `${name}.${entry.seq}.json`));
+			// a copy, not a move, and the new file replaces the live one by rename: no reader (the tools server reads process.json too) ever finds it missing
+			if (existsSync(f)) copyFileSync(f, join(this.dir, "versions", `${name}.${entry.seq}.json`));
 		}
 		atomicWrite(f, JSON.stringify(value, null, 1));
 	}

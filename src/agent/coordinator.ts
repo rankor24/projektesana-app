@@ -39,6 +39,8 @@ export interface CoordinatorDeps {
 	gates?: () => Extract<WaitingItem, { kind: "gate" }>[];
 	/** the stages escalated to the user, of every project (process mode); without it none are listed */
 	escalations?: () => Extract<WaitingItem, { kind: "escalated" }>[];
+	/** the projects at S5 where the user has yet to start eks (process mode); without it none are listed */
+	eksStarts?: () => Extract<WaitingItem, { kind: "start-eks" }>[];
 	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
 	mail?: (projectId: string | null) => Mailbox;
 	/** an answer was written for eks without eks being able to hear a real one (a run that ended, a recipient that could not run): its open question note on the topic closes (14.6) */
@@ -64,7 +66,9 @@ interface Live {
 export interface SystemPost {
 	from: string;
 	to: string;
-	kind: "task" | "ask";
+	kind: "task" | "ask" | "reply";
+	/** the thread of `to` that gets it when it is open and is that agent's (the user's answer to a question goes to the thread that asked); else the agent's thread is made */
+	toThread?: string;
 	/** the topic's title */
 	title: string;
 	text: string;
@@ -81,6 +85,10 @@ export class Coordinator {
 	/** threads `restore()` found in flight; they stay `interrupted` until the user resumes or discards */
 	private interrupted: { threadId: string; projectId: string | null }[] = [];
 	private closing = false;
+	/** what `restore()` found in the mailboxes: tasks and asks a cut run had been delivered and nobody answered, and queued messages no queue item holds.
+	 *  The user's answer settles them (`resumeInterrupted` tells the senders, `discardInterrupted` stops them). */
+	private cutMail: { projectId: string | null; ids: string[] }[] = [];
+	private orphanMail: { projectId: string | null; ids: string[] }[] = [];
 	/** prepared files (and the run id the caller named) wait here beside the queued item; the saved queue never holds them */
 	private prepared = new Map<string, { files?: PreparedAttachments; runId?: string }>();
 	/** a job that is not a run but holds the slot (the user's own "saspiest") */
@@ -218,8 +226,14 @@ export class Coordinator {
 		} catch {
 			// unreadable process files: the list shows the rest
 		}
+		let eksStarts: Extract<WaitingItem, { kind: "start-eks" }>[] = [];
+		try {
+			eksStarts = this.d.eksStarts?.() ?? [];
+		} catch {
+			// unreadable process files or threads: the list shows the rest
+		}
 		const paused = [...this.waves.values()].filter((w) => w.paused).map((w) => ({ kind: "wave-paused" as const, wave: w.id, projectId: w.projectId, reason: w.paused! }));
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates, escalated });
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates, escalated, eksStarts });
 	}
 
 	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */
@@ -427,7 +441,9 @@ export class Coordinator {
 				}
 				// a run a message started that ended well but sent nothing back: its final answer goes to the sender, so the sender does not wait for ever
 				else if (!this.closing && ids.length) this.autoReply(thread.projectId, ids, answer);
-				this.settle(thread.projectId, thread.id);
+				// a run cut by the app closing is not finished: its thread stays `interrupted`, so the next start asks the user and tells the senders (I1)
+				if (this.closing && abort.signal.aborted && !ok && !live.silent) this.mark(thread, { state: "interrupted" });
+				else this.settle(thread.projectId, thread.id);
 				if (!this.closing) this.wake(thread.projectId);
 				this.pump();
 			});
@@ -614,7 +630,8 @@ export class Coordinator {
 				}
 				const topic = mb.openTopic({ title: it.title, parties: [it.from, it.to], parent: null });
 				const from = senderThread(it.from, it.title);
-				const to = threads.create({ projectId, agent: it.to, title: it.title, topic: topic.id, startedBy: it.from });
+				const named = it.toThread ? threads.get(it.toThread) : undefined;
+				const to = named && named.agent === it.to && named.state !== "closed" ? named : threads.create({ projectId, agent: it.to, title: it.title, topic: topic.id, startedBy: it.from });
 				this.d.onThread?.(to);
 				out.push(mb.add({ wave, topic: topic.id, from: it.from, to: it.to, kind: it.kind, text: it.text, refs: it.refs ?? [], fromThread: from.id, toThread: to.id, depth: 1 }));
 			}
@@ -708,13 +725,37 @@ export class Coordinator {
 		const loaded = loadQueue(this.d.queueFile);
 		this.queue = loaded.items;
 		this.prepared.clear();
-		const queued = this.queue.filter((q) => q.state === "queued").length;
+		const items = this.queue.filter((q) => q.state === "queued");
+		this.scanMail(new Set(items.flatMap((q) => (q.input.cause.by === "message" ? q.input.cause.ids : []))));
+		// a queued message no item holds (its addressee was running when the process died) is work the restart question is about too
+		const queued = items.length + this.orphanMail.reduce((n, o) => n + o.ids.length, 0);
 		this.paused = loaded.paused || this.interrupted.length > 0 || queued > 0;
 		const found = { interrupted: this.interrupted.length, queued };
 		// a clean start is not paused and has nothing to ask
 		this.restoreNotice = this.paused ? found : null;
 		this.waitingChanged();
 		return found;
+	}
+
+	/** The mail a restart has to settle: delivered tasks and asks whose recipient thread was interrupted and that nobody answered, and queued messages that no queue item
+	 *  (`held`: the ids of the queued items' messages) carries. Never throws. */
+	private scanMail(held: ReadonlySet<string>): void {
+		this.cutMail = [];
+		this.orphanMail = [];
+		for (const projectId of this.d.projects?.() ?? []) {
+			try {
+				const mb = this.d.mail?.(projectId);
+				if (!mb) continue;
+				const cutThreads = new Set(this.interrupted.filter((r) => r.projectId === projectId).map((r) => r.threadId));
+				const ms = mb.messages();
+				const cut = ms.filter((m) => (m.kind === "task" || m.kind === "ask") && m.state === "delivered" && cutThreads.has(m.toThread) && !answered(m, ms)).map((m) => m.id);
+				const orphans = ms.filter((m) => m.state === "queued" && !held.has(m.id)).map((m) => m.id);
+				if (cut.length) this.cutMail.push({ projectId, ids: cut });
+				if (orphans.length) this.orphanMail.push({ projectId, ids: orphans });
+			} catch {
+				// an unreadable mailbox: nothing of it is reconciled
+			}
+		}
 	}
 
 	/** The thread is still `interrupted` (the user may have sent it a message while the queue was paused): give it its next state. */
@@ -732,6 +773,11 @@ export class Coordinator {
 		this.settleInterrupted((r) => (this.queue.some((q) => q.state === "queued" && q.threadId === r.threadId) ? "queued" : "idle"));
 		this.paused = false;
 		this.pump();
+		// the senders of work a cut run never finished hear it (the reply wakes them); the cut run itself is not started again
+		const cut = this.cutMail;
+		this.cutMail = [];
+		this.orphanMail = [];
+		for (const c of cut) this.tellCut(c.projectId, c.ids, "queued");
 		// mail that arrived while the app was down or the queue was held
 		for (const p of this.projectsInPlay()) this.wake(p);
 	}
@@ -739,19 +785,52 @@ export class Coordinator {
 	/** The user chose to drop it: queued items stay in the queue as `stopped`, the threads are idle, nothing starts. */
 	discardInterrupted(): void {
 		this.answerRestore();
+		const dropped: QueueItem[] = [];
 		this.queue = this.queue.map((q) => {
 			if (q.state !== "queued") return q;
 			this.prepared.delete(q.id);
+			dropped.push(q);
 			return { ...q, state: "stopped" as const };
 		});
+		// the messages of the dropped items go with them, and so do the queued ones no item held: left queued, the next run end in the project would wake them (C1)
+		for (const q of dropped) if (q.input.cause.by === "message") this.setMail(q.projectId, q.input.cause.ids, "stopped");
+		for (const o of this.orphanMail) this.setMail(o.projectId, o.ids, "stopped");
+		// the senders of what a cut run never finished are told in the books, not woken
+		for (const c of this.cutMail) this.tellCut(c.projectId, c.ids, "stopped");
+		this.cutMail = [];
+		this.orphanMail = [];
 		this.settleInterrupted(() => "idle");
 		// a thread the user messaged while paused was marked queued for an item that is stopped now
 		for (const q of this.queue) {
 			const t = [...this.live.values()].some((l) => l.thread.id === q.threadId) ? null : this.d.threads(q.projectId).get(q.threadId);
 			if (t?.state === "queued") this.mark(t, { state: "idle" });
 		}
+		// a thread that waited for an answer that will not come is no longer waiting
+		for (const p of this.projectsInPlay()) {
+			try {
+				for (const t of this.d.threads(p).list()) if (t.state === "waiting-reply") this.settle(p, t.id);
+			} catch {
+				// a project whose thread folder cannot be read is skipped, as in restore
+			}
+		}
 		this.paused = false;
 		this.changed();
+	}
+
+	/** The cut run's senders are told: one "bloķēts" reply per message, from its recipient (`blockMessages`). */
+	private tellCut(projectId: string | null, ids: readonly string[], state: "queued" | "stopped"): void {
+		const mb = this.d.mail?.(projectId);
+		if (!mb) return;
+		let ms: Message[] = [];
+		try {
+			ms = mb.messages();
+		} catch {
+			return;
+		}
+		for (const id of ids) {
+			const m = ms.find((x) => x.id === id);
+			if (m) this.blockMessages(projectId, [id], `Aģents «${m.to}» nevarēja izpildīt: darbs tika pārtraukts (lietotne aizvērta).`, state);
+		}
 	}
 
 	pause(): void {

@@ -91,7 +91,9 @@ export type WaitingItem =
 	| { kind: "question"; noteId: string; projectId: string; from: string; title: string }
 	| { kind: "gate"; gate: string; projectId: string; noteId: string }
 	/** a stage the process has escalated to the user (iteration limit): no gate waits, the user decides (14.8) */
-	| { kind: "escalated"; projectId: string; stage: string };
+	| { kind: "escalated"; projectId: string; stage: string }
+	/** S5 is on and nobody has started the expert since the stage began: only the user opens eks's thread, so this line is the cue (R48) */
+	| { kind: "start-eks"; projectId: string };
 
 /** One line of the room (Telpa): who said what to whom, an agreement, a pass-up, a paused wave. `threadId` opens the thread, `noteId` names the Atmiņa note of a closed topic.
  *  A "state" line has no source yet: nothing records a thread's state changes with their time, so none is made. */

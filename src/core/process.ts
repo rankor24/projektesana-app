@@ -118,7 +118,7 @@ export function step(s: ProcessState, e: ProcessEvent): StepResult {
 				if (e.comment) waiting.comment = e.comment;
 				if (stage === "S5") waiting.fix = fix;
 			} else {
-				n.gates.push({ id: GATE_OF[stage], stage, iteration: s.iteration[stage] + 1, state: "approved", noteId: "", at: e.at, decidedAt: e.at, ...(e.comment ? { comment: e.comment } : {}) });
+				n.gates.push({ id: GATE_OF[stage], stage, iteration: s.iteration[stage] + 1, state: "approved", noteId: "", at: e.at, decidedAt: e.at, ...(e.comment ? { comment: e.comment } : {}), ...(stage === "S5" ? { fix } : {}) });
 			}
 			n.escalated = null;
 			if (stage === "S5") moveOn(n, fix.length ? "S6" : "S7", [], e.at);
@@ -142,6 +142,8 @@ export function step(s: ProcessState, e: ProcessEvent): StepResult {
 		}
 		case "stage.skip": {
 			if (stage === "S6" || stage === "S7") return fail(`${stage} nedrīkst izlaist.`);
+			// R46: H4 hands the project to the expertise and S5 is eks's own: a skip there is the user's, or bpv alone could walk past the gates
+			if (e.by === "agent" && (stage === "S4" || stage === "S5")) return fail(`${stage} izlaist drīkst tikai lietotājs.`);
 			// escalation is cleared by the user only: skipping the stage would clear it
 			if (e.by === "agent" && s.escalated === stage) return fail(`Stadija ${stage} gaida cilvēka lēmumu.`);
 			if (waiting) return fail("Gate jau gaida lēmumu.");
@@ -255,6 +257,9 @@ const DOC_TYPES = Object.keys(DEFAULT_DEPTH) as DocType[];
 export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: readonly string[], by: Who, now = new Date()): ProcessState {
 	const cur = readProcess(store);
 	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");
+	// R46: a profile change can drop stages the user is about to be asked to approve; while any gate waits it is the user's alone
+	const waitingGate = cur.gates.find((g) => g.state === "waiting");
+	if (by === "agent" && waitingGate) throw new Error(`Gate ${waitingGate.id} gaida lietotāja lēmumu; profilu tagad nemaina.`);
 	const why = (p.why ?? "").trim();
 	if (!why) throw new Error("Profila maiņai vajag pamatojumu.");
 	if (p.docType !== undefined && !DOC_TYPES.includes(p.docType)) throw new Error(`Nezināms dokumenta veids: ${p.docType}.`);

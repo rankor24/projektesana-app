@@ -115,7 +115,7 @@ function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic
 }
 
 /** The topic goes up: an open question for the lead (or for the user, when the caller is the lead) whose body is `why`; the topic closes `passed-up`.
- *  In process mode the question goes to bpv instead of the lead (to the user when the caller is bpv itself or the lead, who is no party of the process);
+ *  In process mode the question goes to bpv instead of the lead (to the user when the caller is bpv itself, eks or the lead, who is no party of the process);
  *  `toUser` sends it to the user whoever the caller is (an iteration overflow: the user decides, not bpv).
  *  A question for the lead or bpv is also put in the mailbox as an `ask` from the caller on a new topic "Nodots: …", so that thread is woken and reads it
  *  (a note alone wakes nobody). It is a system notice: written straight into the mailbox, no send rules, not an exchange of the old topic.
@@ -127,7 +127,8 @@ export function passUp(d: MailDeps, topic: Topic, why: string, o: { toUser?: boo
 	if (!store) throw new Error(NO_PROJECT);
 	const inProcess = processNow(d) !== null;
 	const addressee = inProcess ? PROCESS_LEADER : LEAD_ID;
-	const toUser = !!o.toUser || d.self.agent === LEAD_ID || d.self.agent === addressee || d.self.depth + 1 > d.limits().chainDepth;
+	// eks is independent of bpv: a notice to bpv would open the wall (bpv may answer on it, R38), so eks's pass-up goes to the user
+	const toUser = !!o.toUser || d.self.agent === LEAD_ID || d.self.agent === addressee || (inProcess && d.self.agent === EKS) || d.self.depth + 1 > d.limits().chainDepth;
 	const note = askAbout(d, store, topic, { to: toUser ? "user" : addressee, title: `Nodots tālāk: ${topic.title}`, body: why });
 	if (!toUser) {
 		try {

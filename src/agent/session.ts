@@ -19,8 +19,9 @@ import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
 import { waitingQuestions } from "../core/notes.js";
-import { waitingEscalations, waitingGates } from "../core/process-waiting.js";
+import { waitingEksStarts, waitingEscalations, waitingGates } from "../core/process-waiting.js";
 import { ProjectStore } from "../core/store.js";
+import { EKS } from "../core/process-def.js";
 import { closeEksQuestions } from "./mail.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator, type SystemPost } from "./coordinator.js";
@@ -76,7 +77,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => this.threads(projectId).list({ agent: EKS }).map((t) => t.lastAt).sort().at(-1) ?? null) });
 	}
 
 	/** The coordinator answered eks's ask for the recipient: the question note closes. A project that cannot be read has no note to close. */
@@ -314,6 +315,18 @@ export class AgentSession {
 	/** Messages the app writes between agents (a client change for bpv, the learning round): into the project's mailbox, the recipients woken as for any mail (14.7). Returns what was written. */
 	postSystem(projectId: string | null, items: readonly SystemPost[], o?: { once?: boolean }): { to: string }[] {
 		return this.coordinator.postSystem(projectId, items, o);
+	}
+
+	/** The user answered a question an agent had put to them (a "Slēgt" with a text in Gaida tevi): the answer is mail from the app to the asking agent, as a reply in the thread that asked
+	 *  (the one that sent the topic up, else the agent's newest open thread, else a thread made for it), so the agent hears it at its next run. An agent that no longer exists hears nothing. */
+	answerQuestion(projectId: string | null, q: { agent?: string; topic?: string; title: string }, text: string): void {
+		const agent = q.agent;
+		if (!agent || !text.trim()) return;
+		if (agent !== LEAD_ID && !this.specs().some((s) => s.id === agent)) return;
+		const threads = this.threads(projectId);
+		const asked = q.topic ? this.mailbox(projectId).messages().filter((m) => m.topic === q.topic && m.from === agent).at(-1)?.fromThread : undefined;
+		const toThread = [asked, threads.list({ agent, open: true })[0]?.id].find((id) => id && threads.get(id)?.agent === agent && threads.get(id)?.state !== "closed");
+		this.coordinator.postSystem(projectId, [{ from: LEAD_ID, to: agent, kind: "reply", title: `Lietotāja atbilde: ${q.title.slice(0, 80)}`, text: text.trim(), ...(toThread ? { toThread } : {}) }]);
 	}
 
 	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */

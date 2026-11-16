@@ -39,7 +39,7 @@ function setup(runAgent?: Run, complete?: Complete) {
 		settings: () => ({ ...DEFAULT_SETTINGS }),
 		toolsServer: () => ({ command: "node", args: [], env: {} }),
 		revit: () => null,
-		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir, skillsDir: join(import.meta.dirname, "..", "resources", "skills") },
 		runsDir: join(dir, "runs"),
 		chatDir: join(dir, "chat"),
 		emit: (_id, e) => {

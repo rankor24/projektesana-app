@@ -255,7 +255,11 @@ export function readSkillAny(syncedDir: string, officeDir: string, name: string,
 	return readSkill(syncedDir, name, path);
 }
 
-export function skillsText(skills: SkillInfo[]): string {
+/** The longest skill description in the lead's list: it carries every synced skill in every request (R47). 160 still measured 10 037 tokens with the five synced skills, over the 10 000 guard, so 100; the skill's own text (read_skill) says the rest. */
+export const LEAD_SKILL_DESC_MAX = 100;
+
+/** `descMax`: how much of each description is listed (a specialist's own few skills keep 400, the lead's list is capped at LEAD_SKILL_DESC_MAX). */
+export function skillsText(skills: SkillInfo[], descMax = 400): string {
 	if (!skills.length) return "Prasmes: nav sinhronizētas (npm run build). Revit darbam lieto tikai rīkus un šos noteikumus.";
-	return `Prasmes (lasi ar read_skill, kad uzdevums atbilst; vispirms SKILL.md):\n${skills.map((s) => `- ${s.name}: ${s.description.slice(0, 400)}`).join("\n")}`;
+	return `Prasmes (lasi ar read_skill, kad uzdevums atbilst; vispirms SKILL.md):\n${skills.map((s) => `- ${s.name}: ${s.description.slice(0, descMax)}`).join("\n")}`;
 }

@@ -14,7 +14,7 @@ export interface RequirementDeps {
 	/** the user's name from the settings (undefined = not set) */
 	userName?: () => string | undefined;
 	/** the agent session: told when a question for the user was closed, so "Gaida tevi" is sent again */
-	session?: { notesChanged(): void };
+	session?: { notesChanged(): void; /** the user's answer reaches the agent that asked */ answerQuestion?(projectId: string, q: { agent?: string; topic?: string; title: string }, text: string): void };
 }
 
 type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.remove" | "findings.runAll" | "notes.list" | "notes.write" | "notes.setStatus" | "notes.review" | "notes.cancel" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
@@ -90,8 +90,19 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 			return note;
 		},
 		// the user's side of the registers agents leave in Atmiņa; every write goes through the store (logged, the old file kept)
-		"notes.setStatus": (id, noteId, status) => {
-			const note = setNoteStatus(d.registry.store(id), noteId, status);
+		"notes.setStatus": (id, noteId, status, answer) => {
+			const store = d.registry.store(id);
+			const note = setNoteStatus(store, noteId, status);
+			// closing a question with a word of the user's own: an `answer` note beside it, and the agent that asked hears it
+			const text = typeof answer === "string" ? answer.trim() : "";
+			if (status === "closed" && text) {
+				store.writeNote({ id: newId("n"), type: "answer", title: text.replace(/\s+/g, " ").slice(0, 80), body: text, refs: [note.id], by: "user", at: new Date().toISOString(), ...(note.agent ? { agent: note.agent } : {}), to: note.agent, ...(note.topic ? { topic: note.topic } : {}), ...(note.stage ? { stage: note.stage } : {}) });
+				try {
+					d.session?.answerQuestion?.(id, { agent: note.agent, topic: note.topic, title: note.title }, text);
+				} catch {
+					// the answer is in Atmiņa; the agent finds it there
+				}
+			}
 			d.emit("data.changed", { projectId: id, what: ["notes"] });
 			d.session?.notesChanged();
 			return note;

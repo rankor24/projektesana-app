@@ -40,6 +40,21 @@ export function waitingGates(projectsDir: string): Gate[] {
 	return out;
 }
 
+type EksStart = Extract<WaitingItem, { kind: "start-eks" }>;
+
+/** S5 is on, no gate waits, and the expert has not run since the stage began (R48): eks leads S5 and only the user opens its thread, so nothing else would tell the user it is their move.
+ *  "Since the stage began" is the newest decision of a gate or change of the profile; `eksLastAt` is when the project's newest eks thread last worked (null: it has none). */
+export function waitingEksStarts(projectsDir: string, eksLastAt: (projectId: string) => string | null): EksStart[] {
+	const out: EksStart[] = [];
+	for (const { projectId, s } of running(projectsDir)) {
+		if (s.stage !== "S5" || s.escalated || s.gates.some((g) => g.state === "waiting")) continue;
+		const since = [...s.gates.map((g) => g.decidedAt ?? g.at), ...s.profile.changes.map((c) => c.at)].sort().at(-1) ?? "";
+		const last = eksLastAt(projectId);
+		if (last === null || last <= since) out.push({ kind: "start-eks", projectId });
+	}
+	return out;
+}
+
 /** A stage escalated to the user (R44): no gate waits for it, so without this item nothing in the window would show the user that the process stands still. */
 export function waitingEscalations(projectsDir: string): Escalated[] {
 	return running(projectsDir).flatMap(({ projectId, s }): Escalated[] => (s.escalated && s.escalated === s.stage ? [{ kind: "escalated", projectId, stage: s.stage }] : []));
