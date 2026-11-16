@@ -82,13 +82,16 @@ test("two threads of one project keep separate histories, each in its own transc
 	assert.equal(seen[3].length, 0, "reset forgets only that thread's memory");
 });
 
-test("the tools server env carries the agent and the thread; a specialist thread is refused until 11.4", async () => {
+test("the tools server env carries the agent and the thread; a specialist thread carries its own id", async () => {
 	const t = setup(async (o) => o.onEvent({ type: "done", text: "ok" }));
 	const a = t.store.create({ projectId: null, agent: LEAD_ID, title: "A", startedBy: "user" });
 	await t.run(a, "sveiki");
 	assert.equal(t.envs[0].PROJEKTESANA_AGENT, LEAD_ID);
 	assert.equal(t.envs[0].PROJEKTESANA_THREAD, a.id);
-	await assert.rejects(t.run(a, "x", { spec: { id: "s", name: "S", description: "", prompt: "p".repeat(12), tools: [] } }), /Speciālista sarunas vēl nav \(11\.4\)\./);
+	const b = t.store.create({ projectId: null, agent: "s", title: "B", startedBy: "user" });
+	await t.run(b, "x", { spec: { id: "s", name: "S", description: "", prompt: "p".repeat(12), tools: [] } });
+	assert.equal(t.envs[1].PROJEKTESANA_AGENT, "s");
+	assert.equal(t.envs[1].PROJEKTESANA_THREAD, b.id);
 });
 
 test("a write tool of the lead holds the project's data while it runs and frees it after; reads and delegate take nothing", async () => {

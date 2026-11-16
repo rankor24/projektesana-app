@@ -6,6 +6,7 @@ import type { ActivityLog } from "../activity.js";
 import type { PiRuntime } from "../../agent/pi/index.js";
 import type { EventName, EventSpec, Handlers, ProviderRow } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
+import { titled } from "./threads.js";
 
 export interface CoreDeps {
 	version: string;
@@ -23,7 +24,7 @@ export interface CoreDeps {
 	openUrl(url: string): void;
 }
 
-type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | `queue.${string}` | "activity.recent";
+type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "queue.restored" | "queue.resumeInterrupted" | "queue.discardInterrupted" | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -105,20 +106,9 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		},
 		"agent.send": async (projectId, text, focus, attachments) => {
 			// the activity log titles the run with what was asked, keyed by the run's id (known before the run starts,
-			// and the run's first event may come before send returns, or much later when the start waits in the queue)
-			let named: string | null = null;
-			try {
-				const r = await d.session.send(projectId, text, focus, attachments ?? [], (id) => {
-					named = id;
-					d.activity?.begin(projectId, text, id);
-				});
-				// a queued run opens with its first event
-				if (r.runId && !r.queued) d.activity?.bind(r.runId);
-				return r;
-			} catch (e) {
-				if (named) d.activity?.cancel(named);
-				throw e;
-			}
+			// and the run's first event may come before send returns, or much later when the start waits in the queue);
+			// for "@agent text" it is the text after the mention
+			return titled(d, projectId, (onRunId) => d.session.send(projectId, text, focus, attachments ?? [], onRunId));
 		},
 		"agent.stop": () => d.session.stop(),
 		"queue.restored": () => d.session.queueRestored(),

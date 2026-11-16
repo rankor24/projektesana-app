@@ -11,8 +11,10 @@ import type { RunEvent, Settings } from "../shared/types.js";
 import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
-import type { AgentSpec } from "../shared/agent-types.js";
-import type { QueueView, RunMeta, Thread } from "../shared/thread-types.js";
+import { findSpec, type AgentSpec } from "../shared/agent-types.js";
+import { parseMention } from "../shared/mention.js";
+import { LEAD_ID, type QueueView, type RunMeta, type Thread } from "../shared/thread-types.js";
+import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
@@ -53,6 +55,8 @@ export interface SessionDeps {
 	afterBatch?: (projectId: string, summary: string) => Promise<string>;
 }
 
+const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
+
 export class AgentSession {
 	private runner: ThreadRunner;
 	private coordinator: Coordinator;
@@ -62,7 +66,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, queueFile: join(d.ctx.appDir, "queue.json"), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir) });
 	}
 
 	private threads(projectId: string | null): ThreadStore {
@@ -70,6 +74,18 @@ export class AgentSession {
 		let s = this.stores.get(id);
 		if (!s) this.stores.set(id, (s = new ThreadStore(threadsDir(this.d.ctx.appDir, this.d.ctx.projectsDir, projectId))));
 		return s;
+	}
+
+	/** The specialists as they are now (the settings page may change them between two runs). */
+	private specs(): AgentSpec[] {
+		return this.d.agents?.() ?? DEFAULT_AGENTS;
+	}
+
+	/** The thread of this project, or a refusal. The id is looked up in this project's folder only, and the thread must say it belongs here. */
+	private threadOf(threadId: string, projectId: string | null): Thread {
+		const t = this.threads(projectId).get(threadId);
+		if (!t || t.projectId !== projectId) throw new Error(`Saruna ${threadId} nav atrasta.`);
+		return t;
 	}
 
 	/** The one chat of a project is the lead's thread; the old chat file is copied in once, when that thread is first made. */
@@ -115,12 +131,77 @@ export class AgentSession {
 		return this.threads(projectId).transcript(t.id);
 	}
 
+	/** Every thread of the project, newest `lastAt` first. */
+	listThreads(projectId: string | null): Thread[] {
+		return this.threads(projectId).list();
+	}
+
+	/** A new thread with `agent`: "lead" or a specialist (by id or name). The title defaults to the specialist's name. */
+	openThread(projectId: string | null, agent: string, title?: string): Thread {
+		const name = title?.trim();
+		let t: Thread;
+		if (agent === LEAD_ID) t = this.threads(projectId).create({ projectId, agent: LEAD_ID, title: name || "Saruna", startedBy: "user" });
+		else {
+			const spec = findSpec(this.specs(), agent);
+			if (!spec) throw new Error(`Nav speciālista: ${agent}.`);
+			t = this.threads(projectId).create({ projectId, agent: spec.id, title: name || spec.name, startedBy: "user" });
+		}
+		this.d.onThread?.(t);
+		return t;
+	}
+
+	/** Ends a conversation: kept on disk, closed to new messages. Refused while its agent is running or waiting in the queue. */
+	closeThread(threadId: string, projectId: string | null): Thread {
+		const t = this.threadOf(threadId, projectId);
+		if (this.coordinator.threadBusy(t.id)) throw new Error(BUSY);
+		const next = this.threads(projectId).patch(t.id, { state: "closed" });
+		this.d.onThread?.(next);
+		return next;
+	}
+
+	threadHistory(threadId: string, projectId: string | null): ChatEntry[] {
+		return this.threads(projectId).transcript(this.threadOf(threadId, projectId).id);
+	}
+
+	stopThread(threadId: string): void {
+		this.coordinator.stopThread(threadId);
+	}
+
+	queueView(): QueueView {
+		return this.coordinator.view();
+	}
+
+	pauseQueue(): void {
+		this.coordinator.pause();
+	}
+
+	resumeQueue(): void {
+		this.coordinator.resume();
+	}
+
+	/** The chat box: a text that starts with `@agent` goes to that agent's newest open thread in the project (one is opened when there is none),
+	 *  without the mention; any other text goes to the lead. `onRunId` hears the run's id and the text that was sent. */
+	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string, sent: string) => void): Promise<{ runId: string | null; queued: boolean }> {
+		const m = parseMention(text, this.specs());
+		if (!m) return this.sendTo(this.leadOf(projectId), text, focus, attachments, onRunId);
+		// refused before a thread is opened for it
+		if (!m.text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
+		const open = this.threads(projectId).list({ agent: m.agent, open: true })[0];
+		return this.sendTo(open ?? this.openThread(projectId, m.agent), m.text, focus, attachments, onRunId);
+	}
+
+	/** A message to one thread (task 11.4). Refused for a closed thread, one whose specialist no longer exists, and one that is running or queued. */
+	async sendToThread(threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string, sent: string) => void): Promise<{ runId: string | null; queued: boolean }> {
+		return this.sendTo(this.threadOf(threadId, projectId), text, focus, attachments, onRunId);
+	}
+
 	/** Starts a run; events arrive through `emit`. Runs now, or waits in the queue when the cap is reached; refuses while this chat's own run is going or queued. Attachments are read and checked
 	 *  first, so a file the model cannot take is refused here (the window keeps it in the strip) and no run starts. */
-	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string) => void): Promise<{ runId: string | null; queued: boolean }> {
-		const busy = "Aģents jau strādā. Aptur vai pagaidi.";
-		const thread = this.leadOf(projectId);
-		if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
+	private async sendTo(thread: Thread, text: string, focus: FocusItem[], attachments: ChatAttachment[], onRunId?: (runId: string, sent: string) => void): Promise<{ runId: string | null; queued: boolean }> {
+		const projectId = thread.projectId;
+		if (thread.state === "closed") throw new Error("Saruna ir slēgta.");
+		if (thread.agent !== LEAD_ID && !this.specs().some((s) => s.id === thread.agent)) throw new Error(`Nav speciālista: ${thread.agent}.`);
+		if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(BUSY);
 		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
 		const runId = this.coordinator.newRunId();
 		let files: PreparedAttachments = { images: [], text: "", refs: [] };
@@ -135,11 +216,11 @@ export class AgentSession {
 				imagesInContext: this.runner.imagesInContext(thread),
 			});
 			// reading the files took a moment: another message may have started meanwhile
-			if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
+			if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(BUSY);
 		}
 		// the files are already prepared (above), so the coordinator is handed them and does not read `attachments` itself
 		// the caller learns the run's id before it starts (a queued start keeps this id when it begins)
-		onRunId?.(runId);
+		onRunId?.(runId, text);
 		const r = await this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
 		return { runId, queued: r.queued };
 	}

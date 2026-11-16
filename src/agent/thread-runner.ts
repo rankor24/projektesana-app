@@ -28,7 +28,7 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, rosterText, subagentDeclarations, subagentTools } from "./subagents.js";
+import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, rosterText, specialistTools, subagentDeclarations, subagentTools } from "./subagents.js";
 import type { SessionDeps } from "./session.js";
 
 /** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected. */
@@ -44,7 +44,7 @@ const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0
 export interface RunInput {
 	runId: string;
 	thread: Thread;
-	/** null = the lead; specialist threads arrive with 11.4 */
+	/** null = the lead; a specialist's thread runs with its own prompt and tools, no helpers */
 	spec: AgentSpec | null;
 	text: string;
 	focus: FocusItem[];
@@ -87,8 +87,10 @@ export class ThreadRunner {
 		return conv && conv.key === `${s.provider}/${s.model}` ? countImages(this.shrink(conv.messages)) : 0;
 	}
 
-	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. */
-	private standing(s: Settings): string {
+	/** What every request starts with: the rules, who the user is, Revit's rules, the skills. A specialist gets its own prompt and the shared rules,
+	 *  the user line, and Revit's rules only when one of its tools is Revit's; no roster and no skills list. */
+	private standing(s: Settings, spec: AgentSpec | null = null, hasRevitTool = false): string {
+		if (spec) return [spec.prompt + RULES, userLine(s.userName), hasRevitTool ? REVIT_RULES : ""].filter(Boolean).join("\n\n");
 		return [SYSTEM_PROMPT, userLine(s.userName), REVIT_RULES, rosterText(this.d.agents?.() ?? DEFAULT_AGENTS), skillsText(listSkills(this.d.ctx.skillsDir ?? ""))].filter(Boolean).join("\n\n");
 	}
 
@@ -147,12 +149,11 @@ export class ThreadRunner {
 	}
 
 	async run(i: RunInput): Promise<{ ok: boolean; answer: string; confirmedBatches: number }> {
-		if (i.spec) throw new Error("Speciālista sarunas vēl nav (11.4).");
-		const { runId, thread, text, focus, files, signal } = i;
+		const { runId, thread, spec, text, focus, files, signal } = i;
 		const projectId = thread.projectId;
 		const emit = i.emit;
 		const owner = `run:${runId}`;
-		const label = "galvenais aģents";
+		const label = spec ? spec.name : "galvenais aģents";
 		let answer = "";
 		let confirmedBatches = 0;
 		let failed = false;
@@ -166,16 +167,28 @@ export class ThreadRunner {
 				writeFileSync(join(runDir, "focus.json"), JSON.stringify(focus), "utf8");
 				this.remember(thread, "user", text, files.refs);
 
-				const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: LEAD_ID, thread: thread.id });
+				const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: spec ? spec.id : LEAD_ID, thread: thread.id });
 				const appTools = allTools().map((t) => t.name);
 				const app = appLevels();
 				const revit = this.d.revit();
 				const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, revit?.levels ?? {});
-				const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = { "projektesana-tools": { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) } };
-				if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
-
+				const appSet = new Set(appTools);
 				const revitTools = new Set(revit?.tools ?? []);
-				const gate = new Gate(levelOf, async (req: ConfirmRequest) => {
+				const listed = [...offered(appTools, levelOf), ...(revit ? offered(revit.tools, levelOf) : [])];
+				// a specialist's own tool list: what `delegate` gives its lanes. Its gate lets only these through; no confirm tool is in it (the cap keeps them out)
+				const own = spec ? new Set(specialistTools(listed, levelOf, revitTools, spec)) : null;
+				const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
+				if (own) {
+					const mine = [...own].filter((n) => appSet.has(n));
+					if (mine.length) mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
+					const theirs = [...own].filter((n) => revitTools.has(n));
+					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs };
+				} else {
+					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf) };
+					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
+				}
+
+				const gate = new Gate(own ? (n) => (own.has(n) ? levelOf(n) : "never") : levelOf, async (req: ConfirmRequest) => {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
@@ -224,7 +237,8 @@ export class ThreadRunner {
 				const conv = this.conversations.get(thread.id);
 				const rt = await this.d.runtime();
 				const model = lookupPiModel(rt, s.provider, s.model);
-				const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), this.planOf(projectId, true));
+				// the plan lines the user changed belong to the lead: a specialist neither carries nor clears them
+				const prompt = buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true));
 				const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
 				const keepRecent = keepRecentFor(model.contextWindow);
 
@@ -235,7 +249,7 @@ export class ThreadRunner {
 					history = (await this.compactHistory({ thread, rt, model, history, signal, emit, keepRecent })) ?? history;
 				}
 
-				const standing = this.standing(s);
+				const standing = this.standing(s, spec, !!own && [...own].some((n) => revitTools.has(n)));
 				const seed = this.transcriptSeed(thread);
 				const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
@@ -265,23 +279,20 @@ export class ThreadRunner {
 						emit(e);
 					};
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
-					const listed = [...offered(appTools, levelOf), ...(revit ? offered(revit.tools, levelOf) : [])];
-					const appSet = new Set(appTools);
-					const revitSet = new Set(revit?.tools ?? []);
-					const extraTools = subagentTools({
+					const extraTools = spec ? undefined : subagentTools({
 						run: this.d.runAgent ?? runPi,
 						base: { runtime: rt, provider: s.provider, modelId: s.model, effort: (s.effort || undefined) as PiEffort | undefined },
 						mcpFor: (allowed) => {
 							const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
 							const mine = allowed.filter((n) => appSet.has(n));
 							if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
-							const theirs = allowed.filter((n) => revitSet.has(n));
+							const theirs = allowed.filter((n) => revitTools.has(n));
 							if (revit && theirs.length) m.revit = { ...revit, allow: theirs };
 							return m;
 						},
 						levelOf,
 						listed,
-						revitTools: revitSet,
+						revitTools,
 						locks: locks.forProject(projectId),
 						ownerPrefix: owner,
 						emit: handle,

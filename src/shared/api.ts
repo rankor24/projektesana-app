@@ -404,6 +404,21 @@ export interface ApiSpec {
 	"queue.resumeInterrupted": () => void;
 	/** Drop it: the restored items stay as stopped, the threads are idle. */
 	"queue.discardInterrupted": () => void;
+	/** The run table and the queue as they are now (the same view `queue.changed` sends). */
+	"queue.view": () => QueueView;
+	/** Nothing queued starts until resume; runs already going continue. */
+	"queue.pause": () => void;
+	"queue.resume": () => void;
+	/** Every thread of the project, newest first. */
+	"threads.list": (projectId: string | null) => Thread[];
+	/** A new thread with an agent: "lead" or a specialist's id. The title defaults to the specialist's name. */
+	"threads.open": (projectId: string | null, agent: string, title?: string) => Thread;
+	/** A message to one thread. Refused for a closed thread, a removed specialist, and a thread that is running or queued. */
+	"threads.send": (threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean };
+	"threads.history": (threadId: string, projectId: string | null) => ChatEntry[];
+	"threads.stop": (threadId: string) => void;
+	/** Closes a thread (kept on disk); refused while it is running or queued. */
+	"threads.close": (threadId: string, projectId: string | null) => Thread;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
 	"agent.reset": (projectId: string | null) => void;
@@ -591,6 +606,15 @@ export const API_NAMES = [
 	"queue.restored",
 	"queue.resumeInterrupted",
 	"queue.discardInterrupted",
+	"queue.view",
+	"queue.pause",
+	"queue.resume",
+	"threads.list",
+	"threads.open",
+	"threads.send",
+	"threads.history",
+	"threads.stop",
+	"threads.close",
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",

@@ -1,7 +1,8 @@
 // Who is running, the queue behind the cap, the batch confirmations, Stop and pause. Runs are a table by run id; the cap is settings().maxParallelAgents.
 // Every event of a run leaves with its envelope (thread, agent, project, wave) and the thread's state follows the run.
 // No Electron imports: the runner, the stores and the sink are injected.
-import type { Thread, RunMeta, StartInput, QueueView } from "../shared/thread-types.js";
+import type { AgentSpec } from "../shared/agent-types.js";
+import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView } from "../shared/thread-types.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
@@ -20,6 +21,9 @@ export interface CoordinatorDeps {
 	onQueue?: (v: QueueView) => void;
 	/** where the queue is saved on every change and loaded from by `restore()` */
 	queueFile: string;
+	/** the specialists that exist now, read at every start: a thread of any other agent than the lead runs only while its specialist is in the list.
+	 *  Without it every thread runs as the lead (the coordinator's own tests). */
+	specs?: () => readonly AgentSpec[];
 	/** every project that has threads on disk (`knownProjects`), for `restore()`; without it restore finds no thread to mark */
 	projects?: () => (string | null)[];
 	now?: () => string;
@@ -186,6 +190,12 @@ export class Coordinator {
 	private begin(item: QueueItem, extra?: { files?: PreparedAttachments; runId?: string }): string {
 		const found = this.d.threads(item.projectId).get(item.threadId);
 		if (!found) throw new Error(`Saruna ${item.threadId} nav atrasta.`);
+		// the specialist is looked up before anything is written: one that was removed in the settings stops this item, the thread stays as it was
+		let spec: AgentSpec | null = null;
+		if (this.d.specs && found.agent !== LEAD_ID) {
+			spec = this.d.specs().find((s) => s.id === found.agent) ?? null;
+			if (!spec) throw new Error(`Nav speciālista: ${found.agent}.`);
+		}
 		const runId = extra?.runId ?? this.newRunId();
 		const wave = item.wave;
 		let thread: Thread;
@@ -217,7 +227,7 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec: null, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask })
 			.finally(() => {
 				this.denyConfirms((c) => c.live === live, false);
 				this.live.delete(runId);
