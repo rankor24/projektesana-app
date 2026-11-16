@@ -20,10 +20,18 @@ const titleOf = (id: string, topics: readonly Topic[]) => topics.find((t) => t.i
 /** One line of text: blanks and line breaks are one space, cut by characters (not UTF-16 halves). */
 const oneLine = (s: string) => [...s.replace(/\s+/g, " ").trim()].slice(0, CUT).join("");
 
-/** The line of one message. An envelope message (task, reply) is shown by its goal or its status: the envelope is what the receiver acts on. */
+/** What a line shows of a message. A task is shown by its goal. A reply that says "izpildīts" by its status; one that says "bloķēts" or "daļēji" by its text,
+ *  because the text holds the reason or the answer itself and the bare status would hide it. */
+function bodyOf(m: Message): string {
+	if (m.task) return m.task.goal;
+	if (m.reply && (m.reply.status === "izpildīts" || !m.text.trim())) return m.reply.status;
+	return m.text;
+}
+
+/** The line of one message. */
 export function messageLine(m: Message, topics: readonly Topic[], names?: Record<string, string>): RoomLine {
 	const title = titleOf(m.topic, topics);
-	const body = oneLine(m.task?.goal ?? m.reply?.status ?? m.text);
+	const body = oneLine(bodyOf(m));
 	return { at: m.at, kind: "message", from: m.from, to: m.to, topic: title, text: `${nameOf(m.from, names)} → ${nameOf(m.to, names)} · ${title}: ${body}`, threadId: m.toThread };
 }
 
@@ -40,10 +48,12 @@ export function topicLine(t: Topic, messages: readonly Message[], threads: reado
 	return { ...base, kind: "passed-up", text: `${t.title} nodots tālāk` };
 }
 
+const LIMIT = { runs: "skrējienu limits", cost: "izmaksu limits" } as const;
+
 /** A wave that stopped at a limit. The window has no time for the pause, so it stands where the wave's last message stands (the limit was met by it), or at the wave's start. */
 function pausedLine(w: Wave, messages: readonly Message[]): RoomLine {
 	const last = messages.filter((m) => m.wave === w.id).reduce((at, m) => (m.at > at ? m.at : at), w.startedAt);
-	return { at: last, kind: "paused", text: `Vilnis apturēts: ${w.paused}` };
+	return { at: last, kind: "paused", text: `Vilnis apturēts: ${LIMIT[w.paused!]}` };
 }
 
 /** The room, oldest first, the newest `max` lines. Lines of one moment keep this order: message, closed topic, pause. */

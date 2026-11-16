@@ -49,12 +49,15 @@ test("12.5 a message's text is cut at 120 characters and its line breaks are one
 	assert.equal(multi.text, "ar → bk · Pārseguma biezums: pirmā rinda otrā rinda");
 });
 
-test("12.5 an envelope message shows its goal or its status, not its text", () => {
+test("12.5 a task shows its goal; a finished reply its status; a blocked or partial reply its text", () => {
 	const task = msg("m1", { kind: "task", text: "UZDEVUMS …", task: { id: "t1", goal: "Pārbaudīt plātnes biezumu", context: [], expects: "ATBILDE", iteration: 1 } });
-	const reply = msg("m2", { at: at(3), kind: "reply", text: "ATBILDE …", reply: { id: "t1", status: "daļēji", results: ["x"], questions: [], decisions: [] } });
-	const [a, b] = roomLines({ messages: [task, reply], topics: [topic("tp1")], threads: [] });
-	assert.equal(a.text, "ar → bk · Pārseguma biezums: Pārbaudīt plātnes biezumu");
-	assert.equal(b.text, "ar → bk · Pārseguma biezums: daļēji");
+	const reply = (id: string, n: number, status: "izpildīts" | "daļēji" | "bloķēts", text: string) => msg(id, { at: at(n), kind: "reply", text, reply: { id: "t1", status, results: [], questions: [], decisions: [] } });
+	const lines = roomLines({
+		messages: [task, reply("m2", 2, "izpildīts", "ATBILDE …"), reply("m3", 3, "daļēji", "Daļu pārbaudīju, AVK vēl nav."), reply("m4", 4, "bloķēts", `Nevaru: ${"b".repeat(200)}`), reply("m5", 5, "bloķēts", "  ")],
+		topics: [topic("tp1")],
+		threads: [],
+	}).map((l) => l.text.replace("ar → bk · Pārseguma biezums: ", ""));
+	assert.deepEqual(lines, ["Pārbaudīt plātnes biezumu", "izpildīts", "Daļu pārbaudīju, AVK vēl nav.", `Nevaru: ${"b".repeat(112)}`, "bloķēts"]);
 });
 
 test("12.5 an agreed topic gives one agreed line with its note; an open topic gives none", () => {
@@ -83,7 +86,7 @@ test("12.5 a paused wave gives a paused line after its last message; a running w
 	const w = (id: string, paused: Wave["paused"]): Wave => ({ id, projectId: "BD999", startedAt: at(0), runs: 20, cost: 0, paused });
 	const lines = roomLines({ messages: [msg("m1", { wave: "w1", at: at(3) })], topics: [topic("tp1")], threads: [], waves: [w("w1", "runs"), w("w2", null), w("w3", "cost")] });
 	// a wave with no messages sits at its start; a tie goes to the message, so the pause reads as what followed it
-	assert.deepEqual(lines.map((l) => [l.kind, l.text, l.at]), [["paused", "Vilnis apturēts: cost", at(0)], ["message", "ar → bk · Pārseguma biezums: Cik biezs?", at(3)], ["paused", "Vilnis apturēts: runs", at(3)]]);
+	assert.deepEqual(lines.map((l) => [l.kind, l.text, l.at]), [["paused", "Vilnis apturēts: izmaksu limits", at(0)], ["message", "ar → bk · Pārseguma biezums: Cik biezs?", at(3)], ["paused", "Vilnis apturēts: skrējienu limits", at(3)]]);
 });
 
 test("12.5 max keeps the newest lines, still oldest first; the default is 300", () => {

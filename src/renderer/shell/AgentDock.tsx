@@ -185,13 +185,16 @@ export function AgentDock() {
 	);
 
 	useEffect(() => {
-		endRef.current?.scrollIntoView({ block: "end" });
-	}, [lines]);
+		// a hidden chat cannot scroll: do it again when the tab comes back
+		if (tab === "chat") endRef.current?.scrollIntoView({ block: "end" });
+	}, [lines, tab]);
 
 	const closedView = viewThread?.state === "closed";
 	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0 && !closedView;
 	const send = async () => {
 		if (!canSend || runId) return;
+		// the message and its reply land in the chat: show it
+		setTab("chat");
 		setErr(null);
 		const t = text;
 		const files = pending;
