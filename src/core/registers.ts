@@ -37,7 +37,9 @@ export function exportRegisters(store: ProjectStore, dir: string, s: ProcessStat
 	];
 	const latest = new Map<string, string>();
 	for (const g of s.gates) {
-		const n = g.noteId ? notes.find((x) => x.id === g.noteId) : undefined;
+		// the id becomes a file name: only the seven real ones (process.json is a file a hand can edit)
+		if (!/^H[1-7]$/.test(g.id)) continue;
+		const n =g.noteId ? notes.find((x) => x.id === g.noteId) : undefined;
 		if (n) latest.set(g.id, n.body);
 	}
 	for (const [id, body] of latest) files.push([`gate_${id}.md`, `${body}\n`]);

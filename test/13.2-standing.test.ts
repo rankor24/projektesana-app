@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { SPECIALIST_FIXED_MAX, fixedTokens, rosterFor, roleDir, standingFor, validateSpec, writeRole, writeShared } from "../src/agent/agents.ts";
+import { SPECIALIST_FIXED_MAX, fixedTokens, processReserve, rosterFor, roleDir, standingFor, validateSpec, writeRole, writeShared } from "../src/agent/agents.ts";
 import { estimateTextTokens } from "../src/agent/context.ts";
 import { declarationTokens } from "../src/agent/declarations.ts";
 import { MAIL_RULES } from "../src/agent/mail.ts";
@@ -164,7 +164,7 @@ test("13.2 agents.list rows carry fixedTokens, measured with the current setting
 	const view = h["agents.list"]();
 	assert.equal(view.specs.length, 2);
 	const dd = { appDir: dir, userName: "Tests", specs: view.specs, skills: listSkills(skillsDir), knowledge: "" };
-	for (const row of view.specs) assert.equal(row.fixedTokens, fixedTokens(row, dd, declarationTokens(row)), row.id);
+	for (const row of view.specs) assert.equal(row.fixedTokens, fixedTokens(row, { ...dd, ...processReserve(row) }, declarationTokens(row)), row.id);
 	assert.ok(view.specs[0].fixedTokens > view.specs[1].fixedTokens, "a skill and a tool weigh something");
 });
 
@@ -176,12 +176,35 @@ test("13.2 agents.save refuses a spec whose fixed context passes the guard, with
 	mkdirSync(roleDir(dir), { recursive: true });
 	writeRole(dir, "liels", "L".repeat(16_000));
 	const big = { ...spec("liels"), prompt: "", roleFile: true, skills: names };
-	const dd = { appDir: dir, userName: "", specs: [big], skills: listSkills(skillsDir), knowledge: "" };
+	const dd = { appDir: dir, userName: "", specs: [big], skills: listSkills(skillsDir), knowledge: "", ...processReserve(big) };
 	const n = fixedTokens(big, dd, declarationTokens(big));
 	assert.ok(n > SPECIALIST_FIXED_MAX, `the fixture must pass the guard: ${n}`);
 	assert.throws(() => h["agents.save"]([big]), { message: `Aģenta liels pastāvīgais konteksts ir ${n} tokeni (limits 16000).` });
 	// the same agent with fewer skills saves
 	assert.equal(h["agents.save"]([{ ...big, skills: names.slice(0, 5) }]).length, 1);
+});
+
+test("14.5 agents.save counts the process text: an agent that fits without it but not with the status and the stage card is refused, with the same text", () => {
+	const names = Array.from({ length: 200 }, (_, i) => `prasme-${String(i).padStart(3, "0")}`);
+	const skillsDir = skillsFolder(names, 400);
+	const { dir, h } = handler(skillsDir);
+	const withSkills = (k: number): AgentSpec => spec("bpv", { skills: names.slice(0, k) });
+	const base = (s: AgentSpec) => fixedTokens(s, { appDir: dir, userName: "", specs: [s], skills: listSkills(skillsDir), knowledge: "" }, declarationTokens(s));
+	// the most skills that still fit without the process text
+	let k = 0;
+	while (k < names.length && base(withSkills(k + 1)) <= SPECIALIST_FIXED_MAX) k++;
+	assert.ok(k > 10 && k < names.length, `the fixture reaches the limit: ${k}`);
+	const s = withSkills(k);
+	assert.ok(base(s) <= SPECIALIST_FIXED_MAX, "fits without the process text");
+	const n = fixedTokens(s, { appDir: dir, userName: "", specs: [s], skills: listSkills(skillsDir), knowledge: "", ...processReserve(s) }, declarationTokens(s));
+	assert.ok(n > SPECIALIST_FIXED_MAX, `and passes with it: ${n}`);
+	assert.throws(() => h["agents.save"]([s]), { message: `Aģenta bpv pastāvīgais konteksts ir ${n} tokeni (limits ${SPECIALIST_FIXED_MAX}).` });
+	// a stage leader's reserve holds its longest card, an agent that leads nothing only the status
+	assert.ok((processReserve(spec("bpv")).processCard ?? "").length > 0 && (processReserve(spec("eks")).processCard ?? "").length > 0);
+	assert.equal(processReserve(spec("ar")).processCard, undefined);
+	assert.equal(processReserve(spec("ar")).status?.length, 3000);
+	// two skills fewer and it saves
+	assert.equal(h["agents.save"]([withSkills(k - 12)]).length, 1);
 });
 
 // ---- from the 13.1 review ----------------------------------------------------------------------------------------------------

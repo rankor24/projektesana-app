@@ -9,7 +9,8 @@ import type { OfficeMemory } from "../core/office-memory.js";
 import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
-import { PROCESS_WRITE_TOOLS } from "../core/process-def.js";
+import { LEADER, PROCESS_WRITE_TOOLS, STAGES, stageCard } from "../core/process-def.js";
+import { STATUS_MAX } from "../core/process.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
@@ -211,6 +212,14 @@ export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
 	return [readShared(d.appDir).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+}
+
+/** What process mode adds to an agent's standing text, at its largest: a status of STATUS_MAX characters and, for a stage leader, the longest card of the stages it leads.
+ *  The save limit (SPECIALIST_FIXED_MAX) is measured with it, so an agent that fits today cannot run over the limit once a process fills its status. */
+export function processReserve(spec: AgentSpec): Pick<StandingDeps, "processCard" | "status"> {
+	const cards = STAGES.filter((st) => LEADER[st] === spec.id).map(stageCard);
+	const longest = cards.reduce((a, b) => (b.length > a.length ? b : a), "");
+	return { status: "x".repeat(STATUS_MAX), ...(longest ? { processCard: longest } : {}) };
 }
 
 /** The standing text plus the tool declarations (`toolDeclarations`, from declarations.ts): what the agent's request weighs before anyone speaks. */

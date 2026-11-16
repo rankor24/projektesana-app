@@ -423,14 +423,17 @@ const idOf = (prefix: string, n: number) => `${prefix}-${n}`;
 
 const day = (n: Note) => n.at.slice(0, 10);
 
+/** A register or status line is one line: a note's own line breaks become spaces (the full text stays in the note). */
+const oneLine = (s: string): string => s.replace(/\s*[\r\n]+\s*/g, " ").trim();
+
 /** One decision as the block of process 7.4. The parties come from the note's `agent` and `to` (the two sides of the topic), the sections it touches are those
  *  parties' own, and "BPV pārskatīts" is whether the user has seen it. */
 function decisionEntry(n: Note, nr: number): string {
 	const parties = [n.agent, n.to].filter((x): x is string => !!x);
 	return [
 		`${idOf("L", nr)} | ${day(n)} | ${n.stage || "-"} | Puses: ${[...parties].sort().join(", ") || "-"}`,
-		`Temats: ${n.title}`,
-		`Lēmums: ${n.body}`,
+		`Temats: ${oneLine(n.title)}`,
+		`Lēmums: ${oneLine(n.body)}`,
 		`Ietekme: ${parties.map((x) => x.toUpperCase()).join(", ") || "-"}`,
 		`BPV pārskatīts: ${n.reviewed ? "jā" : "nē"}`,
 	].join("\n");
@@ -440,10 +443,11 @@ function decisionEntry(n: Note, nr: number): string {
 function questionEntry(n: Note, nr: number, notes: readonly Note[]): string {
 	const answer = notes.filter((a) => a.type === "answer" && a.refs.includes(n.id)).sort(byTime).at(-1);
 	return [
-		`${idOf("J", nr)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"} | Kam: ${n.to || "-"}`,
-		`Jautājums: ${n.title}`,
-		"Ietekme, ja neatbild: nav",
-		`Atbilde: ${answer?.title ?? "-"}`,
+		`${idOf("J", nr)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"} | Kam: ${n.to === "user" ? "CILV" : n.to || "-"}`,
+		`Jautājums: ${oneLine(n.title)}`,
+		// the notes hold no impact: no data, not "nav"
+		"Ietekme, ja neatbild: -",
+		`Atbilde: ${answer ? oneLine(answer.title) : "-"}`,
 		`Statuss: ${n.status === "closed" ? "slēgts" : "atvērts"}`,
 	].join("\n");
 }
@@ -457,7 +461,7 @@ export const questionLog = (notes: readonly Note[]): string[] => inTime(notes, "
 /** Risks and changes have no block in the process document; the same head line and a title and description keep them readable beside the others. */
 export function noteLog(notes: readonly Note[], type: "risk" | "change"): string[] {
 	const [prefix, label] = type === "risk" ? ["R", "Risks"] : ["I", "Izmaiņa"];
-	return inTime(notes, type).map((n, i) => [`${idOf(prefix, i + 1)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"}`, `${label}: ${n.title}`, `Apraksts: ${n.body}`].join("\n"));
+	return inTime(notes, type).map((n, i) => [`${idOf(prefix, i + 1)} | ${day(n)} | ${n.stage || "-"} | No: ${n.agent || "-"}`, `${label}: ${oneLine(n.title)}`, `Apraksts: ${oneLine(n.body)}`].join("\n"));
 }
 
 /** Whole lines of `lines` that fit in `budget` characters (a newline between lines counts). */
@@ -473,10 +477,13 @@ function fit(lines: readonly string[], budget: number): string[] {
 	return out;
 }
 
+/** The most characters the status page takes in an agent's standing text. */
+export const STATUS_MAX = 3000;
+
 /** The project's status page, the short text every agent of the process carries (and the file projekta_statuss.md): the stage and its iteration, the gate that waits,
  *  the open questions and the open tasks, newest first. Cut at whole lines to stay under `maxChars`; each of the two lists keeps room for the other, so 200 questions
  *  do not push the tasks out. The text has no time in it (`now` is the caller's, kept in the signature for it): it must not change between two runs that saw the same work. */
-export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: readonly Message[]; now: string }, maxChars = 3000): string {
+export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: readonly Message[]; now: string }, maxChars = STATUS_MAX): string {
 	const head = [s.stage === "mācības" || s.stage === "done" ? `Stadija ${s.stage}` : `Stadija ${s.stage} (iterācija ${s.iteration[s.stage] + 1} no ${MAX_ITERATIONS})`];
 	const gate = [...s.gates].reverse().find((g) => g.state === "waiting");
 	if (gate) head.push(`Gaida gate ${gate.id}: lēmums cilvēkam.`);
@@ -485,8 +492,8 @@ export function statusText(s: ProcessState, i: { notes: readonly Note[]; open: r
 	const questions = [...i.notes]
 		.filter((n) => n.type === "question" && n.status !== "closed")
 		.sort((a, b) => byTime(b, a))
-		.map((n) => `- ${idOf("J", numbered.get(n.id) ?? 0)} ${n.to || "-"}: ${n.title}`);
-	const tasks = [...i.open].sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).map((m) => `- ${m.id} → ${m.to}: ${m.task?.goal ?? m.text.split("\n")[0]}`);
+		.map((n) => `- ${idOf("J", numbered.get(n.id) ?? 0)} ${n.to || "-"}: ${oneLine(n.title)}`);
+	const tasks = [...i.open].sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).map((m) => `- ${m.id} → ${m.to}: ${oneLine(m.task?.goal ?? m.text)}`);
 
 	// each line costs its length and a newline, so a total cost within maxChars leaves the text one character short of it. The headings are always there;
 	// each list takes what it needs of what is left, but never more than the half the other one leaves it

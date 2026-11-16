@@ -9,7 +9,7 @@ import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
 import { makeLevelOf } from "../../agent/tools/levels.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOL_LEVELS, validateSpec } from "../../agent/subagents.js";
-import { ROLE_MAX, SPECIALIST_FIXED_MAX, fixedTokens, readRole, readShared, writeRole, writeShared } from "../../agent/agents.js";
+import { ROLE_MAX, SPECIALIST_FIXED_MAX, fixedTokens, processReserve, readRole, readShared, writeRole, writeShared } from "../../agent/agents.js";
 import { declarationTokens } from "../../agent/declarations.js";
 import { listSkills, officeSkillsDir } from "../../agent/skills.js";
 import type { AgentSpec, AgentSpecRow, AgentToolRow } from "../../shared/agent-types.js";
@@ -28,8 +28,9 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 		// confirm tools are listed too (13.5): the page offers them only to an agent with maxLevel "confirm", validateSpec holds the line on save
 		return [...app, ...rv].filter((r) => !PROCESS_WRITE_TOOLS.has(r.name) && LEVEL_RANK[levelOf(r.name)] > 0 && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
 	};
-	/** what the agent's requests carry before the conversation starts, measured with the settings, the specs and the skills as they are now */
-	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[]) => fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(spec));
+	/** what the agent's requests carry before the conversation starts, measured with the settings, the specs and the skills as they are now, and with the process text
+	 *  (status, stage card) at its largest: in process mode the run carries it too, and the limit must hold then */
+	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[]) => fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "", ...processReserve(spec) }, declarationTokens(spec));
 	return {
 		"agents.list": () => {
 			const { specs, shipped } = d.settings.agentSpecs();
@@ -48,7 +49,7 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 				if (out.some((o) => o.id === v.spec.id)) throw new Error(`Identifikators ${v.spec.id} atkārtojas.`);
 				out.push(v.spec);
 			}
-			// the standing text is read from the role file, so this is the count the agent's runs will carry
+			// the standing text is read from the role file, and a process adds its status and card: this is the most the agent's runs will carry
 			for (const spec of out) {
 				const n = fixedOf(spec, out);
 				if (n > SPECIALIST_FIXED_MAX) throw new Error(`Aģenta ${spec.id} pastāvīgais konteksts ir ${n} tokeni (limits ${SPECIALIST_FIXED_MAX}).`);

@@ -99,8 +99,8 @@ test("14.5 a question note renders as the 7.5 block: the answer is the title of 
 		note({ id: "q2", type: "question", at: "2026-11-12T09:00:00Z", title: "Vai jumts ir zaļais?", agent: "ar", to: "bpv", status: "open" }),
 	];
 	const log = questionLog(notes);
-	assert.equal(log[0], ["J-1 | 2026-11-10 | S1 | No: bk | Kam: user", "Jautājums: Kāds ir grunts ūdens līmenis?", "Ietekme, ja neatbild: nav", "Atbilde: Līmenis -2,4 m", "Statuss: slēgts"].join("\n"));
-	assert.equal(log[1], ["J-2 | 2026-11-12 | - | No: ar | Kam: bpv", "Jautājums: Vai jumts ir zaļais?", "Ietekme, ja neatbild: nav", "Atbilde: -", "Statuss: atvērts"].join("\n"));
+	assert.equal(log[0], ["J-1 | 2026-11-10 | S1 | No: bk | Kam: CILV", "Jautājums: Kāds ir grunts ūdens līmenis?", "Ietekme, ja neatbild: -", "Atbilde: Līmenis -2,4 m", "Statuss: slēgts"].join("\n"));
+	assert.equal(log[1], ["J-2 | 2026-11-12 | - | No: ar | Kam: bpv", "Jautājums: Vai jumts ir zaļais?", "Ietekme, ja neatbild: -", "Atbilde: -", "Statuss: atvērts"].join("\n"));
 });
 
 function project(over: { agents?: string[] } = {}) {
@@ -125,7 +125,7 @@ test("14.5 exportRegisters writes the six kinds of file inside the data folder a
 	assert.deepEqual(paths.map((p) => p.slice(dir.length + 1)).sort(), readdirSync(dir).sort());
 	const rd = (f: string) => readFileSync(join(dir, f), "utf8");
 	assert.match(rd("lemumu_zurnals.md"), /L-1 \| 2026-11-11 \| - \| Puses: ar, bk/);
-	assert.match(rd("jautajumu_zurnals.md"), /J-1 \| 2026-11-12 \| - \| No: ar \| Kam: user[\s\S]*Statuss: atvērts/);
+	assert.match(rd("jautajumu_zurnals.md"), /J-1 \| 2026-11-12 \| - \| No: ar \| Kam: CILV[\s\S]*Statuss: atvērts/);
 	assert.match(rd("risku_registrs.md"), /Izpēte kavējas[\s\S]*Pieņemam, ka grunts ir smilts\./);
 	assert.match(rd("izmainu_zurnals.md"), /Pasūtītājs prasa lielāku balkonu[\s\S]*S2 izlaista \(nav vajadzīga\)/);
 	assert.match(rd("projekta_statuss.md"), /^Stadija S1 \(iterācija 1 no 3\)\nGaida gate H1: lēmums cilvēkam\.\nAtvērtie jautājumi:\n- J-1 user: Pirmais jautājums/);
@@ -138,6 +138,24 @@ test("14.5 exportRegisters writes the six kinds of file inside the data folder a
 	assert.match(rd("gate_H1.md"), /Lēmums 2026-11-16: apstiprināts\./);
 	assert.match(rd("lemumu_zurnals.md"), /L-2 \| 2026-11-14/);
 	assert.equal(rd("lemumu_zurnals.md").match(/^L-1 /gm)?.length, 1, "no duplicates from the earlier export");
+});
+
+test("14.5 (R40) a gate id that is not H1..H7 makes no file; a note's line breaks become spaces in the registers and the status", () => {
+	const { store, state } = project();
+	store.writeNote(note({ id: "g1", type: "gate", at: "2026-11-12T12:00:00Z", title: "GATE", body: "ļaunais", agent: "bpv" }));
+	store.writeNote(note({ id: "d1", type: "decision", at: "2026-11-11T09:00:00Z", title: "Sienas", body: "Pirmā rinda.\nOtrā rinda.\r\n\r\nTrešā.", agent: "ar", to: "bk" }));
+	store.writeNote(note({ id: "q1", type: "question", at: "2026-11-12T09:00:00Z", title: "Kāds\nbiezums?", agent: "ar", to: "user", status: "open" }));
+	store.writeNote(note({ id: "r1", type: "risk", at: "2026-11-12T10:00:00Z", title: "Risks", body: "a\nb", agent: "bpv" }));
+	const s = { ...state, gates: [{ id: "../x" as never, stage: "S1" as const, iteration: 1, state: "waiting" as const, noteId: "g1", at: NOW }] };
+	const dir = join(store.dir, "export", "00_vadiba");
+	exportRegisters(store, dir, s);
+	assert.deepEqual(readdirSync(dir).filter((f) => f.startsWith("gate_")), []);
+	const rd = (f: string) => readFileSync(join(dir, f), "utf8");
+	assert.match(rd("lemumu_zurnals.md"), /Lēmums: Pirmā rinda\. Otrā rinda\. Trešā\.\nIetekme/);
+	assert.match(rd("jautajumu_zurnals.md"), /Jautājums: Kāds biezums\?\n/);
+	assert.match(rd("risku_registrs.md"), /Apraksts: a b\n/);
+	const lines = statusText(proc(), { notes: [note({ id: "q9", type: "question", at: NOW, title: "Divas\nrindas", to: "bpv", status: "open" })], open: [task("m1", "ar", "Mērķis\nar rindu", NOW)], now: NOW }).split("\n");
+	assert.deepEqual(lines.slice(2), ["- J-1 bpv: Divas rindas", "Atvērtie uzdevumi:", "- m1 → ar: Mērķis ar rindu"]);
 });
 
 test("14.5 exportRegisters with nothing to say writes nav; one gate file per gate id, the newest wins", () => {
