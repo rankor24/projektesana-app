@@ -60,13 +60,13 @@ export function ProcessBlock({ projectId }: { projectId: string }) {
 						Process
 					</button>
 				</div>
-				{s && <span className="dim small">{s.stage === "mācības" ? "stadija: mācības" : s.stage === "done" ? "process pabeigts" : `stadija: ${s.stage}`}</span>}
+				{s && s.mode === "process" && <span className="dim small">{s.stage === "mācības" ? "stadija: mācības" : s.stage === "done" ? "process pabeigts" : `stadija: ${s.stage}`}</span>}
 			</div>
 			{err && <div className="err pblock-msg">{err}</div>}
 			{info && <div className="small pblock-msg">{info}</div>}
-			{s && <ProfileEditor key={`${projectId}|${JSON.stringify([s.docType, s.profile.depth, s.profile.agents])}`} projectId={projectId} s={s} specs={specs} run={run} busy={busy} />}
+			{s && s.mode === "process" && <ProfileEditor key={`${projectId}|${JSON.stringify([s.docType, s.profile.depth, s.profile.agents])}`} projectId={projectId} s={s} specs={specs} run={run} busy={busy} />}
 			{s && s.mode === "process" && <Actions projectId={projectId} stage={s.stage} run={run} busy={busy} />}
-			{s && <History changes={s.profile.changes} />}
+			{s && s.mode === "process" && <History changes={s.profile.changes} />}
 		</section>
 	);
 }

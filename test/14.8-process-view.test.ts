@@ -19,7 +19,7 @@ test("14.8 strip: a fresh process has S1 on and six to come", () => {
 	assert.deepEqual(states(initial("buvprojekts", ["bpv"])), ["current", "todo", "todo", "todo", "todo", "todo", "todo"]);
 	assert.equal(m.stages.length, 7);
 	assert.equal(m.gate, null);
-	assert.equal(m.iteration, null);
+	assert.deepEqual(m.iteration, { n: 1, of: 3 }, "the first pass");
 	assert.equal(m.escalated, null);
 });
 
@@ -40,7 +40,7 @@ test("14.8 strip: the iteration counts returns and escalation shows", () => {
 		s = ok(s, { type: "gate.request", noteId: `n${i}`, at: AT });
 		s = ok(s, { type: "gate.return", at: AT, comment: "vēlreiz" });
 		const m = stripModel(s);
-		assert.deepEqual(m.iteration, { n: i + 1, of: 3 });
+		assert.deepEqual(m.iteration, { n: i + 2, of: 3 }, "passes: returns so far + 1");
 	}
 	assert.equal(stripModel(s).escalated, "S1", "the fourth return goes to the human");
 });
@@ -81,7 +81,12 @@ test("14.8 profilePatch: only differences, bpv kept, null when nothing moved", (
 	assert.equal(profilePatch(s, same), null);
 	assert.deepEqual(profilePatch(s, { ...same, depth: { ...same.depth, S2: "izlaiž" }, why: " vienkāršs " }), { why: "vienkāršs", depth: { S2: "izlaiž" } });
 	assert.deepEqual(profilePatch(s, { ...same, agents: ["ar"] })?.agents, ["bpv", "ar"], "bpv cannot be unticked");
+	// a cell put back to its old value after a type change must be sent: the new type's default would otherwise win in main
+	const back = profilePatch(s, { docType: "pazinojums", depth: { ...depthOfDocType("pazinojums"), S2: "pilna" }, agents: [...s.profile.agents], why: "x" });
+	assert.equal(back?.depth?.S2, "pilna");
+	assert.equal(Object.keys(back?.depth ?? {}).length, 1, "only the cell that differs from the new type's row");
 	const p = profilePatch(s, { docType: "pazinojums", depth: depthOfDocType("pazinojums"), agents: [...s.profile.agents], why: "mazs darbs" });
 	assert.equal(p?.docType, "pazinojums");
-	assert.deepEqual(p?.depth?.S2, DEFAULT_DEPTH.pazinojums.S2);
+	assert.equal(p?.depth, undefined, "the new type's own row is main's to apply, nothing extra is sent");
+	assert.equal(DEFAULT_DEPTH.pazinojums.S2, "izlaiž");
 });

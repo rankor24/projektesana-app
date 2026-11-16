@@ -90,11 +90,9 @@ export function Waiting({ items, specs, projectId, onConfirm, onOpen }: Props) {
 							</div>
 						);
 					case "gate":
-						return (
-							<div key={`g${w.gate}${w.noteId}`} className="small">
-								Vārti {w.gate} gaida apstiprinājumu ({w.projectId})
-							</div>
-						);
+						return <GateCard key={`g${w.projectId}${w.gate}${w.noteId}`} w={w} current={w.projectId === projectId} />;
+					case "escalated":
+						return <EscalatedCard key={`e${w.projectId}${w.stage}`} w={w} current={w.projectId === projectId} />;
 				}
 			})}
 			{err && <div className="err">{err}</div>}
@@ -193,6 +191,36 @@ function GateCard({ w, current }: { w: Extract<WaitingItem, { kind: "gate" }>; c
 			<div className="row">
 				<button className="primary" disabled={busy} onClick={() => decide(true)}>Apstiprināt</button>
 				<button disabled={busy} onClick={() => decide(false)}>Atgriezt</button>
+			</div>
+			{err && <div className="err">{err}</div>}
+		</div>
+	);
+}
+
+/** A stage the process escalated after too many returns: no gate waits, so the user's word is the decision. "Turpināt" is `process.gate` approve, which main accepts on an escalated stage. */
+function EscalatedCard({ w, current }: { w: Extract<WaitingItem, { kind: "escalated" }>; current: boolean }) {
+	const [comment, setComment] = useState("");
+	const [err, setErr] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
+	const go = () => {
+		setErr(null);
+		setBusy(true);
+		call("process.gate", w.projectId, { approve: true, ...(comment.trim() ? { comment: comment.trim() } : {}) })
+			.catch((e) => setErr(errText(e)))
+			.finally(() => setBusy(false));
+	};
+	return (
+		<div className="confirm gate-card">
+			<div className="row small">
+				<b>Stadija {w.stage} eskalēta — gaida tavu lēmumu</b>
+				<span className={`badge ${current ? "dim" : "warn"}`} title={current ? "Atvērtais projekts" : "Cits projekts"}>
+					{w.projectId}
+				</span>
+			</div>
+			<div className="dim small">Stadija atgriezta vairāk reižu, nekā procesā atļauts. Turpināt nozīmē pieņemt stadijas rezultātu un doties tālāk.</div>
+			<textarea className="gate-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Komentārs (pēc izvēles)" />
+			<div className="row">
+				<button className="primary" disabled={busy} onClick={go}>Turpināt</button>
 			</div>
 			{err && <div className="err">{err}</div>}
 		</div>

@@ -24,7 +24,7 @@ export function ProcessStrip({ projectId }: { projectId: string | null }) {
 				{s.stage === "mācības" && <span className="badge info">mācības</span>}
 				{s.stage === "done" && <span className="badge ok">process pabeigts</span>}
 				{m.iteration && (
-					<span className="dim" title="Cik reizes stadija atgriezta; ceturtā atgriešana nonāk pie tevis">
+					<span className="dim" title="Stadijas gājiens: katra atgriešana pievieno vienu; pēc trešās atgriešanas lēmums ir tavs">
 						iterācija {m.iteration.n} no {m.iteration.of}
 					</span>
 				)}

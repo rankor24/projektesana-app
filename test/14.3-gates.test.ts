@@ -10,7 +10,7 @@ import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { allTools } from "../src/agent/tools/defs.ts";
 import { type GateArgs, type ProcessState, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, recordClientChange, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
 import { STAGE_CARD } from "../src/core/process-def.ts";
-import { waitingGates } from "../src/core/process-waiting.ts";
+import { waitingEscalations, waitingGates } from "../src/core/process-waiting.ts";
 import { ProjectStore } from "../src/core/store.ts";
 import { processHandlers } from "../src/main/handlers/process.ts";
 import { AppSettings } from "../src/main/settings.ts";
@@ -317,6 +317,21 @@ test("14.3 waitingGates: only projects in process mode with a waiting gate; an u
 	assert.deepEqual(waitingGates(join(r.dir, "nav-tādas-mapes")), []);
 	switchMode(r.store, "cowork", AGENTS, "user");
 	assert.deepEqual(waitingGates(r.dir), [], "co-work: the gate cannot be decided, so it is not offered");
+});
+
+test("14.8 waitingEscalations: an escalated stage of a project in process mode is listed; the user's approval clears it", () => {
+	const r = rig({ mode: "process" });
+	assert.deepEqual(waitingEscalations(r.dir), []);
+	writeProcess(r.store, { ...r.state(), escalated: "S1" }, "user");
+	assert.deepEqual(waitingEscalations(r.dir), [{ kind: "escalated", projectId: "BD999", stage: "S1" }]);
+	assert.deepEqual(waitingGates(r.dir), [], "no gate waits for an escalated stage");
+	// the window's "Turpināt" is this call
+	decideGate(r.store, { approve: true }, new Date());
+	assert.deepEqual(waitingEscalations(r.dir), []);
+	assert.equal(r.state().stage, "S2");
+	switchMode(r.store, "cowork", AGENTS, "user");
+	writeProcess(r.store, { ...r.state(), escalated: "S2" }, "user");
+	assert.deepEqual(waitingEscalations(r.dir), [], "co-work: not offered");
 });
 
 test("14.3 through a session: a process tool's result tells the window; the gate is in Gaida tevi and leaves it when the user decides", async () => {

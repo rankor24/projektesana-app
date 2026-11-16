@@ -37,6 +37,8 @@ export interface CoordinatorDeps {
 	questions?: () => Extract<WaitingItem, { kind: "question" }>[];
 	/** the gates that wait for the user, of every project (process mode); without it none are listed */
 	gates?: () => Extract<WaitingItem, { kind: "gate" }>[];
+	/** the stages escalated to the user, of every project (process mode); without it none are listed */
+	escalations?: () => Extract<WaitingItem, { kind: "escalated" }>[];
 	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
 	mail?: (projectId: string | null) => Mailbox;
 	/** an answer was written for eks without eks being able to hear a real one (a run that ended, a recipient that could not run): its open question note on the topic closes (14.6) */
@@ -210,8 +212,14 @@ export class Coordinator {
 		} catch {
 			// unreadable process files: the list shows the rest
 		}
+		let escalated: Extract<WaitingItem, { kind: "escalated" }>[] = [];
+		try {
+			escalated = this.d.escalations?.() ?? [];
+		} catch {
+			// unreadable process files: the list shows the rest
+		}
 		const paused = [...this.waves.values()].filter((w) => w.paused).map((w) => ({ kind: "wave-paused" as const, wave: w.id, projectId: w.projectId, reason: w.paused! }));
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates });
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates, escalated });
 	}
 
 	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */

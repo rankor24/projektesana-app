@@ -26,8 +26,9 @@ test("11.5 waitingItems: confirmations, then gates, questions, pauses, interrupt
 	const gate: WaitingItem = { kind: "gate", gate: "g1", projectId: "p1", noteId: "n1" };
 	const question: WaitingItem = { kind: "question", noteId: "n2", projectId: "p1", from: "ar", title: "Kas?" };
 	const paused: WaitingItem = { kind: "wave-paused", wave: "w1", projectId: null, reason: "cost" };
-	const items = waitingItems({ confirms: [confirm], gates: [gate], questions: [question], paused: [paused], restore: { interrupted: 2, queued: 1 } });
-	assert.deepEqual(items.map((i) => i.kind), ["confirm", "gate", "question", "wave-paused", "interrupted"]);
+	const escalated: WaitingItem = { kind: "escalated", projectId: "p1", stage: "S4" };
+	const items = waitingItems({ confirms: [confirm], gates: [gate], escalated: [escalated], questions: [question], paused: [paused], restore: { interrupted: 2, queued: 1 } });
+	assert.deepEqual(items.map((i) => i.kind), ["confirm", "gate", "escalated", "question", "wave-paused", "interrupted"]);
 	assert.deepEqual(items.at(-1), { kind: "interrupted", interrupted: 2, queued: 1 });
 	assert.deepEqual(waitingItems({ confirms: [], gates: [], questions: [], paused: [], restore: null }), [], "nothing waits");
 });
