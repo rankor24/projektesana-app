@@ -7,7 +7,7 @@ import type { AgentSpec } from "../shared/agent-types.js";
 import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type Topic } from "../core/messages.js";
 import { newId, type Note } from "../core/model.js";
 import type { ThreadStore } from "../core/threads.js";
-import { LEAD_ID } from "../shared/thread-types.js";
+import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
 
 /** The two tools as the gate sees them. Sending mail changes nothing in the project; what the recipient then does goes through its own gate. */
@@ -35,6 +35,8 @@ export interface MailDeps {
 	notes?: () => { writeNote(n: Note): void } | null;
 	/** a question for the user was written: "Gaida tevi" changed */
 	notesChanged?: () => void;
+	/** the lead's current thread in this project (made when there is none); without it the project's thread store is asked */
+	leadThread?: () => Thread;
 }
 
 export const NO_PROJECT = "Temata slēgšanai vajag atvērtu projektu.";
@@ -90,11 +92,29 @@ function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic
 }
 
 /** The topic goes up: an open question for the lead (or for the user, when the caller is the lead) whose body is `why`; the topic closes `passed-up`.
+ *  A question for the lead is also put in the mailbox as an `ask` from the caller on a new topic "Nodots: …", so the lead's thread is woken and reads it
+ *  (a note alone wakes nobody). It is a system notice: written straight into the mailbox, no send rules, not an exchange of the old topic.
+ *  Past the chain depth no notice is sent: the notices skip `canSend`, so without this an agent that keeps answering would pass up for ever; the note stays in Atmiņa.
  *  Used by `close_topic` (passed-up) and by a send refused at a limit. Throws NO_PROJECT when the thread has no Atmiņa to write into. */
 export function passUp(d: MailDeps, topic: Topic, why: string): Note {
 	const store = d.notes?.();
 	if (!store) throw new Error(NO_PROJECT);
-	return askAbout(d, store, topic, { to: d.self.agent === LEAD_ID ? "user" : LEAD_ID, title: `Nodots tālāk: ${topic.title}`, body: why });
+	const toUser = d.self.agent === LEAD_ID;
+	const note = askAbout(d, store, topic, { to: toUser ? "user" : LEAD_ID, title: `Nodots tālāk: ${topic.title}`, body: why });
+	if (!toUser && d.self.depth + 1 <= d.limits().chainDepth) {
+		try {
+			const lead = d.leadThread ? d.leadThread() : d.threads.lead(d.self.projectId, "");
+			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, LEAD_ID], parent: topic.id });
+			d.mailbox.add({
+				wave: d.self.wave, topic: notice.id, from: d.self.agent, to: LEAD_ID, kind: "ask", text: why, refs: [note.id],
+				fromThread: d.self.threadId, toThread: lead.id, depth: d.self.depth + 1,
+			});
+			d.enqueue();
+		} catch {
+			// the note is written and the topic closed; the notice could not be: the question still waits in Atmiņa
+		}
+	}
+	return note;
 }
 
 /** send_message and close_topic, for pi (`extraTools` of the run). */

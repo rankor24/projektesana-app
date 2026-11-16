@@ -338,6 +338,7 @@ export class ThreadRunner {
 									}
 								},
 								notesChanged: () => i.notesChanged?.(),
+								leadThread: () => this.store(thread).lead(projectId, join(this.d.chatDir, `${projectId ?? "_"}.jsonl`)),
 							})
 						: [];
 					const extraTools = [...lanes, ...mail];

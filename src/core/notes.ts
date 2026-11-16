@@ -6,7 +6,7 @@ import type { WaitingItem } from "../shared/thread-types.js";
 import { newId, upgradeWho, type Note, type NoteType } from "./model.js";
 
 export function serializeNote(n: Note): string {
-	const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at, ...(n.from ? { from: n.from } : {}), ...(n.state ? { state: n.state } : {}), ...(n.agent ? { agent: n.agent } : {}), ...(n.to ? { to: n.to } : {}), ...(n.topic ? { topic: n.topic } : {}), ...(n.stage ? { stage: n.stage } : {}), ...(n.status ? { status: n.status } : {}), ...(n.reviewed !== undefined ? { reviewed: n.reviewed } : {}) };
+	const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at, ...(n.from ? { from: n.from } : {}), ...(n.state ? { state: n.state } : {}), ...(n.agent ? { agent: n.agent } : {}), ...(n.to ? { to: n.to } : {}), ...(n.topic ? { topic: n.topic } : {}), ...(n.stage ? { stage: n.stage } : {}), ...(n.status ? { status: n.status } : {}), ...(n.reviewed !== undefined ? { reviewed: n.reviewed } : {}), ...(n.cancels ? { cancels: n.cancels } : {}) };
 	return `---\n${JSON.stringify(fm)}\n---\n${n.body}\n`;
 }
 
@@ -58,9 +58,14 @@ function find(store: NoteStore, id: string): Note {
 	return n;
 }
 
+/** Is this decision cancelled: a note by the user that says it cancels it. An agent's note (whatever its title) never counts. */
+export const isCancelled = (id: string, notes: readonly Note[]): boolean => notes.some((n) => n.cancels === id && n.by === "user");
+
 /** Closes (or reopens) a question; the file it replaces is kept by the store's write. */
 export function setNoteStatus(store: NoteStore, id: string, status: "open" | "closed"): Note {
-	const next = { ...find(store, id), status };
+	const n = find(store, id);
+	if (n.type !== "question") throw new Error("Slēgt var tikai jautājumu.");
+	const next = { ...n, status };
 	store.writeNote(next);
 	return next;
 }
@@ -78,8 +83,9 @@ export function reviewDecision(store: NoteStore, id: string): Note {
 export function cancelDecision(store: NoteStore, id: string, reason: string): Note {
 	const n = find(store, id);
 	if (n.type !== "decision") throw new Error("Atcelt var tikai lēmumu.");
+	if (isCancelled(id, store.notes())) throw new Error("Šis lēmums jau ir atcelts.");
 	if (!reason.trim()) throw new Error("Norādi atcelšanas iemeslu.");
-	const note: Note = { id: newId("n"), type: "decision", title: `Atcelts: ${n.title}`, body: reason.trim(), refs: [id], by: "user", at: new Date().toISOString(), ...(n.topic ? { topic: n.topic } : {}) };
+	const note: Note = { id: newId("n"), type: "decision", title: `Atcelts: ${n.title}`, body: reason.trim(), refs: [id], cancels: id, by: "user", at: new Date().toISOString(), ...(n.topic ? { topic: n.topic } : {}) };
 	store.writeNote(note);
 	return note;
 }

@@ -11,7 +11,7 @@ import { allTools } from "../src/agent/tools/defs.ts";
 import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { DEFAULT_LIMITS, Mailbox, mailDir } from "../src/core/messages.ts";
 import type { Note } from "../src/core/model.ts";
-import { cancelDecision, reviewDecision, setNoteStatus, waitingQuestions } from "../src/core/notes.ts";
+import { cancelDecision, isCancelled, reviewDecision, setNoteStatus, waitingQuestions } from "../src/core/notes.ts";
 import { ProjectStore } from "../src/core/store.ts";
 import { ThreadStore, threadsDir } from "../src/core/threads.ts";
 import type { AgentSpec } from "../src/shared/agent-types.ts";
@@ -161,7 +161,15 @@ test("12.3 the exchange limit passes the topic up: one open question to the lead
 	assert.match(qs[0].body, /jau ir 3 ziņas/);
 	assert.match(qs[0].body, /četri/, "the message that was not sent is kept");
 	assert.equal(r.mailbox.topics()[0].state, "passed-up");
-	assert.equal(r.mailbox.messages().length, 3, "the refused message was not added");
+	assert.equal(r.mailbox.messages().filter((m) => m.text === "četri").length, 0, "the refused message was not added");
+	// the lead is told through the mailbox: one system ask from ar on a topic of its own, not an exchange of the old topic
+	const notice = r.mailbox.messages().filter((m) => m.to === "lead");
+	assert.equal(notice.length, 1);
+	assert.deepEqual([notice[0].from, notice[0].kind, notice[0].state], ["ar", "ask", "queued"]);
+	assert.match(notice[0].text, /jau ir 3 ziņas/);
+	const nt = r.mailbox.topics().find((t) => t.id === notice[0].topic)!;
+	assert.deepEqual([nt.title, nt.parties, nt.parent, nt.state], ["Nodots: Sienas biezums", ["ar", "lead"], topic, "open"]);
+	assert.equal(notice[0].toThread, r.threads.list({ agent: "lead", open: true })[0].id, "the lead's current thread");
 	// a send onto the passed-up topic is now plainly closed, and writes nothing more
 	const late = await r.sendMsg({ to: "bk", topic, kind: "ask", text: "vēl" });
 	assert.match(text(late), /jau ir slēgts \(nodots tālāk\)/);
@@ -174,7 +182,8 @@ test("12.3 a refusal past the chain depth on a new topic opens it only to pass i
 	assert.ok(out.isError);
 	const [q] = r.store.notes("question");
 	assert.deepEqual([q.to, q.title.includes("Pārāk dziļi")], ["user", true], "the lead's pass-up goes to the user");
-	assert.deepEqual(r.mailbox.topics().map((t) => [t.title, t.state]), [["Pārāk dziļi", "passed-up"]]);
+	assert.deepEqual(r.mailbox.topics().map((t) => [t.title, t.state]), [["Pārāk dziļi", "passed-up"]], "the lead's own pass-up goes to the user: no notice to itself");
+	assert.equal(r.mailbox.messages().length, 0);
 	assert.equal(r.changed(), 1);
 
 	const self = await r.sendMsg({ to: "lead", title: "Pats sev", kind: "ask", text: "x" });
@@ -304,4 +313,97 @@ test("12.3 through a session: a close with an impact flag puts a question in Gai
 	assert.deepEqual(s.waiting().filter((x) => x.kind === "question"), []);
 	assert.equal(told.length, before + 1);
 	assert.deepEqual(told.at(-1)!.filter((x) => x.kind === "question"), []);
+});
+
+// ---- fix round 1: pass-ups wake the lead; cancellation by the user only -------------------------------------------------------
+
+test("12.3 fix: an agent's close_topic passed-up also reaches the lead's thread as a mailbox ask", async () => {
+	const r = rig({ agent: "ar" });
+	const topic = await r.open("bk");
+	await r.closeTopic({ topic, outcome: "passed-up", decision: "Nevaram vienoties par asi.", impact: NONE });
+	const [m] = r.mailbox.messages().filter((x) => x.to === "lead");
+	assert.deepEqual([m.from, m.kind, m.text, m.depth], ["ar", "ask", "Nevaram vienoties par asi.", 1]);
+	assert.deepEqual(m.refs, [r.store.notes("question")[0].id], "it points at the question in Atmiņa");
+});
+
+test("12.3 fix: a specialist hits the exchange limit in a lead-started chain: the lead's thread runs with the pass-up in its prompt", async () => {
+	const dir = tmp();
+	mkdirSync(join(dir, "chat"), { recursive: true });
+	const store = ProjectStore.open(dir, { id: "BD999", name: "BD999 Testa projekts", root: tmp(), createdAt: "2026-11-16T00:00:00Z" });
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const prompts: string[] = [];
+	let leadRuns = 0;
+	let arRuns = 0;
+	const s = new AgentSession({
+		runtime: async () => rt,
+		settings: () => ({ ...DEFAULT_SETTINGS, maxParallelAgents: 4 }),
+		toolsServer: () => ({ command: "node", args: [], env: {} }),
+		revit: () => null,
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
+		agents: () => [spec("ar")],
+		runsDir: join(dir, "runs"),
+		chatDir: join(dir, "chat"),
+		emit: () => undefined,
+		runAgent: async (o) => {
+			const tool = (n: string) => o.extraTools!.find((t) => t.name === n)!;
+			if (/AGENT ar\./.test(o.systemPrompt ?? "")) {
+				if (++arRuns > 1) return o.onEvent({ type: "done", text: "gatavs" });
+				const topic = /tp_\w+/.exec(o.prompt)![0];
+				for (const n of ["viens", "divi", "trīs", "četri"]) await tool("send_message").execute("t", { to: "lead", topic, kind: "reply", text: n } as never, o.signal);
+			} else {
+				prompts.push(o.prompt);
+				if (++leadRuns === 1) await tool("send_message").execute("t", { to: "ar", title: "Sienas biezums", kind: "ask", text: "cik bieza?" } as never, o.signal);
+			}
+			o.onEvent({ type: "done", text: "gatavs" });
+		},
+	});
+	await s.send("BD999", "sāc", []);
+	for (let quiet = 0, i = 0; quiet < 3 && i < 400; i++) {
+		await new Promise((r) => setTimeout(r, 5));
+		const v = s.queueView();
+		quiet = v.running.length === 0 && !v.queued.some((q) => q.state === "queued") ? quiet + 1 : 0;
+	}
+	const woken = prompts.slice(1).join("\n");
+	assert.match(woken, /\[no ar · Nodots: Sienas biezums · ask\]/, "the lead's thread ran on the pass-up");
+	assert.match(woken, /jau ir 3 ziņas no ar; temats nodots tālāk\./);
+	assert.match(woken, /četri/, "with the message that was not sent");
+	const q = store.notes("question")[0];
+	assert.deepEqual([q.to, q.status, q.agent], ["lead", "open", "ar"]);
+});
+
+test("12.3 fix: cancelling needs the user's own `cancels` note; an agent's note titled \"Atcelts: …\" cancels nothing", () => {
+	const s = ProjectStore.open(tmp(), { id: "BD1", name: "BD1", root: tmp(), createdAt: "2026-11-16T00:00:00Z" });
+	s.writeNote(q({ id: "n1", type: "decision", status: undefined, reviewed: false, title: "Siena 300" }));
+	// what write_note can make: by "agent", no `cancels`
+	s.writeNote({ id: "n2", type: "decision", title: "Atcelts: Siena 300", body: "x", refs: ["n1"], by: "agent", at: "2026-11-16T10:05:00.000Z", agent: "bk" });
+	assert.equal(isCancelled("n1", s.notes()), false);
+	const c = cancelDecision(s, "n1", "Nepareizs biezums.");
+	assert.deepEqual([c.cancels, c.by], ["n1", "user"]);
+	assert.equal(s.notes().find((n) => n.id === c.id)!.cancels, "n1", "kept in the file");
+	assert.equal(isCancelled("n1", s.notes()), true);
+	// an agent's note that carries `cancels` is not the user's
+	assert.equal(isCancelled("n9", [{ ...c, id: "nx", cancels: "n9", by: "agent" }]), false);
+	assert.throws(() => cancelDecision(s, "n1", "vēlreiz"), /jau ir atcelts/);
+});
+
+test("12.3 fix: write_note never sets `cancels`, and notes.setStatus takes questions only", async () => {
+	const projectsDir = tmp();
+	const s = ProjectStore.open(projectsDir, { id: "BD1", name: "BD1", root: tmp(), createdAt: "2026-11-16T00:00:00Z" });
+	s.writeNote(q({ id: "n1", type: "decision", status: undefined, reviewed: false }));
+	const ctx: ToolCtx = { projectsDir, projectId: "BD1", dataDir: tmp(), appDir: tmp(), runDir: null, agent: "bk", thread: null };
+	await allTools().find((t) => t.name === "write_note")!.run(ctx, { type: "decision", title: "Atcelts: Jautājums", body: "x", refs: ["n1"], cancels: "n1" } as never);
+	assert.ok(s.notes().every((n) => !n.cancels), "no note carries cancels");
+	assert.throws(() => setNoteStatus(s, "n1", "closed"), /tikai jautājumu/);
+	assert.equal(s.notes().find((n) => n.id === "n1")!.status, undefined, "the decision is untouched");
+});
+
+test("12.3 fix: past the chain depth a pass-up writes its question but sends no notice (the chain would never end)", async () => {
+	for (const [depth, notices] of [[5, 1], [6, 0]] as const) {
+		const r = rig({ agent: "ar", depth });
+		const topic = r.mailbox.openTopic({ title: "Sienas biezums", parties: ["ar", "bk"], parent: null }).id; // opened directly: a send at this depth would be refused
+		const out = await r.closeTopic({ topic, outcome: "passed-up", decision: "Nevaram.", impact: NONE });
+		assert.ok(!out.isError, text(out));
+		assert.equal(r.store.notes("question").length, 1);
+		assert.equal(r.mailbox.messages().filter((m) => m.to === "lead").length, notices, `depth ${depth}`);
+	}
 });

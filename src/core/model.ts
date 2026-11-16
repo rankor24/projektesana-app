@@ -328,6 +328,8 @@ export interface Note {
 	stage?: string;
 	status?: "open" | "closed";
 	reviewed?: boolean;
+	/** a decision the user cancelled (task 12.3): this note cancels the note with that id. Written only by `notes.cancel`, never by an agent's tool */
+	cancels?: string;
 }
 
 export interface Event {

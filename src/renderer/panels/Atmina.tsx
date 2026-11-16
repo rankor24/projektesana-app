@@ -25,8 +25,8 @@ export function Atmina() {
 	const rows = (notes.data ?? []).filter((n) => !type || n.type === type);
 	const proposals = rows.filter((n) => n.state === "proposed");
 	const standing = rows.filter((n) => n.state !== "proposed");
-	// a decision that a later "Atcelts: …" note names is cancelled
-	const cancelled = new Set((notes.data ?? []).filter((n) => n.type === "decision" && n.title.startsWith("Atcelts: ")).flatMap((n) => n.refs));
+	// a decision is cancelled only by a note of the user's that says so (`cancels`); an agent's note with a similar title does not count
+	const cancelled = new Set((notes.data ?? []).filter((n) => n.cancels && n.by === "user").map((n) => n.cancels!));
 	const act = (p: Promise<unknown>) => p.then(() => (setErr(null), notes.reload())).catch(fail);
 
 	const save = () =>
