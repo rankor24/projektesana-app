@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { AgentSpec } from "../src/shared/agent-types.ts";
 import {
-	DEFAULT_LIMITS, Mailbox, canSend, inboxOf, pendingOf, renderReply, renderTask, shouldWake,
+	DEFAULT_LIMITS, Mailbox, answered, canSend, inboxOf, pendingOf, renderReply, renderTask, shouldWake,
 	type Message, type ReplyEnvelope, type TaskEnvelope, type Topic,
 } from "../src/core/messages.ts";
 import { tmp } from "./helpers.ts";
@@ -296,4 +296,27 @@ test("Mailbox: a damaged topics.json reads as empty and does not throw", () => {
 	writeFileSync(join(dir, "topics.json"), "{ not json");
 	assert.deepEqual(mb.topics(), []);
 	assert.ok(existsSync(join(dir, "topics.json")));
+});
+
+test("wake (R22): a task or an ask wakes a thread that still waits for an answer on another topic; replies alone are batched", () => {
+	// A asked B on t1 and waits; B asked A on t2
+	const ms = [
+		msg("a1", { topic: "t1", state: "delivered" }),
+		msg("a2", { topic: "t2", from: "bk", to: "ar", kind: "ask", fromThread: "tB", toThread: "tA" }),
+	];
+	assert.deepEqual(pendingOf("tA", ms).map((m) => m.id), ["a1"]);
+	assert.equal(shouldWake("tA", ms), true, "an ask in the inbox wakes at once");
+	assert.equal(shouldWake("tA", [ms[0], { ...ms[1], kind: "task" as const }]), true);
+	// the same inbox holding only a reply to another ask still waits
+	const onlyReply = [msg("a1", { topic: "t1", state: "delivered" }), msg("a3", { topic: "t3", to: "ve", toThread: "tV", state: "delivered" }), msg("r3", { topic: "t3", from: "ve", to: "ar", kind: "reply", fromThread: "tV", toThread: "tA" })];
+	assert.equal(shouldWake("tA", onlyReply), false);
+});
+
+test("answered: a later message on the topic back to the sender's thread answers it", () => {
+	const a = msg("a1", { topic: "t1", state: "delivered" });
+	assert.equal(answered(a, [a]), false);
+	const early = msg("r0", { topic: "t1", from: "bk", to: "ar", kind: "reply", fromThread: "tB", toThread: "tA" });
+	assert.equal(answered(a, [early, a]), false, "a reply before the ask does not count");
+	assert.equal(answered(a, [a, { ...early, id: "r1" }]), true);
+	assert.equal(answered(a, [a, { ...early, id: "r2", topic: "t2" }]), false);
 });

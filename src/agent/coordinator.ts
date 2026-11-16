@@ -5,7 +5,7 @@ import type { AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
-import { inboxOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
+import { answered, inboxOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -257,6 +257,7 @@ export class Coordinator {
 		const text = item.hadFiles && !extra?.files ? `${item.input.text}\n${NO_FILES}` : item.input.text;
 		const abort = new AbortController();
 		let ok = false;
+		let answer = "";
 		let lastError: string | null = null;
 		const emit = (e: RunEvent) => {
 			if (e.type === "error") lastError = e.message;
@@ -288,6 +289,7 @@ export class Coordinator {
 			.then(
 				(r) => {
 					ok = r.ok;
+					answer = r.answer;
 					return r;
 				},
 				(e: unknown) => {
@@ -303,6 +305,8 @@ export class Coordinator {
 					const why = abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
 					this.blockMessages(thread.projectId, ids, `Aģents «${thread.agent}» nevarēja izpildīt: ${why}`, live.silent ? "stopped" : "queued");
 				}
+				// a run a message started that ended well but sent nothing back: its final answer goes to the sender, so the sender does not wait for ever
+				else if (!this.closing && ids.length) this.autoReply(thread.projectId, ids, answer);
 				this.settle(thread.projectId, thread.id);
 				if (!this.closing) this.wake(thread.projectId);
 				this.pump();
@@ -353,7 +357,11 @@ export class Coordinator {
 			return { ...q, state: "stopped" as const };
 		});
 		for (const q of dropped) {
-			if (q.input.cause.by === "message") this.setMail(q.projectId, q.input.cause.ids, "stopped");
+			// Stop for everything or a wave: its messages are stopped and wake nobody. Stopping one thread: its senders are told, like for a run that was stopped
+			if (q.input.cause.by === "message") {
+				if (silent) this.setMail(q.projectId, q.input.cause.ids, "stopped");
+				else this.blockMessages(q.projectId, q.input.cause.ids, `Aģents «${q.agent}» nevarēja izpildīt: darbs tika apturēts.`, "queued");
+			}
 			// a thread that also has a run keeps the run's state
 			if (![...this.live.values()].some((l) => l.thread.id === q.threadId)) this.settle(q.projectId, q.threadId);
 		}
@@ -417,8 +425,10 @@ export class Coordinator {
 		const mb = this.d.mail?.(projectId);
 		if (!mb) return;
 		try {
-			for (const m of mb.messages()) {
-				if (!ids.includes(m.id)) continue;
+			const all = mb.messages();
+			for (const m of all) {
+				// one the recipient already answered for real needs no "bloķēts" on top of it
+				if (!ids.includes(m.id) || (m.kind !== "reply" && answered(m, all))) continue;
 				if (m.kind !== "reply") {
 					const r = mb.add({
 						wave: m.wave, topic: m.topic, from: m.to, to: m.from, kind: "reply", text: reason, refs: [], fromThread: m.toThread, toThread: m.fromThread, depth: m.depth + 1,
@@ -434,6 +444,26 @@ export class Coordinator {
 		for (const t of this.d.threads(projectId).list()) if (t.state === "waiting-reply") this.settle(projectId, t.id);
 		// not at once: this may be called from inside `pump`, which must not be started again from within itself
 		if (state === "queued") queueMicrotask(() => this.wake(projectId));
+	}
+
+	/** The tasks and asks that started a run which ended without answering them: a `reply` "daļēji" from the recipient, its text the run's final answer (cut at 2000),
+	 *  written straight into the mailbox like `blockMessages` (no send rules, not an exchange), so each sender wakes. */
+	private autoReply(projectId: string | null, ids: readonly string[], answer: string): void {
+		const mb = this.d.mail?.(projectId);
+		if (!mb) return;
+		try {
+			const all = mb.messages();
+			const text = answer.trim().slice(0, 2000) || "(aģents neko neatbildēja)";
+			for (const m of all) {
+				if (!ids.includes(m.id) || m.kind === "reply" || answered(m, all)) continue;
+				mb.add({
+					wave: m.wave, topic: m.topic, from: m.to, to: m.from, kind: "reply", text, refs: [], fromThread: m.toThread, toThread: m.fromThread, depth: m.depth + 1,
+					reply: { id: `a${m.id}`, status: "daļēji", results: [text], questions: [], decisions: [], risks: "Atbilde ir aģenta gājiena beigu teksts: ziņu viņš neatsūtīja." },
+				});
+			}
+		} catch {
+			// a locked file: the sender can be told by the next run
+		}
 	}
 
 	/** Starts a run for every thread of the project that has mail to read and no answer it still waits for (`shouldWake`), unless it is running or queued.
@@ -465,7 +495,12 @@ export class Coordinator {
 		}
 		const topics = mb.topics();
 		for (const t of this.d.threads(projectId).list()) {
-			if (t.state === "closed" || !shouldWake(t.id, ms) || this.threadBusy(t.id)) continue;
+			// a conversation the user closed before its mail came: the senders hear it, they do not wait
+			if (t.state === "closed") {
+				if (inboxOf(t.id, ms).length) this.blockMessages(projectId, inboxOf(t.id, ms).map((m) => m.id), `Aģenta «${t.agent}» saruna «${t.title}» ir slēgta.`, "queued");
+				continue;
+			}
+			if (!shouldWake(t.id, ms) || this.threadBusy(t.id)) continue;
 			const inbox = inboxOf(t.id, ms);
 			// a specialist removed from the settings before its mail came: the senders hear it now, they do not wait
 			if (this.d.specs && t.agent !== LEAD_ID && !this.d.specs().some((s) => s.id === t.agent)) {

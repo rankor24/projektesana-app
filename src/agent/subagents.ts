@@ -86,6 +86,7 @@ export function validateSpec(raw: unknown, levelOf: LevelOf, known: readonly str
 	if (!Array.isArray(r.tools)) return { ok: false, error: "Rīku saraksts nav derīgs." };
 	const tools = [...new Set(r.tools.map(str).filter(Boolean))];
 	for (const t of tools) {
+		if (Object.hasOwn(MAIL_TOOL_LEVELS, t)) return { ok: false, error: `${t} ir dots katram aģentam automātiski; to nevajag norādīt.` };
 		if (MAIN_TOOLS.has(t)) return { ok: false, error: `Speciālists nevar palaist citus aģentus (${t}).` };
 		if (!known.includes(t)) return { ok: false, error: `Nezināms rīks: ${t}.` };
 		const lv = levelOf(t);

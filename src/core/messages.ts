@@ -117,9 +117,19 @@ export function pendingOf(threadId: string, ms: readonly Message[]): Message[] {
 	);
 }
 
-/** Something to read and nothing still being waited for: the thread should run now. */
+/** The thread should run now: a task or an ask in its inbox wakes it at once (another agent is waiting for it, and it may be waiting for that agent
+ *  on another topic: holding the ask back would deadlock the two); replies alone are batched until nothing the thread asked is still unanswered. */
 export function shouldWake(threadId: string, ms: readonly Message[]): boolean {
-	return inboxOf(threadId, ms).length > 0 && pendingOf(threadId, ms).length === 0;
+	const inbox = inboxOf(threadId, ms);
+	if (!inbox.length) return false;
+	if (inbox.some((m) => m.kind !== "reply")) return true;
+	return pendingOf(threadId, ms).length === 0;
+}
+
+/** Has this task or ask got an answer: a later message on its topic that came back to the thread that sent it (the test `pendingOf` uses). */
+export function answered(m: Message, ms: readonly Message[]): boolean {
+	const i = ms.findIndex((x) => x.id === m.id);
+	return ms.some((r, j) => j > i && r.topic === m.topic && r.toThread === m.fromThread);
 }
 
 const list = (xs: readonly string[]) => (xs.length ? xs.join("; ") : "nav");

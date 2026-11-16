@@ -10,7 +10,7 @@ import { MAIL_TOOL_LEVELS, mailTools } from "../src/agent/mail.ts";
 import { createPiRuntime } from "../src/agent/pi/models.ts";
 import type { PiRunOptions } from "../src/agent/pi/index.ts";
 import { AgentSession } from "../src/agent/session.ts";
-import { MAIN_TOOLS, laneTools } from "../src/agent/subagents.ts";
+import { MAIN_TOOLS, laneTools, validateSpec } from "../src/agent/subagents.ts";
 import { DEFAULT_LIMITS, Mailbox, deliveryText, mailDir, type Message } from "../src/core/messages.ts";
 import { ThreadStore, threadsDir } from "../src/core/threads.ts";
 import type { AgentSpec } from "../src/shared/agent-types.ts";
@@ -28,7 +28,7 @@ const gate = () => {
 	return { p, open };
 };
 
-type Ctx = { agent: string; o: PiRunOptions; n: number };
+type Ctx = { agent: string; o: PiRunOptions; n: number; /** the run's final answer; default `<agent> #<n>` */ answer?: string };
 type Script = (c: Ctx) => Promise<void> | void;
 
 /** A session whose runs are scripted per agent. `calls` records every run (agent, prompt, system prompt, tools). */
@@ -56,7 +56,7 @@ function setup(over: { agents?: AgentSpec[]; cap?: number; scripts?: Record<stri
 			const c: Ctx = { agent, o, n: (seen[agent] = (seen[agent] ?? 0) + 1) };
 			calls.push(c);
 			await over.scripts?.[agent]?.(c);
-			o.onEvent({ type: "done", text: `${agent} #${c.n}` });
+			o.onEvent({ type: "done", text: c.answer ?? `${agent} #${c.n}` });
 		},
 	});
 	const coordinator = (s as unknown as { coordinator: Coordinator }).coordinator;
@@ -138,6 +138,7 @@ test("12.2 a task carries its envelope: the recipient's text has the UZDEVUMS bl
 	const t = setup({
 		scripts: {
 			lead: async (c) => {
+				if (c.n > 1) return;
 				await t.send(c, { to: "parbaude", title: "Pārbaude", kind: "task", text: "Lūdzu izpildi.", task: { goal: "Pārbaudīt AR sienas", expects: "atradumu saraksts", context: ["avots s1"] } });
 			},
 		},
@@ -422,7 +423,7 @@ test("12.2 send_message input is checked: topic xor title, a known topic, the to
 	assert.match(out[3], /Nezināms aģents «nav-tada»/);
 	assert.match(out[4], /nevar sūtīt ziņu pats sev/);
 	assert.match(out[5], /ir starp lead un ekspertize/);
-	assert.equal(t.mail.messages().length, 1, "only the one good message");
+	assert.equal(t.mail.messages().filter((m) => m.from === "lead").length, 1, "only the one good message");
 });
 
 test("12.2 the depth of a message grows one a hop, from the run that sends it", async () => {
@@ -432,13 +433,13 @@ test("12.2 the depth of a message grows one a hop, from the run that sends it", 
 				if (c.n === 1) await t.send(c, { to: "ekspertize", title: "T", kind: "ask", text: "a" });
 			},
 			ekspertize: async (c) => {
-				await t.send(c, { to: "parbaude", title: "T2", kind: "ask", text: "b" });
+				if (c.n === 1) await t.send(c, { to: "parbaude", title: "T2", kind: "ask", text: "b" });
 			},
 		},
 	});
 	await t.s.send(null, "jautā", []);
 	await t.settle();
-	assert.deepEqual(t.mail.messages().map((m) => [m.from, m.depth]), [["lead", 1], ["ekspertize", 2]]);
+	assert.deepEqual(t.mail.messages().filter((m) => m.kind === "ask").map((m) => [m.from, m.depth]), [["lead", 1], ["ekspertize", 2]]);
 });
 
 test("12.2 close_topic is declared but says it comes with 12.3", async () => {
@@ -582,4 +583,146 @@ test("12.2 deliveryText: a plain message is its text; an envelope is rendered an
 	assert.match(out, /^\[no ar · Siena · reply\]\nATBILDE: a1 \| Statuss: bloķēts/);
 	assert.match(deliveryText([{ ...reply, text: "Skat. arī pielikumu." }], topics), /Riski: Aģents nevar\nSkat\. arī pielikumu\.$/);
 	assert.match(deliveryText([{ ...base, topic: "tp_x", kind: "ask", text: "a" }], topics), /^\[no lead · tp_x · ask\]/, "an unknown topic shows its id");
+});
+
+// ---- fix round 1 -------------------------------------------------------------------------------------------------------------
+
+test("12.2 fix: stopThread on a recipient that is still queued tells the sender, who wakes", async () => {
+	const hold = gate();
+	const t = setup({
+		cap: 1, // the recipient waits in the queue behind the sender's run
+		scripts: {
+			lead: async (c) => {
+				if (c.n > 1) return;
+				await t.send(c, { to: "ekspertize", title: "Jautājums", kind: "ask", text: "vai ir?" });
+				await hold.p;
+			},
+		},
+	});
+	await t.s.send(null, "jautā", []);
+	await tick(30);
+	const th = t.threads.list({ agent: "ekspertize" })[0];
+	assert.equal(th.state, "queued");
+	t.s.stopThread(th.id);
+	assert.equal(t.mail.messages()[0].state, "failed", "the ask will not be delivered");
+	hold.open();
+	await t.settle();
+	assert.equal(t.callsOf("ekspertize").length, 0);
+	assert.equal(t.callsOf("lead").length, 2, "the sender was woken, it does not wait for ever");
+	assert.match(t.callsOf("lead")[1].o.prompt, /Statuss: bloķēts/);
+	assert.match(t.callsOf("lead")[1].o.prompt, /darbs tika apturēts/);
+	assert.equal(t.stateOf("lead"), "idle");
+});
+
+test("12.2 fix: stopAll(wave) with a queued recipient leaves its sender idle and unwoken (silent)", async () => {
+	const t = setup({
+		cap: 1,
+		scripts: {
+			lead: async (c) => {
+				await t.send(c, { to: "ekspertize", title: "Jautājums", kind: "ask", text: "vai ir?" });
+				await new Promise<void>((r) => c.o.signal.addEventListener("abort", () => r()));
+			},
+		},
+	});
+	await t.s.send(null, "jautā", []);
+	await tick(30);
+	t.coordinator.stopAll(t.s.queueView().running[0].wave);
+	await t.settle();
+	assert.equal(t.callsOf("lead").length, 1);
+	assert.equal(t.mail.messages()[0].state, "stopped");
+	assert.equal(t.stateOf("lead"), "idle");
+});
+
+test("12.2 fix: a recipient that really replied and then errored does not also send a 'bloķēts' reply", async () => {
+	const t = setup({
+		scripts: {
+			lead: async (c) => {
+				if (c.n === 1) await t.send(c, { to: "ekspertize", title: "Jautājums", kind: "ask", text: "vai ir?" });
+			},
+			ekspertize: async (c) => {
+				await t.send(c, { to: "lead", topic: topicIn(c.o.prompt), kind: "reply", text: "jā, ir." });
+				c.o.onEvent({ type: "error", engine: "pi", message: "pēc atbildes kļūda" });
+			},
+		},
+	});
+	await t.s.send(null, "jautā", []);
+	await t.settle();
+	assert.equal(t.mail.messages().filter((m) => m.reply?.status === "bloķēts").length, 0);
+	assert.equal(t.mail.messages().filter((m) => m.kind === "reply").length, 1);
+	assert.equal(t.callsOf("lead").length, 2);
+	assert.match(t.callsOf("lead")[1].o.prompt, /jā, ir\./);
+	assert.doesNotMatch(t.callsOf("lead")[1].o.prompt, /bloķēts/);
+});
+
+test("12.2 fix: two threads that asked each other on different topics do not deadlock: an ask wakes at once", async () => {
+	const t = setup();
+	const a = t.threads.create({ projectId: null, agent: "lead", title: "Saruna", startedBy: "user" });
+	const b = t.threads.create({ projectId: null, agent: "ekspertize", title: "Saruna B", startedBy: "user" });
+	const t1 = t.mail.openTopic({ title: "Pirmais", parties: ["lead", "ekspertize"], parent: null });
+	const t2 = t.mail.openTopic({ title: "Otrais", parties: ["ekspertize", "lead"], parent: null });
+	const base = { wave: "w1", refs: [], depth: 1 };
+	// A asked B about topic 1 and waits; B asked A about topic 2 and waits
+	const m1 = t.mail.add({ ...base, topic: t1.id, from: "lead", to: "ekspertize", kind: "ask", text: "viens?", fromThread: a.id, toThread: b.id });
+	t.mail.setState(m1.id, "delivered");
+	const m2 = t.mail.add({ ...base, topic: t2.id, from: "ekspertize", to: "lead", kind: "ask", text: "divi?", fromThread: b.id, toThread: a.id });
+	t.threads.patch(a.id, { state: "waiting-reply" });
+	t.coordinator.wake(null);
+	await t.settle();
+	assert.equal(t.callsOf("lead").length, 1, "A is woken by B's ask although its own ask is unanswered");
+	assert.match(t.callsOf("lead")[0].o.prompt, /\[no ekspertize · Otrais · ask\]\ndivi\?/);
+	assert.equal(t.mail.messages().find((m) => m.id === m2.id)!.state, "delivered");
+	// it still waits for its own answer once the run ends
+	assert.equal(t.threads.get(a.id)!.state, "waiting-reply");
+});
+
+test("12.2 fix: a run a message started that ends well without sending anything back answers by itself, 'daļēji', with its final answer", async () => {
+	const t = setup({
+		scripts: {
+			lead: async (c) => {
+				if (c.n === 1) await t.send(c, { to: "ekspertize", title: "Jautājums", kind: "ask", text: "vai ir?" });
+			},
+			ekspertize: (c) => {
+				c.answer = "Atbilde bez ziņas: " + "x".repeat(3000);
+			},
+		},
+	});
+	await t.s.send(null, "jautā", []);
+	await t.settle();
+	const auto = t.mail.messages().find((m) => m.kind === "reply")!;
+	assert.equal(auto.reply?.status, "daļēji");
+	assert.equal(auto.from, "ekspertize");
+	assert.equal(auto.text.length, 2000, "cut at 2000");
+	assert.ok(auto.text.startsWith("Atbilde bez ziņas: "));
+	assert.equal(auto.depth, 2);
+	assert.equal(t.callsOf("lead").length, 2, "the sender wakes");
+	assert.match(t.callsOf("lead")[1].o.prompt, /Statuss: daļēji/);
+	assert.equal(t.stateOf("lead"), "idle");
+	assert.equal(t.callsOf("ekspertize").length, 1, "the automatic reply is not an ask: no run follows for the recipient");
+});
+
+test("12.2 fix: a message whose recipient thread was closed before delivery is answered 'bloķēts' (saruna ir slēgta)", async () => {
+	const t = setup();
+	const a = t.threads.create({ projectId: null, agent: "lead", title: "Saruna", startedBy: "user" });
+	const b = t.threads.create({ projectId: null, agent: "ekspertize", title: "Atzinums", startedBy: "user" });
+	const tp = t.mail.openTopic({ title: "Jautājums", parties: ["lead", "ekspertize"], parent: null });
+	t.threads.patch(b.id, { state: "closed" });
+	const m = t.mail.add({ wave: "w1", refs: [], depth: 1, topic: tp.id, from: "lead", to: "ekspertize", kind: "ask", text: "vai ir?", fromThread: a.id, toThread: b.id });
+	t.threads.patch(a.id, { state: "waiting-reply" });
+	t.coordinator.wake(null);
+	await t.settle();
+	assert.equal(t.callsOf("ekspertize").length, 0);
+	assert.equal(t.mail.messages().find((x) => x.id === m.id)!.state, "failed");
+	assert.equal(t.callsOf("lead").length, 1);
+	assert.match(t.callsOf("lead")[0].o.prompt, /Statuss: bloķēts/);
+	assert.match(t.callsOf("lead")[0].o.prompt, /saruna «Atzinums» ir slēgta/);
+});
+
+test("12.2 fix: a specialist that lists send_message or close_topic is told they come automatically", () => {
+	const levelOf = (n: string) => (n === "read_notes" ? ("read" as const) : ("never" as const));
+	for (const tool of ["send_message", "close_topic"]) {
+		const r = validateSpec({ id: "ar", name: "Arhitektūra", description: "", prompt: "You read the AR part.", tools: [tool] }, levelOf, ["read_notes"]);
+		assert.deepEqual(r, { ok: false, error: `${tool} ir dots katram aģentam automātiski; to nevajag norādīt.` });
+	}
+	const d = validateSpec({ id: "ar", name: "Arhitektūra", description: "", prompt: "You read the AR part.", tools: ["delegate"] }, levelOf, ["read_notes"]);
+	assert.ok(!d.ok && /nevar palaist citus aģentus/.test(d.error), "the old text for the helpers' tools");
 });
