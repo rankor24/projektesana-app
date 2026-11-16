@@ -48,6 +48,8 @@ export interface QueueItem {
 	wave: string;
 	at: string;
 	state: "queued" | "stopped";
+	/** the start carried attachments; the saved queue does not (they were in memory), so a restored item starts without them and says so */
+	hadFiles?: boolean;
 	input: Omit<StartInput, "threadId" | "projectId" | "wave">;
 }
 export interface Running {

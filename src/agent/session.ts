@@ -13,7 +13,7 @@ import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import type { QueueView, RunMeta, Thread } from "../shared/thread-types.js";
-import { ThreadStore, threadsDir } from "../core/threads.js";
+import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
@@ -57,10 +57,12 @@ export class AgentSession {
 	private runner: ThreadRunner;
 	private coordinator: Coordinator;
 	private stores = new Map<string, ThreadStore>();
+	/** what `restore()` found, until the user answers (resume or discard); the window asks for it with `queue.restored` */
+	private restored: { interrupted: number; queued: number } | null = null;
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry() });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, queueFile: join(d.ctx.appDir, "queue.json") });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, queueFile: join(d.ctx.appDir, "queue.json"), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir) });
 	}
 
 	private threads(projectId: string | null): ThreadStore {
@@ -144,6 +146,27 @@ export class AgentSession {
 
 	stop() {
 		this.coordinator.stopAll();
+	}
+
+	/** Once at start-up, before the window opens: marks what the last process left in flight and holds the queue paused. Starts nothing. */
+	restore(): void {
+		const r = this.coordinator.restore();
+		// a clean start is not paused and has nothing to ask
+		this.restored = this.coordinator.view().paused ? r : null;
+	}
+
+	queueRestored(): { interrupted: number; queued: number } | null {
+		return this.restored;
+	}
+
+	resumeInterrupted(): void {
+		this.restored = null;
+		this.coordinator.resumeInterrupted();
+	}
+
+	discardInterrupted(): void {
+		this.restored = null;
+		this.coordinator.discardInterrupted();
 	}
 
 	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */

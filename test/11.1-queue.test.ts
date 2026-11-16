@@ -68,5 +68,13 @@ test("loadQueue: items that fail the shape check are dropped, the rest kept", ()
 	writeFileSync(f, JSON.stringify({ items: [item("a"), { id: "b" }, null, item("c", { state: "weird" as never })], paused: false }));
 	const q = loadQueue(f);
 	assert.deepEqual(q.items.map((i) => i.id), ["a"]);
-	assert.equal(q.paused, false);
+	// a file that lost items is not trusted to start by itself, whatever it said
+	assert.equal(q.paused, true);
+});
+test("loadQueue: a well-formed file keeps the paused flag it was saved with", () => {
+	const f = join(tmp(), "q.json");
+	for (const paused of [false, true]) {
+		writeFileSync(f, JSON.stringify({ items: [item("a")], paused }));
+		assert.equal(loadQueue(f).paused, paused);
+	}
 });

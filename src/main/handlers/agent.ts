@@ -23,7 +23,7 @@ export interface CoreDeps {
 	openUrl(url: string): void;
 }
 
-type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "activity.recent";
+type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | `queue.${string}` | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -121,6 +121,9 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			}
 		},
 		"agent.stop": () => d.session.stop(),
+		"queue.restored": () => d.session.queueRestored(),
+		"queue.resumeInterrupted": () => d.session.resumeInterrupted(),
+		"queue.discardInterrupted": () => d.session.discardInterrupted(),
 		"agent.confirm": (id, allow) => {
 			d.session.confirm(id, allow);
 			d.activity?.confirmed(id, allow);

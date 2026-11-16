@@ -33,7 +33,8 @@ function isItem(v: unknown): v is QueueItem {
 	);
 }
 
-/** Missing file: empty. Damaged file: empty and paused, so nothing starts by itself after damage. Never throws. */
+/** Missing file: empty. Damaged file: empty and paused, so nothing starts by itself after damage. A file that lost items to the shape check
+ *  is paused too, whatever it said. Never throws. */
 export function loadQueue(file: string): { items: QueueItem[]; paused: boolean } {
 	if (!existsSync(file)) return { items: [], paused: false };
 	try {
@@ -41,7 +42,8 @@ export function loadQueue(file: string): { items: QueueItem[]; paused: boolean }
 		if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("shape");
 		const o = raw as { items?: unknown; paused?: unknown };
 		if (!Array.isArray(o.items) || typeof o.paused !== "boolean") throw new Error("shape");
-		return { items: o.items.filter(isItem), paused: o.paused };
+		const items = o.items.filter(isItem);
+		return { items, paused: o.paused || items.length < o.items.length };
 	} catch {
 		return { items: [], paused: true };
 	}

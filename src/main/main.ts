@@ -159,6 +159,8 @@ const session = new AgentSession({
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 	onQueue: (v) => emit("queue.changed", v),
 });
+// threads a dead process left in flight are marked interrupted and the saved queue waits paused; nothing starts until the user answers
+session.restore();
 
 const registry = new Registry(settings.registryFile(), settings.projectsDir());
 const resourcesDir = app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources");

@@ -11,6 +11,20 @@ export function threadsDir(appDir: string, projectsDir: string, projectId: strin
 	return projectId ? join(projectsDir, projectId, "threads") : join(appDir, "threads", "_");
 }
 
+/** Every project the app has threads for: each `<projectsDir>/<id>/threads` that exists, plus the project-less folder (null). A folder that cannot be read is left out. */
+export function knownProjects(appDir: string, projectsDir: string): (string | null)[] {
+	const out: (string | null)[] = [];
+	try {
+		for (const e of readdirSync(projectsDir, { withFileTypes: true })) {
+			if (e.isDirectory() && existsSync(threadsDir(appDir, projectsDir, e.name))) out.push(e.name);
+		}
+	} catch {
+		// no projects folder yet, or one that cannot be read
+	}
+	if (existsSync(threadsDir(appDir, projectsDir, null))) out.push(null);
+	return out;
+}
+
 function atomicWrite(file: string, body: string) {
 	const tmp = `${file}.${process.pid}.tmp`;
 	writeFileSync(tmp, body);

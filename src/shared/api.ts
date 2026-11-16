@@ -398,6 +398,12 @@ export interface ApiSpec {
 	"agent.logout": (provider: string) => void;
 	"agent.send": (projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean };
 	"agent.stop": () => void;
+	/** What the start-up found left in flight, until the user answers; null when nothing waits for an answer. */
+	"queue.restored": () => { interrupted: number; queued: number } | null;
+	/** Go on: the restored queue starts, the interrupted threads wait their turn or are idle. */
+	"queue.resumeInterrupted": () => void;
+	/** Drop it: the restored items stay as stopped, the threads are idle. */
+	"queue.discardInterrupted": () => void;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
 	"agent.reset": (projectId: string | null) => void;
@@ -582,6 +588,9 @@ export const API_NAMES = [
 	"agent.logout",
 	"agent.send",
 	"agent.stop",
+	"queue.restored",
+	"queue.resumeInterrupted",
+	"queue.discardInterrupted",
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",

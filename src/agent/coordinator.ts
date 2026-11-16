@@ -4,7 +4,7 @@
 import type { Thread, RunMeta, StartInput, QueueView } from "../shared/thread-types.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import type { ThreadStore } from "../core/threads.js";
-import { pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
+import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
 import type { ConfirmRequest } from "./tools/levels.js";
 import type { ThreadRunner } from "./thread-runner.js";
@@ -18,8 +18,10 @@ export interface CoordinatorDeps {
 	onThread?: (t: Thread) => void;
 	/** the run table or the queue changed */
 	onQueue?: (v: QueueView) => void;
-	/** where the queue is saved on every change (task 11.3 loads it at start-up) */
+	/** where the queue is saved on every change and loaded from by `restore()` */
 	queueFile: string;
+	/** every project that has threads on disk (`knownProjects`), for `restore()`; without it restore finds no thread to mark */
+	projects?: () => (string | null)[];
 	now?: () => string;
 }
 
@@ -36,11 +38,14 @@ interface Live {
 }
 
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
+const NO_FILES = "[pielikumi pēc restartēšanas netika saglabāti]";
 
 export class Coordinator {
 	private live = new Map<string, Live>();
 	private queue: QueueItem[] = [];
 	private paused = false;
+	/** threads `restore()` found in flight; they stay `interrupted` until the user resumes or discards */
+	private interrupted: { threadId: string; projectId: string | null }[] = [];
 	private closing = false;
 	/** prepared files (and the run id the caller named) wait here beside the queued item; the saved queue never holds them */
 	private prepared = new Map<string, { files?: PreparedAttachments; runId?: string }>();
@@ -159,6 +164,7 @@ export class Coordinator {
 		const id = `q${Date.now().toString(36)}${++this.n}`;
 		this.queue.push({
 			id, threadId: i.threadId, agent: found.agent, projectId: i.projectId, wave: i.wave ?? this.newWave(), at: this.now(), state: "queued",
+			...(i.files && (i.files.images.length || i.files.text || i.files.refs.length) ? { hadFiles: true } : {}),
 			input: { text: i.text, focus: i.focus, cause: i.cause },
 		});
 		this.prepared.set(id, { files: i.files, runId: i.runId });
@@ -191,6 +197,8 @@ export class Coordinator {
 			throw e;
 		}
 		const meta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId: thread.projectId, wave };
+		// a restored item lost its prepared files with the old process: it starts without them and says so
+		const text = item.hadFiles && !extra?.files ? `${item.input.text}\n${NO_FILES}` : item.input.text;
 		const abort = new AbortController();
 		const emit = (e: RunEvent) => this.d.emit(runId, e, meta);
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
@@ -209,7 +217,7 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec: null, text: item.input.text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask })
+			.run({ runId, thread, spec: null, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask })
 			.finally(() => {
 				this.denyConfirms((c) => c.live === live, false);
 				this.live.delete(runId);
@@ -266,6 +274,73 @@ export class Coordinator {
 
 	stopThread(threadId: string): void {
 		this.stopWhere((x) => x.threadId === threadId);
+	}
+
+	/** Called once at start-up, before anything can start. Marks the threads a dead process left in flight as `interrupted`, loads the saved queue
+	 *  (every item kept, stopped ones too) and holds it paused until the user answers with `resumeInterrupted` or `discardInterrupted`.
+	 *  A clean start (nothing in flight, nothing queued, a file that was not paused) stays unpaused. Never throws, never starts a run. */
+	restore(): { interrupted: number; queued: number } {
+		this.interrupted = [];
+		const inFlight = new Set<Thread["state"]>(["running", "queued", "waiting-confirm", "interrupted"]);
+		for (const projectId of this.d.projects?.() ?? []) {
+			let list: Thread[];
+			try {
+				list = this.d.threads(projectId).list();
+			} catch {
+				continue; // a project whose thread folder cannot be read is skipped
+			}
+			for (const t of list) {
+				if (!inFlight.has(t.state)) continue;
+				// "interrupted" from an earlier start the user never answered counts too: resume / discard must reach it
+				if (t.state !== "interrupted") {
+					try {
+						this.setState(t, { state: "interrupted" });
+					} catch {
+						continue;
+					}
+				}
+				this.interrupted.push({ threadId: t.id, projectId: t.projectId });
+			}
+		}
+		const loaded = loadQueue(this.d.queueFile);
+		this.queue = loaded.items;
+		this.prepared.clear();
+		const queued = this.queue.filter((q) => q.state === "queued").length;
+		this.paused = loaded.paused || this.interrupted.length > 0 || queued > 0;
+		return { interrupted: this.interrupted.length, queued };
+	}
+
+	/** The thread is still `interrupted` (the user may have sent it a message while the queue was paused): give it its next state. */
+	private settleInterrupted(next: (r: { threadId: string; projectId: string | null }) => Thread["state"]): void {
+		for (const r of this.interrupted) {
+			const t = this.d.threads(r.projectId).get(r.threadId);
+			if (t?.state === "interrupted") this.mark(t, { state: next(r) });
+		}
+		this.interrupted = [];
+	}
+
+	/** The user chose to go on: threads with a queued item wait for their turn, the others are idle, and the queue starts. */
+	resumeInterrupted(): void {
+		this.settleInterrupted((r) => (this.queue.some((q) => q.state === "queued" && q.threadId === r.threadId) ? "queued" : "idle"));
+		this.paused = false;
+		this.pump();
+	}
+
+	/** The user chose to drop it: queued items stay in the queue as `stopped`, the threads are idle, nothing starts. */
+	discardInterrupted(): void {
+		this.queue = this.queue.map((q) => {
+			if (q.state !== "queued") return q;
+			this.prepared.delete(q.id);
+			return { ...q, state: "stopped" as const };
+		});
+		this.settleInterrupted(() => "idle");
+		// a thread the user messaged while paused was marked queued for an item that is stopped now
+		for (const q of this.queue) {
+			const t = [...this.live.values()].some((l) => l.thread.id === q.threadId) ? null : this.d.threads(q.projectId).get(q.threadId);
+			if (t?.state === "queued") this.mark(t, { state: "idle" });
+		}
+		this.paused = false;
+		this.changed();
 	}
 
 	pause(): void {
