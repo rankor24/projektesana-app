@@ -76,16 +76,20 @@ test("13.6 a skill with two placeholders is a draft with placeholders 2; markTes
 	assert.equal(get("beta-aprekins").state, "draft");
 	const marked = markTested(office, "beta-aprekins", true);
 	assert.equal(marked.state, "ready");
+	assert.equal(marked.tested, true);
 	assert.equal(get("beta-aprekins").state, "ready");
 
 	// a tested skill that gains a placeholder is a draft again
 	writeFileSync(join(office, "beta-aprekins", "SKILL.md"), skillMd("beta-aprekins", `Rezerve ${PH}.`), "utf8");
-	assert.deepEqual([get("beta-aprekins").placeholders, get("beta-aprekins").state], [1, "draft"]);
+	assert.deepEqual([get("beta-aprekins").placeholders, get("beta-aprekins").state, get("beta-aprekins").tested], [1, "draft", false]);
+	assert.deepEqual(JSON.parse(readFileSync(join(office, "skills.json"), "utf8")).tested, [], "the mark is dropped on disk too");
 	// a placeholder in a reference file counts too
 	writeFileSync(join(office, "beta-aprekins", "SKILL.md"), skillMd("beta-aprekins", "labi"), "utf8");
 	writeFileSync(join(office, "beta-aprekins", "references", "reg.md"), `atsauce ${PH}`, "utf8");
 	assert.deepEqual([get("beta-aprekins").placeholders, get("beta-aprekins").state], [1, "draft"]);
 	writeFileSync(join(office, "beta-aprekins", "references", "reg.md"), "atsauce", "utf8");
+	assert.deepEqual([get("beta-aprekins").state, get("beta-aprekins").tested], ["draft", false], "fixed again, but it has to be tested again");
+	markTested(office, "beta-aprekins", true);
 
 	// unmarking is always allowed
 	assert.equal(markTested(office, "beta-aprekins", false).state, "draft");
@@ -134,6 +138,7 @@ test("13.6 a synced skill is always ready with no placeholders; a synced name wi
 	// the old one-argument call keeps working
 	assert.equal(listSkills(synced("revit-api")).length, 1);
 	assert.equal(listSkills("", undefined).length, 0);
+	assert.ok(list.every((s) => s.tested), "synced skills count as tested");
 });
 
 test("13.6 skillsFor leaves out drafts and skills the agent was not given", () => {
@@ -229,4 +234,46 @@ test("13.6 the handlers: list, import, tested and read work on <appDir>\\skills;
 	const withSkill = ah["agents.list"]().specs[0].fixedTokens;
 	ah["agents.save"]([plain]);
 	assert.ok(withSkill > ah["agents.list"]().specs[0].fixedTokens, "the ready skill is in the measure");
+});
+
+test("13.6 a skill that fails to import is refused alone; the others go in, and a replaced skill is never left marked tested", () => {
+	const office = join(tmp(), "skills");
+	importSkills(tree(), office);
+	markTested(office, "alfa-parbaude", true);
+	markTested(office, "gamma-saraksts", true);
+	// `versions` is a file: replacing an existing skill cannot move the old folder there, so that one throws; new skills are unaffected
+	writeFileSync(join(office, "versions"), "ne mape", "utf8");
+	const src = join(tmp(), "skilli");
+	put(join(src, "g", "alfa-parbaude", "SKILL.md"), skillMd("alfa-parbaude", "jauns"));
+	put(join(src, "g", "delta-jauna", "SKILL.md"), skillMd("delta-jauna"));
+	put(join(src, "g", "epsilon-jauna", "SKILL.md"), skillMd("epsilon-jauna"));
+	const r = importSkills(src, office);
+	assert.deepEqual(r.imported.sort(), ["delta-jauna", "epsilon-jauna"]);
+	assert.equal(r.refused.length, 1);
+	assert.equal(r.refused[0].name, "alfa-parbaude");
+	assert.match(r.refused[0].why, /Neizdevās importēt/);
+	assert.match(r.refused[0].why, /\.import-alfa-parbaude/, "the staging folder it left is named");
+	assert.ok(readdirSync(office).some((n) => n.startsWith(".import-alfa-parbaude")), "and is not deleted");
+	// the failed one: old text still there, but its mark is gone (the new text was never tested, and nothing can leave it marked)
+	const all = listSkills(synced(), office);
+	assert.match(readFileSync(join(office, "alfa-parbaude", "SKILL.md"), "utf8"), /teksts/);
+	assert.deepEqual([all.find((s) => s.name === "alfa-parbaude")!.tested, all.find((s) => s.name === "alfa-parbaude")!.state], [false, "draft"]);
+	assert.equal(all.find((s) => s.name === "gamma-saraksts")!.tested, true, "a skill not in this import keeps its mark");
+	assert.equal(JSON.parse(readFileSync(join(office, "skills.json"), "utf8")).groups["delta-jauna"], "g", "the group of an imported skill is recorded");
+	assert.ok(all.some((s) => s.name === "delta-jauna") && all.some((s) => s.name === "epsilon-jauna"));
+});
+
+test("13.6 reserved and hostile front-matter names (con, COM1, ../x, a-backslash-b, versions) are refused and write nothing", () => {
+	const office = join(tmp(), "skills");
+	const src = join(tmp(), "skilli");
+	for (const [dirName, name] of [["a", "con"], ["b", "COM1"], ["c", "nul"], ["d", "../x"], ["e", "a\\b"], ["f", "a/b"], ["g", "lpt9"], ["h", "dobra-prasme"], ["i", "versions"]]) {
+		put(join(src, "g", dirName, "SKILL.md"), skillMd(name));
+	}
+	const r = importSkills(src, office);
+	assert.deepEqual(r.imported, ["dobra-prasme"]);
+	assert.deepEqual(r.refused.map((x) => x.name).sort(), ["../x", "COM1", "a/b", "a\\b", "con", "lpt9", "nul", "versions"].sort());
+	assert.match(r.refused.find((x) => x.name === "con")!.why, /rezervēts/);
+	assert.match(r.refused.find((x) => x.name === "../x")!.why, /Nederīgs/);
+	assert.deepEqual(readdirSync(office).filter((n) => n !== "skills.json").sort(), ["dobra-prasme"], "nothing was written outside the skill's own folder");
+	assert.ok(!existsSync(join(office, "..", "x")));
 });

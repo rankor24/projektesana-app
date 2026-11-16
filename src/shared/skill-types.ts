@@ -9,6 +9,8 @@ export interface SkillInfo {
 	group?: string;
 	/** {{AIZPILDĪT: …}} left in the skill's .md files */
 	placeholders: number;
+	/** the user's mark that the skill's test example was checked; synced skills count as tested. Dropped again when the text gains a placeholder. */
+	tested: boolean;
 	/** an office skill is ready only without placeholders and once the user marked it tested */
 	state: "draft" | "ready";
 }

@@ -71,22 +71,35 @@ function writeMeta(officeDir: string, m: Meta): void {
 function officeSkills(officeDir: string): SkillInfo[] {
 	if (!existsSync(officeDir)) return [];
 	const meta = readMeta(officeDir);
-	return readdirSync(officeDir)
+	const dropped = new Set<string>();
+	const out = readdirSync(officeDir)
 		.filter((n) => NAME.test(n) && n !== VERSIONS && existsSync(join(officeDir, n, "SKILL.md")))
 		.map((n) => {
 			const dir = join(officeDir, n);
 			const placeholders = countPlaceholders(dir);
+			// a tested skill that holds a placeholder again was edited after the check: the mark is dropped, the user tests it again
+			const tested = meta.tested.includes(n) && placeholders === 0;
+			if (meta.tested.includes(n) && !tested) dropped.add(n);
 			const info: SkillInfo = {
 				name: n,
 				description: frontMatter(readFileSync(join(dir, "SKILL.md"), "utf8")).description ?? "",
 				files: listFiles(dir),
 				origin: "office",
 				placeholders,
-				state: placeholders === 0 && meta.tested.includes(n) ? "ready" : "draft",
+				tested,
+				state: tested ? "ready" : "draft",
 			};
 			if (meta.groups[n]) info.group = meta.groups[n];
 			return info;
 		});
+	if (dropped.size) {
+		try {
+			writeMeta(officeDir, { ...meta, tested: meta.tested.filter((x) => !dropped.has(x)) });
+		} catch {
+			// a read-only folder: the list is right anyway, the mark is dropped again at the next list
+		}
+	}
+	return out;
 }
 
 /** The synced skills first (always ready), then the office's. A name both have is the synced one: import refuses it, and a folder that predates a
@@ -98,7 +111,7 @@ export function listSkills(syncedDir: string, officeDir?: string): SkillInfo[] {
 				.filter((n) => existsSync(join(syncedDir, n, "SKILL.md")))
 				.map((n) => {
 					const fm = frontMatter(readFileSync(join(syncedDir, n, "SKILL.md"), "utf8"));
-					return { name: n, description: fm.description ?? "", files: listFiles(join(syncedDir, n)), origin: "synced" as const, placeholders: 0, state: "ready" as const };
+					return { name: n, description: fm.description ?? "", files: listFiles(join(syncedDir, n)), origin: "synced" as const, placeholders: 0, tested: true, state: "ready" as const };
 				});
 	if (!officeDir) return synced;
 	const taken = new Set(synced.map((s) => s.name));
@@ -137,45 +150,67 @@ function findSkillDirs(src: string, depth = 1): string[] {
 	return out;
 }
 
+/** Windows device names: a folder of that name cannot be made reliably, so such a skill name is refused up front. */
+const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+
+/** Moves the old folder of a skill to <officeDir>ersions\<name>.<timestamp>; never deletes it. */
+function keepOld(officeDir: string, name: string, target: string): string {
+	mkdirSync(join(officeDir, VERSIONS), { recursive: true });
+	const stamp = new Date(Date.now()).toISOString().replace(/[:.]/g, "-");
+	let kept = join(officeDir, VERSIONS, `${name}.${stamp}`);
+	// two imports in one millisecond must not meet in the same folder
+	for (let n = 1; existsSync(kept); n++) kept = join(officeDir, VERSIONS, `${name}.${stamp}.${n}`);
+	renameSync(target, kept);
+	return kept;
+}
+
 /** Copies every <group>/<name>/SKILL.md tree under `src` to <officeDir>\<name>, the group kept in skills.json. A name that exists is replaced and the old
- *  folder moved to <officeDir>\versions\<name>.<timestamp> (never deleted); the new text has not been tested, so its mark is cleared. `syncedDir`: a name
- *  equal to a synced skill is refused. */
+ *  folder moved to <officeDir>ersions\<name>.<timestamp> (never deleted). `syncedDir`: a name equal to a synced skill is refused.
+ *  Each skill stands alone: one that fails (a locked folder, a long path) is refused with the reason and the rest go on. The new text has not been tested,
+ *  so skills.json (the group, no tested mark) is written BEFORE the folder is swapped: whatever fails after that can leave an old text, never an untested
+ *  one marked tested. A staging folder a failure leaves behind is named in the reason and never deleted. */
 export function importSkills(src: string, officeDir: string, syncedDir?: string): { imported: string[]; refused: { name: string; why: string }[] } {
 	if (!existsSync(src) || !statSync(src).isDirectory()) throw new Error(`Mape nav atrasta: ${src}`);
 	const syncedNames = new Set(listSkills(syncedDir ?? "").map((s) => s.name));
 	const imported: string[] = [];
 	const refused: { name: string; why: string }[] = [];
-	const meta = readMeta(officeDir);
 	for (const dir of findSkillDirs(src)) {
-		const shown = basename(dir);
-		const name = frontMatter(readFileSync(join(dir, "SKILL.md"), "utf8")).name;
-		if (!name) refused.push({ name: shown, why: "SKILL.md sākumā nav front matter ar name." });
-		else if (!NAME.test(name) || name === VERSIONS) refused.push({ name, why: `Nederīgs prasmes nosaukums: ${name} (mazie burti, cipari, domuzīme).` });
-		else if (syncedNames.has(name)) refused.push({ name, why: `Prasme ${name} jau ir starp Revit prasmēm.` });
-		else if (imported.includes(name)) refused.push({ name, why: `Nosaukums ${name} šajā mapē atkārtojas.` });
-		else {
-			mkdirSync(officeDir, { recursive: true });
-			const target = join(officeDir, name);
-			// the new copy is made first beside the old one, so a failed copy leaves the old skill where it was
-			let staging = join(officeDir, `.import-${name}`);
-			// a folder left by an import that died midway is not reused
-			for (let n = 1; existsSync(staging); n++) staging = join(officeDir, `.import-${name}.${n}`);
-			copyMd(dir, staging);
-			if (existsSync(target)) {
-				mkdirSync(join(officeDir, VERSIONS), { recursive: true });
-				const stamp = new Date(Date.now()).toISOString().replace(/[:.]/g, "-");
-				let kept = join(officeDir, VERSIONS, `${name}.${stamp}`);
-				// two imports in one millisecond must not meet in the same folder
-				for (let n = 1; existsSync(kept); n++) kept = join(officeDir, VERSIONS, `${name}.${stamp}.${n}`);
-				renameSync(target, kept);
+		let name: string | undefined;
+		let staging = "";
+		try {
+			name = frontMatter(readFileSync(join(dir, "SKILL.md"), "utf8")).name;
+			if (!name) refused.push({ name: basename(dir), why: "SKILL.md sākumā nav front matter ar name." });
+			else if (!NAME.test(name) || name === VERSIONS) refused.push({ name, why: `Nederīgs prasmes nosaukums: ${name} (mazie burti, cipari, domuzīme).` });
+			else if (RESERVED.test(name)) refused.push({ name, why: `Nosaukums ${name} ir Windows rezervēts vārds; pārsauc prasmi.` });
+			else if (syncedNames.has(name)) refused.push({ name, why: `Prasme ${name} jau ir starp Revit prasmēm.` });
+			else if (imported.includes(name)) refused.push({ name, why: `Nosaukums ${name} šajā mapē atkārtojas.` });
+			else {
+				mkdirSync(officeDir, { recursive: true });
+				const target = join(officeDir, name);
+				// the new copy is made first beside the old one, so a failed copy leaves the old skill where it was
+				staging = join(officeDir, `.import-${name}`);
+				// a folder left by an import that died midway is not reused
+				for (let n = 1; existsSync(staging); n++) staging = join(officeDir, `.import-${name}.${n}`);
+				copyMd(dir, staging);
+				const meta = readMeta(officeDir);
+				meta.groups[name] = basename(dirname(dir));
+				meta.tested = meta.tested.filter((x) => x !== name);
+				writeMeta(officeDir, meta);
+				const kept = existsSync(target) ? keepOld(officeDir, name, target) : null;
+				try {
+					renameSync(staging, target);
+				} catch (e) {
+					// the old text goes back where it was
+					if (kept) renameSync(kept, target);
+					throw e;
+				}
+				imported.push(name);
 			}
-			renameSync(staging, target);
-			meta.groups[name] = basename(dirname(dir));
-			meta.tested = meta.tested.filter((x) => x !== name);
-			imported.push(name);
+		} catch (e) {
+			const left = staging && existsSync(staging) ? ` Palikusi pagaidu mape: ${staging} (dzēs pats).` : "";
+			refused.push({ name: name ?? basename(dir), why: `Neizdevās importēt: ${e instanceof Error ? e.message : String(e)}.${left}` });
 		}
 	}
-	if (imported.length) writeMeta(officeDir, meta);
 	return { imported, refused };
 }
 

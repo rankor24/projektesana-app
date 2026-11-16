@@ -139,8 +139,8 @@ export function Prasmes() {
 									{s.origin === "office" && s.placeholders > 0 && <Badge tone="bad">vietturi: {s.placeholders}</Badge>}
 									<span className="grow" />
 									{s.origin === "office" && (
-										<label className="small" title={s.placeholders > 0 && s.state === "draft" ? `Vēl ir ${s.placeholders} vietturi` : "Aprēķina testa piemērs ir pārbaudīts"}>
-											<input type="checkbox" checked={s.state === "ready"} disabled={s.placeholders > 0 && s.state === "draft"} onChange={(e) => tested(s, e.target.checked)} /> Pārbaudīts
+										<label className="small" title={s.placeholders > 0 && !s.tested ? `Vēl ir ${s.placeholders} vietturi` : "Aprēķina testa piemērs ir pārbaudīts"}>
+											<input type="checkbox" checked={s.tested} disabled={s.placeholders > 0 && !s.tested} onChange={(e) => tested(s, e.target.checked)} /> Pārbaudīts
 										</label>
 									)}
 									<button className="small ghost" onClick={() => open(s)}>
