@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import { z } from "zod";
 import { proposeFact } from "../../core/facts.js";
-import { newId, profileOf, type NoteType } from "../../core/model.js";
+import { newId, profileOf, type Note, type NoteType } from "../../core/model.js";
 import { OfficeMemory } from "../../core/office-memory.js";
 import { Library } from "../../rules/library.js";
 import { EXTRACTION_PROMPT, extractFor } from "../../sources/extract/index.js";
@@ -153,11 +153,19 @@ export const sourceTools: ToolDef[] = [
 		name: "read_notes",
 		level: "read",
 		description: "The memory (Atmiņa): decisions, answers, learnings and open questions written earlier, newest first. scope 'projekts' = this project's; 'birojs' = the office memory, lessons that hold for every project (only the ones the user has accepted); 'visi' (default) = both, each marked with its scope.",
-		input: { type: z.enum(["decision", "answer", "learning", "question"]).optional(), scope: z.enum(["projekts", "birojs", "visi"]).optional() },
-		run: (ctx, { type, scope }) => {
+		input: {
+			type: z.enum(["decision", "answer", "learning", "question"]).optional(),
+			scope: z.enum(["projekts", "birojs", "visi"]).optional(),
+			topic: z.string().optional().describe("only the notes of this message topic id"),
+			agent: z.string().optional().describe("only the notes this agent wrote"),
+			status: z.enum(["open", "closed"]).optional().describe("only open or closed questions"),
+		},
+		run: (ctx, { type, scope, topic, agent, status }) => {
 			const s = scope ?? "visi";
-			const mine = s !== "birojs" && ctx.projectId ? storeOf(ctx).notes(type as NoteType | undefined).map((n) => ({ scope: "projekts", ...n })) : [];
-			const office = s !== "projekts" ? new OfficeMemory(join(ctx.appDir, "memory")).list({ type: type as NoteType | undefined, standing: true }).map((n) => ({ scope: "birojs", ...n })) : [];
+			const mailOnly = !!(topic || agent || status); // these fields exist on project notes only: the office memory has none
+			const keep = (n: Note) => (!topic || n.topic === topic) && (!agent || n.agent === agent) && (!status || n.status === status);
+			const mine = s !== "birojs" && ctx.projectId ? storeOf(ctx).notes(type as NoteType | undefined).filter(keep).map((n) => ({ scope: "projekts", ...n })) : [];
+			const office = s !== "projekts" && !mailOnly ? new OfficeMemory(join(ctx.appDir, "memory")).list({ type: type as NoteType | undefined, standing: true }).map((n) => ({ scope: "birojs", ...n })) : [];
 			const all = [...mine, ...office];
 			return all.length ? all : "no data: atmiņā nav ierakstu.";
 		},

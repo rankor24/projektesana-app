@@ -17,6 +17,7 @@ import { LEAD_ID, type QueueView, type RunMeta, type Thread, type WaitingItem } 
 import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
+import { waitingQuestions } from "../core/notes.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
@@ -68,7 +69,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), questions: () => waitingQuestions(d.ctx.projectsDir) });
 	}
 
 	/** A project's mailbox (it reads the disk on every call, so one handle per project is enough). */
@@ -260,6 +261,11 @@ export class AgentSession {
 	/** Everything that waits for the user, of every project. */
 	waiting(): WaitingItem[] {
 		return this.coordinator.waiting();
+	}
+
+	/** A question for the user was written or closed (an agent's `close_topic`, the user's button): "Gaida tevi" is told. */
+	notesChanged(): void {
+		this.coordinator.notesChanged();
 	}
 
 	/** App is quitting: abort the run and wait until it has closed its tool servers (the Revit MCP child and the tools child). */

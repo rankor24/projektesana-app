@@ -57,6 +57,9 @@ const refuse = (code: Exclude<SendCheck, { ok: true }>["code"], reason: string, 
 
 const STATE_WORD: Record<Topic["state"], string> = { open: "atvērts", agreed: "vienošanās panākta", "passed-up": "nodots tālāk" };
 
+/** The refusal for a topic that is no longer open (a send onto it, or a second close). */
+export const closedReason = (t: Topic): string => `Temats «${t.title}» jau ir slēgts (${STATE_WORD[t.state]}).`;
+
 /** The send rules, in this order: self, unknown-agent, acl, closed, exchanges, depth, iterations. The first that fails decides. */
 export function canSend(
 	m: { from: string; to: string; kind: MessageKind; topic: Topic | null; depth: number; iteration?: number },
@@ -81,7 +84,7 @@ export function canSend(
 		if (accepts && !accepts.includes(m.from)) return refuse("acl", `Aģents «${m.to}» nepieņem ziņas no aģenta «${m.from}».`);
 	}
 
-	if (t && t.state !== "open") return refuse("closed", `Temats «${t.title}» jau ir slēgts (${STATE_WORD[t.state]}).`);
+	if (t && t.state !== "open") return refuse("closed", closedReason(t));
 
 	if (t) {
 		const sent = c.messages.filter((x) => x.topic === t.id && x.from === m.from).length;

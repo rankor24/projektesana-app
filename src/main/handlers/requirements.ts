@@ -1,6 +1,7 @@
 // Requirements and findings: list, the user's decisions, override with reason, re-run.
 import { overrideFinding, removeFinding, reopenFinding } from "../../checks/run.js";
 import { newId } from "../../core/model.js";
+import { cancelDecision, reviewDecision, setNoteStatus } from "../../core/notes.js";
 import { addPin, closePin, commentPin, reopenPin } from "../../core/pins.js";
 import type { Registry } from "../../core/registry.js";
 import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
@@ -12,9 +13,11 @@ export interface RequirementDeps {
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	/** the user's name from the settings (undefined = not set) */
 	userName?: () => string | undefined;
+	/** the agent session: told when a question for the user was closed, so "Gaida tevi" is sent again */
+	session?: { notesChanged(): void };
 }
 
-type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.remove" | "findings.runAll" | "notes.list" | "notes.write" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
+type K = "requirements.list" | "requirements.notes" | "requirements.decide" | "requirements.refresh" | "findings.list" | "findings.override" | "findings.reopen" | "findings.remove" | "findings.runAll" | "notes.list" | "notes.write" | "notes.setStatus" | "notes.review" | "notes.cancel" | "pins.list" | "pins.add" | "pins.comment" | "pins.close" | "pins.reopen";
 
 export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["requirements", "findings"] });
@@ -83,6 +86,23 @@ export function requirementHandlers(d: RequirementDeps): Pick<Handlers, K> {
 			if (title.trim().length < 3) throw new Error("Virsraksts ir pārāk īss.");
 			const note = { id: newId("n"), type, title: title.trim(), body, refs: [], by: "user" as const, at: new Date().toISOString() };
 			d.registry.store(id).writeNote(note);
+			d.emit("data.changed", { projectId: id, what: ["notes"] });
+			return note;
+		},
+		// the user's side of the registers agents leave in Atmiņa; every write goes through the store (logged, the old file kept)
+		"notes.setStatus": (id, noteId, status) => {
+			const note = setNoteStatus(d.registry.store(id), noteId, status);
+			d.emit("data.changed", { projectId: id, what: ["notes"] });
+			d.session?.notesChanged();
+			return note;
+		},
+		"notes.review": (id, noteId) => {
+			const note = reviewDecision(d.registry.store(id), noteId);
+			d.emit("data.changed", { projectId: id, what: ["notes"] });
+			return note;
+		},
+		"notes.cancel": (id, noteId, reason) => {
+			const note = cancelDecision(d.registry.store(id), noteId, reason);
 			d.emit("data.changed", { projectId: id, what: ["notes"] });
 			return note;
 		},

@@ -509,6 +509,12 @@ export interface ApiSpec {
 	"pins.reopen": (id: string, pinId: string) => void;
 	"notes.list": (id: string, type?: NoteType) => Note[];
 	"notes.write": (id: string, type: NoteType, title: string, body: string) => Note;
+	/** the user closes (or reopens) a question the agents left (task 12.3); "Gaida tevi" is sent again */
+	"notes.setStatus": (id: string, noteId: string, status: "open" | "closed") => Note;
+	/** the user has seen an agents' decision */
+	"notes.review": (id: string, noteId: string) => Note;
+	/** the user cancels a decision: a new decision note that names it; nothing is deleted */
+	"notes.cancel": (id: string, noteId: string, reason: string) => Note;
 	"revit.status": () => RevitStatusRow;
 	"revit.views": () => { id: string; name: string; type: string }[];
 	"revit.exportView": (id: string, viewId: string, name: string) => string;
@@ -687,6 +693,9 @@ export const API_NAMES = [
 	"pins.reopen",
 	"notes.list",
 	"notes.write",
+	"notes.setStatus",
+	"notes.review",
+	"notes.cancel",
 	"revit.status",
 	"revit.views",
 	"revit.exportView",

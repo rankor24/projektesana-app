@@ -1,12 +1,13 @@
 // The mail tools of the main process: `send_message` puts a message into the project's mailbox for another agent and returns at once;
-// the coordinator delivers it and wakes the recipient (coordinator.ts). `close_topic` is declared here and given its body in task 12.3.
-// Like `delegate` they are handed to pi through `extraTools`, not served by the tools server.
+// the coordinator delivers it and wakes the recipient (coordinator.ts). `close_topic` ends a topic into Atmiņa: an agreement is a decision note,
+// a pass-up (also the automatic one at a send limit) an open question. Like `delegate` they are handed to pi through `extraTools`, not served by the tools server.
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, type Static } from "@earendil-works/pi-ai";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { canSend, threadOnTopic, type Limits, type Mailbox, type Message } from "../core/messages.js";
-import { newId } from "../core/model.js";
+import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type Topic } from "../core/messages.js";
+import { newId, type Note } from "../core/model.js";
 import type { ThreadStore } from "../core/threads.js";
+import { LEAD_ID } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
 
 /** The two tools as the gate sees them. Sending mail changes nothing in the project; what the recipient then does goes through its own gate. */
@@ -30,7 +31,13 @@ export interface MailDeps {
 	enqueue: () => void;
 	/** a line for the run's feed */
 	note: (line: string) => void;
+	/** the project's Atmiņa (its `ProjectStore`); returns null when the thread has no open project, and then no topic can be closed or passed up */
+	notes?: () => { writeNote(n: Note): void } | null;
+	/** a question for the user was written: "Gaida tevi" changed */
+	notesChanged?: () => void;
 }
+
+export const NO_PROJECT = "Temata slēgšanai vajag atvērtu projektu.";
 
 // a plain `enum` is a third the size of a union of literals in the declaration every request carries
 const oneOf = <T extends string>(...v: T[]) => Type.Unsafe<T>(Type.String({ enum: v }));
@@ -58,10 +65,37 @@ const sendSchema = Type.Object({
 const closeSchema = Type.Object({
 	topic: Type.String(),
 	outcome: oneOf("agreed", "passed-up"),
-	decision: Type.String(),
+	decision: Type.String({ description: "agreed: what was agreed; passed-up: what is unresolved and why." }),
+	impact: Type.Object({ cost: Type.Boolean(), time: Type.Boolean(), norms: Type.Boolean(), pu: Type.Boolean() }, { description: "Does the agreement change cost, time, compliance with norms or the PU? true = it goes to the user." }),
 });
 
+/** What the four flags of `impact` are called in a note the user reads. */
+const IMPACT_WORD = { cost: "izmaksas", time: "termiņu", norms: "normatīvo atbilstību", pu: "PU" } as const;
+
 const result = (text: string, isError = false) => ({ content: [{ type: "text" as const, text }], details: {}, isError });
+
+/** The ids of the messages of a topic: what a note about it refers to. */
+const topicRefs = (d: MailDeps, topic: Topic) => d.mailbox.messages().filter((m) => m.topic === topic.id).map((m) => m.id);
+
+/** Writes a question note about a topic and closes the topic `passed-up` with it. The question is addressed to the user when it is for the user, so the window hears of it. */
+function askAbout(d: MailDeps, store: { writeNote(n: Note): void }, topic: Topic, q: { to: string; title: string; body: string }): Note {
+	const note: Note = {
+		id: newId("n"), type: "question", title: q.title, body: q.body, refs: topicRefs(d, topic), by: "agent", at: new Date().toISOString(),
+		agent: d.self.agent, to: q.to, topic: topic.id, status: "open",
+	};
+	store.writeNote(note);
+	d.mailbox.closeTopic(topic.id, "passed-up", note.id);
+	if (q.to === "user") d.notesChanged?.();
+	return note;
+}
+
+/** The topic goes up: an open question for the lead (or for the user, when the caller is the lead) whose body is `why`; the topic closes `passed-up`.
+ *  Used by `close_topic` (passed-up) and by a send refused at a limit. Throws NO_PROJECT when the thread has no Atmiņa to write into. */
+export function passUp(d: MailDeps, topic: Topic, why: string): Note {
+	const store = d.notes?.();
+	if (!store) throw new Error(NO_PROJECT);
+	return askAbout(d, store, topic, { to: d.self.agent === LEAD_ID ? "user" : LEAD_ID, title: `Nodots tālāk: ${topic.title}`, body: why });
+}
 
 /** send_message and close_topic, for pi (`extraTools` of the run). */
 export function mailTools(d: MailDeps): AgentTool<any>[] {
@@ -82,8 +116,19 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 				{ from: d.self.agent, to: p.to, kind: p.kind, topic: existing ?? null, depth: d.self.depth + 1, iteration: p.task?.iteration },
 				{ agents: d.agents(), limits: d.limits(), messages: mailbox.messages() },
 			);
-			// a refusal that passes the topic up (check.passUp) gets its side effects in task 12.3
-			if (!check.ok) return result(check.reason, true);
+			if (!check.ok) {
+				// a limit was reached: the topic goes up with the message that was not sent (a new topic is opened just to record that)
+				if (check.passUp && d.notes?.()) {
+					try {
+						const topic = existing ?? mailbox.openTopic({ title: p.title!.trim(), parties: [d.self.agent, p.to], parent: null });
+						const q = passUp(d, topic, `${check.reason}\nNeizsūtītā ziņa (${p.kind} → ${p.to}): ${p.text}`);
+						return result(`${check.reason} Jautājums ierakstīts Atmiņā (${q.id}).`, true);
+					} catch {
+						// the note could not be written: the plain refusal below
+					}
+				}
+				return result(check.reason, true);
+			}
 
 			const topic = existing ?? mailbox.openTopic({ title: p.title!.trim(), parties: [d.self.agent, p.to], parent: null });
 			// the thread the other side already has on this topic, else one opened for it
@@ -109,9 +154,43 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 	const close: AgentTool<typeof closeSchema> = {
 		name: "close_topic",
 		label: "Temata slēgšana",
-		description: "Close a topic: agreed, or passed-up to the lead or the user.",
+		description: "Close a topic you are a party of. agreed = a decision note in Atmiņa; passed-up = a question for the lead or the user. An agreement that changes cost, time, norms compliance or the PU is not yours to make: set that impact flag and it goes to the user as a question.",
 		parameters: closeSchema,
-		execute: async () => result("close_topic nāk ar 12.3.", true),
+		execute: async (_id, p: Static<typeof closeSchema>) => {
+			const store = d.notes?.();
+			if (!store) return result(NO_PROJECT, true);
+			const topic = d.mailbox.topics().find((t) => t.id === p.topic);
+			if (!topic) return result(`Temats ${p.topic} nav atrasts.`, true);
+			if (!topic.parties.includes(d.self.agent)) return result(`Temats «${topic.title}» ir starp ${topic.parties.join(" un ")}; slēgt to var tikai viens no viņiem.`, true);
+			if (topic.state !== "open") return result(closedReason(topic), true);
+			try {
+				if (p.outcome === "passed-up") {
+					const q = passUp(d, topic, p.decision);
+					return result(`Temats «${topic.title}» nodots ${q.to === "user" ? "lietotājam" : "vadošajam aģentam"}: jautājums ierakstīts Atmiņā (${q.id}).`);
+				}
+				const flags = (Object.keys(IMPACT_WORD) as (keyof typeof IMPACT_WORD)[]).filter((k) => p.impact[k]);
+				if (flags.length) {
+					// agents do not settle what changes cost, time, norms or the PU: the proposal goes to the user
+					const words = flags.map((k) => IMPACT_WORD[k]).join(", ");
+					const q = askAbout(d, store, topic, {
+						to: "user",
+						title: `Jāizlemj: ${topic.title}`,
+						body: `${topic.parties.join(" un ")} piedāvā lēmumu:\n${p.decision}\n\nTas ietekmē: ${words}. Šādu lēmumu pieņem lietotājs, nevis aģenti.`,
+					});
+					return result(`Vienošanās ietekmē ${words}: tā nav aģentu ziņā. Temats nodots lietotājam kā jautājums (${q.id}).`);
+				}
+				const other = topic.parties.find((x) => x !== d.self.agent) ?? topic.parties[0];
+				const note: Note = {
+					id: newId("n"), type: "decision", title: topic.title, body: p.decision, refs: topicRefs(d, topic), by: "agent", at: new Date().toISOString(),
+					agent: d.self.agent, to: other, topic: topic.id, reviewed: false,
+				};
+				store.writeNote(note);
+				d.mailbox.closeTopic(topic.id, "agreed", note.id);
+				return result(`Temats «${topic.title}» slēgts: vienošanās ierakstīta Atmiņā (${note.id}).`);
+			} catch (e) {
+				return result(e instanceof Error ? e.message : String(e), true);
+			}
+		},
 	};
 	return [send, close];
 }

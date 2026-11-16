@@ -2,6 +2,8 @@
 // and open questions; Birojs — lessons that hold for every project, which the agent reads in all of them. Notes are written
 // by the user or by the agent (write_note), one markdown file per note. A project note is lifted to the office with one click
 // (a copy; the project's note stays); the agent can only propose an office note, and the user accepts or rejects it here.
+// Notes that agents leave through close_topic (task 12.3) show who agreed with whom: an unreviewed decision can be marked seen or cancelled
+// (a new decision note names it; nothing is deleted), an open question for the user can be closed.
 import { useState } from "react";
 import type { Note, NoteType } from "../../core/model";
 import { call, errText } from "../bridge";
@@ -16,12 +18,16 @@ export function Atmina() {
 	const [type, setType] = useState<NoteType | "">("");
 	const [draft, setDraft] = useState({ type: "decision" as NoteType, title: "", body: "" });
 	const [err, setErr] = useState<string | null>(null);
+	const [cancelling, setCancelling] = useState<{ id: string; reason: string } | null>(null);
 	const office = scope === "office";
 	const notes = useLoad<Note[]>(() => (office ? call("memory.list") : projectId ? call("notes.list", projectId) : Promise.resolve([])), [projectId, scope]);
 	const fail = (e: unknown) => setErr(errText(e));
 	const rows = (notes.data ?? []).filter((n) => !type || n.type === type);
 	const proposals = rows.filter((n) => n.state === "proposed");
 	const standing = rows.filter((n) => n.state !== "proposed");
+	// a decision that a later "Atcelts: …" note names is cancelled
+	const cancelled = new Set((notes.data ?? []).filter((n) => n.type === "decision" && n.title.startsWith("Atcelts: ")).flatMap((n) => n.refs));
+	const act = (p: Promise<unknown>) => p.then(() => (setErr(null), notes.reload())).catch(fail);
 
 	const save = () =>
 		(office ? call("memory.write", draft.type, draft.title, draft.body) : call("notes.write", projectId!, draft.type, draft.title, draft.body))
@@ -40,6 +46,10 @@ export function Atmina() {
 				<Badge>{TYPE[n.type]}</Badge>
 				<b className="grow">{n.title}</b>
 				{n.from && <Badge tone="info" title={`Pacelts no projekta ${n.from.project}`}>no {n.from.project}</Badge>}
+				{n.agent && n.to && <Badge tone="info" title="Kas ar ko">{n.agent} → {n.to}</Badge>}
+				{n.type === "decision" && n.agent && n.reviewed === false && !cancelled.has(n.id) && <Badge tone="warn">nepārskatīts</Badge>}
+				{cancelled.has(n.id) && <Badge>atcelts</Badge>}
+				{n.type === "question" && n.status && <Badge>{n.status === "open" ? "atvērts" : "slēgts"}</Badge>}
 				<span className="dim small">
 					{n.by === "agent" ? "aģents" : n.by} · {new Date(n.at).toLocaleString("lv-LV")}
 				</span>
@@ -53,6 +63,26 @@ export function Atmina() {
 				)}
 			</div>
 			{n.body}
+			{!office && projectId && n.type === "decision" && n.agent && n.reviewed === false && !cancelled.has(n.id) && (
+				<div className="row" style={{ marginTop: 6 }}>
+					<span className="grow" />
+					<button className="small primary" onClick={() => act(call("notes.review", projectId, n.id))}>Pārskatīts</button>
+					<button className="small ghost" title="Raksta jaunu lēmumu «Atcelts: …»; šis paliek" onClick={() => setCancelling({ id: n.id, reason: "" })}>Atcelt…</button>
+				</div>
+			)}
+			{cancelling?.id === n.id && projectId && (
+				<div className="row" style={{ marginTop: 6 }}>
+					<input className="grow" autoFocus placeholder="Atcelšanas iemesls" value={cancelling.reason} onChange={(e) => setCancelling({ id: n.id, reason: e.target.value })} />
+					<button className="small primary" disabled={!cancelling.reason.trim()} onClick={() => act(call("notes.cancel", projectId, n.id, cancelling.reason).then(() => setCancelling(null)))}>Atcelt lēmumu</button>
+					<button className="small ghost" onClick={() => setCancelling(null)}>Neatcelt</button>
+				</div>
+			)}
+			{!office && projectId && n.type === "question" && n.status === "open" && n.to === "user" && (
+				<div className="row" style={{ marginTop: 6 }}>
+					<span className="grow" />
+					<button className="small primary" onClick={() => act(call("notes.setStatus", projectId, n.id, "closed"))}>Slēgt</button>
+				</div>
+			)}
 			{n.state === "proposed" && (
 				<div className="row" style={{ marginTop: 6 }}>
 					<Badge tone="info">aģenta priekšlikums</Badge>

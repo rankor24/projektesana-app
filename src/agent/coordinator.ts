@@ -30,6 +30,8 @@ export interface CoordinatorDeps {
 	specs?: () => readonly AgentSpec[];
 	/** every project that has threads on disk (`knownProjects`), for `restore()`; without it restore finds no thread to mark */
 	projects?: () => (string | null)[];
+	/** the open questions for the user, of every project (Atmiņa); without it none are listed */
+	questions?: () => Extract<WaitingItem, { kind: "question" }>[];
 	/** a project's mailbox; without it nothing is delivered and nobody is woken (the coordinator's own tests) */
 	mail?: (projectId: string | null) => Mailbox;
 	now?: () => string;
@@ -120,9 +122,20 @@ export class Coordinator {
 		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: [] };
 	}
 
-	/** Everything that waits for the user, of every project: open confirmations first, then the unanswered restart. */
+	/** Everything that waits for the user, of every project: open confirmations first, then the questions in Atmiņa, then the unanswered restart. */
 	waiting(): WaitingItem[] {
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused: [], questions: [], gates: [] });
+		let questions: Extract<WaitingItem, { kind: "question" }>[] = [];
+		try {
+			questions = this.d.questions?.() ?? [];
+		} catch {
+			// unreadable notes: the list shows the rest
+		}
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused: [], questions, gates: [] });
+	}
+
+	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */
+	notesChanged(): void {
+		this.waitingChanged();
 	}
 
 	/** Tells the window the list changed. Never breaks a run (a window already gone). */
@@ -285,7 +298,7 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, wake: () => this.wake(thread.projectId) })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged() })
 			.then(
 				(r) => {
 					ok = r.ok;

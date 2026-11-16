@@ -67,6 +67,8 @@ export interface RunInput {
 	depth?: number;
 	/** a message was added to the mailbox: the coordinator delivers it */
 	wake?: () => void;
+	/** a question for the user was written into Atmiņa: "Gaida tevi" changed */
+	notesChanged?: () => void;
 }
 
 export interface Conversation {
@@ -326,6 +328,16 @@ export class ThreadRunner {
 								self: { agent: spec ? spec.id : LEAD_ID, threadId: thread.id, projectId, wave: i.wave, depth: i.depth ?? 0 },
 								enqueue: () => i.wake?.(),
 								note: (line) => emit({ type: "text", text: line }),
+								// the project's Atmiņa, from the main process; a thread with no project (or one without data yet) has none
+								notes: () => {
+									if (!projectId) return null;
+									try {
+										return ProjectStore.load(this.d.ctx.projectsDir, projectId);
+									} catch {
+										return null;
+									}
+								},
+								notesChanged: () => i.notesChanged?.(),
 							})
 						: [];
 					const extraTools = [...lanes, ...mail];

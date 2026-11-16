@@ -2,7 +2,8 @@
 // folder) and the office memory (task 8.8, in <app data>\memory) use the same format and the same functions.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { upgradeWho, type Note, type NoteType } from "./model.js";
+import type { WaitingItem } from "../shared/thread-types.js";
+import { newId, upgradeWho, type Note, type NoteType } from "./model.js";
 
 export function serializeNote(n: Note): string {
 	const fm = { id: n.id, type: n.type, title: n.title, refs: n.refs, by: n.by, at: n.at, ...(n.from ? { from: n.from } : {}), ...(n.state ? { state: n.state } : {}), ...(n.agent ? { agent: n.agent } : {}), ...(n.to ? { to: n.to } : {}), ...(n.topic ? { topic: n.topic } : {}), ...(n.stage ? { stage: n.stage } : {}), ...(n.status ? { status: n.status } : {}), ...(n.reviewed !== undefined ? { reviewed: n.reviewed } : {}) };
@@ -41,4 +42,65 @@ export function writeNoteFile(dir: string, n: Note, versionsDir: string): void {
 	const tmp = `${f}.${process.pid}.tmp`;
 	writeFileSync(tmp, serializeNote(n));
 	renameSync(tmp, f);
+}
+
+// ---- the registers of mail (task 12.3): questions and decisions agents leave in Atmiņa ----------------------------------------------
+
+/** What these helpers need of a project: its notes and the write that logs. `ProjectStore` is one. */
+export interface NoteStore {
+	notes(type?: NoteType): Note[];
+	writeNote(n: Note): void;
+}
+
+function find(store: NoteStore, id: string): Note {
+	const n = store.notes().find((x) => x.id === id);
+	if (!n) throw new Error(`Piezīme ${id} nav atrasta.`);
+	return n;
+}
+
+/** Closes (or reopens) a question; the file it replaces is kept by the store's write. */
+export function setNoteStatus(store: NoteStore, id: string, status: "open" | "closed"): Note {
+	const next = { ...find(store, id), status };
+	store.writeNote(next);
+	return next;
+}
+
+/** The user has seen an agents' decision. */
+export function reviewDecision(store: NoteStore, id: string): Note {
+	const n = find(store, id);
+	if (n.type !== "decision") throw new Error("Pārskatīt var tikai lēmumu.");
+	const next = { ...n, reviewed: true };
+	store.writeNote(next);
+	return next;
+}
+
+/** Cancels a decision the way the books allow: a new decision note that names it. The cancelled note stays as it was; nothing is deleted. */
+export function cancelDecision(store: NoteStore, id: string, reason: string): Note {
+	const n = find(store, id);
+	if (n.type !== "decision") throw new Error("Atcelt var tikai lēmumu.");
+	if (!reason.trim()) throw new Error("Norādi atcelšanas iemeslu.");
+	const note: Note = { id: newId("n"), type: "decision", title: `Atcelts: ${n.title}`, body: reason.trim(), refs: [id], by: "user", at: new Date().toISOString(), ...(n.topic ? { topic: n.topic } : {}) };
+	store.writeNote(note);
+	return note;
+}
+
+/** Every open question for the user, of every project that has data: the `question` items of "Gaida tevi". A project whose notes cannot be read is left out. */
+export function waitingQuestions(projectsDir: string): Extract<WaitingItem, { kind: "question" }>[] {
+	const out: Extract<WaitingItem, { kind: "question" }>[] = [];
+	let dirs: string[] = [];
+	try {
+		dirs = readdirSync(projectsDir, { withFileTypes: true }).filter((e) => e.isDirectory() && existsSync(join(projectsDir, e.name, "project.json"))).map((e) => e.name);
+	} catch {
+		return out;
+	}
+	for (const projectId of dirs) {
+		try {
+			for (const n of readNotes(join(projectsDir, projectId, "notes"), "question")) {
+				if (n.to === "user" && n.status === "open") out.push({ kind: "question", noteId: n.id, projectId, from: n.agent ?? "", title: n.title });
+			}
+		} catch {
+			// unreadable notes folder: skipped
+		}
+	}
+	return out;
 }
