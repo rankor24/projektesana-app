@@ -239,17 +239,19 @@ export class Coordinator {
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
+				// the gate numbers its confirmations per run (c1, c2…), so two runs both ask "c1": the id the window sees names the run too
+				const id = `${runId}:${req.id}`;
 				// the list shows the same text the `confirm` event carries
-				const item: Extract<WaitingItem, { kind: "confirm" }> = { kind: "confirm", id: req.id, threadId: thread.id, agent: thread.agent, projectId: thread.projectId, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) };
-				this.confirms.set(req.id, {
+				const item: Extract<WaitingItem, { kind: "confirm" }> = { kind: "confirm", id, threadId: thread.id, agent: thread.agent, projectId: thread.projectId, tool: req.batch.map((b) => b.tool).join(", "), batch: JSON.stringify(req.batch).slice(0, 4000) };
+				this.confirms.set(id, {
 					resolve,
 					live,
 					waiting: () => this.mark(thread, { state: "waiting-confirm" }),
 					resume: () => this.mark(thread, { state: "running" }),
 					item,
 				});
-				this.confirms.get(req.id)!.waiting();
-				emit({ type: "confirm", id: req.id, tool: item.tool, batch: item.batch });
+				this.confirms.get(id)!.waiting();
+				emit({ type: "confirm", id, tool: item.tool, batch: item.batch });
 				this.waitingChanged();
 				// a run parked on a confirmation frees its slot
 				this.pump();

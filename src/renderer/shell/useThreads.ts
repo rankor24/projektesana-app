@@ -1,6 +1,6 @@
 // What the chat window knows about threads: the project's threads, the run table and queue, Gaida tevi, the agents, and the last step of each running thread.
 // Everything is pushed by main (threads.changed, queue.changed, waiting.changed, agent.event); the first read only fills what has not been pushed yet.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normRef, type AgentSpec } from "../../shared/agent-types";
 import { LEAD_ID, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
 import type { RunEvent } from "../../shared/types";
@@ -69,8 +69,15 @@ export function useThreads(projectId: string | null) {
 	const [waiting, setWaiting] = useState<WaitingItem[]>([]);
 	const [specs, setSpecs] = useState<AgentSpec[]>([]);
 	const [steps, setSteps] = useState<Record<string, string>>({});
-	/** confirmations answered from the window: the chat's own confirm line follows */
-	const [answered, setAnswered] = useState<ReadonlyMap<string, boolean>>(new Map());
+	/** every confirmation id that has been in the list: one that was and is gone has been answered (ids carry their run, so they never repeat) */
+	const seen = useRef(new Set<string>());
+	const listed = useCallback((v: WaitingItem[]) => {
+		for (const w of v) if (w.kind === "confirm") seen.current.add(w.id);
+		setWaiting(v);
+	}, []);
+	/** the open project right now: an answer that comes back after a switch belongs to the project that was open when it was asked */
+	const current = useRef(projectId);
+	current.current = projectId;
 
 	useEffect(() => {
 		let live = true;
@@ -105,13 +112,13 @@ export function useThreads(projectId: string | null) {
 		let pushed = false;
 		const off = on("waiting.changed", (v) => {
 			pushed = true;
-			setWaiting(v);
+			listed(v);
 		});
 		call("waiting.list")
-			.then((v) => pushed || setWaiting(v))
+			.then((v) => pushed || listed(v))
 			.catch(() => undefined);
 		return off;
-	}, []);
+	}, [listed]);
 
 	useEffect(() => {
 		let live = true;
@@ -154,13 +161,13 @@ export function useThreads(projectId: string | null) {
 	/** work going on in other projects: the lanes show the open one only, but Apturēt visu stops these too */
 	const elsewhere = useMemo(() => queue.running.filter((r) => r.projectId !== projectId).length + queue.queued.filter((q) => q.state === "queued" && q.projectId !== projectId).length, [queue, projectId]);
 
-	const confirm = useCallback(async (id: string, allow: boolean) => {
-		await call("agent.confirm", id, allow);
-		setAnswered((m) => new Map(m).set(id, allow));
-	}, []);
+	const confirm = useCallback((id: string, allow: boolean) => call("agent.confirm", id, allow), []);
+	/** The chat's confirm line is settled once main's list no longer has it (answered here or in Gaida tevi, or its run ended). Never before the list showed it once. */
+	const settled = (id: string) => seen.current.has(id) && !waiting.some((w) => w.kind === "confirm" && w.id === id);
 	const reload = useCallback(() => {
-		call("threads.list", projectId)
-			.then((list) => setThreads((pushed) => pushed.reduce(upsert, list)))
+		const p = projectId;
+		call("threads.list", p)
+			.then((list) => current.current === p && setThreads((pushed) => pushed.reduce(upsert, list)))
 			.catch(() => undefined);
 	}, [projectId]);
 	const add = useCallback((t: Thread) => setThreads((ts) => upsert(ts, t)), []);
@@ -173,7 +180,10 @@ export function useThreads(projectId: string | null) {
 	const select = useCallback((id: string) => ui.selectThread(id === lead?.id ? null : id), [lead?.id]);
 	const open = useCallback(
 		async (agent: string) => {
-			const t = await call("threads.open", projectId, agent);
+			const p = projectId;
+			const t = await call("threads.open", p, agent);
+			// the user went to another project meanwhile: the thread is made, but this list and this chat are not its
+			if (current.current !== p) return;
 			add(t);
 			select(t.id);
 		},
@@ -181,10 +191,12 @@ export function useThreads(projectId: string | null) {
 	);
 	const close = useCallback(
 		async (id: string) => {
-			add(await call("threads.close", id, projectId));
+			const p = projectId;
+			const t = await call("threads.close", id, p);
+			if (current.current === p) add(t);
 		},
 		[projectId, add],
 	);
 
-	return { threads, queue, waiting, specs, lead, lanes, elsewhere, answered, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close };
+	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close };
 }

@@ -137,10 +137,12 @@ test("an open confirmation puts the thread in waiting-confirm; answering returns
 	await tick();
 	assert.equal(t.store.get(t.thread.id)!.state, "waiting-confirm");
 	assert.equal(t.emitted.find((e) => e.event.type === "confirm")!.meta.threadId, t.thread.id);
-	t.c.confirm("c1", true);
+	const id = t.c.waiting().map((w) => (w.kind === "confirm" ? w.id : ""))[0];
+	assert.equal((t.emitted.find((e) => e.event.type === "confirm")!.event as { id: string }).id, id, "the event and the list carry the same id");
+	t.c.confirm(id, true);
 	assert.equal(await answer, true);
 	assert.equal(t.store.get(t.thread.id)!.state, "running");
-	assert.throws(() => t.c.confirm("c1", true), { message: "Šis apstiprinājums vairs negaida." });
+	assert.throws(() => t.c.confirm(id, true), { message: "Šis apstiprinājums vairs negaida." });
 	release();
 	await t.c.shutdown();
 	assert.equal(t.store.get(t.thread.id)!.state, "idle");
@@ -184,7 +186,7 @@ test("a failing state write (onThread throws) neither loses an answer nor holds 
 	await go();
 	await tick();
 	broken = true;
-	c.confirm("c1", true);
+	c.confirm(c.waiting().map((w) => (w.kind === "confirm" ? w.id : ""))[0], true);
 	assert.equal(await answer, true, "the Allow reached the run although the state write failed");
 	await tick();
 	release();

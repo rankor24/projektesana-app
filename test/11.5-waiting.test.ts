@@ -67,7 +67,9 @@ function setup() {
 		await tick();
 		return t;
 	};
-	return { c, store, go, answers, sent, queueFile };
+	/** the id of the open confirmation of an agent (ids carry the run, so the test reads them from the list) */
+	const idOf = (agent: string) => c.waiting().flatMap((w) => (w.kind === "confirm" && w.agent === agent ? [w.id] : []))[0];
+	return { c, store, go, answers, sent, queueFile, idOf };
 }
 
 test("11.5 confirmations of runs in two projects are both listed with their project while a third is the open one", async () => {
@@ -76,8 +78,8 @@ test("11.5 confirmations of runs in two projects are both listed with their proj
 	const b = await t.go("p2", "ekspertize");
 	// the user looks at p3: it has no run, and the list does not depend on which project is open
 	assert.deepEqual(t.c.waiting(), [
-		{ kind: "confirm", id: "c-p1-lead", threadId: a.id, agent: "lead", projectId: "p1", tool: "tool_lead", batch: JSON.stringify([{ tool: "tool_lead", input: { n: 1 } }]) },
-		{ kind: "confirm", id: "c-p2-ekspertize", threadId: b.id, agent: "ekspertize", projectId: "p2", tool: "tool_ekspertize", batch: JSON.stringify([{ tool: "tool_ekspertize", input: { n: 1 } }]) },
+		{ kind: "confirm", id: t.idOf("lead"), threadId: a.id, agent: "lead", projectId: "p1", tool: "tool_lead", batch: JSON.stringify([{ tool: "tool_lead", input: { n: 1 } }]) },
+		{ kind: "confirm", id: t.idOf("ekspertize"), threadId: b.id, agent: "ekspertize", projectId: "p2", tool: "tool_ekspertize", batch: JSON.stringify([{ tool: "tool_ekspertize", input: { n: 1 } }]) },
 	]);
 	assert.equal(t.sent.length, 2, "waiting.changed after each opened confirmation");
 	assert.deepEqual(t.sent.at(-1)!.map((i) => (i.kind === "confirm" ? i.projectId : i.kind)), ["p1", "p2"]);
@@ -88,16 +90,17 @@ test("11.5 confirmations of runs in two projects are both listed with their proj
 test("11.5 an answered confirmation leaves the list and the list is sent", async () => {
 	const t = setup();
 	await go2(t);
-	t.c.confirm("c-p1-lead", true);
+	const [lead, spec] = [t.idOf("lead"), t.idOf("ekspertize")];
+	t.c.confirm(lead, true);
 	await tick();
-	assert.deepEqual(t.c.waiting().map((i) => (i.kind === "confirm" ? i.id : i.kind)), ["c-p2-ekspertize"]);
-	assert.deepEqual(t.sent.at(-1)!.map((i) => (i.kind === "confirm" ? i.id : i.kind)), ["c-p2-ekspertize"]);
+	assert.deepEqual(t.c.waiting().map((i) => (i.kind === "confirm" ? i.id : i.kind)), [spec]);
+	assert.deepEqual(t.sent.at(-1)!.map((i) => (i.kind === "confirm" ? i.id : i.kind)), [spec]);
 	assert.deepEqual([...t.answers.values()], [true], "the answered run got its answer");
-	t.c.confirm("c-p2-ekspertize", false);
+	t.c.confirm(spec, false);
 	await tick();
 	assert.deepEqual(t.c.waiting(), []);
 	assert.deepEqual(t.sent.at(-1), []);
-	assert.throws(() => t.c.confirm("c-p2-ekspertize", true), /vairs negaida/);
+	assert.throws(() => t.c.confirm(spec, true), /vairs negaida/);
 	await t.c.shutdown();
 });
 
@@ -110,6 +113,39 @@ test("11.5 a stopped run's confirmation leaves the list too", async () => {
 	assert.deepEqual(t.c.waiting(), []);
 	assert.deepEqual(t.sent.at(-1), []);
 	await t.c.shutdown();
+});
+
+test("11.5 two concurrent runs both ask their first confirmation (the gate's own c1): distinct ids, and an answer reaches only its run", async () => {
+	const dir = tmp();
+	const store = new ThreadStore(join(dir, "threads"));
+	const answers = new Map<string, boolean>();
+	const events: { runId: string; id: string }[] = [];
+	const c = new Coordinator({
+		runner: { run: async (i: RunIn) => (answers.set(i.thread.agent, await i.ask(batch("c1"))), { ok: true, answer: "", confirmedBatches: 0 }) } as unknown as ThreadRunner,
+		threads: () => store,
+		settings: () => ({ ...DEFAULT_SETTINGS, maxParallelAgents: 3 }),
+		emit: (runId, e) => {
+			if (e.type === "confirm") events.push({ runId, id: e.id });
+		},
+		queueFile: join(dir, "queue.json"),
+	});
+	const a = store.create({ projectId: "p1", agent: "lead", title: "a", startedBy: "user" });
+	const b = store.create({ projectId: "p1", agent: "ekspertize", title: "b", startedBy: "user" });
+	for (const t of [a, b]) await c.start({ threadId: t.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" } });
+	await tick();
+	const ids = c.waiting().flatMap((w) => (w.kind === "confirm" ? [w.id] : []));
+	assert.equal(ids.length, 2, "both are listed");
+	assert.equal(new Set(ids).size, 2, "with distinct ids");
+	assert.deepEqual(events.map((e) => e.id).sort(), [...ids].sort(), "the event carries the id the list has");
+	const leadId = c.waiting().flatMap((w) => (w.kind === "confirm" && w.agent === "lead" ? [w.id] : []))[0];
+	c.confirm(leadId, true);
+	await tick();
+	assert.deepEqual([...answers], [["lead", true]], "only the answered run went on");
+	assert.deepEqual(c.waiting().map((w) => (w.kind === "confirm" ? w.agent : w.kind)), ["ekspertize"], "the other is still open");
+	c.confirm(c.waiting().flatMap((w) => (w.kind === "confirm" ? [w.id] : []))[0], false);
+	await tick();
+	assert.deepEqual([...answers].sort(), [["ekspertize", false], ["lead", true]]);
+	await c.shutdown();
 });
 
 async function go2(t: ReturnType<typeof setup>) {

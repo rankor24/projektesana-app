@@ -205,11 +205,12 @@ test("confirmations of two runs are answered separately by id; a waiting run fre
 	// both runs wait on a confirmation, so neither holds a slot: a third start runs at once
 	assert.equal((await go(d.id)).queued, false);
 	assert.ok(started.includes(d.id));
-	c.confirm("c-ekspertize", false);
+	const idOf = (agent: string) => c.waiting().flatMap((w) => (w.kind === "confirm" && w.agent === agent ? [w.id] : []))[0];
+	c.confirm(idOf("ekspertize"), false);
 	await tick();
 	assert.equal(answers.get(b.id), false);
 	assert.equal(answers.has(a.id), false, "the other confirmation is still open");
-	c.confirm("c-lead", true);
+	c.confirm(idOf("lead"), true);
 	await c.shutdown();
 	assert.equal(answers.get(a.id), true);
 });

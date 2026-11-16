@@ -389,7 +389,7 @@ export function AgentDock() {
 							<div key={l.runId} className="dim small">{l.queued ? "Gaida rindā" : "strādā…"}</div>
 						)
 					) : (
-						<ChatLine key={i} line={l.kind === "confirm" && T.answered.has(l.id) ? { ...l, answered: true, allow: T.answered.get(l.id) } : l} onAnswer={answer} />
+						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
 					),
 				)}
 				<div ref={endRef} />
@@ -593,7 +593,7 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 				</div>
 				<pre>{l.batch}</pre>
 				{l.answered ? (
-					<span className={`badge ${l.allow ? "ok" : "bad"}`}>{l.allow ? "atļauts" : "noraidīts"}</span>
+					<span className={`badge ${l.allow === undefined ? "dim" : l.allow ? "ok" : "bad"}`}>{l.allow === undefined ? "atbildēts" : l.allow ? "atļauts" : "noraidīts"}</span>
 				) : (
 					<div className="row">
 						<button className="primary" onClick={() => onAnswer(l.id, true)}>Atļaut</button>
