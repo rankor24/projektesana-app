@@ -2,12 +2,12 @@
 // Every event of a run leaves with its envelope (thread, agent, project, wave) and the thread's state follows the run.
 // No Electron imports: the runner, the stores and the sink are injected.
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem } from "../shared/thread-types.js";
+import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
-import { answered, inboxOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
+import { answered, inboxOf, limitsOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
 import type { ThreadStore } from "../core/threads.js";
-import { loadQueue, pickNext, saveQueue, type QueueItem, type Running } from "../core/queue.js";
+import { loadQueue, pickNext, saveQueue, waveCheck, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
 import type { ConfirmRequest } from "./tools/levels.js";
 import type { ThreadRunner } from "./thread-runner.js";
@@ -69,7 +69,11 @@ export class Coordinator {
 	/** what `restore()` found, until the user answers it; the same lifetime as the window's `queue.restored` */
 	private restoreNotice: { interrupted: number; queued: number } | null = null;
 	private n = 0;
-	private waves = 0;
+	private waveN = 0;
+	/** every wave this process has seen, by id: counts live here only (a restored item's wave starts again from zero) */
+	private waves = new Map<string, Wave>();
+	/** set by `waveBlocked` when a wave was just paused, so `pump` tells the window once */
+	private wavePaused = false;
 	/** projects whose mail is to be looked at again; `waking` keeps a wake that comes from inside a wake from nesting */
 	private rewake = new Set<string | null>();
 	private waking = false;
@@ -95,7 +99,59 @@ export class Coordinator {
 	}
 
 	private newWave(): string {
-		return `w${Date.now().toString(36)}${++this.waves}`;
+		return `w${Date.now().toString(36)}${++this.waveN}`;
+	}
+
+	/** The wave of this id, made on first sight (a user start opens one; an item restored from disk or a message of an old wave finds it missing). */
+	private waveOf(id: string, projectId: string | null): Wave {
+		let w = this.waves.get(id);
+		if (!w) {
+			w = { id, projectId, startedAt: this.now(), runs: 0, cost: 0, paused: null };
+			this.waves.set(id, w);
+		}
+		return w;
+	}
+
+	/** Is this queued item held back by its wave? Asked only of items that could start now: the first time the wave is at a limit it is paused and Gaida tevi hears of it. */
+	private waveBlocked(q: QueueItem): boolean {
+		const w = this.waveOf(q.wave, q.projectId);
+		if (!w.paused) {
+			const hit = waveCheck(w, limitsOf(this.d.settings()));
+			if (hit) {
+				w.paused = hit;
+				this.wavePaused = true;
+			}
+		}
+		return w.paused !== null;
+	}
+
+	/** The live waves: those with a run going or an item queued, and any paused one (it waits for the user). */
+	private liveWaves(): Wave[] {
+		const busy = (w: Wave) => [...this.live.values()].some((l) => l.wave === w.id) || this.queue.some((q) => q.state === "queued" && q.wave === w.id);
+		return [...this.waves.values()].filter((w) => w.paused || busy(w)).map((w) => ({ ...w }));
+	}
+
+	/** A paused wave with nothing queued has nothing to resume (Stop took its items): it is no longer paused. True when one changed. */
+	private settleWaves(): boolean {
+		let any = false;
+		for (const w of this.waves.values()) {
+			if (w.paused && !this.queue.some((q) => q.state === "queued" && q.wave === w.id)) {
+				w.paused = null;
+				any = true;
+			}
+		}
+		return any;
+	}
+
+	/** The user chose to go on with a paused wave: its counts start again from zero and what it held back starts. */
+	resumeWave(wave: string): void {
+		const w = this.waves.get(wave);
+		if (!w) return;
+		w.runs = 0;
+		w.cost = 0;
+		w.paused = null;
+		this.waitingChanged();
+		this.pump();
 	}
 
 	private setState(t: Thread, p: Parameters<ThreadStore["patch"]>[1]): Thread {
@@ -119,7 +175,7 @@ export class Coordinator {
 	}
 
 	view(): QueueView {
-		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: [] };
+		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: this.liveWaves() };
 	}
 
 	/** Everything that waits for the user, of every project: open confirmations first, then the questions in Atmiņa, then the unanswered restart. */
@@ -130,7 +186,8 @@ export class Coordinator {
 		} catch {
 			// unreadable notes: the list shows the rest
 		}
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused: [], questions, gates: [] });
+		const paused = [...this.waves.values()].filter((w) => w.paused).map((w) => ({ kind: "wave-paused" as const, wave: w.id, projectId: w.projectId, reason: w.paused! }));
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates: [] });
 	}
 
 	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */
@@ -155,6 +212,7 @@ export class Coordinator {
 
 	/** Every change of the view: save the queue, tell the window. Neither may break a run. */
 	private changed(): void {
+		if (this.settleWaves()) this.waitingChanged();
 		try {
 			saveQueue(this.d.queueFile, { items: this.queue, paused: this.paused });
 		} catch {
@@ -174,7 +232,7 @@ export class Coordinator {
 		// nothing starts while the app closes or a compaction holds the coordinator
 		while (!this.closing && !this.held) {
 			const cap = this.d.settings().maxParallelAgents;
-			const item = pickNext(this.queue, this.running(), Number.isFinite(cap) ? cap : 1, this.paused);
+			const item = pickNext(this.queue, this.running(), Number.isFinite(cap) ? cap : 1, this.paused, (q) => this.waveBlocked(q));
 			if (!item) break;
 			this.queue = this.queue.filter((q) => q !== item);
 			const files = this.prepared.get(item.id);
@@ -192,6 +250,10 @@ export class Coordinator {
 			}
 		}
 		this.changed();
+		if (this.wavePaused) {
+			this.wavePaused = false;
+			this.waitingChanged();
+		}
 		return { started, failed };
 	}
 
@@ -219,8 +281,10 @@ export class Coordinator {
 		// the user's own messages never pile up unseen; a message from another agent may wait behind the run
 		if (i.cause.by === "user" && this.threadBusy(i.threadId)) throw new Error(BUSY);
 		const id = `q${Date.now().toString(36)}${++this.n}`;
+		const wave = i.wave ?? this.newWave();
+		this.waveOf(wave, i.projectId);
 		this.queue.push({
-			id, threadId: i.threadId, agent: found.agent, projectId: i.projectId, wave: i.wave ?? this.newWave(), at: this.now(), state: "queued",
+			id, threadId: i.threadId, agent: found.agent, projectId: i.projectId, wave, at: this.now(), state: "queued",
 			...(i.files && (i.files.images.length || i.files.text || i.files.refs.length) ? { hadFiles: true } : {}),
 			input: { text: i.text, focus: i.focus, cause: i.cause },
 		});
@@ -265,6 +329,8 @@ export class Coordinator {
 		}
 		// the run is going: the messages it reads are delivered
 		this.setMail(item.projectId, ids, "delivered");
+		// the run is counted when it starts, whatever started it
+		this.waveOf(wave, thread.projectId).runs++;
 		const meta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId: thread.projectId, wave };
 		// a restored item lost its prepared files with the old process: it starts without them and says so
 		const text = item.hadFiles && !extra?.files ? `${item.input.text}\n${NO_FILES}` : item.input.text;
@@ -274,6 +340,15 @@ export class Coordinator {
 		let lastError: string | null = null;
 		const emit = (e: RunEvent) => {
 			if (e.type === "error") lastError = e.message;
+			// what the provider charged adds to the wave; none given adds nothing
+			if (e.type === "usage" && e.cost !== null) {
+				this.waveOf(wave, thread.projectId).cost += e.cost;
+				try {
+					this.d.onQueue?.(this.view());
+				} catch {
+					// a window already gone
+				}
+			}
 			this.d.emit(runId, e, meta);
 		};
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
@@ -526,7 +601,7 @@ export class Coordinator {
 				continue;
 			}
 			try {
-				this.submit({ threadId: t.id, projectId, text: deliveryText(inbox, topics), focus: [], cause: { by: "message", ids: inbox.map((m) => m.id) }, wave: inbox[0].wave });
+				this.submit({ threadId: t.id, projectId, text: deliveryText(inbox, topics, limitsOf(this.d.settings()).taskIterations), focus: [], cause: { by: "message", ids: inbox.map((m) => m.id) }, wave: inbox[0].wave });
 			} catch {
 				// the thread is gone or its state could not be written: the messages stay queued for the next wake
 			}

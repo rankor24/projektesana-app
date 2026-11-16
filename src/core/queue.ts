@@ -1,13 +1,21 @@
 // The run queue as plain data: who may start next, and how it is kept on disk. No timers, no runs.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { QueueItem, Running } from "../shared/thread-types.js";
+import type { Limits, QueueItem, Running, Wave } from "../shared/thread-types.js";
 
 // The shapes live in shared/thread-types.ts (the window imports them and must not reach node:fs through this file).
-export type { QueueItem, Running };
+export type { QueueItem, Running, Wave };
 
-/** The oldest queued item whose thread is not running, whose agent is not running in that project, while fewer than `cap` runs are not waiting for a confirmation. */
-export function pickNext(queue: QueueItem[], running: Running[], cap: number, paused: boolean): QueueItem | null {
+/** Has the wave reached a limit: `runs` when it has started `runsPerWave` runs, `cost` when `waveCost` is set and spent; null while it may start more. Runs are named first. */
+export function waveCheck(w: Wave, l: Limits): null | "runs" | "cost" {
+	if (w.runs >= l.runsPerWave) return "runs";
+	if (l.waveCost !== null && w.cost >= l.waveCost) return "cost";
+	return null;
+}
+
+/** The oldest queued item whose thread is not running, whose agent is not running in that project, while fewer than `cap` runs are not waiting for a confirmation.
+ *  `blocked` names items that must wait for now (a paused wave's); the pick goes on to the next. It is asked only of items that could otherwise start. */
+export function pickNext(queue: QueueItem[], running: Running[], cap: number, paused: boolean, blocked?: (q: QueueItem) => boolean): QueueItem | null {
 	if (paused) return null;
 	// A run parked on a confirmation does not hold a slot: the user may be away for hours.
 	const active = running.filter((r) => !r.waitingConfirm).length;
@@ -16,7 +24,8 @@ export function pickNext(queue: QueueItem[], running: Running[], cap: number, pa
 		queue.find(
 			(q) =>
 				q.state === "queued" &&
-				!running.some((r) => r.threadId === q.threadId || (r.agent === q.agent && r.projectId === q.projectId)),
+				!running.some((r) => r.threadId === q.threadId || (r.agent === q.agent && r.projectId === q.projectId)) &&
+				!blocked?.(q),
 		) ?? null
 	);
 }

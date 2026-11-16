@@ -75,7 +75,8 @@ test("cap 2, three threads of three agents: two run, one queues, and it starts w
 	assert.equal(t.store.get(d.id)!.state, "running");
 	assert.equal(t.c.view().queued.length, 0);
 	assert.equal(t.views.at(-1)!.running.length, 2, "queue.changed was sent");
-	assert.deepEqual(t.views.at(-1)!.waves, []);
+	// 12.4: the live waves are the two that still have a run going (a's wave ended and is dropped), one run each
+	assert.deepEqual(t.views.at(-1)!.waves.map((w) => [w.runs, w.paused]), [[1, null], [1, null]]);
 	t.c.stopAll();
 	await t.c.shutdown();
 });

@@ -1,5 +1,7 @@
 // One collapsed row per running or queued thread of the open project, with its last step and a stop button; above them the queue's own controls.
 import type { AgentSpec } from "../../shared/agent-types";
+import type { Wave } from "../../shared/thread-types";
+import { waveLine } from "../../shared/wave";
 import { StateDot } from "./ThreadList";
 import { agentName, type LaneItem } from "./useThreads";
 
@@ -28,6 +30,8 @@ interface BarProps {
 	lanes: LaneItem[];
 	specs: AgentSpec[];
 	paused: boolean;
+	/** the open project's current wave, shown beside Stop */
+	wave: Wave | null;
 	/** running or queued in other projects */
 	elsewhere: number;
 	onOpen: (threadId: string) => void;
@@ -37,7 +41,7 @@ interface BarProps {
 }
 
 /** Shown only while something runs, waits in the queue, or the queue is paused: an idle window has no strip. */
-export function LaneBar({ lanes, specs, paused, elsewhere, onOpen, onStop, onStopAll, onTogglePause }: BarProps) {
+export function LaneBar({ lanes, specs, paused, wave, elsewhere, onOpen, onStop, onStopAll, onTogglePause }: BarProps) {
 	if (lanes.length === 0 && elsewhere === 0 && !paused) return null;
 	return (
 		<div className="run-lanes">
@@ -47,6 +51,7 @@ export function LaneBar({ lanes, specs, paused, elsewhere, onOpen, onStop, onSto
 				{elsewhere > 0 && <span className="dim">· citos projektos {elsewhere}</span>}
 				{paused && <span className="badge warn">rinda apturēta</span>}
 				<span className="grow" />
+				{wave && <span className={`small ${wave.paused ? "badge warn" : "dim"}`}>{waveLine(wave)}</span>}
 				<button className="small" onClick={onTogglePause} title={paused ? "Rindā gaidošie darbi sāks darbu" : "Kas jau strādā, turpina; jauni darbi gaida"}>
 					{paused ? "Turpināt rindu" : "Pauzēt rindu"}
 				</button>

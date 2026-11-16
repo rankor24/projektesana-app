@@ -1,6 +1,7 @@
 // Settings: which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort, theme,
 // Revit MCP path. Keys are stored encrypted by main; nothing here shows a stored key.
 import { useEffect, useState } from "react";
+import type { Limits } from "../../shared/thread-types";
 import type { LoginNotice } from "../../shared/types";
 import type { ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
@@ -169,6 +170,9 @@ export function Iestatijumi() {
 			)}
 			<div className="section-title">Aģenti</div>
 			<Agenti />
+			<div className="section-title">Aģentu ierobežojumi</div>
+			{s && <LimitInputs limits={s.limits} save={(limits) => act(() => call("settings.set", { limits }))} />}
+			<div className="dim small">Cik tālu aģenti drīkst sarunāties savā starpā. Vilnis ir viss, ko izraisa viena tava darbība; tam sasniedzot robežu, rindā gaidošie darbi apstājas un “Gaida tevi” piedāvā turpināt.</div>
 			<div className="section-title">Izmantojums</div>
 			<UsageTable />
 			<div className="section-title">3D skats (BimCraft)</div>
@@ -197,6 +201,41 @@ export function Iestatijumi() {
 				</div>
 			)}
 		</div>
+	);
+}
+
+const LIMIT_ROWS: { key: keyof Limits; label: string; min: number; max: number; step?: number }[] = [
+	{ key: "exchangesPerTopic", label: "Ziņas par vienu tematu (no katras puses)", min: 1, max: 10 },
+	{ key: "chainDepth", label: "Ziņu ķēdes dziļums", min: 1, max: 20 },
+	{ key: "runsPerWave", label: "Skrējieni vienā vilnī", min: 1, max: 200 },
+	{ key: "waveCost", label: "Viļņa izmaksu robeža ($)", min: 0, max: 100000, step: 0.1 },
+	{ key: "taskIterations", label: "Uzdevuma iterācijas", min: 1, max: 10 },
+];
+
+/** The five limits. Saved on leaving a field; main puts each into its range, and the field shows what was kept. An empty cost field = no cost limit. */
+function LimitInputs({ limits, save }: { limits: Limits; save: (next: Limits) => void }) {
+	return (
+		<>
+			{LIMIT_ROWS.map((r) => (
+				<label key={`${r.key}${limits[r.key]}`} className="row">
+					<span style={{ width: 260 }}>{r.label}</span>
+					<input
+						type="number"
+						min={r.min}
+						max={r.max}
+						step={r.step ?? 1}
+						defaultValue={limits[r.key] ?? ""}
+						placeholder={r.key === "waveCost" ? "nav robežas" : undefined}
+						style={{ width: 110 }}
+						onBlur={(e) => {
+							const raw = e.target.value.trim();
+							const v = raw === "" ? null : Number(raw);
+							if (v !== limits[r.key] && !(v === null && r.key !== "waveCost")) save({ ...limits, [r.key]: v });
+						}}
+					/>
+				</label>
+			))}
+		</>
 	);
 }
 

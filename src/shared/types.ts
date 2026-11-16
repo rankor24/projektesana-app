@@ -1,4 +1,5 @@
 // Types shared by main, the tools server, the pi harness and the renderer. No Node or DOM imports here.
+import { DEFAULT_LIMITS, type Limits } from "./thread-types.js";
 
 export type RunEvent =
 	| { type: "text"; text: string }
@@ -41,9 +42,11 @@ export interface Settings {
 	userName: string;
 	/** how many helpers / specialists may work at once (task 8.15), 1–6 */
 	maxParallelAgents: number;
+	/** how far agents may talk to each other and how much one wave may start and spend (task 12.4) */
+	limits: Limits;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3 };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

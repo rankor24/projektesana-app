@@ -61,7 +61,11 @@ export interface Running {
 	waitingConfirm: boolean;
 }
 
-/** A wave: the runs one user start set going (filled by task 12.4; the queue view carries none until then). */
+/** The limits of agents talking to each other (Iestatījumi). Here, not in core/messages.ts, because `Settings` carries them and the window must not reach node:fs. */
+export interface Limits { exchangesPerTopic: number; chainDepth: number; runsPerWave: number; waveCost: number | null; taskIterations: number }
+export const DEFAULT_LIMITS: Limits = { exchangesPerTopic: 3, chainDepth: 6, runsPerWave: 20, waveCost: null, taskIterations: 3 };
+
+/** A wave: everything one user action set off. Its id travels on every run and message it causes; the counts are the limits' input. */
 export interface Wave {
 	id: string;
 	projectId: string | null;

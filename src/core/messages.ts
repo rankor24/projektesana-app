@@ -3,7 +3,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID } from "../shared/thread-types.js";
+import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
 import { newId } from "./model.js";
 
 export type MessageKind = "task" | "reply" | "ask";
@@ -40,10 +40,37 @@ export interface Topic {
 	openedAt: string;
 	closedAt?: string;
 	noteId?: string;
+	/** a "Nodots:" system notice to the lead: only the lead may close it */
+	notice?: true;
 }
 
-export interface Limits { exchangesPerTopic: number; chainDepth: number; runsPerWave: number; waveCost: number | null; taskIterations: number }
-export const DEFAULT_LIMITS: Limits = { exchangesPerTopic: 3, chainDepth: 6, runsPerWave: 20, waveCost: null, taskIterations: 3 };
+// the shapes live in shared/thread-types.ts (Settings carries them); everything that imported them from here still can
+export { DEFAULT_LIMITS, type Limits };
+
+const RANGES: Record<Exclude<keyof Limits, "waveCost">, [number, number]> = { exchangesPerTopic: [1, 10], chainDepth: [1, 20], runsPerWave: [1, 200], taskIterations: [1, 10] };
+
+/** A number from a form or a hand-edited file; "", null and booleans are not numbers (`Number(null)` would be 0). */
+const num = (v: unknown): number => (v === null || v === "" || typeof v === "boolean" ? NaN : Number(v));
+
+/** `patch` laid over `base`, every value forced into its range (whole numbers; one that is no number keeps `base`'s). `waveCost` is null (no limit) or above 0. */
+export function clampLimits(patch: Partial<Limits> | undefined, base: Limits): Limits {
+	const out: Limits = { ...base };
+	const p = patch ?? {};
+	for (const k of Object.keys(RANGES) as (keyof typeof RANGES)[]) {
+		const n = Math.round(num(p[k]));
+		if (Number.isFinite(n)) out[k] = Math.max(RANGES[k][0], Math.min(RANGES[k][1], n));
+	}
+	if ("waveCost" in p) {
+		const c = num(p.waveCost);
+		out.waveCost = c > 0 && Number.isFinite(c) ? c : null;
+	}
+	return out;
+}
+
+/** The limits in force: the settings' own, or the defaults where they are absent (a settings file older than this field, a test's partial settings). */
+export function limitsOf(s: { limits?: Partial<Limits> }): Limits {
+	return clampLimits(s.limits, DEFAULT_LIMITS);
+}
 
 export type SendCheck =
 	| { ok: true }
@@ -192,12 +219,12 @@ export function topicsLine(open: readonly Topic[]): string {
 }
 
 /** The text of a run a message starts: every message in order, headed with who wrote it, on what topic, of what kind. */
-export function deliveryText(inbox: readonly Message[], topics: readonly Topic[]): string {
+export function deliveryText(inbox: readonly Message[], topics: readonly Topic[], iterations: number = DEFAULT_LIMITS.taskIterations): string {
 	return inbox
 		.map((m) => {
 			const head = `[no ${m.from} · ${topics.find((t) => t.id === m.topic)?.title ?? m.topic} · ${m.kind}]`;
 			// the envelope when there is one; the free text beside it only if the envelope does not already say it
-			const env = [m.task ? renderTask(m.task, m.to) : "", m.reply ? renderReply(m.reply) : ""].filter(Boolean).join("\n");
+			const env = [m.task ? renderTask(m.task, m.to, iterations) : "", m.reply ? renderReply(m.reply) : ""].filter(Boolean).join("\n");
 			const text = m.text.trim();
 			const body = env ? (text && !env.includes(text) ? `${env}\n${text}` : env) : text;
 			return `${head}\n${body}`;

@@ -22,6 +22,7 @@ import { bimcraft } from "../preview/IfcView";
 import { parseMention } from "../../shared/mention";
 import { LaneBar } from "./Lane";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
+import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
 import { Waiting } from "./Waiting";
 
@@ -409,6 +410,7 @@ export function AgentDock() {
 				lanes={T.lanes}
 				specs={T.specs}
 				paused={T.queue.paused}
+				wave={currentWave(T.queue.waves, T.queue.running, projectId)}
 				elsewhere={T.elsewhere}
 				onOpen={T.select}
 				onStop={stopLane}

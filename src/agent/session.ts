@@ -190,6 +190,11 @@ export class AgentSession {
 		this.coordinator.resume();
 	}
 
+	/** A wave that stopped at a limit goes on, its counts from zero. */
+	resumeWave(wave: string): void {
+		this.coordinator.resumeWave(wave);
+	}
+
 	/** The chat box: a text that starts with `@agent` goes to that agent's newest open thread in the project (one is opened when there is none),
 	 *  without the mention; any other text goes to the lead. `onRunId` hears the run's id and the text that was sent. */
 	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string, sent: string) => void): Promise<{ runId: string | null; queued: boolean }> {

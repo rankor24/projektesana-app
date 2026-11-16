@@ -105,7 +105,7 @@ export function passUp(d: MailDeps, topic: Topic, why: string): Note {
 	if (!toUser) {
 		try {
 			const lead = d.leadThread ? d.leadThread() : d.threads.lead(d.self.projectId, "");
-			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, LEAD_ID], parent: topic.id });
+			const notice = d.mailbox.openTopic({ title: `Nodots: ${topic.title}`, parties: [d.self.agent, LEAD_ID], parent: topic.id, notice: true });
 			d.mailbox.add({
 				wave: d.self.wave, topic: notice.id, from: d.self.agent, to: LEAD_ID, kind: "ask", text: why, refs: [note.id],
 				fromThread: d.self.threadId, toThread: lead.id, depth: d.self.depth + 1,
@@ -183,6 +183,8 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 			const topic = d.mailbox.topics().find((t) => t.id === p.topic);
 			if (!topic) return result(`Temats ${p.topic} nav atrasts.`, true);
 			if (!topic.parties.includes(d.self.agent)) return result(`Temats «${topic.title}» ir starp ${topic.parties.join(" un ")}; slēgt to var tikai viens no viņiem.`, true);
+			// a notice is the lead's to answer; the agent that sent it already passed its topic up and has nothing more to close
+			if (topic.notice && d.self.agent !== LEAD_ID) return result("Šo tematu slēdz galvenais aģents.", true);
 			if (topic.state !== "open") return result(closedReason(topic), true);
 			try {
 				if (p.outcome === "passed-up") {

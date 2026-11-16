@@ -3,8 +3,10 @@
 // v2 starts with a fresh data folder.
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_LIMITS, clampLimits } from "../core/messages.js";
 import { DEFAULT_AGENTS } from "../agent/subagents.js";
 import type { AgentSpec } from "../shared/agent-types.js";
+import type { Limits } from "../shared/thread-types.js";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/types.js";
 
 export interface Crypto {
@@ -27,16 +29,20 @@ export class AppSettings {
 		const f = join(this.dir, "settings.json");
 		if (!existsSync(f)) return { ...DEFAULT_SETTINGS };
 		try {
-			return { ...DEFAULT_SETTINGS, ...(JSON.parse(readFileSync(f, "utf8")) as Partial<Settings>) };
+			const saved = JSON.parse(readFileSync(f, "utf8")) as Partial<Settings>;
+			// a file from before the limits, or one edited by hand, still gives limits inside their ranges
+			return { ...DEFAULT_SETTINGS, ...saved, limits: clampLimits(saved.limits, DEFAULT_LIMITS) };
 		} catch {
 			return { ...DEFAULT_SETTINGS };
 		}
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits"];
 		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
 		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
+		// a patch may name only some limits: the rest stay as they are
+		if ("limits" in clean) clean.limits = clampLimits(clean.limits as Partial<Limits>, this.get().limits);
 		const s = { ...this.get(), ...clean };
 		writeFileSync(join(this.dir, "settings.json"), JSON.stringify(s, null, 2), "utf8");
 		return s;

@@ -30,7 +30,7 @@ import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, rosterText, specialistTools, subagentDeclarations, subagentTools } from "./subagents.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS, mailDeclarations, mailTools } from "./mail.js";
-import { DEFAULT_LIMITS, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
+import { limitsOf, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps } from "./session.js";
 
 /** Tokens of the app's own tool declarations, which every request carries. Revit's tools come on top when it is connected.
@@ -324,7 +324,7 @@ export class ThreadRunner {
 								mailbox,
 								threads: this.store(thread),
 								agents: () => this.d.agents?.() ?? DEFAULT_AGENTS,
-								limits: () => DEFAULT_LIMITS,
+								limits: () => limitsOf(this.d.settings()),
 								self: { agent: spec ? spec.id : LEAD_ID, threadId: thread.id, projectId, wave: i.wave, depth: i.depth ?? 0 },
 								enqueue: () => i.wake?.(),
 								note: (line) => emit({ type: "text", text: line }),

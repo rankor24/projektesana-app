@@ -66,13 +66,20 @@ export function Waiting({ items, specs, projectId, onConfirm, onOpen }: Props) {
 								</div>
 							</div>
 						);
-					// the three below are filled by later phases; a line each until they have their own controls
 					case "wave-paused":
 						return (
-							<div key={`wave${w.wave}`} className="small">
-								Vilnis {w.wave} apturēts: {REASON[w.reason]} ({w.projectId ?? "bez projekta"})
+							<div key={`wave${w.wave}`} className="confirm">
+								<div className="row small">
+									<b>Vilnis apturēts</b>
+									<span className={`badge ${w.projectId === projectId ? "dim" : "warn"}`}>{w.projectId ?? "bez projekta"}</span>
+									<span className="dim">{REASON[w.reason]}</span>
+								</div>
+								<div className="row">
+									<button className="primary" onClick={() => run(call("queue.resumeWave", w.wave))} title="Skaitītāji sākas no nulles; rindā gaidošie darbi sāk darbu">Turpināt</button>
+								</div>
 							</div>
 						);
+					// the two below are filled by later phases; a line each until they have their own controls
 					case "question":
 						return (
 							<div key={`q${w.noteId}`} className="small">

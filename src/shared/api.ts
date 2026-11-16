@@ -409,6 +409,8 @@ export interface ApiSpec {
 	/** Nothing queued starts until resume; runs already going continue. */
 	"queue.pause": () => void;
 	"queue.resume": () => void;
+	/** A wave stopped at a limit (Gaida tevi, "Turpināt"): its counts start again from zero and what it held back starts. */
+	"queue.resumeWave": (wave: string) => void;
 	/** Everything that waits for the user, of every project, not only the open one (Gaida tevi). */
 	"waiting.list": () => WaitingItem[];
 	/** Every thread of the project, newest first. */
@@ -617,6 +619,7 @@ export const API_NAMES = [
 	"queue.view",
 	"queue.pause",
 	"queue.resume",
+	"queue.resumeWave",
 	"waiting.list",
 	"threads.list",
 	"threads.open",
