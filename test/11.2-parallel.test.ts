@@ -225,3 +225,69 @@ test("the saved queue item never carries attachments", async () => {
 	t.c.stopAll();
 	await t.c.shutdown();
 });
+
+test("a start whose own item cannot begin throws to the caller and leaves nothing queued", async () => {
+	const dir = tmp();
+	const store = new ThreadStore(join(dir, "threads"));
+	const a = store.create({ projectId: "p1", agent: "lead", title: "a", startedBy: "user" });
+	let broken = true;
+	const c = new Coordinator({
+		runner: { run: async () => ({ ok: true, answer: "", confirmedBatches: 0 }) } as unknown as ThreadRunner,
+		threads: () => store,
+		settings: () => ({ ...DEFAULT_SETTINGS, maxParallelAgents: 1 }),
+		emit: () => undefined,
+		onThread: () => {
+			if (broken) throw new Error("EPERM");
+		},
+		queueFile: join(dir, "queue.json"),
+	});
+	await assert.rejects(c.start({ threadId: a.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" } }), { message: "EPERM" });
+	assert.equal(c.view().queued.length, 0);
+	assert.equal(store.get(a.id)!.state, "idle");
+	broken = false;
+	assert.equal((await c.start({ threadId: a.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" } })).queued, false);
+	await c.shutdown();
+});
+
+test("a queued item whose thread vanished surfaces as an error event on its run and is kept as stopped", async () => {
+	const t = setup(1);
+	const [a, b] = [t.mk("lead", "a"), t.mk("ekspertize", "b")];
+	const events: { runId: string; type: string; threadId: string }[] = [];
+	const store = t.store;
+	// rebuild the emit sink: setup's coordinator drops events, so spy through a second coordinator on the same store
+	const c = new Coordinator({
+		runner: { run: async (i: RunIn) => (await new Promise<void>((r) => i.signal.addEventListener("abort", () => r())), { ok: true, answer: "", confirmedBatches: 0 }) } as unknown as ThreadRunner,
+		threads: () => store,
+		settings: () => ({ ...DEFAULT_SETTINGS, maxParallelAgents: 1 }),
+		emit: (runId, e, meta) => events.push({ runId, type: e.type, threadId: meta.threadId }),
+		queueFile: join(tmp(), "queue.json"),
+	});
+	await c.start({ threadId: a.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" } });
+	assert.deepEqual(await c.start({ threadId: b.id, projectId: "p1", text: "x", focus: [], cause: { by: "user" }, runId: "rB" }), { runId: null, queued: true });
+	// b's thread disappears while it waits
+	(store as unknown as { get: (id: string) => unknown }).get = ((orig) => (id: string) => (id === b.id ? undefined : orig(id)))(store.get.bind(store));
+	c.stopThread(a.id);
+	await tick();
+	assert.deepEqual(events, [{ runId: "rB", type: "error", threadId: b.id }]);
+	assert.deepEqual(c.view().queued.map((q) => q.state), ["stopped"]);
+	assert.equal(c.view().running.length, 0);
+	await c.shutdown();
+});
+
+test("resume during a manual compaction starts nothing until the compaction ends", async () => {
+	const t = setup(2);
+	const a = t.mk("lead", "a");
+	t.c.pause();
+	assert.deepEqual(await t.start(a.id), { runId: null, queued: true });
+	let end!: () => void;
+	const job = t.c.exclusive(() => new Promise<void>((r) => (end = r)));
+	await tick();
+	t.c.resume();
+	assert.deepEqual(t.started, []);
+	assert.equal(t.c.view().queued.length, 1);
+	end();
+	await job;
+	assert.deepEqual(t.started, [a.id]);
+	t.c.stopAll();
+	await t.c.shutdown();
+});

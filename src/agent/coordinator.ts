@@ -113,9 +113,11 @@ export class Coordinator {
 	}
 
 	/** Starts queued items while `pickNext` allows. The cap is read at every pick; a value that is not a number counts as 1. */
-	private pump(): Map<string, string> {
+	private pump(own?: string): { started: Map<string, string>; failed: Map<string, Error> } {
 		const started = new Map<string, string>();
-		while (!this.closing) {
+		const failed = new Map<string, Error>();
+		// nothing starts while the app closes or a compaction holds the coordinator
+		while (!this.closing && !this.held) {
 			const cap = this.d.settings().maxParallelAgents;
 			const item = pickNext(this.queue, this.running(), Number.isFinite(cap) ? cap : 1, this.paused);
 			if (!item) break;
@@ -124,13 +126,28 @@ export class Coordinator {
 			this.prepared.delete(item.id);
 			try {
 				started.set(item.id, this.begin(item, files));
-			} catch {
-				// the thread is gone: the item cannot run
+			} catch (e) {
+				// the item cannot run (its thread is gone, a state write failed): it stays in the queue as stopped
+				const err = e instanceof Error ? e : new Error(String(e));
 				this.queue.push({ ...item, state: "stopped" });
+				if (item.id === own) failed.set(item.id, err);
+				else this.surface(item, files?.runId, err);
 			}
 		}
 		this.changed();
-		return started;
+		return { started, failed };
+	}
+
+	/** A delayed item failed to start: the window gets an error on the run it was told about, and the thread is not left "queued". */
+	private surface(item: QueueItem, runId: string | undefined, err: Error): void {
+		const meta: RunMeta = { threadId: item.threadId, agent: item.agent, projectId: item.projectId, wave: item.wave };
+		try {
+			this.d.emit(runId ?? this.newRunId(), { type: "error", engine: "pi", message: err.message }, meta);
+		} catch {
+			// a window already gone
+		}
+		const t = this.d.threads(item.projectId).get(item.threadId);
+		if (t) this.mark(t, { state: "idle" });
 	}
 
 	async start(i: StartRequest): Promise<{ runId: string | null; queued: boolean }> {
@@ -145,7 +162,15 @@ export class Coordinator {
 			input: { text: i.text, focus: i.focus, cause: i.cause },
 		});
 		this.prepared.set(id, { files: i.files, runId: i.runId });
-		const runId = this.pump().get(id);
+		const { started, failed } = this.pump(id);
+		const error = failed.get(id);
+		if (error) {
+			// the caller's own start failed: it hears about it, nothing is left behind in the queue
+			this.queue = this.queue.filter((q) => q.id !== id);
+			this.changed();
+			throw error;
+		}
+		const runId = started.get(id);
 		if (runId) return { runId, queued: false };
 		this.mark(found, { state: "queued" });
 		return { runId: null, queued: true };
@@ -157,7 +182,14 @@ export class Coordinator {
 		if (!found) throw new Error(`Saruna ${item.threadId} nav atrasta.`);
 		const runId = extra?.runId ?? this.newRunId();
 		const wave = item.wave;
-		const thread = this.setState(found, { state: "running", lastAt: this.now(), runs: found.runs + 1, wave });
+		let thread: Thread;
+		try {
+			thread = this.setState(found, { state: "running", lastAt: this.now(), runs: found.runs + 1, wave });
+		} catch (e) {
+			// the store may have taken the write before the notice failed: do not leave a "running" thread without a run
+			this.mark(found, { state: "idle" });
+			throw e;
+		}
 		const meta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId: thread.projectId, wave };
 		const abort = new AbortController();
 		const emit = (e: RunEvent) => this.d.emit(runId, e, meta);
@@ -206,6 +238,7 @@ export class Coordinator {
 			return await job(abort.signal);
 		} finally {
 			this.held = null;
+			this.pump();
 		}
 	}
 

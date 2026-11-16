@@ -104,16 +104,19 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
 		},
 		"agent.send": async (projectId, text, focus, attachments) => {
-			// the activity log titles the run with what was asked; the run's first event may come before send returns
-			d.activity?.begin(projectId, text);
+			// the activity log titles the run with what was asked, keyed by the run's id (known before the run starts,
+			// and the run's first event may come before send returns, or much later when the start waits in the queue)
+			let named: string | null = null;
 			try {
-				const r = await d.session.send(projectId, text, focus, attachments ?? []);
-				// a queued start has no run yet; its first event opens the run and takes the pending title
-				if (r.runId) // a queued start has no run yet; its first event opens the run and takes the pending title
-				if (r.runId) d.activity?.bind(r.runId);
+				const r = await d.session.send(projectId, text, focus, attachments ?? [], (id) => {
+					named = id;
+					d.activity?.begin(projectId, text, id);
+				});
+				// a queued run opens with its first event
+				if (r.runId && !r.queued) d.activity?.bind(r.runId);
 				return r;
 			} catch (e) {
-				d.activity?.cancel();
+				if (named) d.activity?.cancel(named);
 				throw e;
 			}
 		},

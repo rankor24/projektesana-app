@@ -118,6 +118,8 @@ export class ActivityLog {
 	private scans = new Map<string, Scan>();
 	/** what the next run is about: set by agent.send before the session starts it, taken by its first line */
 	private pending: { projectId: string | null; prompt: string } | null = null;
+	/** the same, keyed by the run it is for: a start that waits in the queue opens its run later, after other runs have opened */
+	private pendingBy = new Map<string, { projectId: string | null; prompt: string }>();
 	private now: () => number;
 
 	constructor(private d: ActivityDeps) {
@@ -130,13 +132,15 @@ export class ActivityLog {
 	}
 
 	/** agent.send is about to start a run for this project with this text. */
-	begin(projectId: string | null, prompt: string) {
-		this.pending = { projectId, prompt };
+	begin(projectId: string | null, prompt: string, runId?: string) {
+		if (runId) this.pendingBy.set(runId, { projectId, prompt });
+		else this.pending = { projectId, prompt };
 	}
 
 	/** agent.send refused: no run started. */
-	cancel() {
-		this.pending = null;
+	cancel(runId?: string) {
+		if (runId) this.pendingBy.delete(runId);
+		else this.pending = null;
 	}
 
 	/** agent.send returned this run id. Opens the run unless one of its events already did. */
@@ -250,9 +254,12 @@ export class ActivityLog {
 	// ---- runs -------------------------------------------------------------------------------------------------------
 
 	private open(runId: string, meta?: RunMeta): Run {
-		const p = this.pending;
-		this.pending = null;
-		const r: Run = { id: runId, project: p?.projectId ?? null, calls: new Map(), anonymous: 0, block: null, summary: { steps: 0, listed: null, sources: [], changes: noChanges() }, titles: null, readOk: new Set(), ended: false, ...(meta ? { meta: { agent: meta.agent, threadId: meta.threadId } } : {}) };
+		// a run named by begin() takes its own entry; an unnamed begin() is taken by the next run to open
+		const own = this.pendingBy.get(runId);
+		this.pendingBy.delete(runId);
+		const p = own ?? this.pending;
+		if (!own) this.pending = null;
+		const r: Run = { id: runId, project: p?.projectId ?? meta?.projectId ?? null, calls: new Map(), anonymous: 0, block: null, summary: { steps: 0, listed: null, sources: [], changes: noChanges() }, titles: null, readOk: new Set(), ended: false, ...(meta ? { meta: { agent: meta.agent, threadId: meta.threadId } } : {}) };
 		this.runs.set(runId, r);
 		this.prune();
 		this.line(r, "start", p ? taskTitle(p.prompt, this.d.templates) : "Uzdevums", { detail: p?.prompt });

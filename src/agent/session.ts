@@ -115,7 +115,7 @@ export class AgentSession {
 
 	/** Starts a run; events arrive through `emit`. Runs now, or waits in the queue when the cap is reached; refuses while this chat's own run is going or queued. Attachments are read and checked
 	 *  first, so a file the model cannot take is refused here (the window keeps it in the strip) and no run starts. */
-	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = []): Promise<{ runId: string | null; queued: boolean }> {
+	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string) => void): Promise<{ runId: string | null; queued: boolean }> {
 		const busy = "Aģents jau strādā. Aptur vai pagaidi.";
 		const thread = this.leadOf(projectId);
 		if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
@@ -136,7 +136,10 @@ export class AgentSession {
 			if (this.coordinator.busy() || this.coordinator.threadBusy(thread.id)) throw new Error(busy);
 		}
 		// the files are already prepared (above), so the coordinator is handed them and does not read `attachments` itself
-		return this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
+		// the caller learns the run's id before it starts (a queued start keeps this id when it begins)
+		onRunId?.(runId);
+		const r = await this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
+		return { runId, queued: r.queued };
 	}
 
 	stop() {

@@ -183,3 +183,22 @@ test("the buffer keeps the newest lines; changes read as Latvian plurals", () =>
 	assert.equal(changesText({ facts: 4, requirements: 1, pins: 0, notes: 0, revit: 2 }), "4 fakti ieteikti · 1 prasība · 2 Revit partijas");
 	assert.equal(changesText({ facts: 0, requirements: 0, pins: 0, notes: 0, revit: 0 }), "");
 });
+
+test("two queued starts in two projects each open with their own title and project, whatever order they open in", () => {
+	const h = harness();
+	h.log.begin("p2", "Izlasi TN", "r2");
+	h.log.begin("p3", TASKS[0].text, "r3");
+	const meta = (projectId: string) => ({ threadId: "t", agent: "lead", projectId, wave: "w1" });
+	// p2 was queued first but p3 opens first
+	h.log.event("r3", { type: "done", text: "gatavs" }, meta("p3"));
+	h.log.event("r2", { type: "done", text: "gatavs" }, meta("p2"));
+	const start = (run: string) => h.lines().find((l) => l.kind === "start" && l.run === run)!;
+	assert.equal(start("r3").text, TASKS[0].label);
+	assert.equal(start("r3").project, "p3");
+	assert.equal(start("r2").text, "Izlasi TN");
+	assert.equal(start("r2").project, "p2");
+	// a run nobody called begin() for takes its project from its envelope, not from someone else's pending title
+	h.log.event("r9", { type: "done", text: "x" }, meta("p5"));
+	assert.equal(start("r9").text, "Uzdevums");
+	assert.equal(start("r9").project, "p5");
+});
