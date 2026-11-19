@@ -2,6 +2,7 @@
 // group is a strip of tab names; its body stays mounted when it holds the chat, so a run in progress is not lost.
 // BIM Crew's App ResizeHandle for the single right-hand dock, here for four sides and a group each.
 import type { ReactNode } from "react";
+import { followMouse } from "./drag";
 import { dockGroup, type DockPlace, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { TabGroup } from "./TabGroup";
@@ -19,12 +20,7 @@ export function DockArea({ side, render }: { side: Side; render: (id: string, fi
 		const size0 = p.size;
 		const sign = side === "left" || side === "top" ? 1 : -1;
 		const move = (ev: MouseEvent) => windows.resizeDock(side, size0 + sign * ((vertical ? ev.clientX : ev.clientY) - s0));
-		const up = () => {
-			document.removeEventListener("mousemove", move);
-			document.removeEventListener("mouseup", up);
-		};
-		document.addEventListener("mousemove", move);
-		document.addEventListener("mouseup", up);
+		followMouse(move, () => {}, { cursor: vertical ? "col-resize" : "row-resize" });
 	};
 
 	// one structure for both states, so the group (and the chat in it) stays mounted when the side is collapsed

@@ -5,7 +5,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { clampGeo, MIN_H, MIN_W, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
-import { track } from "./drag";
+import { followMouse, track } from "./drag";
 import { TabGroup } from "./TabGroup";
 
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
@@ -61,13 +61,10 @@ export function FloatingWindow({ group, focused, render }: { group: Group; focus
 				setLive(final);
 			};
 			const up = () => {
-				document.removeEventListener("mousemove", move);
-				document.removeEventListener("mouseup", up);
 				windows.resize(id, final);
 				setLive(null);
 			};
-			document.addEventListener("mousemove", move);
-			document.addEventListener("mouseup", up);
+			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
 		[id, p.x, p.y, p.w, p.h],
 	);
