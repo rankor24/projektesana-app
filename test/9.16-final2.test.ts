@@ -1,7 +1,7 @@
 // Follow-up fix wave 2: an agent cannot skip S4 or S5 by any road (R46), the lead's cap is held at save (R49), a gate decision lands in the leader's open thread (R48),
 // the "start eks" card goes once eks has run (R48), and Office servers left behind by a failed COM job are stopped. Invented projects and agents; no real Word is started.
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { LEAD_FIXED_MAX, fixedTokens, rosterFor, standingFor } from "../src/agent/agents.ts";
@@ -9,7 +9,7 @@ import { declarationTokens } from "../src/agent/declarations.ts";
 import type { PiRunOptions } from "../src/agent/pi/index.ts";
 import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
-import { LEAD_ROSTER_DESC_MAX, rosterText } from "../src/agent/subagents.ts";
+import { DEFAULT_AGENTS, LEAD_ROSTER_DESC_MAX, rosterText } from "../src/agent/subagents.ts";
 import { Mailbox, mailDir } from "../src/core/messages.ts";
 import { type ProcessState, changeProfile, initial, readProcess, skipStage, step, switchMode, writeProcess } from "../src/core/process.ts";
 import { waitingEksStarts } from "../src/core/process-waiting.ts";
@@ -20,7 +20,8 @@ import { AppSettings } from "../src/main/settings.ts";
 import type { AgentSpec } from "../src/shared/agent-types.ts";
 import type { WaitingItem } from "../src/shared/thread-types.ts";
 import { DEFAULT_SETTINGS } from "../src/shared/types.ts";
-import { type OfficeProc, type OfficeProcIO, automationPids, pidsToStop, withOfficeCleanup } from "../src/sources/text/office-procs.ts";
+import { LOCK_FILE, type LockEnv, OfficeLockTimeout, realLockEnv, withOfficeLock } from "../src/sources/text/office-lock.ts";
+import { SETTLE_MS, type OfficeProc, type OfficeProcIO, automationPids, pidsToStop, withOfficeCleanup } from "../src/sources/text/office-procs.ts";
 import { tmp } from "./helpers.ts";
 
 const plainCrypto = { available: () => true, encrypt: (s: string) => Buffer.from(s), decrypt: (b: Buffer) => b.toString() };
@@ -134,7 +135,35 @@ test("R49: the lead is measured with the synced skills the app really has (0.6 g
 	}
 	const settings = new AppSettings(dir, plainCrypto);
 	const h = agentHandlers({ settings, skillsDir: skills });
-	assert.throws(() => h["agents.save"]([spec("ar", { tools: [] })]), /^Error: Galvenā aģenta pastāvīgais konteksts būtu \d+ tokeni \(limits 10000\)\. Saīsini/);
+	// the shipped list already carries the lead over the cap (the skills did it): adding to it is refused ...
+	assert.ok(leadOf(dir, DEFAULT_AGENTS) < LEAD_FIXED_MAX, "without skills the shipped list fits");
+	assert.throws(() => h["agents.save"]([...DEFAULT_AGENTS, spec("ar9", { tools: [] })]), /^Error: Galvenā aģenta pastāvīgais konteksts būtu \d+ tokeni \(limits 10000\)\. Saīsini/);
+});
+
+test("R49: a save that does not make the lead heavier always goes through, so a lead pushed over the cap by a skills sync can still be trimmed", () => {
+	const dir = tmp();
+	// three agents saved while no skills were synced ...
+	const before = agentHandlers({ settings: new AppSettings(dir, plainCrypto) });
+	const three = [spec("aa", { tools: [] }), spec("bb", { tools: [] }), spec("cc", { tools: [] })];
+	before["agents.save"](three);
+	// ... then a sync brings so many skills that the lead is over the cap
+	const skills = join(tmp(), "skills");
+	for (let i = 0; i < 60; i++) {
+		mkdirSync(join(skills, `prasme-${i}`), { recursive: true });
+		writeFileSync(join(skills, `prasme-${i}`, "SKILL.md"), `---
+name: prasme-${i}
+description: ${"s".repeat(100)}
+---
+teksts`, "utf8");
+	}
+	const h = agentHandlers({ settings: new AppSettings(dir, plainCrypto), skillsDir: skills });
+	const over = /^Error: Galvenā aģenta pastāvīgais konteksts būtu \d+ tokeni/;
+	assert.throws(() => h["agents.save"]([...three, spec("dd", { tools: [] })]), over, "one more agent while over: refused");
+	assert.equal(h["agents.save"](three).length, 3, "the same list saves (an edit that changes no lead text)");
+	assert.equal(h["agents.save"](three.slice(0, 2)).length, 2, "one agent fewer saves although the lead is over the cap");
+	assert.throws(() => h["agents.save"](three), over, "putting it back is an increase: refused");
+	assert.equal(h["agents.save"]([three[0]]).length, 1);
+	assert.deepEqual(h["agents.list"]().specs.map((x) => x.id), ["aa"]);
 });
 
 // ---- 3 and 4. gate decisions and the start-eks card ----------------------------------------------------------------------------------
@@ -270,6 +299,7 @@ test("office: only automation servers without a window count, and only the ones 
 
 function fakeIO(snapshots: (number[] | null)[]) {
 	const stopped: number[][] = [];
+	const waits: number[] = [];
 	let i = 0;
 	const io: OfficeProcIO = {
 		list: async () => {
@@ -277,33 +307,137 @@ function fakeIO(snapshots: (number[] | null)[]) {
 			return snap ? new Set(snap) : null;
 		},
 		stop: (p) => void stopped.push([...p]),
+		wait: async (ms) => void waits.push(ms),
 	};
-	return { io, stopped };
+	return { io, stopped, waits };
 }
+
+const lockOf = (dir = tmp()) => ({ dir, timeoutMs: 2_000 });
 
 test("office: a failed job stops the new servers, a good one stops nothing, one that threw is cleaned and rethrown, an unreadable list stops nothing", async () => {
 	const failed = (r: { ok: boolean }) => !r.ok;
-	let f = fakeIO([[10], [10, 11, 12]]);
-	assert.deepEqual(await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, f.io), { ok: false });
+	// snapshots: before the job, right after the failure, after the settling wait
+	let f = fakeIO([[10], [10, 11, 12], [10, 11, 12]]);
+	assert.deepEqual(await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io), { ok: false });
 	assert.deepEqual(f.stopped, [[11, 12]], "the one from before (10) stays");
 	f = fakeIO([[10], [10, 11]]);
-	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: true }), failed, f.io);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: true }), failed, lockOf(), f.io);
 	assert.deepEqual(f.stopped, [], "success: no second look");
-	f = fakeIO([[], [20]]);
-	await assert.rejects(withOfficeCleanup("EXCEL.EXE", async () => Promise.reject(new Error("boom")), failed, f.io), { message: "boom" });
+	assert.deepEqual(f.waits, []);
+	f = fakeIO([[], [20], [20]]);
+	await assert.rejects(withOfficeCleanup("EXCEL.EXE", async () => Promise.reject(new Error("boom")), failed, lockOf(), f.io), { message: "boom" });
 	assert.deepEqual(f.stopped, [[20]]);
 	f = fakeIO([null, [30]]);
-	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, f.io);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io);
 	assert.deepEqual(f.stopped, [], "no list before the job: nobody can tell which are new");
 	f = fakeIO([[1], null]);
-	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, f.io);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io);
 	assert.deepEqual(f.stopped, []);
+	f = fakeIO([[1], [1, 2], null]);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io);
+	assert.deepEqual(f.stopped, [], "the second list unreadable: nothing is stopped");
+});
+
+test("office: after a failure the cleanup waits, looks again, and stops only the servers still there (one that finished quitting by itself is left)", async () => {
+	const failed = (r: { ok: boolean }) => !r.ok;
+	// 11 and 12 are new right after the failure; after the wait 11 is gone (its Quit finished) and 13 is new but was not in the first look
+	let f = fakeIO([[10], [10, 11, 12], [10, 12, 13]]);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io);
+	assert.deepEqual(f.stopped, [[12]]);
+	assert.deepEqual(f.waits, [SETTLE_MS]);
+	assert.equal(SETTLE_MS, 1_500);
+	// nothing new at the first look: no wait, no second list
+	f = fakeIO([[10], [10]]);
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), f.io);
+	assert.deepEqual(f.waits, []);
+	assert.deepEqual(f.stopped, []);
+	// the wait comes before the second list is read, not after
+	const order: string[] = [];
+	let n = 0;
+	const io: OfficeProcIO = { list: async () => (order.push(`list${n}`), new Set(n++ === 0 ? [] : [5])), stop: () => void order.push("stop"), wait: async () => void order.push("wait") };
+	await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: false }), failed, lockOf(), io);
+	assert.deepEqual(order, ["list0", "list1", "wait", "list2", "stop"]);
 });
 
 test("office: jobs run one at a time, so a failed job's cleanup cannot stop the server of one beside it", async () => {
 	const order: string[] = [];
-	const io: OfficeProcIO = { list: async () => new Set<number>(), stop: () => undefined };
-	const job = (name: string, ms: number) => withOfficeCleanup("WINWORD.EXE", async () => (order.push(`${name}+`), await tick(ms), order.push(`${name}-`), { ok: true }), (r) => !r.ok, io);
+	const io: OfficeProcIO = { list: async () => new Set<number>(), stop: () => undefined, wait: async () => undefined };
+	const lock = lockOf();
+	const job = (name: string, ms: number) => withOfficeCleanup("WINWORD.EXE", async () => (order.push(`${name}+`), await tick(ms), order.push(`${name}-`), { ok: true }), (r) => !r.ok, lock, io);
 	await Promise.all([job("a", 30), job("b", 1)]);
 	assert.deepEqual(order, ["a+", "a-", "b+", "b-"]);
+});
+
+// ---- R50: the lock across processes -----------------------------------------------------------------------------------------------------
+
+const DEAD = 2_147_000_000; // no process has this id
+const fastEnv = (over: Partial<LockEnv> = {}): LockEnv => ({ ...realLockEnv, pollMs: 5, ...over });
+
+test("R50: two acquirers of one lock folder run one after the other, and the lock file is gone afterwards", async () => {
+	const dir = tmp();
+	const order: string[] = [];
+	const job = (name: string, ms: number) => withOfficeLock(dir, 2_000, async () => (order.push(`${name}+`), await tick(ms), order.push(`${name}-`), name), fastEnv());
+	assert.deepEqual(await Promise.all([job("a", 40), job("b", 1), job("c", 1)]), ["a", "b", "c"]);
+	// whoever came first runs first; none of the three overlaps another
+	assert.deepEqual(
+		order.filter((_, i) => i % 2 === 0).map((x) => x[0]).sort(),
+		["a", "b", "c"],
+	);
+	for (let i = 0; i < order.length; i += 2) assert.equal(order[i][0], order[i + 1][0], `${order.join(" ")}: a job's start is followed by its own end`);
+	assert.equal(existsSync(join(dir, LOCK_FILE)), false);
+});
+
+test("R50: a lock whose pid is dead is taken over; one whose pid lives is waited for, then OfficeLockTimeout; one older than its owner's limit + 60 s is taken over though its pid lives", async () => {
+	const dir = tmp();
+	const file = join(dir, LOCK_FILE);
+	const body = (pid: number, start: number, staleMs = 60_000) => JSON.stringify({ pid, start, staleMs, token: "x" });
+	// the owner is gone
+	writeFileSync(file, body(DEAD, Date.now()), "utf8");
+	assert.equal(await withOfficeLock(dir, 1_000, async () => "taken", fastEnv()), "taken");
+	assert.equal(existsSync(file), false);
+	// the owner lives and the lock is young: we wait the whole budget, the lock is left as it was
+	writeFileSync(file, body(process.pid, Date.now()), "utf8");
+	await assert.rejects(withOfficeLock(dir, 60, async () => "never", fastEnv()), OfficeLockTimeout);
+	assert.equal(readFileSync(file, "utf8"), body(process.pid, Number(JSON.parse(readFileSync(file, "utf8")).start)), "a live owner's lock is not touched");
+	// the owner lives but the lock is older than its own limit + 60 s: a pid can be reused, so age decides too
+	writeFileSync(file, JSON.stringify({ pid: process.pid, start: 1_000, staleMs: 240_000, token: "old" }), "utf8");
+	assert.equal(await withOfficeLock(dir, 1_000, async () => "aged", fastEnv({ now: () => 1_000 + 240_001 })), "aged");
+	// an unreadable lock (owner died before writing it) is a leftover only after a long while
+	writeFileSync(file, "", "utf8");
+	await assert.rejects(withOfficeLock(dir, 40, async () => "never", fastEnv()), OfficeLockTimeout);
+	assert.equal(await withOfficeLock(dir, 1_000, async () => "late", fastEnv({ now: () => Date.now() + 10 * 60_000 })), "late");
+});
+
+test("R50: the lock is released when the job throws, and a job never removes a lock that is no longer its own", async () => {
+	const dir = tmp();
+	const file = join(dir, LOCK_FILE);
+	await assert.rejects(
+		withOfficeLock(dir, 1_000, async () => {
+			assert.equal(existsSync(file), true, "held while the job runs");
+			throw new Error("boom");
+		}, fastEnv()),
+		{ message: "boom" },
+	);
+	assert.equal(existsSync(file), false, "released in finally");
+	assert.equal(await withOfficeLock(dir, 1_000, async () => "again", fastEnv()), "again");
+	// a very long job whose lock was taken over meanwhile: the new owner's lock stays
+	await withOfficeLock(dir, 1_000, async () => writeFileSync(file, JSON.stringify({ pid: process.pid, start: Date.now(), staleMs: 60_000, token: "other" }), "utf8"), fastEnv());
+	assert.equal(JSON.parse(readFileSync(file, "utf8")).token, "other");
+});
+
+test("R50: withOfficeCleanup takes the lock around the snapshots and the cleanup: a lock held by another process makes it wait, and a lock that never frees fails it without running the job", async () => {
+	const dir = tmp();
+	const file = join(dir, LOCK_FILE);
+	const io = fakeIO([[], [], []]).io;
+	let ran = false;
+	writeFileSync(file, JSON.stringify({ pid: process.pid, start: Date.now(), staleMs: 60_000, token: "other-process" }), "utf8");
+	await assert.rejects(
+		withOfficeCleanup("WINWORD.EXE", async () => ((ran = true), { ok: true }), (r) => !r.ok, { dir, timeoutMs: 60, env: fastEnv() }, io),
+		OfficeLockTimeout,
+	);
+	assert.equal(ran, false, "no job, and no snapshot, while another job holds the lock");
+	// the other process finishes while we wait
+	setTimeout(() => rmSync(file, { force: true }), 30);
+	assert.deepEqual(await withOfficeCleanup("WINWORD.EXE", async () => ({ ok: true }), (r) => !r.ok, { dir, timeoutMs: 2_000, env: fastEnv() }, io), { ok: true });
+	assert.equal(existsSync(file), false);
 });

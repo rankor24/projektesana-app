@@ -66,9 +66,12 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 				const n = fixedOf(spec, out);
 				if (n > SPECIALIST_FIXED_MAX) throw new Error(`Aģenta ${spec.id} pastāvīgais konteksts ir ${n} tokeni (limits ${SPECIALIST_FIXED_MAX}).`);
 			}
-			// each added specialist adds a roster line to the lead's text: the lead is measured with the new list, as the 0.6 guard measures it (R49)
-			const lead = fixedTokens(null, { appDir: d.settings.dir, userName: d.settings.get().userName, specs: out, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(null));
-			if (lead > LEAD_FIXED_MAX) throw new Error(`Galvenā aģenta pastāvīgais konteksts būtu ${lead} tokeni (limits ${LEAD_FIXED_MAX}). Saīsini aģentu aprakstus vai noņem kādu aģentu.`);
+			// each added specialist adds a roster line to the lead's text: the lead is measured with the new list, as the 0.6 guard measures it (R49).
+			// A save that does not make the lead heavier always goes through, so a list already over the cap (a skills sync adds to the lead) can still be
+			// trimmed; only a save that crosses the cap, or adds to a lead already over it, is refused.
+			const leadOf = (list: AgentSpec[]) => fixedTokens(null, { appDir: d.settings.dir, userName: d.settings.get().userName, specs: list, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(null));
+			const lead = leadOf(out);
+			if (lead > LEAD_FIXED_MAX && lead > leadOf(d.settings.agentSpecs().specs)) throw new Error(`Galvenā aģenta pastāvīgais konteksts būtu ${lead} tokeni (limits ${LEAD_FIXED_MAX}). Saīsini aģentu aprakstus vai noņem kādu aģentu.`);
 			d.settings.saveAgentSpecs(out);
 			return out;
 		},

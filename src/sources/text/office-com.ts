@@ -4,7 +4,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Extracted } from "./index.js";
-import { withOfficeCleanup, type OfficeExe } from "./office-procs.js";
+import { officeLockDir, withOfficeCleanup, type OfficeExe } from "./office-procs.js";
 
 export const KIND_OF: Record<string, "doc" | "xls" | "msg" | "ppt"> = { ".doc": "doc", ".rtf": "doc", ".xls": "xls", ".msg": "msg", ".ppt": "ppt" };
 const PROGID = { doc: "Word.Application", xls: "Excel.Application", msg: "Outlook.Application", ppt: "PowerPoint.Application" } as const;
@@ -44,7 +44,7 @@ export function officeHas(kind: keyof typeof PROGID): Promise<boolean> {
 	return p;
 }
 
-export function officeText(script: string, abs: string, ext: string, timeoutMs = 120_000): Promise<Extracted> {
+export function officeText(script: string, abs: string, ext: string, timeoutMs = 120_000, appDir?: string): Promise<Extracted> {
 	const kind = KIND_OF[ext.toLowerCase()];
 	if (!kind) return Promise.resolve({ state: "unsupported", pages: [], reason: `formāts ${ext} nav Office` });
 	if (!existsSync(script)) return Promise.resolve({ state: "unsupported", pages: [], reason: `Office palīgs nav atrasts: ${script}` });
@@ -57,8 +57,9 @@ export function officeText(script: string, abs: string, ext: string, timeoutMs =
 					resolve(parseOfficeOutput(stdout));
 				});
 			});
-		// a timeout kills PowerShell before its Quit(): the server it started is stopped after a failed job (office-procs.ts)
+		// a timeout kills PowerShell before its Quit(): the server it started is stopped after a failed job, under the lock all Office jobs share (office-procs.ts)
 		const exe = EXE_OF[kind];
-		return exe ? withOfficeCleanup(exe, run, (r) => r.state === "error") : run();
+		if (!exe) return run();
+		return withOfficeCleanup(exe, run, (r) => r.state === "error", { dir: officeLockDir(appDir), timeoutMs }).catch((e): Extracted => ({ state: "error", pages: [], reason: `Office: ${e instanceof Error ? e.message : String(e)}` }));
 	});
 }

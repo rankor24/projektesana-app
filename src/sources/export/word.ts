@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { officeHas } from "../text/office-com.js";
-import { withOfficeCleanup } from "../text/office-procs.js";
+import { officeLockDir, withOfficeCleanup } from "../text/office-procs.js";
 import { unxml } from "../text/xml.js";
 import { validateOps, type OpInput } from "./word-ops.js";
 
@@ -193,17 +193,19 @@ function runScript(script: string, args: string[], timeoutMs: number): Promise<W
 	});
 }
 
-async function word(script: string, args: string[], timeoutMs = 180_000): Promise<WordResult> {
+async function word(script: string, args: string[], appDir?: string, timeoutMs = 180_000): Promise<WordResult> {
 	if (!existsSync(script)) return { ok: false, reason: `Word palīgs nav atrasts: ${script}` };
 	if (!(await officeHas("doc"))) return { ok: false, reason: "Word.Application nav instalēts: Word dokumentu labošanai un PDF eksportam vajag Microsoft Word." };
-	// a timeout kills PowerShell before its Quit(): the Word it started is stopped here (office-procs.ts)
-	const job = queue.then(() => withOfficeCleanup("WINWORD.EXE", () => runScript(script, args, timeoutMs), (r) => !r.ok));
+	// a timeout kills PowerShell before its Quit(): the Word it started is stopped here, under the lock all Office jobs share (office-procs.ts)
+	const job = queue.then(() =>
+		withOfficeCleanup("WINWORD.EXE", () => runScript(script, args, timeoutMs), (r) => !r.ok, { dir: officeLockDir(appDir), timeoutMs }).catch((e): WordResult => ({ ok: false, reason: `Word: ${e instanceof Error ? e.message : String(e)}` })),
+	);
 	queue = job.catch(() => undefined);
 	return job;
 }
 
 /** Edits a .docx with the ops, all or nothing. `out` equal to `src` edits in place (the caller has made a copy to go back to). */
-export async function applyDocxOps(script: string, src: string, out: string, ops: OpInput[], opts: { dryRun?: boolean; workDir: string }): Promise<WordResult> {
+export async function applyDocxOps(script: string, src: string, out: string, ops: OpInput[], opts: { dryRun?: boolean; workDir: string; appDir?: string }): Promise<WordResult> {
 	const v = validateOps(ops);
 	if (!v.ok) return { ok: false, reason: v.errors.join("; ") };
 	mkdirSync(opts.workDir, { recursive: true });
@@ -211,15 +213,15 @@ export async function applyDocxOps(script: string, src: string, out: string, ops
 	writeFileSync(file, JSON.stringify(v.ops), "utf8");
 	mkdirSync(dirname(out), { recursive: true });
 	try {
-		return await word(script, ["-Mode", "apply", "-Path", src, "-Out", out, "-OpsFile", file, ...(opts.dryRun ? ["-DryRun"] : [])]);
+		return await word(script, ["-Mode", "apply", "-Path", src, "-Out", out, "-OpsFile", file, ...(opts.dryRun ? ["-DryRun"] : [])], opts.appDir);
 	} finally {
 		rmSync(file, { force: true });
 	}
 }
 
 /** A PDF of a .docx. */
-export function docxToPdf(script: string, src: string, out: string): Promise<WordResult> {
-	return word(script, ["-Mode", "pdf", "-Path", src, "-Out", out]);
+export function docxToPdf(script: string, src: string, out: string, appDir?: string): Promise<WordResult> {
+	return word(script, ["-Mode", "pdf", "-Path", src, "-Out", out], appDir);
 }
 
 /** Convenience: a copy of a file (so the original of an edit stays as it was). */

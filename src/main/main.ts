@@ -191,7 +191,7 @@ const handlers = createHandlers({
 	engine,
 	revit,
 	registry,
-	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr), officeText: (abs, ext) => officeText(join(resourcesDir, "office-text.ps1"), abs, ext) }),
+	hooks: () => ({ ocr: ocrHook(pageRenderer, ocr), officeText: (abs, ext) => officeText(join(resourcesDir, "office-text.ps1"), abs, ext, undefined, appDir) }),
 	version: app.getVersion(),
 	settings,
 	dataDir,

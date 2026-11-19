@@ -83,14 +83,14 @@ export const documentTools: ToolDef[] = [
 			const script = wordScript(ctx);
 			const workDir = join(store.dir, "tmp-word");
 			if (a.dryRun) {
-				const r = await applyDocxOps(script, src, `${src}.dry`, a.ops, { dryRun: true, workDir });
+				const r = await applyDocxOps(script, src, `${src}.dry`, a.ops, { dryRun: true, workDir, appDir: ctx.appDir });
 				return r.ok ? `Pārbaude: visas ${r.done?.length ?? 0} darbības atrod savu vietu; nekas nav saglabāts.` : failText(r);
 			}
 			// an edit in place is made to a side file and swapped in only when every op worked: a failed batch leaves the file and the
 			// undo list as they were, and the copy the undo goes back to is taken at the moment of the swap
 			const side = inPlace ? join(dirname(src), `~edit_${basename(src)}`) : out;
 			if (inPlace) rmSync(side, { force: true });
-			const r = await applyDocxOps(script, src, side, a.ops, { workDir });
+			const r = await applyDocxOps(script, src, side, a.ops, { workDir, appDir: ctx.appDir });
 			if (!r.ok) throw new Error(failText(r));
 			if (inPlace) {
 				checkpointBeforeWrite(store, src);
@@ -118,7 +118,7 @@ export const documentTools: ToolDef[] = [
 			writeFileSync(out, markdownToDocx(a.markdown, { title: a.title ?? basename(out, ".docx") }));
 			let note = "";
 			if (a.pdf) {
-				const r = await docxToPdf(wordScript(ctx), out, pdf);
+				const r = await docxToPdf(wordScript(ctx), out, pdf, ctx.appDir);
 				note = r.ok ? ` un ${basename(pdf)}` : ` (PDF nav izveidots: ${r.reason})`;
 				if (!r.ok) rmSync(pdf, { force: true });
 			}
