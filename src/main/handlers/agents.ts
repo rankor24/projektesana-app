@@ -9,7 +9,7 @@ import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
 import { makeLevelOf } from "../../agent/tools/levels.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOL_LEVELS, validateSpec } from "../../agent/subagents.js";
-import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type StandingDeps, fixedTokens, processReserve, readRole, revitReserve, readShared, writeRole, writeShared } from "../../agent/agents.js";
+import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type StandingDeps, fixedTokens, processReserve, readRole, revitReserve, readShared, writeRole, writeShared } from "../../agent/agents.js";
 import { declarationTokens } from "../../agent/declarations.js";
 import { listSkills, officeSkillsDir } from "../../agent/skills.js";
 import type { AgentSpec, AgentSpecRow, AgentToolRow } from "../../shared/agent-types.js";
@@ -66,6 +66,9 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 				const n = fixedOf(spec, out);
 				if (n > SPECIALIST_FIXED_MAX) throw new Error(`Aģenta ${spec.id} pastāvīgais konteksts ir ${n} tokeni (limits ${SPECIALIST_FIXED_MAX}).`);
 			}
+			// each added specialist adds a roster line to the lead's text: the lead is measured with the new list, as the 0.6 guard measures it (R49)
+			const lead = fixedTokens(null, { appDir: d.settings.dir, userName: d.settings.get().userName, specs: out, skills: listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)), knowledge: "" }, declarationTokens(null));
+			if (lead > LEAD_FIXED_MAX) throw new Error(`Galvenā aģenta pastāvīgais konteksts būtu ${lead} tokeni (limits ${LEAD_FIXED_MAX}). Saīsini aģentu aprakstus vai noņem kādu aģentu.`);
 			d.settings.saveAgentSpecs(out);
 			return out;
 		},

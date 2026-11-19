@@ -42,13 +42,21 @@ export function waitingGates(projectsDir: string): Gate[] {
 
 type EksStart = Extract<WaitingItem, { kind: "start-eks" }>;
 
+/** When S5 began: the newest approval of H4 or the newest "S4 izlaista" of the profile (a skip, or a profile that passes S4 over). Later gate decisions or profile changes inside S5 do not move it,
+ *  or the card would come back after eks had worked. Without either (a state written by hand) the newest decision or profile change of any kind. */
+function stageStart(s: ProcessState): string {
+	const starts = [...s.gates.filter((g) => g.stage === "S4" && g.state === "approved").map((g) => g.decidedAt ?? g.at), ...s.profile.changes.filter((c) => c.what === "S4 izlaista").map((c) => c.at)];
+	if (starts.length) return starts.sort().at(-1)!;
+	return [...s.gates.map((g) => g.decidedAt ?? g.at), ...s.profile.changes.map((c) => c.at)].sort().at(-1) ?? "";
+}
+
 /** S5 is on, no gate waits, and the expert has not run since the stage began (R48): eks leads S5 and only the user opens its thread, so nothing else would tell the user it is their move.
- *  "Since the stage began" is the newest decision of a gate or change of the profile; `eksLastAt` is when the project's newest eks thread last worked (null: it has none). */
+ *  `eksLastAt` is when the project's newest eks thread last worked (null: it has none): a run of eks in S5 sets it past `stageStart`. */
 export function waitingEksStarts(projectsDir: string, eksLastAt: (projectId: string) => string | null): EksStart[] {
 	const out: EksStart[] = [];
 	for (const { projectId, s } of running(projectsDir)) {
 		if (s.stage !== "S5" || s.escalated || s.gates.some((g) => g.state === "waiting")) continue;
-		const since = [...s.gates.map((g) => g.decidedAt ?? g.at), ...s.profile.changes.map((c) => c.at)].sort().at(-1) ?? "";
+		const since = stageStart(s);
 		const last = eksLastAt(projectId);
 		if (last === null || last <= since) out.push({ kind: "start-eks", projectId });
 	}

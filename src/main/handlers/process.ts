@@ -22,7 +22,8 @@ export interface ProcessSession {
 	postSystem?(projectId: string | null, items: readonly SystemPost[], o?: { once?: boolean }): { to: string }[];
 }
 
-/** After the user decides a gate, the leader of the stage the process is in now hears it as a system ask from the lead (R48): "<Hx> apstiprināts, stadija <S>." or "<Hx> atgriezts: <comment>".
+/** After the user decides a gate, the leader of the stage the process is in now hears it as a system ask from the lead (R48): "<Hx> apstiprināts, stadija <S>." or "<Hx> atgriezts: <comment>",
+ *  in its newest open thread of the project (one is made only when it has none), not in a new thread for every decision.
  *  Nothing is posted for S5 (eks leads it and only the user opens its thread: Gaida tevi carries a line for that), after H7 (the learning round is the user's button), or for a return
  *  that escalated the stage (nobody but the user may act on it). A post that fails does not undo the decision: the leader reads the new stage in its status text at its next run. */
 function tellLeader(session: ProcessSession | undefined, projectId: string, before: ProcessState | null, after: ProcessState, d: { approve: boolean; comment?: string }): void {
@@ -34,7 +35,7 @@ function tellLeader(session: ProcessSession | undefined, projectId: string, befo
 	const comment = (d.comment ?? "").trim();
 	const text = d.approve ? `${gate} apstiprināts, stadija ${after.stage}.${comment ? ` Komentārs: ${comment}` : ""}` : `${gate} atgriezts: ${comment}`;
 	try {
-		session.postSystem(projectId, [{ from: LEAD_ID, to, kind: "ask", title: `Gate ${gate}: ${d.approve ? "apstiprināts" : "atgriezts"}`, text }]);
+		session.postSystem(projectId, [{ from: LEAD_ID, to, kind: "ask", toOpen: true, title: `Gate ${gate}: ${d.approve ? "apstiprināts" : "atgriezts"}`, text }]);
 	} catch {
 		// the decision is written; the leader finds it in the status text
 	}

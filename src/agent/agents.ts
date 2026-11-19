@@ -6,7 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OfficeMemory } from "../core/office-memory.js";
-import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
+import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
 import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-def.js";
@@ -15,14 +15,14 @@ import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
 import { LEAD_SKILL_DESC_MAX, skillsFor, skillsText, type SkillInfo } from "./skills.js";
-import { LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
+import { LEAD_ROSTER_DESC_MAX, LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
 import type { LevelOf } from "./tools/levels.js";
 import { REVIT_RULES } from "./tools/revit.js";
 import { REVIT_LEVELS } from "./tools/revit-levels.js";
 
 // subagents.ts re-exports validateSpec from here and this file reads its level tables: the bindings are only used inside functions, so the cycle is safe.
 
-export { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX };
+export { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX };
 
 const ID = /^[a-z][a-z0-9-]{1,30}$/;
 const SHARED_FILE = "_kopejie.md";
@@ -202,7 +202,7 @@ export interface StandingDeps {
 /** Whom an agent may write to, one line each. The lead's is the specialists' list as before (it delegates to them); a specialist's holds the agents
  *  its `mayMessage` allows (absent = everyone), never itself, and `lead`. "" when it may write to nobody. */
 export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): string {
-	if (!spec) return rosterText(specs);
+	if (!spec) return rosterText(specs, LEAD_ROSTER_DESC_MAX);
 	const may = (id: string) => !spec.mayMessage || spec.mayMessage.includes(id);
 	const lines = [...specs.filter((s) => s.id !== spec.id && may(s.id)).map((s) => `- ${s.id}: ${s.description || s.name}`), ...(may(LEAD_ID) ? [`- ${LEAD_ID}: galvenais aģents`] : [])];
 	return lines.length ? `Aģenti, kuriem vari rakstīt ar send_message (id: apraksts):\n${lines.join("\n")}` : "";

@@ -69,6 +69,8 @@ export interface SystemPost {
 	kind: "task" | "ask" | "reply";
 	/** the thread of `to` that gets it when it is open and is that agent's (the user's answer to a question goes to the thread that asked); else the agent's thread is made */
 	toThread?: string;
+	/** no `toThread` named: the newest open thread of `to` in the project gets it, and one is made only when there is none (a decision tell must not open a thread each time) */
+	toOpen?: boolean;
 	/** the topic's title */
 	title: string;
 	text: string;
@@ -375,6 +377,8 @@ export class Coordinator {
 		}
 		// the run is going: the messages it reads are delivered
 		this.setMail(item.projectId, ids, "delivered");
+		// eks has begun: the "start eks" card of Gaida tevi (R48) is out of date now, not at the next unrelated change
+		if (thread.agent === EKS) this.waitingChanged();
 		// the run is counted when it starts, whatever started it
 		this.waveOf(wave, thread.projectId).runs++;
 		const meta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId: thread.projectId, wave };
@@ -630,7 +634,7 @@ export class Coordinator {
 				}
 				const topic = mb.openTopic({ title: it.title, parties: [it.from, it.to], parent: null });
 				const from = senderThread(it.from, it.title);
-				const named = it.toThread ? threads.get(it.toThread) : undefined;
+				const named = it.toThread ? threads.get(it.toThread) : it.toOpen ? threads.list({ agent: it.to, open: true })[0] : undefined;
 				const to = named && named.agent === it.to && named.state !== "closed" ? named : threads.create({ projectId, agent: it.to, title: it.title, topic: topic.id, startedBy: it.from });
 				this.d.onThread?.(to);
 				out.push(mb.add({ wave, topic: topic.id, from: it.from, to: it.to, kind: it.kind, text: it.text, refs: it.refs ?? [], fromThread: from.id, toThread: to.id, depth: 1 }));

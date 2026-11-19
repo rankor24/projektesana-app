@@ -148,8 +148,11 @@ export function step(s: ProcessState, e: ProcessEvent): StepResult {
 			if (e.by === "agent" && s.escalated === stage) return fail(`Stadija ${stage} gaida cilvēka lēmumu.`);
 			if (waiting) return fail("Gate jau gaida lēmumu.");
 			if (!e.why.trim()) return fail("Stadijas izlaišanai jānorāda pamatojums.");
-			n.profile.changes.push({ at: e.at, what: `${stage} izlaista`, why: e.why });
 			const { next, skipped } = nextStage(n.profile.depth, stage);
+			// R46: the stages passed over by the profile count too, or skipping S3 would carry an agent over S4 and S5
+			const guarded = skipped.find((st) => st === "S4" || st === "S5");
+			if (e.by === "agent" && guarded) return fail(`${guarded} izlaist drīkst tikai lietotājs.`);
+			n.profile.changes.push({ at: e.at, what: `${stage} izlaista`, why: e.why });
 			moveOn(n, next, skipped, e.at);
 			if (n.escalated === stage) n.escalated = null;
 			return { ok: true, state: n };
@@ -274,6 +277,8 @@ export function changeProfile(store: ProcessStore, p: ProfilePatch, existing: re
 		if (!(STAGES as readonly string[]).includes(st)) throw new Error(`Nezināma stadija: ${st}.`);
 		if (!DEPTHS.includes(d as Depth)) throw new Error(`Nezināms dziļums: ${d}.`);
 		if ((st === "S6" || st === "S7") && d === "izlaiž") throw new Error("S6 un S7 nevar izlaist.");
+		// R46: H4 and S5 are the user's to drop; an agent that sets them to "izlaiž" could then skip S3 and walk past both
+		if (by === "agent" && (st === "S4" || st === "S5") && d === "izlaiž") throw new Error(`${st} izlaist drīkst tikai lietotājs.`);
 	}
 
 	const at = now.toISOString();

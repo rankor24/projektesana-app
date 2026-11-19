@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { officeHas } from "../text/office-com.js";
+import { withOfficeCleanup } from "../text/office-procs.js";
 import { unxml } from "../text/xml.js";
 import { validateOps, type OpInput } from "./word-ops.js";
 
@@ -195,7 +196,8 @@ function runScript(script: string, args: string[], timeoutMs: number): Promise<W
 async function word(script: string, args: string[], timeoutMs = 180_000): Promise<WordResult> {
 	if (!existsSync(script)) return { ok: false, reason: `Word palīgs nav atrasts: ${script}` };
 	if (!(await officeHas("doc"))) return { ok: false, reason: "Word.Application nav instalēts: Word dokumentu labošanai un PDF eksportam vajag Microsoft Word." };
-	const job = queue.then(() => runScript(script, args, timeoutMs));
+	// a timeout kills PowerShell before its Quit(): the Word it started is stopped here (office-procs.ts)
+	const job = queue.then(() => withOfficeCleanup("WINWORD.EXE", () => runScript(script, args, timeoutMs), (r) => !r.ok));
 	queue = job.catch(() => undefined);
 	return job;
 }

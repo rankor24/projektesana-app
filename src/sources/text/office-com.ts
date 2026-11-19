@@ -4,9 +4,13 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Extracted } from "./index.js";
+import { withOfficeCleanup, type OfficeExe } from "./office-procs.js";
 
 export const KIND_OF: Record<string, "doc" | "xls" | "msg" | "ppt"> = { ".doc": "doc", ".rtf": "doc", ".xls": "xls", ".msg": "msg", ".ppt": "ppt" };
 const PROGID = { doc: "Word.Application", xls: "Excel.Application", msg: "Outlook.Application", ppt: "PowerPoint.Application" } as const;
+
+/** The Office program whose COM server a job of this kind starts; Outlook and PowerPoint are left alone. */
+const EXE_OF: Partial<Record<keyof typeof PROGID, OfficeExe>> = { doc: "WINWORD.EXE", xls: "EXCEL.EXE" };
 
 export function officeArgs(script: string, path: string, kind: string): string[] {
 	return ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Path", path, "-Kind", kind];
@@ -46,11 +50,15 @@ export function officeText(script: string, abs: string, ext: string, timeoutMs =
 	if (!existsSync(script)) return Promise.resolve({ state: "unsupported", pages: [], reason: `Office palīgs nav atrasts: ${script}` });
 	return officeHas(kind).then((has) => {
 		if (!has) return { state: "unsupported" as const, pages: [], reason: `${PROGID[kind]} nav instalēts` };
-		return new Promise<Extracted>((resolve) => {
-			execFile("powershell.exe", officeArgs(script, abs, kind), { windowsHide: true, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, encoding: "utf8" }, (err, stdout, stderr) => {
-				if (err && !stdout) return resolve({ state: "error", pages: [], reason: `Office palīgs: ${err.message} ${stderr}`.trim() });
-				resolve(parseOfficeOutput(stdout));
+		const run = () =>
+			new Promise<Extracted>((resolve) => {
+				execFile("powershell.exe", officeArgs(script, abs, kind), { windowsHide: true, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, encoding: "utf8" }, (err, stdout, stderr) => {
+					if (err && !stdout) return resolve({ state: "error", pages: [], reason: `Office palīgs: ${err.message} ${stderr}`.trim() });
+					resolve(parseOfficeOutput(stdout));
+				});
 			});
-		});
+		// a timeout kills PowerShell before its Quit(): the server it started is stopped after a failed job (office-procs.ts)
+		const exe = EXE_OF[kind];
+		return exe ? withOfficeCleanup(exe, run, (r) => r.state === "error") : run();
 	});
 }

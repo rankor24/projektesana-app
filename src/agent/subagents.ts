@@ -73,10 +73,14 @@ export { validateSpec } from "./agents.js";
 
 export { findSpec };
 
-/** Two lines per specialist for the standing prompt: who can be delegated to. */
-export function rosterText(specs: readonly AgentSpec[]): string {
+/** The most of a specialist's description the lead's roster lists (R49): every added agent adds a line to the lead's fixed context, so a long description would cost it for good. */
+export const LEAD_ROSTER_DESC_MAX = 120;
+
+/** One line per specialist for the standing prompt: who can be delegated to. `descMax` cuts a longer description (ending in "…"); unset keeps it whole. */
+export function rosterText(specs: readonly AgentSpec[], descMax = Infinity): string {
 	if (!specs.length) return "";
-	return `Speciālisti (delegate ar id; viņi nevar redzēt šo sarunu, uzdevumā ieliec visu vajadzīgo):\n${specs.map((s) => `- ${s.id}: ${s.description || s.name}`).join("\n")}`;
+	const cut = (t: string) => (t.length > descMax ? `${t.slice(0, descMax - 1).trimEnd()}…` : t);
+	return `Speciālisti (delegate ar id; viņi nevar redzēt šo sarunu, uzdevumā ieliec visu vajadzīgo):\n${specs.map((s) => `- ${s.id}: ${cut(s.description || s.name)}`).join("\n")}`;
 }
 
 // ---- lanes -------------------------------------------------------------------------------------------------------------------

@@ -6,6 +6,8 @@ export const ROLE_MAX = 16_000; // characters of a role text
 export const SHARED_MAX = 6_000; // characters of the shared rules
 /** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
 export const SPECIALIST_FIXED_MAX = 16_000; // tokens
+/** The same for the lead (standing text with the roster and skills list + its declarations); the 0.6 guard holds it, and saving specialists is refused past it (R49). */
+export const LEAD_FIXED_MAX = 10_000; // tokens
 
 export interface AgentSpec {
 	id: string;

@@ -2,7 +2,7 @@
 // a specialist's save reserves the office knowledge and its Revit tools' declarations; a role or shared text that would push a saved agent over is refused.
 // Invented agents and skills; nothing leaves the machine.
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { KNOWLEDGE_MAX, REVIT_DECLARATION_TOKENS, SPECIALIST_FIXED_MAX, fixedTokens, processReserve, readRole, readShared, revitReserve, standingFor, writeRole } from "../src/agent/agents.ts";
@@ -29,7 +29,10 @@ function skillsFolder(names: string[], chars: number): string {
 function handler(skillsDir: string) {
 	const dir = tmp();
 	const settings = new AppSettings(dir, { available: () => false, encrypt: () => Buffer.alloc(0), decrypt: () => "" });
-	return { dir, settings, h: agentHandlers({ settings, skillsDir }) };
+	// the fixture skills are the office's, ready: the lead lists only the synced ones, and these are meant to weigh on the specialist alone
+	cpSync(skillsDir, join(dir, "skills"), { recursive: true });
+	writeFileSync(join(dir, "skills", "skills.json"), JSON.stringify({ groups: {}, tested: readdirSync(skillsDir) }), "utf8");
+	return { dir, settings, h: agentHandlers({ settings }) };
 }
 const NAMES = Array.from({ length: 200 }, (_, i) => `prasme-${String(i).padStart(3, "0")}`);
 

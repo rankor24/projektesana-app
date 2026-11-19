@@ -2,7 +2,7 @@
 // message, fixedTokens counts it with the tool declarations, and a save that would pass SPECIALIST_FIXED_MAX is refused.
 // The agent loop is scripted (SessionDeps.runAgent); invented names and texts only.
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { SPECIALIST_FIXED_MAX, fixedTokens, processReserve, rosterFor, roleDir, standingFor, validateSpec, writeRole, writeShared } from "../src/agent/agents.ts";
@@ -151,7 +151,12 @@ test("13.2 rosterFor: the lead's is today's; a specialist's holds only whom it m
 function handler(skillsDir?: string) {
 	const dir = tmp();
 	const settings = new AppSettings(dir, { available: () => false, encrypt: () => Buffer.alloc(0), decrypt: () => "" });
-	return { dir, settings, h: agentHandlers({ settings, skillsDir }) };
+	if (skillsDir) {
+		// the fixture skills are the office's, ready: the lead lists only the synced ones, and these are meant to weigh on the specialist alone
+		cpSync(skillsDir, join(dir, "skills"), { recursive: true });
+		writeFileSync(join(dir, "skills", "skills.json"), JSON.stringify({ groups: {}, tested: readdirSync(skillsDir) }), "utf8");
+	}
+	return { dir, settings, h: agentHandlers({ settings }) };
 }
 
 test("13.2 agents.list rows carry fixedTokens, measured with the current settings, specs and skills", () => {
