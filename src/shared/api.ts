@@ -4,6 +4,7 @@
 import type { BimStage, Delivery, Fact, Finding, Markup, Note, NoteType, Pin, PinIntent, PinTarget, Project, Requirement, Revision, Source, Task, TaskPriority } from "../core/model.js";
 import type { StageDates } from "./gantt.js";
 import type { GrafikItem } from "./calendar.js";
+import type { DrawingSet } from "./drawing-sets.js";
 import type { ProjectDashboard, ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
 import type { UndoRow } from "../core/undo-types.js";
@@ -229,6 +230,16 @@ export interface ModelRow {
 	origin: ModelOrigin;
 	/** in an arhīvs folder: older than the file kept in its section */
 	archived: boolean;
+}
+
+/** The Revit tab: the .rvt files of the project folder (Revit's own backups counted, not listed) and the document open in Revit. */
+export interface RevitFilesView {
+	files: ModelRow[];
+	backups: number;
+	/** null = no Revit session answers; `rel` = the listed file it is ("path": Revit's path is that file, "name": only the name matches) */
+	open: { title: string; path: string; rel: string | null; by: "path" | "name" | null } | null;
+	/** why `open` is null, in words */
+	message: string | null;
 }
 
 /** The coordination panel's one answer (task 8.9): the reference, the audit of the models against it, what a seeded reference
@@ -573,6 +584,10 @@ export interface ApiSpec {
 	"revisions.capture": (id: string, summary: string, sheetIds: string[]) => Revision;
 	"tasks.list": () => { id: string; label: string; text: string }[];
 	"models.list": (id: string) => ModelRow[];
+	/** the PDF and DWG files of the project folder grouped by drawing: version chains and the PDF = DWG check */
+	"sheets.sets": (id: string) => DrawingSet[];
+	/** the Revit files of the project folder and which one is open in Revit */
+	"revit.files": (id: string) => RevitFilesView;
 	"models.bytes": (id: string, rel: string) => Uint8Array;
 	"revisions.list": (id: string) => Revision[];
 	"sheets.bytes": (id: string, ref: string) => Uint8Array;
@@ -790,6 +805,8 @@ export const API_NAMES = [
 	"revisions.capture",
 	"tasks.list",
 	"models.list",
+	"sheets.sets",
+	"revit.files",
 	"models.bytes",
 	"revisions.list",
 	"sheets.bytes",

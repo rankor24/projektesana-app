@@ -12,13 +12,14 @@ import { captureRevision, makeWorkCopy } from "../../revit/revision.js";
 import { TASKS } from "../../agent/tasks.js";
 import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
-import { projectModels } from "../../sources/models.js";
+import { listProjectFiles, projectModels } from "../../sources/models.js";
+import { drawingSets, isRevitBackup, openRevitMatch } from "../../shared/drawing-sets.js";
 import { sourceBytes } from "../../sources/bytes.js";
 import { insideBase } from "../../sources/tree.js";
 import { rootDir } from "./files.js";
 import type { FileRoot } from "../../shared/api.js";
 
-type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.addins" | "revit.installAddins" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
+type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "sheets.sets" | "revit.files" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.addins" | "revit.installAddins" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
 export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcraftApp: string; openPath(p: string): Promise<string> }): Pick<Handlers, K> {
 	const exportsDir = (id: string) => {
@@ -52,6 +53,25 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		"revit.workCopy": (id) => makeWorkCopy(d.registry.store(id), d.revit),
 		"revisions.capture": (id, summary, sheetIds) => captureRevision(d.registry.store(id), d.revit, { trigger: "manualSave", summary, sheetIds, bimcraftApp: d.bimcraftApp }),
 		"models.list": (id) => projectModels(d.registry.store(id)),
+		"sheets.sets": async (id) => drawingSets(await listProjectFiles(d.registry.store(id).project.root, [".pdf", ".dwg"])),
+		"revit.files": async (id) => {
+			const root = d.registry.store(id).project.root;
+			const all = await listProjectFiles(root, [".rvt"]);
+			const files = all.filter((f) => !isRevitBackup(f.name));
+			// the open document's full path (Revit's PathName), so the file is known by where it is, not guessed from its title
+			let open = null;
+			let message: string | null = null;
+			if (!d.revit.where()) message = "Revit MCP serveris nav atrasts (Iestatījumi → Integrācijas).";
+			else
+				try {
+					const doc = await revitExport.docInfo(d.revit);
+					const m = openRevitMatch(files, root, doc);
+					open = { title: doc.title, path: doc.path, rel: m?.rel ?? null, by: m?.by ?? null };
+				} catch (e) {
+					message = (e as Error).message;
+				}
+			return { files, backups: all.length - files.length, open, message };
+		},
 		"models.bytes": (id, rel) => {
 			const store = d.registry.store(id);
 			if (rel.startsWith("src:")) {

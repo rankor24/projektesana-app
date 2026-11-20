@@ -3,6 +3,7 @@
 //   listModels(root)      every .ifc under 01_Projektesana: 1.1, 1.2, 1.4 and the rest; arhīvs folders are listed and marked
 //                         old, never hidden (the office keeps the latest file per section in the section folder)
 //   projectModels(store)  that, plus the IFCs staged in drafts and the revisions the app captured
+//   listProjectFiles      the same walk for other kinds (PDF and DWG for the sheet versions, RVT for the Revit tab)
 // Read-only. The preview opens a model through its `rel`: a path under the project folder, an absolute path under the
 // app's data folder (drafts), or "rev:<id>" (a revision).
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -31,6 +32,15 @@ const sortModels = (a: ModelFile, b: ModelFile) =>
 	Number(a.archived) - Number(b.archived) || (a.section ?? "").localeCompare(b.section ?? "", "lv", { numeric: true }) || a.name.localeCompare(b.name, "lv");
 
 export async function listModels(root: string): Promise<ModelFile[]> {
+	return listProjectFiles(root, [".ifc"]);
+}
+
+/**
+ * Every file of the given kinds under 01_Projektesana, walked the same way as the models: the Lapu izmaiņas tab lists PDF and
+ * DWG with it, the Revit tab RVT. `exts` lower-case with the dot.
+ */
+export async function listProjectFiles(root: string, exts: string[]): Promise<ModelFile[]> {
+	const want = new Set(exts);
 	const out: ModelFile[] = [];
 	// 01_Projektesana, or the project folder itself when it holds 1.1 … 1.4 (projecting.ts)
 	const base = await projectingDir(root);
@@ -51,7 +61,7 @@ export async function listModels(root: string): Promise<ModelFile[]> {
 			if (d.isDirectory()) {
 				if (/^(node_modules|\.git)$/i.test(d.name)) continue;
 				await walk(full, part, section ?? (depth > 0 ? d.name : null), archived || /^arh[iī]v/.test(norm(d.name)), depth + 1);
-			} else if (d.isFile() && extname(d.name).toLowerCase() === ".ifc") {
+			} else if (d.isFile() && want.has(extname(d.name).toLowerCase())) {
 				const s = await stat(full);
 				out.push({ rel: relative(root, full), name: d.name, section, size: s.size, mtime: s.mtime.toISOString(), origin: originOf(part), archived });
 			}
@@ -59,7 +69,7 @@ export async function listModels(root: string): Promise<ModelFile[]> {
 	};
 	for (const d of await readdir(base, { withFileTypes: true })) {
 		if (d.isDirectory()) await walk(join(base, d.name), d.name, null, /^arh[iī]v/.test(norm(d.name)), 1);
-		else if (d.isFile() && extname(d.name).toLowerCase() === ".ifc") {
+		else if (d.isFile() && want.has(extname(d.name).toLowerCase())) {
 			const s = await stat(join(base, d.name));
 			out.push({ rel: relative(root, join(base, d.name)), name: d.name, section: null, size: s.size, mtime: s.mtime.toISOString(), origin: "cits", archived: false });
 		}

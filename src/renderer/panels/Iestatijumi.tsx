@@ -1,4 +1,4 @@
-// Settings: which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort, theme,
+// Settings, in tabs like BIM Crew's (General · AI · Integrations · Paths): which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort, theme,
 // Revit MCP path. Keys are stored encrypted by main; nothing here shows a stored key.
 import { useEffect, useState } from "react";
 import type { LoginNotice } from "../../shared/types";
@@ -8,7 +8,18 @@ import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
 import { locale, getLang, LANGS, setLang, tr, trDyn } from "../i18n";
 
+type SettingsTab = "general" | "agent" | "integrations" | "paths";
+const TABS: { id: SettingsTab; label: string }[] = [
+	{ id: "general", label: "Vispārīgi" },
+	{ id: "agent", label: "Aģents" },
+	{ id: "integrations", label: "Integrācijas" },
+	{ id: "paths", label: "Ceļi" },
+];
+let lastTab: SettingsTab = "general";
+
 export function Iestatijumi() {
+	const [tab, setTabState] = useState<SettingsTab>(lastTab);
+	const setTab = (t: SettingsTab) => setTabState((lastTab = t));
 	const settings = useLoad(() => call("settings.get"), []);
 	const providers = useLoad<ProviderRow[]>(() => call("agent.providers"), []);
 	const [notice, setNotice] = useState<LoginNotice | null>(null);
@@ -38,170 +49,192 @@ export function Iestatijumi() {
 			{err && <div className="err">{err}</div>}
 			{settings.error ? <Err error={settings.error} /> : null}
 			{providers.error ? <Err error={providers.error} /> : null}
-			<div className="section-title">{tr("Lietotājs")}</div>
-			{s && (
-				<label className="row">
-					<span style={{ width: 150 }}>{tr("Vārds, uzvārds")}</span>
-					<input className="grow" defaultValue={s.userName} placeholder={tr("nav norādīts — lēmumi tiek parakstīti kā “lietotājs”")} onBlur={(e) => act(() => call("settings.set", { userName: e.target.value.trim() }))} />
-				</label>
-			)}
-			<div className="dim small">{tr("Vārds tiek ierakstīts pie taviem lēmumiem (pieņemti atradumi, paša ierakstītas vērtības), BCF komentāros un tiek pateikts aģentam. Jau pieņemtie lēmumi savu vārdu saglabā.")}</div>
-			<div className="section-title">{tr("Aģents")}</div>
-			{s && (
-				<div className="row">
-					<label>
-						{tr("Pakalpojums")}{" "}
-						<select value={s.provider} onChange={(e) => act(() => call("settings.set", { provider: e.target.value, model: "", effort: "" }))}>
-							{(providers.data ?? []).map((p) => (
-								<option key={p.id} value={p.id}>
-									{p.label}
-									{p.configured ? "" : tr(" (nav pieslēgts)")}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
-						{tr("Modelis")}{" "}
-						<select value={s.model} onChange={(e) => act(() => call("settings.set", { model: e.target.value, effort: "" }))}>
-							<option value="">{tr("noklusējums")}</option>
-							{(current?.models ?? []).map((m) => (
-								<option key={m.id} value={m.id}>
-									{m.name}
-									{m.legacy ? tr(" (vecāks)") : ""}
-								</option>
-							))}
-						</select>
-					</label>
-					{model && model.efforts.length > 0 && (
-						<label>
-							{tr("Piepūle")}{" "}
-							<select value={s.effort} onChange={(e) => act(() => call("settings.set", { effort: e.target.value as never }))}>
-								<option value="">{tr("noklusējums ({effort})", { effort: model.defaultEffort })}</option>
-								{model.efforts.map((x) => (
-									<option key={x}>{x}</option>
-								))}
-							</select>
+			<div className="row" style={{ flexWrap: "wrap" }}>
+				{TABS.map((t) => (
+					<button key={t.id} className={`small ${tab === t.id ? "primary" : ""}`} onClick={() => setTab(t.id)}>
+						{tr(t.label)}
+					</button>
+				))}
+			</div>
+			{tab === "general" && (
+				<>
+					<div className="section-title">{tr("Lietotājs")}</div>
+					{s && (
+						<label className="row">
+							<span style={{ width: 150 }}>{tr("Vārds, uzvārds")}</span>
+							<input className="grow" defaultValue={s.userName} placeholder={tr("nav norādīts — lēmumi tiek parakstīti kā “lietotājs”")} onBlur={(e) => act(() => call("settings.set", { userName: e.target.value.trim() }))} />
 						</label>
 					)}
-				</div>
-			)}
-			<table>
-				<thead>
-					<tr>
-						<th>{tr("Pakalpojums")}</th>
-						<th>{tr("Stāvoklis")}</th>
-						<th>{tr("Pieslēgšana")}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{(providers.data ?? []).map((p) => (
-						<tr key={p.id}>
-							<td>{p.label}</td>
-							<td>{p.configured ? <Badge tone="ok">{tr("pieslēgts ({method})", { method: p.method })}</Badge> : <Badge tone="dim">{tr("nav pieslēgts")}</Badge>}</td>
-							<td>
-								<div className="row">
-									{p.auth.includes("oauth") &&
-										(p.configured && p.method === "oauth" ? (
-											<button onClick={() => act(() => call("agent.logout", p.id))}>{tr("Atslēgties")}</button>
-										) : (
-											<button className="primary" onClick={() => act(() => call("agent.login", p.id))}>
-												{tr("Pieslēgties ar abonementu")}</button>
-										))}
-									{p.auth.includes("api_key") && (
-										<>
-											<input type="password" placeholder={p.keyHelp ? "setup-token" : tr("API atslēga")} title={p.keyHelp ? trDyn(p.keyHelp) : undefined} value={keyDraft[p.id] ?? ""} onChange={(e) => setKeyDraft({ ...keyDraft, [p.id]: e.target.value })} />
-											<button disabled={!keyDraft[p.id]} onClick={() => act(async () => (await call("agent.setKey", p.id, keyDraft[p.id]), setKeyDraft({ ...keyDraft, [p.id]: "" })))}>
-												{tr("Saglabāt")}</button>
-											{p.configured && p.method === "api_key" && <button onClick={() => act(() => call("agent.clearKey", p.id))}>{tr("Dzēst atslēgu")}</button>}
-											{p.keyUrl && (
-												<a href={p.keyUrl} target="_blank" rel="noreferrer">
-													{tr("kur dabūt")}</a>
-											)}
-											{p.keyHelp && !p.configured && <span className="dim small">{trDyn(p.keyHelp)}</span>}
-										</>
-									)}
-								</div>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-			{notice && (
-				<div className="confirm">
-					<b>{tr("Pieslēgšanās — {provider}", { provider: notice.provider })}</b>
-					{notice.type === "url" && (
-						<div>
-							{tr("Pārlūkā atvērta lapa. Ja tā neatvērās:")} <a href={notice.url}>{notice.url}</a>
-						</div>
-					)}
-					{notice.type === "code" && (
-						<div>
-							{tr("Kods:")} <b className="mono">{notice.userCode}</b> — <a href={notice.url}>{notice.url}</a>
-						</div>
-					)}
-					{notice.type === "info" && <div>{notice.message}</div>}
-					{notice.type === "ask" && (
+					<div className="dim small">{tr("Vārds tiek ierakstīts pie taviem lēmumiem (pieņemti atradumi, paša ierakstītas vērtības), BCF komentāros un tiek pateikts aģentam. Jau pieņemtie lēmumi savu vārdu saglabā.")}</div>
+					<div className="section-title">{tr("Valoda")}</div>
+					{s && (
 						<div className="row">
-							<span>{notice.message}</span>
-							<input className="grow" value={answer} onChange={(e) => setAnswer(e.target.value)} />
-							<button onClick={() => act(async () => (await call("agent.loginAnswer", answer), setAnswer("")))}>{tr("Nosūtīt")}</button>
+							{LANGS.map((l) => (
+								<button key={l.id} className={getLang() === l.id ? "primary" : ""} onClick={() => act(() => call("settings.set", { language: l.id })).then(() => (setLang(l.id), location.reload()))}>
+									{l.name}
+								</button>
+							))}
+							<span className="dim small">{tr("Lietotnes saskarne. Aģenta teksti un dokumenti paliek latviski.")}</span>
 						</div>
 					)}
-					{notice.type === "done" && <Badge tone="ok">{tr("pieslēgts")}</Badge>}
-					{notice.type === "error" && <div className="err">{notice.message}</div>}
-				</div>
-			)}
-			<div className="section-title">{tr("Revit MCP")}</div>
-			<RevitServer version={rv} />
-			{s && (
-				<>
-					<label className="row">
-						<span style={{ width: 150 }}>{tr("Cits index.js")}</span>
-						<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder={tr("tukšs = standarta instalācija (%LOCALAPPDATA%\\Revit-MCP-Node)")} onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
-					</label>
-					<label className="row">
-						<span style={{ width: 150 }}>{tr("Cits node.exe")}</span>
-						<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder={tr("tukšs = servera node-runtime vai Electron node")} onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
-					</label>
+					<div className="section-title">{tr("Izskats")}</div>
+					{s && (
+						<div className="row">
+							{(["auto", "dark", "light"] as const).map((t) => (
+								<button key={t} className={s.theme === t ? "primary" : ""} onClick={() => act(() => call("settings.set", { theme: t }))}>
+									{t === "auto" ? tr("kā sistēmā") : t === "dark" ? tr("tumšs") : tr("gaišs")}
+								</button>
+							))}
+						</div>
+					)}
 				</>
 			)}
-			<div className="section-title">{tr("Izmantojums")}</div>
-			<UsageTable />
-			<div className="section-title">{tr("3D skats (BimCraft)")}</div>
-			<BimcraftCopy />
-			<div className="section-title">{tr("Biroja standarts")}</div>
-			{s && (
-				<label className="row">
-					<span style={{ width: 150 }}>{tr("Projekta mapju koks (PDF)")}</span>
-					<input
-						className="grow mono"
-						defaultValue={s.officeStandardPdf ?? ""}
-						placeholder={tr("nav norādīts — biroja prasības (nosaukumi, datumi) nav citējamas")}
-						onBlur={(e) => act(() => call("settings.set", { officeStandardPdf: e.target.value.trim() || null }))}
-					/>
-				</label>
+			{tab === "agent" && (
+				<>
+					<div className="section-title">{tr("Aģents")}</div>
+					{s && (
+						<div className="row">
+							<label>
+								{tr("Pakalpojums")}{" "}
+								<select value={s.provider} onChange={(e) => act(() => call("settings.set", { provider: e.target.value, model: "", effort: "" }))}>
+									{(providers.data ?? []).map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.label}
+											{p.configured ? "" : tr(" (nav pieslēgts)")}
+										</option>
+									))}
+								</select>
+							</label>
+							<label>
+								{tr("Modelis")}{" "}
+								<select value={s.model} onChange={(e) => act(() => call("settings.set", { model: e.target.value, effort: "" }))}>
+									<option value="">{tr("noklusējums")}</option>
+									{(current?.models ?? []).map((m) => (
+										<option key={m.id} value={m.id}>
+											{m.name}
+											{m.legacy ? tr(" (vecāks)") : ""}
+										</option>
+									))}
+								</select>
+							</label>
+							{model && model.efforts.length > 0 && (
+								<label>
+									{tr("Piepūle")}{" "}
+									<select value={s.effort} onChange={(e) => act(() => call("settings.set", { effort: e.target.value as never }))}>
+										<option value="">{tr("noklusējums ({effort})", { effort: model.defaultEffort })}</option>
+										{model.efforts.map((x) => (
+											<option key={x}>{x}</option>
+										))}
+									</select>
+								</label>
+							)}
+						</div>
+					)}
+					<table>
+						<thead>
+							<tr>
+								<th>{tr("Pakalpojums")}</th>
+								<th>{tr("Stāvoklis")}</th>
+								<th>{tr("Pieslēgšana")}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{(providers.data ?? []).map((p) => (
+								<tr key={p.id}>
+									<td>{p.label}</td>
+									<td>{p.configured ? <Badge tone="ok">{tr("pieslēgts ({method})", { method: p.method })}</Badge> : <Badge tone="dim">{tr("nav pieslēgts")}</Badge>}</td>
+									<td>
+										<div className="row">
+											{p.auth.includes("oauth") &&
+												(p.configured && p.method === "oauth" ? (
+													<button onClick={() => act(() => call("agent.logout", p.id))}>{tr("Atslēgties")}</button>
+												) : (
+													<button className="primary" onClick={() => act(() => call("agent.login", p.id))}>
+														{tr("Pieslēgties ar abonementu")}</button>
+												))}
+											{p.auth.includes("api_key") && (
+												<>
+													<input type="password" placeholder={p.keyHelp ? "setup-token" : tr("API atslēga")} title={p.keyHelp ? trDyn(p.keyHelp) : undefined} value={keyDraft[p.id] ?? ""} onChange={(e) => setKeyDraft({ ...keyDraft, [p.id]: e.target.value })} />
+													<button disabled={!keyDraft[p.id]} onClick={() => act(async () => (await call("agent.setKey", p.id, keyDraft[p.id]), setKeyDraft({ ...keyDraft, [p.id]: "" })))}>
+														{tr("Saglabāt")}</button>
+													{p.configured && p.method === "api_key" && <button onClick={() => act(() => call("agent.clearKey", p.id))}>{tr("Dzēst atslēgu")}</button>}
+													{p.keyUrl && (
+														<a href={p.keyUrl} target="_blank" rel="noreferrer">
+															{tr("kur dabūt")}</a>
+													)}
+													{p.keyHelp && !p.configured && <span className="dim small">{trDyn(p.keyHelp)}</span>}
+												</>
+											)}
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+					{notice && (
+						<div className="confirm">
+							<b>{tr("Pieslēgšanās — {provider}", { provider: notice.provider })}</b>
+							{notice.type === "url" && (
+								<div>
+									{tr("Pārlūkā atvērta lapa. Ja tā neatvērās:")} <a href={notice.url}>{notice.url}</a>
+								</div>
+							)}
+							{notice.type === "code" && (
+								<div>
+									{tr("Kods:")} <b className="mono">{notice.userCode}</b> — <a href={notice.url}>{notice.url}</a>
+								</div>
+							)}
+							{notice.type === "info" && <div>{notice.message}</div>}
+							{notice.type === "ask" && (
+								<div className="row">
+									<span>{notice.message}</span>
+									<input className="grow" value={answer} onChange={(e) => setAnswer(e.target.value)} />
+									<button onClick={() => act(async () => (await call("agent.loginAnswer", answer), setAnswer("")))}>{tr("Nosūtīt")}</button>
+								</div>
+							)}
+							{notice.type === "done" && <Badge tone="ok">{tr("pieslēgts")}</Badge>}
+							{notice.type === "error" && <div className="err">{notice.message}</div>}
+						</div>
+					)}
+					<div className="section-title">{tr("Izmantojums")}</div>
+					<UsageTable />
+				</>
 			)}
-			<div className="dim small">{tr("Biroja standarta teksts tiek lasīts no šī faila, kad lietotne strādā; tas netiek glabāts lietotnes kodā.")}</div>
-			<div className="section-title">{tr("Valoda")}</div>
-			{s && (
-				<div className="row">
-					{LANGS.map((l) => (
-						<button key={l.id} className={getLang() === l.id ? "primary" : ""} onClick={() => act(() => call("settings.set", { language: l.id })).then(() => (setLang(l.id), location.reload()))}>
-							{l.name}
-						</button>
-					))}
-					<span className="dim small">{tr("Lietotnes saskarne. Aģenta teksti un dokumenti paliek latviski.")}</span>
-				</div>
+			{tab === "integrations" && (
+				<>
+					<div className="section-title">{tr("Komponentes")}</div>
+					<Components version={rv} />
+				</>
 			)}
-			<div className="section-title">{tr("Izskats")}</div>
-			{s && (
-				<div className="row">
-					{(["auto", "dark", "light"] as const).map((t) => (
-						<button key={t} className={s.theme === t ? "primary" : ""} onClick={() => act(() => call("settings.set", { theme: t }))}>
-							{t === "auto" ? tr("kā sistēmā") : t === "dark" ? tr("tumšs") : tr("gaišs")}
-						</button>
-					))}
-				</div>
+			{tab === "paths" && (
+				<>
+					<div className="section-title">{tr("Revit MCP")}</div>
+					{s && (
+						<>
+							<label className="row">
+								<span style={{ width: 150 }}>{tr("Cits index.js")}</span>
+								<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder={tr("tukšs = standarta instalācija (%LOCALAPPDATA%\\Revit-MCP-Node)")} onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
+							</label>
+							<label className="row">
+								<span style={{ width: 150 }}>{tr("Cits node.exe")}</span>
+								<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder={tr("tukšs = servera node-runtime vai Electron node")} onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
+							</label>
+						</>
+					)}
+					<div className="section-title">{tr("Biroja standarts")}</div>
+					{s && (
+						<label className="row">
+							<span style={{ width: 150 }}>{tr("Projekta mapju koks (PDF)")}</span>
+							<input
+								className="grow mono"
+								defaultValue={s.officeStandardPdf ?? ""}
+								placeholder={tr("nav norādīts — biroja prasības (nosaukumi, datumi) nav citējamas")}
+								onBlur={(e) => act(() => call("settings.set", { officeStandardPdf: e.target.value.trim() || null }))}
+							/>
+						</label>
+					)}
+					<div className="dim small">{tr("Biroja standarta teksts tiek lasīts no šī faila, kad lietotne strādā; tas netiek glabāts lietotnes kodā.")}</div>
+				</>
 			)}
 		</div>
 	);
@@ -249,53 +282,69 @@ function UsageTable() {
 	);
 }
 
-/** The BimCraft copy the app ships: where the build took it from, when, and whether our bridge add-on is switched on. */
-function BimcraftCopy() {
-	const st = useLoad(() => call("bimcraft.status"), []);
-	const b = st.data;
-	if (st.error) return <Err error={st.error} />;
-	if (!b) return <div className="dim small">{tr("pārbauda…")}</div>;
+/**
+ * Everything the app ships or connects to, one row each: Revit MCP (the server and a Revit session), BimCraft (the 3D / IFC
+ * view and its bridge add-on), CadCraft (the DWG view and compare). Where a build took a copy from is in the tooltip.
+ */
+function Components({ version }: { version: number }) {
+	const rv = useLoad(() => call("revit.status"), [version]);
+	const bc = useLoad(() => call("bimcraft.status"), []);
+	const cad = useLoad(() => call("dwg.craft"), []);
+	const r = rv.data;
+	const b = bc.data;
+	const reload = () => (rv.reload(), bc.reload(), cad.reload());
 	return (
-		<div className="small">
+		<>
+			<table className="small">
+				<thead>
+					<tr>
+						<th>{tr("Komponente")}</th>
+						<th>{tr("Stāvoklis")}</th>
+						<th>{tr("Kas tas ir")}</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Revit MCP</td>
+						<td>{rv.error ? <Err error={rv.error} /> : r ? <Badge tone={r.state === "savienots" ? "ok" : r.state === "nav konfigurēts" ? "bad" : "warn"}>{tr(r.state)}</Badge> : <span className="dim">{tr("pārbauda…")}</span>}</td>
+						<td>
+							<div>
+								{tr("Lasa un raksta atvērto Revit modeli.")}
+								{r?.document && <> {r.document}{r.version ? tr(" · Revit {version}", { version: r.version }) : ""}</>}
+							</div>
+							{r?.server && (
+								<div className="dim mono" title={r.server.node ?? ""}>
+									{r.server.source === "iekļauts" ? tr("iekļauts lietotnē: ") : r.server.source === "automātiski" ? tr("atrasts automātiski: ") : tr("no Iestatījumiem: ")}
+									{r.server.serverJs}
+								</div>
+							)}
+							{r?.message && <div className="dim">{trDyn(r.message)}</div>}
+						</td>
+					</tr>
+					<tr>
+						<td>BimCraft</td>
+						<td>{bc.error ? <Err error={bc.error} /> : b ? <Badge tone={b.state === "gatavs" ? "ok" : b.state === "nav tilta" ? "warn" : "bad"}>{tr(b.state)}</Badge> : <span className="dim">{tr("pārbauda…")}</span>}</td>
+						<td title={b?.source ? `${b.source}${b.copiedAt ? ` · ${b.copiedAt.slice(0, 16).replace("T", " ")}` : ""}` : undefined}>
+							<div>
+								{tr("3D skats un IFC salīdzināšana.")} {b && b.state !== "nav konfigurēts" && (b.addon ? tr("Tilts uz lietotni ieslēgts.") : tr("Tilts uz lietotni nav ieslēgts."))}
+							</div>
+							{b?.message && <div className="dim">{trDyn(b.message)}</div>}
+						</td>
+					</tr>
+					<tr>
+						<td>CadCraft</td>
+						<td>{cad.error ? <Err error={cad.error} /> : cad.data === null ? <span className="dim">{tr("pārbauda…")}</span> : <Badge tone={cad.data ? "ok" : "warn"}>{cad.data ? tr("gatavs") : tr("nav iekļauts")}</Badge>}</td>
+						<td>
+							{tr("DWG skats un DWG salīdzināšana.")} {cad.data === false && <span className="dim">{tr("Bez tā DWG rāda vienkāršā līniju skatā.")}</span>}
+						</td>
+					</tr>
+				</tbody>
+			</table>
 			<div className="row">
-				<Badge tone={b.state === "gatavs" ? "ok" : b.state === "nav tilta" ? "warn" : "bad"}>{tr(b.state)}</Badge>
-				{b.state !== "nav konfigurēts" && <span>{b.vendor} {tr("bibliotēkas · tilta papildinājums")} {b.addon ? tr("ieslēgts") : tr("nav ieslēgts")}</span>}
-				<button className="small ghost" onClick={st.reload}>{tr("pārbaudīt")}</button>
+				<button className="small ghost" onClick={reload}>{tr("pārbaudīt")}</button>
 			</div>
-			{b.source && (
-				<div className="dim mono">
-					{tr("no")} {b.source}
-					{b.copiedAt ? ` · ${b.copiedAt.slice(0, 16).replace("T", " ")}` : ""}
-				</div>
-			)}
-			{b.message && <div className="dim">{b.message}</div>}
-		</div>
-	);
-}
-
-/** What the app actually starts for Revit: the server it found and how, and whether a Revit session answers. */
-function RevitServer({ version }: { version: number }) {
-	const st = useLoad(() => call("revit.status"), [version]);
-	const r = st.data;
-	if (st.error) return <Err error={st.error} />;
-	if (!r) return <div className="dim small">{tr("pārbauda…")}</div>;
-	return (
-		<div className="small">
-			<div className="row">
-				<Badge tone={r.state === "savienots" ? "ok" : r.state === "nav konfigurēts" ? "bad" : "warn"}>{tr(r.state)}</Badge>
-				{r.document && <span>{r.document}{r.version ? tr(" · Revit {version}", { version: r.version }) : ""}</span>}
-				<button className="small ghost" onClick={st.reload}>{tr("pārbaudīt")}</button>
-			</div>
-			{r.server && (
-				<div className="dim mono">
-					{r.server.source === "iekļauts" ? tr("iekļauts lietotnē: ") : r.server.source === "automātiski" ? tr("atrasts automātiski: ") : tr("no Iestatījumiem: ")}
-					{r.server.serverJs}
-					{r.server.node ? ` · ${r.server.node}` : tr(" · Electron node")}
-				</div>
-			)}
-			{r.message && <div className="dim">{r.message}</div>}
-			<RevitAddins onDone={st.reload} />
-		</div>
+			<RevitAddins onDone={rv.reload} />
+		</>
 	);
 }
 

@@ -132,3 +132,22 @@ milestones. Calendar should be more usable like bim-crew, clicking adding tasks.
 | Usable like BIM Crew | A task is a bar: drag it to move, drag its ends to change its first / last day; click it to edit. Month and week task chips open the same popup. |
 
 **Not checked live:** the look and feel in the running app (I do not drive his app); the maths, data and checks are covered by tests 9.19 and 8.5.
+
+## 7. Versions, Revit files, Settings (2026-11-20, version 2.6.6)
+
+His words: "Why Versions for sheets not proposing same as Models proposing list of IFC from folders? DWG and PDF should be checked
+separately PDF vs PDF versions, DWG vs DWG versions, but and also they have to be same PDF=DWG. Why revit files not listed from folder
+as well? if specific Revit file is opened app will understand? Why in settings Bim craft libraries shown? delete or show all others too.
+Settings need to be split up thematically in tabs same as bim-crew."
+
+| Complaint | Done in 2.6.6 |
+|---|---|
+| Sheet versions not listed from the folders like the IFC models | Lapu izmaiņas lists every PDF and DWG under 01_Projektesana (the same walk as Models, `listProjectFiles`), one row per drawing (name without `_01`/`_v2`). Arhīvs files are in the chain, marked dim. Filters: all · with several versions · PDF ≠ DWG. |
+| PDF vs PDF, DWG vs DWG | Each drawing has a PDF chain and a DWG chain (ordered by revision suffix, then date). Tick two of one kind (a tick of the other kind starts over) or "PDF ⇄" / "DWG ⇄" for the last two: PDF opens the sheet compare and fills the sheet-by-sheet list above, DWG opens CadCraft's compare. |
+| PDF = DWG | Per drawing: sakrīt (newest PDF and DWG same suffix), versijas nesakrīt (`_02` vs `_01`), DWG jaunāks (DWG saved > 1 h after the PDF), tikai PDF / tikai DWG. A name-and-date check, said so on the page: the drawings' content is not compared. |
+| Revit files not listed | The Revit tab lists the .rvt files of the project folder (Revit's `.0001.rvt` backups counted, not listed), each with "Atvērt" (opens in Revit). |
+| Does the app know which Revit file is open? | Yes: it asks Revit for the open document's path (`Document.PathName`). Same path = "šis projekta fails" and the row is marked "atvērts Revit"; only the name matching (a local copy of a central model) is said as such; a file from elsewhere = "nav no šī projekta mapes". |
+| BimCraft libraries shown in Settings | Replaced by one Components table on the Integrācijas tab: Revit MCP, BimCraft, CadCraft, each with its state and one line of what it does. The "16 libraries" count is gone; where a build copied BimCraft from is the row's tooltip. |
+| Settings in thematic tabs like BIM Crew | Four tabs, BIM Crew's pill row: Vispārīgi (user, language, look), Aģents (provider, model, sign-in, usage), Integrācijas (components, Revit add-in), Ceļi (Revit server overrides, office standard PDF). The tab is remembered while the app runs. |
+
+**Not checked live:** the look in the running app (his rule). Grouping, the PDF = DWG states, backups and the open-file match: test 5.6.
