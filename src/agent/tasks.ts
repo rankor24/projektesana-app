@@ -18,7 +18,7 @@ export const FIRST_SCAN_TASK =
 	"1. Avoti → fakti: list_sources; katram PU, īpašuma dokumentam, topogrāfijai, TAA un TN (tikai jaunākajam izdevumam: augstākais rev, tad jaunākais datums) extract_candidates, pārbaudi kandidātus tekstā (read_source) un ieraksti pareizos ar set_fact (lapa, burtisks citāts). Profila laukiem lieto profila atslēgas, ne savas.\n" +
 	"2. No jaunākā BIP: bim.bipPresent, bim.lodByStage, koordinātas un IFC hierarhija (projekts, vieta, ēka, stāvi) ar set_fact.\n" +
 	"3. Grafiks: get_schedule. Posmu datumus un plānotos nodevumus lietotne jau nolasīja no BIP; pārbaudi pret BIP un, ja kāda trūkst, ieraksti ar set_stage_dates / plan_delivery; TN termiņus ar set_clock.\n" +
-	"4. Telpas: list_rooms. Ja inventarizācija tukša, pasaki, kuram dokumentam vajag citu lomu (set_source_role).\n" +
+	"4. Telpas: list_rooms. Ja tabula nolasīta no skenēta dokumenta (state skenēts), apskati tās lapas ar view_page un ieraksti katru telpu ar set_inventory_rooms; summai jāsakrīt ar dokumenta kopējo platību. Ja inventarizācija tukša, pasaki, kuram dokumentam vajag citu lomu (set_source_role).\n" +
 	"Dokumentus sauc nosaukumos, ne id. Beigās īsi: kas atrasts, kas trūkst, kas ir pretrunā un ko vajag izlemt lietotājam.";
 
 export const TASKS: TaskTemplate[] = [
