@@ -8,7 +8,7 @@
 // rendered again for every pixel the mouse travels; the store gets the final geometry once, on release. The component is
 // memoised, so the drop hint that follows the pointer (a separate layer) never re-renders the windows either.
 import { memo, useCallback, useRef, type ReactNode } from "react";
-import { clampGeo, MIN_H, MIN_W, type FloatPlace, type Geo, type Group } from "../../shared/layout";
+import { clampGeo, MIN_H, minWOf, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
 import { followMouse, track } from "./drag";
 import { TabGroup } from "./TabGroup";
@@ -21,6 +21,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 	const p = group.place as FloatPlace;
 	const id = group.active;
 	const root = useRef<HTMLDivElement>(null);
+	const minW = minWOf(group.tabs);
 	const frame = useRef(0);
 
 	/** Writes a geometry to the element, at most once per animation frame. */
@@ -51,7 +52,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 		let final: Geo = o;
 		track(e, id, group.tabs.length > 1 ? `${group.tabs.length} logi` : id, {
 			onMove: (_x, _y, dx, dy) => {
-				final = clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp());
+				final = clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp(), minW);
 				apply(final);
 			},
 			onEnd(_x, _y, moved, target) {
@@ -77,17 +78,17 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 				const dx = ev.clientX - sx;
 				const dy = ev.clientY - sy;
 				let { x, y, w, h } = o;
-				if (dir.includes("e")) w = Math.max(MIN_W, o.w + dx);
+				if (dir.includes("e")) w = Math.max(minW, o.w + dx);
 				if (dir.includes("s")) h = Math.max(MIN_H, o.h + dy);
 				if (dir.includes("w")) {
-					w = Math.max(MIN_W, o.w - dx);
+					w = Math.max(minW, o.w - dx);
 					x = o.x + (o.w - w);
 				}
 				if (dir.includes("n")) {
 					h = Math.max(MIN_H, o.h - dy);
 					y = o.y + (o.h - h);
 				}
-				final = clampGeo({ x, y, w, h }, vp());
+				final = clampGeo({ x, y, w, h }, vp(), minW);
 				apply(final);
 			};
 			const up = () => {
@@ -96,7 +97,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			};
 			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
-		[id, p.x, p.y, p.w, p.h, apply, settle],
+		[id, p.x, p.y, p.w, p.h, minW, apply, settle],
 	);
 
 	return (

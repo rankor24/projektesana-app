@@ -6,7 +6,7 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
-import { defaultLayout, LIST_DOCK_SIZE, migratePlanC, pageById, PLAN_C, resolveOpen, START_PAGE } from "../shared/pages";
+import { defaultLayout, LIST_DOCK_SIZE, migratePlanC, migrateToolsColumn, pageById, PLAN_C, resolveOpen, START_PAGE, TOOLS_COLUMN } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
 import { tr } from "./i18n";
@@ -139,12 +139,14 @@ export const windows = {
 		// a store from the per-page builds starts the shared layout: the open page's windows are added once (the tool bar too)
 		const seeded = migrating ? L.addMissing(base, defaultFor(page), vp()) : base;
 		// a layout from before plan C: the lists leave the docks for the sidebar, the tool bar leaves the top for the column
-		const planC = store.migrated?.includes(PLAN_C) ? seeded : migratePlanC(seeded);
+		const planC0 = store.migrated?.includes(PLAN_C) ? seeded : migratePlanC(seeded);
+		// 2.6.7: floating comment tools go back to the column beside the chat, once
+		const planC = store.migrated?.includes(TOOLS_COLUMN) ? planC0 : migrateToolsColumn(planC0);
 		// the OS windows of a last session are gone: whatever was popped out is docked back (a pop-out window shows its one window)
 		const layout = POP_ID ? planC : L.popInAll(planC, vp());
 		// the list that was open (a list page as the current page, before plan C) is the sidebar's
 		const sidebar = validSidebar(store.sidebar ?? (pageById(page)?.kind === "sidebar" ? { ...L.emptySidebar(), id: page, open: true } : L.emptySidebar()));
-		const migrated = [...new Set([...(store.migrated ?? []), PLAN_C])];
+		const migrated = [...new Set([...(store.migrated ?? []), PLAN_C, TOOLS_COLUMN])];
 		state = { ...state, page, store, sidebar, loaded: true, layout, ...(POP_ID ? {} : { store: { ...L.withShared(store, layout, store.visited ?? [page]), sidebar, migrated } }) };
 		notify();
 		scheduleSave();

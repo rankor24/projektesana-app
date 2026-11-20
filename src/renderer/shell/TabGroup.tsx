@@ -66,8 +66,10 @@ export function TabGroup({
 	useEffect(() => {
 		tabsRef.current?.querySelector<HTMLElement>(".tg-tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest" });
 	}, [own, group.tabs.length]);
+	// the comment tools alone in a window: the strip is as slim as their icon column (no title, the buttons stacked)
+	const slim = group.tabs.length === 1 && group.tabs[0] === TOOLS;
 	return (
-		<div className={`tg ${mode === "edge" ? "tg-edge" : ""}`}>
+		<div className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
 			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "float" ? windows.maximize(own) : windows.undock(own))}>
 				<div
 					ref={tabsRef}

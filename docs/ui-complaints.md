@@ -151,3 +151,23 @@ Settings need to be split up thematically in tabs same as bim-crew."
 | Settings in thematic tabs like BIM Crew | Four tabs, BIM Crew's pill row: Vispārīgi (user, language, look), Aģents (provider, model, sign-in, usage), Integrācijas (components, Revit add-in), Ceļi (Revit server overrides, office standard PDF). The tab is remembered while the app runs. |
 
 **Not checked live:** the look in the running app (his rule). Grouping, the PDF = DWG states, backups and the open-file match: test 5.6.
+
+## 8. Comment tools: one icon column, always (2026-11-20, version 2.6.7)
+
+His words (third time): "where are commenting tools gone?" · "found it through windows selector only. Why still not list with just
+icons for tools? Should be compact vertical, i repeat again 3rd time."
+
+**Why it kept coming back:** the tool bar laid itself out by its width (a CSS container query): under 200 px a column with a label
+under each icon, wider a wrapped row of labelled buttons. The edge column was 96 px (icon + label), and a floating window could not be
+narrower than 280 px, so a floated tool bar was always the wide labelled row. His saved layout had it floating (280 × 415).
+
+**Ruling:** the comment tools are a compact vertical column of icons, wherever they are.
+
+| Done in 2.6.7 |
+|---|
+| One layout at every width: a single column of 36 × 34 px icon buttons; the tool's name and hint are the tooltip. No labels, no width switch. |
+| "Pick on the page" is an icon (⌖) too: lit when something is picked, its tooltip says what; a click clears it. Open comments: 💬 with a count badge. Colours: two swatches per row. |
+| Edge column 96 → 52 px. Alone in a floating window the tools may be 60 px wide (other windows keep 280); the strip has no title and its buttons stack. With another window in the same tab group they float as a normal window. |
+| Once, on start: tools floating (or minimised from floating) go back to the column beside the chat. Tools docked on a side stay there. |
+
+**Not checked live** (his rule). Layout rules: test 9.17.

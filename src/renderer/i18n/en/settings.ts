@@ -1,4 +1,4 @@
-// Settings tabs, the drawing sets of Lapu izmaiņas and the Revit file list (2.6.6).
+// Settings tabs, the drawing sets of Lapu izmaiņas and the Revit file list (2.6.6); the icon-only comment tools (2.6.7).
 export const settings: Record<string, string> = {
 	"Vispārīgi": "General",
 	"Integrācijas": "Integrations",
@@ -45,4 +45,5 @@ export const settings: Record<string, string> = {
 	"Revit MCP serveris nav atrasts (Iestatījumi → Integrācijas).": "Revit MCP server not found (Settings → Integrations).",
 	"DWG ar šo nosaukumu projekta mapē nav.": "No DWG with this name in the project folder.",
 	"PDF ar šo nosaukumu projekta mapē nav.": "No PDF with this name in the project folder.",
+	"klikšķis: notīrīt": "click: clear",
 };

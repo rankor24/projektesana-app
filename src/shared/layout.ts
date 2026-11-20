@@ -58,6 +58,9 @@ export interface Layout {
 }
 
 export const MIN_W = 280;
+/** The comment tools are one column of icons: alone in a floating window they may be this slim (other windows: MIN_W). */
+export const TOOLS_W = 60;
+export const minWOf = (tabs: readonly string[]): number => (tabs.length === 1 && tabs[0] === TOOLS ? TOOLS_W : MIN_W);
 export const MIN_H = 200;
 export const MIN_DOCK = 200;
 export const DEFAULT_DOCK = 440;
@@ -78,15 +81,15 @@ export const groupOf = (l: Layout, id: string): Group | undefined => l.groups.fi
 export const allWindows = (l: Layout): string[] => l.groups.flatMap((g) => g.tabs);
 export const dockGroup = (l: Layout, side: Side): Group | undefined => l.groups.find((g) => g.place.kind === "dock" && g.place.side === side);
 export const edgeGroup = (l: Layout): Group | undefined => l.groups.find((g) => g.place.kind === "edge");
-/** The edge column's width: the board's 95 px column, so a tool's icon and its label fit under each other. */
-export const EDGE_SIZE = 96;
+/** The edge column's width: one column of tool icons (their names are in the tooltips). */
+export const EDGE_SIZE = 52;
 export const floatGroups = (l: Layout): Group[] => l.groups.filter((g) => g.place.kind === "float").sort((a, b) => (a.place as FloatPlace).z - (b.place as FloatPlace).z);
 const topZ = (l: Layout) => l.groups.reduce((m, g) => (g.place.kind === "float" ? Math.max(m, g.place.z) : m), 0);
 
 // ---- geometry ----
 
-export function clampGeo(g: Geo, vp: Vp): Geo {
-	const w = Math.max(MIN_W, Math.min(g.w, vp.w - 16));
+export function clampGeo(g: Geo, vp: Vp, minW = MIN_W): Geo {
+	const w = Math.max(minW, Math.min(g.w, vp.w - 16));
 	const h = Math.max(MIN_H, Math.min(g.h, vp.h - 16));
 	return { x: Math.max(0, Math.min(g.x, Math.max(0, vp.w - w))), y: Math.max(0, Math.min(g.y, Math.max(0, vp.h - h))), w, h };
 }
@@ -102,13 +105,13 @@ export function defaultFloat(vp: Vp): { w: number; h: number } {
 	return { w: Math.max(720, Math.min(Math.round(vp.w * 0.55), 1200)), h: Math.max(520, Math.min(Math.round(vp.h * 0.72), 860)) };
 }
 /** A list wants a tall, narrow window, not half the screen. */
-const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 }, [TOOLS]: { w: 560, h: 260 }, "coord.reference": { w: 680, h: 720 } };
+const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 }, [TOOLS]: { w: TOOLS_W, h: 560 }, "coord.reference": { w: 680, h: 720 } };
 function cascade(l: Layout, vp: Vp, id?: string): Geo {
 	const n = l.groups.filter((g) => g.place.kind === "float").length;
 	const off = (n % 6) * 28;
-	return clampGeo({ x: 120 + off, y: 110 + off, ...((id && FLOAT_SIZE[id]) || defaultFloat(vp)) }, vp);
+	return clampGeo({ x: 120 + off, y: 110 + off, ...((id && FLOAT_SIZE[id]) || defaultFloat(vp)) }, vp, id ? minWOf([id]) : MIN_W);
 }
-const clampPlace = <P extends Restorable>(p: P, vp: Vp): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp) } : p.kind === "dock" ? { ...p, size: clampDock(p.side, p.size, vp) } : p);
+const clampPlace = <P extends Restorable>(p: P, vp: Vp, minW = MIN_W): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp, minW) } : p.kind === "dock" ? { ...p, size: clampDock(p.side, p.size, vp) } : p);
 
 // ---- helpers that keep the invariants ----
 
@@ -133,10 +136,10 @@ function addGroup(l: Layout, id: string, place: Place): Layout {
 	return { ...l, groups: [...l.groups, { tabs: [id], active: id, place }], focused: id };
 }
 
-function floatPlace(l: Layout, vp: Vp, near?: Place, id?: string): FloatPlace {
+function floatPlace(l: Layout, vp: Vp, near?: Place, id?: string, tabs: readonly string[] = id ? [id] : []): FloatPlace {
 	const r = near ? restorable(near) : undefined;
 	const base = r && r.kind === "float" ? { x: r.x + 28, y: r.y + 28, w: r.w, h: r.h } : r && r.kind === "dock" ? dockedGeo(r, vp) : cascade(l, vp, id);
-	return { kind: "float", z: topZ(l) + 1, ...clampGeo(base, vp) };
+	return { kind: "float", z: topZ(l) + 1, ...clampGeo(base, vp, tabs.length ? minWOf(tabs) : MIN_W) };
 }
 /** Where a docked group would float: over the middle of its side, so it does not jump across the screen. */
 function dockedGeo(d: DockPlace, vp: Vp): Geo {
@@ -176,14 +179,14 @@ export function move(l: Layout, id: string, x: number, y: number, vp: Vp): Layou
 	const g = groupOf(l, id);
 	if (!g || g.place.kind !== "float") return l;
 	const { restore: _r, ...p } = g.place;
-	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo({ x, y, w: p.w, h: p.h }, vp) } } : k)) };
+	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo({ x, y, w: p.w, h: p.h }, vp, minWOf(g.tabs)) } } : k)) };
 }
 
 export function resize(l: Layout, id: string, geo: Geo, vp: Vp): Layout {
 	const g = groupOf(l, id);
 	if (!g || g.place.kind !== "float") return l;
 	const { restore: _r, ...p } = g.place;
-	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo(geo, vp) } } : k)) };
+	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo(geo, vp, minWOf(g.tabs)) } } : k)) };
 }
 
 /** A floating group fills the screen (a margin around it), or goes back to the size it had; a move or resize forgets the old size. */
@@ -249,7 +252,7 @@ export function toEdge(l: Layout, id: string, opts: { whole?: boolean } = {}): L
 export function undock(l: Layout, id: string, vp: Vp): Layout {
 	const g = groupOf(l, id);
 	if (!g || (g.place.kind !== "dock" && g.place.kind !== "edge")) return l;
-	const place = floatPlace(l, vp, g.place, id);
+	const place = floatPlace(l, vp, g.place, id, g.tabs);
 	return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place } : x)), focused: id };
 }
 
@@ -259,8 +262,8 @@ export function pullOut(l: Layout, id: string, vp: Vp, at?: { x: number; y: numb
 	if (!g) return l;
 	if (g.tabs.length === 1) return g.place.kind === "dock" || g.place.kind === "edge" ? undock(l, id, vp) : l;
 	const { layout } = detach(l, id);
-	const place = floatPlace(layout, vp, g.place);
-	const moved = at ? { ...place, ...clampGeo({ ...place, x: at.x, y: at.y }, vp) } : place;
+	const place = floatPlace(layout, vp, g.place, id);
+	const moved = at ? { ...place, ...clampGeo({ ...place, x: at.x, y: at.y }, vp, minWOf([id])) } : place;
 	return { ...layout, groups: [...layout.groups, { tabs: [id], active: id, place: moved }], focused: id };
 }
 
@@ -342,14 +345,14 @@ export function popOut(l: Layout, id: string, vp: Vp): Layout {
 	if (!g || g.place.kind === "pop") return l;
 	const from = restorable(g.place);
 	const { layout } = detach(l, id);
-	return { ...layout, groups: [...layout.groups, { tabs: [id], active: id, place: { kind: "pop", from: clampPlace(from, vp) } }], focused: layout.focused === id ? null : layout.focused };
+	return { ...layout, groups: [...layout.groups, { tabs: [id], active: id, place: { kind: "pop", from: clampPlace(from, vp, minWOf([id])) } }], focused: layout.focused === id ? null : layout.focused };
 }
 
 /** The popped-out window closes: it docks back (into that side's group) or floats where it was. */
 export function popIn(l: Layout, id: string, vp: Vp): Layout {
 	const g = groupOf(l, id);
 	if (!g || g.place.kind !== "pop") return l;
-	const from = clampPlace(g.place.from, vp);
+	const from = clampPlace(g.place.from, vp, minWOf([id]));
 	const { layout } = detach(l, id);
 	if (from.kind === "dock") return dock(addGroup(layout, id, { kind: "float", z: topZ(layout) + 1, ...cascade(layout, vp) }), id, from.side, vp, { size: from.size });
 	if (from.kind === "edge") return toEdge(addGroup(layout, id, { kind: "float", z: topZ(layout) + 1, ...cascade(layout, vp) }), id);
@@ -479,7 +482,7 @@ export function normalize(raw: Layout, vp: Vp): Layout {
 		});
 		if (!tabs.length || !g.place) continue;
 		const active = tabs.includes(g.active) ? g.active : tabs[0];
-		const place = fixPlace(g.place, vp);
+		const place = fixPlace(g.place, vp, minWOf(tabs));
 		if (!place) continue;
 		if (place.kind === "dock") {
 			const have = sideTaken.get(place.side);
@@ -521,25 +524,25 @@ function cleanFilters(f: unknown, ids: Set<string>): Record<string, string> {
 	return Object.fromEntries(Object.entries(f as Record<string, unknown>).filter(([k, v]) => ids.has(k) && typeof v === "string")) as Record<string, string>;
 }
 const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
-function fixRestorable(p: unknown, vp: Vp): Restorable | null {
+function fixRestorable(p: unknown, vp: Vp, minW = MIN_W): Restorable | null {
 	const o = p as Record<string, unknown> | null;
 	if (!o || typeof o !== "object") return null;
 	if (o.kind === "float") {
 			const r = o.restore as Record<string, unknown> | undefined;
 			const restore = r && typeof r === "object" ? clampGeo({ x: num(r.x, 0), y: num(r.y, 0), w: num(r.w, 720), h: num(r.h, 520) }, vp) : undefined;
-			return { kind: "float", z: num(o.z, 1), ...clampGeo({ x: num(o.x, 0), y: num(o.y, 0), w: num(o.w, 720), h: num(o.h, 520) }, vp), ...(restore ? { restore } : {}) };
+			return { kind: "float", z: num(o.z, 1), ...clampGeo({ x: num(o.x, 0), y: num(o.y, 0), w: num(o.w, 720), h: num(o.h, 520) }, vp, minW), ...(restore ? { restore } : {}) };
 		}
 	if (o.kind === "dock" && (SIDES as readonly unknown[]).includes(o.side)) return { kind: "dock", side: o.side as Side, size: clampDock(o.side as Side, num(o.size, defaultSize(o.side as Side)), vp), collapsed: o.collapsed === true };
 	if (o.kind === "edge") return { kind: "edge" };
 	return null;
 }
-function fixPlace(p: unknown, vp: Vp): Place | null {
+function fixPlace(p: unknown, vp: Vp, minW = MIN_W): Place | null {
 	const o = p as Record<string, unknown> | null;
 	if (o && (o.kind === "min" || o.kind === "pop")) {
-		const from = fixRestorable(o.from, vp);
+		const from = fixRestorable(o.from, vp, minW);
 		return from ? { kind: o.kind, from } : null;
 	}
-	return fixRestorable(p, vp);
+	return fixRestorable(p, vp, minW);
 }
 
 // ---- the store: one layout for the app ----

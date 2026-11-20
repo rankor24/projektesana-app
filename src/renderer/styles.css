@@ -675,46 +675,34 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .cmp-pick-item .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* the comment tool bar (X1, M2): a window; a row of tools when it is wide, a column when it is narrow (the plan's purple bar) */
-.ctool-win { container: ctool / inline-size; flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
-.ctool-empty { padding: 10px 12px; }
-.ctool-col { position: relative; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 8px; }
-/* E4: the "pick on the page" chip was dashed and dim; now a solid, readable field that turns purple once something is picked */
-.ctool-subject { display: flex; align-items: center; gap: 4px; min-width: 150px; max-width: 280px; padding: 3px 8px; font-size: 11.5px; line-height: 1.25; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); background: var(--panel); }
-.ctool-subject .dim { color: var(--dim); }
-.ctool-subject.on { border-color: #8e6bbf; background: rgba(142, 107, 191, 0.14); }
-.ctool-subject-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctool-subject .x { padding: 0 3px; border: none; background: none; line-height: 1; }
-.ctool-ab { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-.ctool-ab button { padding: 1px 8px; font-size: 11px; }
+/* Comment tools: one column of icon buttons at every width and place (edge column, floating, docked); names in the tooltips */
+.ctool-win { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
+.ctool-empty { padding: 10px 6px; font-size: 11px; }
+.ctool-col { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; min-height: 100%; box-sizing: border-box; }
+.ctool-ab { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 40px; }
+.ctool-ab button { padding: 1px 0; font-size: 11px; }
 .ctool-ab button.on { background: #8e6bbf; color: #fff; border-color: #8e6bbf; }
-.ctool { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; padding: 3px 9px; background: none; border: 1px solid transparent; border-radius: 6px; }
+.ctool { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 34px; padding: 0; background: none; border: 1px solid transparent; border-radius: 7px; }
 .ctool:hover:not(:disabled) { background: var(--elev2); }
 .ctool.on { border-color: #8e6bbf; background: rgba(142, 107, 191, 0.18); }
 .ctool:disabled { opacity: 0.4; cursor: default; }
-.ctool-icon { font-size: 15px; line-height: 1.1; }
-.ctool-label { font-size: 12px; line-height: 1.15; color: var(--text); white-space: nowrap; }
-.ctool-sep { width: 1px; align-self: stretch; min-height: 22px; margin: 0 2px; background: var(--border); }
-.ctool-head { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.ctool-colours { display: inline-flex; gap: 5px; padding: 0 4px; }
+.ctool-icon { font-size: 17px; line-height: 1; }
+.ctool-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; font-size: 9.5px; line-height: 14px; font-weight: 700; text-align: center; color: #fff; background: #8e6bbf; }
+.ctool-sep { flex: none; width: 28px; height: 1px; margin: 4px 0; background: var(--border); }
+.ctool-colours { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 2px 0; }
 .ctool-swatch { width: 16px; height: 16px; padding: 0; border: 2px solid transparent; border-radius: 50%; }
 .ctool-swatch.on { border-color: var(--text); box-shadow: 0 0 0 1px var(--bg); }
-.ctool-col > .grow { display: none; }
-@container ctool (max-width: 200px) {
-	.ctool-col { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 2px; padding: 6px 4px; }
-	.ctool-subject { min-width: 0; max-width: none; min-height: 30px; align-items: flex-start; }
-	.ctool-subject-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: normal; word-break: break-word; }
-	.ctool { flex-direction: column; gap: 1px; width: 100%; padding: 5px 2px 4px; }
-	.ctool-label { font-size: 10px; text-align: center; white-space: normal; word-break: break-word; }
-	.ctool-sep { width: auto; height: 1px; min-height: 0; margin: 4px 2px; align-self: auto; }
-	.ctool-head { text-align: center; }
-	.ctool-colours { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; }
-	.ctool-col > .grow { display: block; flex: 1; }
-}
+.ctool-col > .grow { display: block; flex: 1; }
+.ctool-err { padding: 2px; font-size: 10px; word-break: break-word; }
+/* the comment tools alone in a floating window: no title tab, the window buttons stacked so the strip is as slim as the column */
+.tg-slim .tg-strip { flex-direction: column; align-items: stretch; min-height: 0; padding: 4px 0 2px; cursor: grab; }
+.tg-slim .tg-tabs { display: none; }
+.tg-slim .tg-buttons { flex-direction: column; padding: 0; gap: 0; }
+.tg-slim .tg-buttons button { width: 100%; height: 24px; }
 .ctool-ask, .ctool-flyout { position: fixed; z-index: 300; left: 160px; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--elev); border: 1px solid #8e6bbf; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
 .ctool-ask { top: 120px; }
 .ctool-ask textarea { resize: vertical; }
 .ctool-flyout { top: 120px; max-height: 50vh; overflow: auto; width: 420px; }
-.ctool-err { padding: 2px; font-size: 10.5px; }
 
 /* a view beside its list (sheet compare, DWG compare): the columns come from the element's own grid-template-columns */
 .split { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; }

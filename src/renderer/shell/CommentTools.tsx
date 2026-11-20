@@ -66,7 +66,7 @@ export function CommentTools() {
 	useEffect(() => {
 		if (!asking && !list) return;
 		const r = col.current?.getBoundingClientRect();
-		// a wide bar opens its box below itself, a narrow column opens it beside itself; never off the screen
+		// the box opens beside the column (below it when the column is a wide strip); never off the screen
 		if (r) setAnchor(r.width > 240 ? { left: Math.min(r.left + 8, window.innerWidth - 320), top: Math.min(r.bottom + 6, window.innerHeight - 260) } : { left: Math.min(r.right + 6, window.innerWidth - 320), top: Math.min(r.top + 8, window.innerHeight - 260) });
 	}, [asking, list]);
 	const pins = useLoad<Pin[]>(() => (projectId ? call("pins.list", projectId) : Promise.resolve([])), [projectId]);
@@ -124,18 +124,13 @@ export function CommentTools() {
 			/>
 			<div className="ctool-sep" />
 			{own && projectId && (
-			<div className={`ctool-subject ${subject ? "on" : ""}`} title={subject ? pinWhere({ target: subject.target } as Pin) : tr("klikšķini rindu, šūnu vai kartīti, pie kuras komentēt")}>
-				{subject ? (
-					<>
-						<span className="ctool-subject-text">{subject.label}</span>
-						<button className="x" onClick={() => commentSubject.clear()} title={tr("Notīrīt")}>
-							×
-						</button>
-					</>
-				) : (
-					<span className="dim">{tr("izvēlies lapā")}</span>
-				)}
-			</div>
+			<ToolButton
+				icon="⌖"
+				label={subject ? subject.label : tr("izvēlies lapā")}
+				hint={subject ? `${pinWhere({ target: subject.target } as Pin)} · ${tr("klikšķis: notīrīt")}` : tr("klikšķini rindu, šūnu vai kartīti, pie kuras komentēt")}
+				on={!!subject}
+				onClick={() => subject && commentSubject.clear()}
+			/>
 			)}
 			{isChange && (
 				<div className="ctool-ab">
@@ -159,7 +154,7 @@ export function CommentTools() {
 			{viewer && <ViewerTools va={viewer} asking={asking} ask={(a) => (setAsking(a), setText(""), setErr(null))} />}
 			<div className="grow" />
 			{mine.length > 0 && (
-				<ToolButton icon="💬" label={tr("Komentāri ({n})", { n: mine.length })} hint={tr("Šīs lapas atvērtie komentāri")} on={list} onClick={() => setList(!list)} />
+				<ToolButton icon="💬" count={mine.length} label={tr("Komentāri ({n})", { n: mine.length })} hint={tr("Šīs lapas atvērtie komentāri")} on={list} onClick={() => setList(!list)} />
 			)}
 			{asking && (
 				<AskBox
@@ -207,11 +202,12 @@ export function CommentTools() {
 	);
 }
 
-function ToolButton({ icon, label, hint, on, disabled, onClick }: { icon: string; label: string; hint: string; on?: boolean; disabled?: boolean; onClick: () => void }) {
+/** An icon only: the tool's name and what it does are its tooltip (the column stays one icon wide wherever it is). */
+function ToolButton({ icon, label, hint, count, on, disabled, onClick }: { icon: string; label: string; hint: string; count?: number; on?: boolean; disabled?: boolean; onClick: () => void }) {
 	return (
-		<button className={`ctool ${on ? "on" : ""}`} title={hint} disabled={disabled} onClick={onClick}>
+		<button className={`ctool ${on ? "on" : ""}`} title={`${label}\n${hint}`} aria-label={label} disabled={disabled} onClick={onClick}>
 			<span className="ctool-icon">{icon}</span>
-			<span className="ctool-label">{label}</span>
+			{!!count && <span className="ctool-count">{count}</span>}
 		</button>
 	);
 }
@@ -221,8 +217,7 @@ function ViewerTools({ va, asking, ask }: { va: ViewerActions; asking: Asking | 
 	const marks = VIEWER_TOOLS.filter((t) => t.id !== "pin");
 	return (
 		<>
-			<div className="ctool-sep" />
-			<div className="ctool-head">{tr("Modelis")}</div>
+			<div className="ctool-sep" title={tr("Modelis")} />
 			<ToolButton icon={ICON.pin} label={tr("Piezīme")} hint={tr("Piezīme pie iezīmētā elementa, ar skatu")} on={asking?.kind === "pin"} disabled={!va.selected} onClick={() => ask({ kind: "pin" })} />
 			{marks.map((t) => {
 				const shape = SHAPE_OF[t.id];

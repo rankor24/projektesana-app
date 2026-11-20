@@ -198,6 +198,16 @@ export function migratePlanC(l: Layout): Layout {
 	return next;
 }
 
+export const TOOLS_COLUMN = "tools-column";
+/**
+ * Once (2.6.7): the comment tools floating on their own, saved while they were a wide bar of labelled buttons, go back to the
+ * column beside the chat, now a column of icons. Tools the user docked on a side or joined to a tab group stay there.
+ */
+export function migrateToolsColumn(l: Layout): Layout {
+	const t = groupOf(l, TOOLS);
+	return t && t.tabs.length === 1 && (t.place.kind === "float" || (t.place.kind === "min" && t.place.from.kind === "float")) ? toEdge(l, TOOLS) : l;
+}
+
 // ---- opening by name: the agent's open_panel, Ctrl+K, links between panels ----
 
 export interface OpenTarget {

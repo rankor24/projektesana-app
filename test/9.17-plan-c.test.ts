@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as L from "../src/shared/layout.ts";
-import { defaultLayout, migratePlanC, viewerShownOn, windowShown } from "../src/shared/pages.ts";
+import { defaultLayout, migratePlanC, migrateToolsColumn, viewerShownOn, windowShown } from "../src/shared/pages.ts";
 
 const VP = { w: 1920, h: 1080 };
 
@@ -122,4 +122,27 @@ test("the sidebar's state is stored and repaired: a width in range, open only wi
 	assert.deepEqual(back.sidebar, { id: "avoti", open: true, width: 360 });
 	assert.deepEqual(back.migrated, ["plan-c"]);
 	assert.equal(L.clampSidebar(L.SIDEBAR_MIN - L.SIDEBAR_COLLAPSE - 1), L.SIDEBAR_MIN, "the drag past the threshold closes it (Sidebar.tsx); the width never goes under the minimum");
+});
+
+test("2.6.7 the comment tools are one icon column: slim alone in a window, a normal window with company, back to the column once", () => {
+	// alone, floated from the column: as slim as the icons, and it stays slim when moved, resized or reloaded
+	const alone = L.undock(L.toEdge(L.open(L.emptyLayout(), L.TOOLS, VP), L.TOOLS), L.TOOLS, VP);
+	const p = L.groupOf(alone, L.TOOLS)!.place as L.FloatPlace;
+	assert.equal(p.w, L.TOOLS_W);
+	assert.equal((L.groupOf(L.move(alone, L.TOOLS, 300, 200, VP), L.TOOLS)!.place as L.FloatPlace).w, L.TOOLS_W);
+	assert.equal((L.groupOf(L.resize(alone, L.TOOLS, { x: 10, y: 10, w: 20, h: 400 }, VP), L.TOOLS)!.place as L.FloatPlace).w, L.TOOLS_W);
+	const back = L.parseStore(JSON.stringify({ ...L.emptyStore(), shared: alone }), VP);
+	assert.equal((L.groupOf(back.shared!, L.TOOLS)!.place as L.FloatPlace).w, L.TOOLS_W, "a reload keeps the slim window");
+	// any other window keeps the usual minimum
+	const other = L.resize(L.open(L.emptyLayout(), "threads", VP), "threads", { x: 10, y: 10, w: 20, h: 400 }, VP);
+	assert.equal((L.groupOf(other, "threads")!.place as L.FloatPlace).w, L.MIN_W);
+	// the tools in a tab group with another window float as a normal window
+	const shared = L.toEdge(L.toEdge(L.open(L.open(L.emptyLayout(), L.TOOLS, VP), "threads", VP), L.TOOLS), "threads");
+	assert.equal((L.groupOf(L.undock(shared, L.TOOLS, VP), L.TOOLS)!.place as L.FloatPlace).w, L.MIN_W);
+	// once: floating (or minimised from floating) tools go back to the column; docked ones stay
+	assert.equal(L.groupOf(migrateToolsColumn(alone), L.TOOLS)!.place.kind, "edge");
+	assert.equal(L.groupOf(migrateToolsColumn(L.collapse(alone, L.TOOLS, true)), L.TOOLS)!.place.kind, "edge");
+	const docked = L.dock(L.open(L.emptyLayout(), L.TOOLS, VP), L.TOOLS, "right", VP);
+	assert.deepEqual(migrateToolsColumn(docked), docked);
+	assert.deepEqual(L.problems(migrateToolsColumn(alone)), []);
 });
