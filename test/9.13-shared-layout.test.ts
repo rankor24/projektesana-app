@@ -92,18 +92,13 @@ test("a window the user closed stays closed when the page is opened again (it is
 	assert.equal((L.groupOf(back, "vers.list")!.place as L.DockPlace).side, "right");
 });
 
-test("the shared layout is stored and read back; a store from the per-page builds starts it from the open page", () => {
+test("the shared layout is stored and read back", () => {
 	const shared = L.dock(L.open(L.emptyLayout(), "avoti", VP), "avoti", "bottom", VP);
 	const s = L.withShared(L.emptyStore(), shared, ["parskats", "avoti"]);
 	const back = L.parseStore(JSON.stringify(s), VP);
 	assert.deepEqual(back.visited, ["parskats", "avoti"]);
 	assert.deepEqual(L.sharedLayout(back, "parskats", defaultLayout, VP), L.normalize(shared, VP));
 	assert.equal(L.parseStore(JSON.stringify({ ...s, visited: [1, "x"] }), VP).visited!.join(), "x");
-	// old file: only per-page layouts
-	const old = { ...L.withPage(L.emptyStore(), "versijas", L.dock(L.open(L.emptyLayout(), "faili", VP), "faili", "left", VP)), current: "versijas" };
-	const start = L.sharedLayout(L.parseStore(JSON.stringify(old), VP), "versijas", defaultLayout, VP);
-	assert.ok(L.groupOf(start, "faili"));
-	assert.deepEqual(L.problems(start), []);
 });
 
 test("maximize fills the screen with a margin and goes back to the old size; a move or resize forgets the old size", () => {

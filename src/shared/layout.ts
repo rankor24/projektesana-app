@@ -553,10 +553,8 @@ export interface LayoutStore {
 	shared?: Layout;
 	/** pages whose own windows were added to the shared layout (a page adds them once, so a window the user closed stays closed) */
 	visited?: string[];
-	/** the per-page layouts of the first Phase 9 builds: read once to start the shared layout, never written again */
+	/** the per-page layouts of the first Phase 9 builds: kept in the file format only (no longer read) */
 	pages: Record<string, Layout>;
-	/** the layout of the old single-layout shell, until a page gets its own */
-	legacy?: Layout;
 	/** the page that was open when the app closed */
 	current?: string;
 	/** the list sidebar between the rail and the chat (BIM Crew's Explorer / Sessions column) */
@@ -591,19 +589,9 @@ export function cleanSidebar(raw: unknown): SidebarState {
 	return { id, open: id !== null && o.open === true, width: clampSidebar(num(o.width, SIDEBAR_DEFAULT)), ...(typeof o.filter === "string" ? { filter: o.filter } : {}) };
 }
 
-/** The layout of a page: its own, else the migrated old layout, else the page's default. */
-export function layoutFor(s: LayoutStore, page: string, defaultFor: (page: string) => Layout, vp: Vp): Layout {
-	const own = s.pages[page];
-	if (own) return normalize(own, vp);
-	return normalize(s.legacy ?? defaultFor(page), vp);
-}
-export function withPage(s: LayoutStore, page: string, l: Layout): LayoutStore {
-	return { ...s, pages: { ...s.pages, [page]: l } };
-}
-
-/** The shared layout; a store from the per-page builds starts it from the layout of the page that was open. */
+/** The shared layout; a store without one starts from the open page's default. */
 export function sharedLayout(s: LayoutStore, page: string, defaultFor: (page: string) => Layout, vp: Vp): Layout {
-	return s.shared ? normalize(s.shared, vp) : layoutFor(s, page, defaultFor, vp);
+	return normalize(s.shared ?? defaultFor(page), vp);
 }
 export function withShared(s: LayoutStore, l: Layout, visited?: string[]): LayoutStore {
 	return { ...s, shared: l, ...(visited ? { visited } : {}) };
@@ -640,7 +628,6 @@ export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore
 		const out: LayoutStore = { version: 1, pages };
 			if (j.shared && typeof j.shared === "object") out.shared = normalize(j.shared as Layout, vp);
 			if (Array.isArray(j.visited)) out.visited = j.visited.filter((x): x is string => typeof x === "string");
-		if (j.legacy) out.legacy = normalize(j.legacy, vp);
 		if (typeof j.current === "string") out.current = j.current;
 		if (j.sidebar) out.sidebar = cleanSidebar(j.sidebar);
 		if (Array.isArray(j.migrated)) out.migrated = j.migrated.filter((x): x is string => typeof x === "string");
@@ -648,26 +635,6 @@ export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore
 	} catch {
 		return emptyStore();
 	}
-}
-
-/** The old `projektesana:windows` value ({windows: [{id, x, y, w, h, z, mode, filter}], focused}) as a layout. */
-export function fromLegacy(raw: unknown, vp: Vp): Layout | null {
-	const o = raw as { windows?: Record<string, unknown>[]; focused?: string | null } | null;
-	if (!o || !Array.isArray(o.windows)) return null;
-	let l = emptyLayout();
-	const olds = o.windows.filter((w) => isWindowId(w.id)).sort((a, b) => num(a.z, 0) - num(b.z, 0));
-	for (const w of olds) {
-		const id = w.id as string;
-		const geo = clampGeo({ x: num(w.x, 120), y: num(w.y, 110), w: num(w.w, 720), h: num(w.h, 520) }, vp);
-		const z = topZ(l) + 1;
-		const mk = (place: Place): Layout => ({ ...l, groups: [...l.groups, { tabs: [id], active: id, place }] });
-		if (w.mode === "docked") l = dock(mk({ kind: "float", z, ...geo }), id, "right", vp);
-		else if (w.mode === "minimized") l = mk({ kind: "min", from: { kind: "float", z, ...geo } });
-		else if (w.mode === "maximized") l = mk({ kind: "float", z, ...clampGeo({ x: 8, y: 8, w: vp.w - 16, h: vp.h - 16 }, vp) });
-		else l = mk({ kind: "float", z, ...geo });
-		if (typeof w.filter === "string") l = setFilter(l, id, w.filter);
-	}
-	return normalize({ ...l, focused: typeof o.focused === "string" && isWindowId(o.focused) ? o.focused : CHAT }, vp);
 }
 
 /** Checks the invariants; returns the problems (empty = valid). Used by the tests and by the page registry's test. */

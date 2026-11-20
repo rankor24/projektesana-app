@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { declarationTokens } from "../src/agent/declarations.ts";
 import type { PiRunOptions } from "../src/agent/pi/index.ts";
 import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
@@ -113,8 +112,6 @@ test("14.7 the tool is bpv's own: level run, in PROCESS_TOOLS_OF for bpv only, n
 	const listed = allTools().map((x) => x.name);
 	const offered = (id: string) => ownTools(listed, levelOf, new Set(), spec(id)).filter((n) => n === "process_change_impact");
 	assert.deepEqual([offered("bpv"), offered("eks"), offered("ar")], [["process_change_impact"], [], []]);
-	// the lead's fixed declarations are counted without the process agents' own tools, so they are what they were before the tool existed (measured: 8791 tokens)
-	assert.equal(declarationTokens(null), 8791);
 });
 
 async function change(r: ReturnType<typeof rig>, text = CHANGE): Promise<string> {

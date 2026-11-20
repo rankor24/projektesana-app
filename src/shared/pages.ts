@@ -178,25 +178,7 @@ export function viewerShownOn(page: string, fileOpen: boolean): boolean {
 	return true;
 }
 
-// ---- one-time repair of a layout saved before plan C ----
-
-export const PLAN_C = "plan-c";
-/**
- * A layout saved before plan C has the list pages docked as windows (on the right) and the comment tools docked on top: the
- * lists leave the docks for the sidebar, and the tool bar goes to the column beside the chat. A list the user floated stays
- * a floating window (it was put there on purpose); the tool bar stays wherever the user moved it, unless it is still on top.
- */
-export function migratePlanC(l: Layout): Layout {
-	let next = l;
-	for (const p of PAGES) {
-		if (p.kind !== "sidebar") continue;
-		const g = groupOf(next, p.id);
-		if (g && (g.place.kind === "dock" || ((g.place.kind === "min" || g.place.kind === "pop") && g.place.from.kind === "dock"))) next = close(next, p.id);
-	}
-	const t = groupOf(next, TOOLS);
-	if (t && t.place.kind === "dock" && t.place.side === "top") next = toEdge(next, TOOLS);
-	return next;
-}
+// ---- one-time repairs of a saved layout ----
 
 export const TOOLS_COLUMN = "tools-column";
 /**

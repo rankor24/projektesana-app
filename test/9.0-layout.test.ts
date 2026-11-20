@@ -51,8 +51,8 @@ test("the user docks Prasības at the bottom, drops Avoti onto it as a tab, and 
 	let l = L.open(L.open(L.emptyLayout(), "prasibas", VP), "avoti", VP);
 	l = L.dock(l, "prasibas", "bottom", VP);
 	l = L.mergeInto(l, "avoti", "prasibas");
-	const back = L.parseStore(JSON.stringify(L.withPage(L.emptyStore(), "pārskats", l)), VP);
-	assert.deepEqual(L.layoutFor(back, "pārskats", L.emptyLayout, VP), L.normalize(l, VP));
+	const back = L.parseStore(JSON.stringify(L.withShared(L.emptyStore(), l)), VP);
+	assert.deepEqual(L.sharedLayout(back, "pārskats", L.emptyLayout, VP), L.normalize(l, VP));
 	assert.deepEqual(L.dockGroup(l, "bottom")!.tabs, ["prasibas", "avoti"]);
 });
 
@@ -230,41 +230,6 @@ test("a long random run of operations never breaks an invariant", () => {
 	assert.deepEqual(L.allWindows(n).sort(), L.allWindows(l).sort(), "and loses no window");
 });
 
-test("per-page layouts are independent; a page without one gets its default", () => {
-	let s = L.emptyStore();
-	const def = () => L.dock(L.open(L.emptyLayout(), "avoti", VP), "avoti", "left", VP);
-	assert.deepEqual(L.dockGroup(L.layoutFor(s, "a", def, VP), "left")!.tabs, ["chat", "avoti"]);
-	s = L.withPage(s, "a", L.open(L.emptyLayout(), "faili", VP));
-	assert.equal(L.groupOf(L.layoutFor(s, "a", def, VP), "avoti"), undefined);
-	assert.ok(L.groupOf(L.layoutFor(s, "b", def, VP), "avoti"), "page b still has its default");
-	assert.ok(L.groupOf(L.layoutFor(s, "a", def, VP), "faili"));
-	assert.equal(L.groupOf(L.layoutFor(s, "b", def, VP), "faili"), undefined);
-});
-
-test("the old projektesana:windows value is migrated: normal, maximised, minimised and the docked window", () => {
-	const old = {
-		windows: [
-			{ id: "avoti", title: "Avoti", x: 100, y: 120, w: 700, h: 500, z: 1, mode: "normal", filter: "x" },
-			{ id: "faili", title: "Faili", x: 0, y: 0, w: 100, h: 100, z: 2, mode: "maximized" },
-			{ id: "grafiks", title: "Grafiks", x: 200, y: 200, w: 600, h: 400, z: 3, mode: "minimized" },
-			{ id: "prasibas", title: "Prasības", x: 300, y: 300, w: 600, h: 400, z: 4, mode: "docked" },
-			{ id: "nezinams", x: 1, y: 1, w: 1, h: 1, z: 5, mode: "normal" },
-		],
-		focused: "prasibas",
-	};
-	const l = L.fromLegacy(old, VP)!;
-	valid(l);
-	assert.equal(where(l, "avoti")?.kind, "float");
-	assert.equal(l.filters.avoti, "x");
-	assert.deepEqual([(where(l, "faili") as L.FloatPlace).w, (where(l, "faili") as L.FloatPlace).h], [1584, 884]);
-	assert.equal(where(l, "grafiks")?.kind, "min");
-	assert.equal((where(l, "prasibas") as L.DockPlace).side, "right");
-	assert.equal(L.groupOf(l, "nezinams"), undefined);
-	assert.equal(l.focused, "prasibas");
-	assert.equal(L.fromLegacy("junk", VP), null);
-	assert.equal(L.fromLegacy({ windows: "no" }, VP), null);
-});
-
 test("a damaged or foreign layout is repaired or dropped: junk, duplicates, two groups on a side, a missing chat", () => {
 	assert.deepEqual(L.parseStore("{ not json", VP), L.emptyStore());
 	assert.deepEqual(L.parseStore('{"version":2,"pages":{}}', VP), L.emptyStore());
@@ -303,7 +268,7 @@ test("the layout file in main: saved and read back, a missing file and a damaged
 	const dir = tmp();
 	const f = new LayoutFile(dir);
 	assert.deepEqual(f.read(VP), L.emptyStore());
-	const s = L.withPage(L.emptyStore(), "pārskats", L.dock(L.open(L.emptyLayout(), "avoti", VP), "avoti", "bottom", VP));
+	const s = L.withShared(L.emptyStore(), L.normalize(L.dock(L.open(L.emptyLayout(), "avoti", VP), "avoti", "bottom", VP), VP));
 	f.write(s);
 	assert.deepEqual(new LayoutFile(dir).read(VP), s);
 	writeFileSync(join(dir, "layout.json"), "{ half a file");

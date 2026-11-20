@@ -95,6 +95,3 @@ export type WaitingItem =
 	/** S5 is on and nobody has started the expert since the stage began: only the user opens eks's thread, so this line is the cue (R48) */
 	| { kind: "start-eks"; projectId: string };
 
-/** One line of the room (Telpa): who said what to whom, an agreement, a pass-up, a paused wave. `threadId` opens the thread, `noteId` names the Atmiņa note of a closed topic.
- *  A "state" line has no source yet: nothing records a thread's state changes with their time, so none is made. */
-export interface RoomLine { at: string; kind: "message" | "state" | "agreed" | "passed-up" | "paused"; from?: string; to?: string; topic?: string; text: string; threadId?: string; noteId?: string }

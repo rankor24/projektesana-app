@@ -6,7 +6,7 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
-import { defaultLayout, LIST_DOCK_SIZE, migratePlanC, migrateToolsColumn, pageById, PLAN_C, resolveOpen, START_PAGE, TOOLS_COLUMN } from "../shared/pages";
+import { defaultLayout, LIST_DOCK_SIZE, migrateToolsColumn, pageById, resolveOpen, START_PAGE, TOOLS_COLUMN } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
 import { tr } from "./i18n";
@@ -65,7 +65,6 @@ export interface WindowsState {
 	loaded: boolean;
 }
 
-const OLD_KEY = "projektesana:windows";
 /** which layout window this OS window shows (a pop-out), or null for the main window */
 export const POP_ID = typeof location === "undefined" ? null : popIdOf(location.search);
 /** names this window to main, so it does not adopt its own "layout.changed" */
@@ -115,7 +114,7 @@ function setSidebar(next: L.SidebarState) {
 }
 
 export const windows = {
-	/** Reads layout.json (and migrates the old localStorage value once), then shows the current page's layout. */
+	/** Reads layout.json, then shows the current page's layout. */
 	async init() {
 		let store = L.emptyStore();
 		try {
@@ -123,30 +122,18 @@ export const windows = {
 		} catch {
 			// no file access: every page uses its default
 		}
-		if (!Object.keys(store.pages).length && !store.legacy) {
-			try {
-				const raw = localStorage.getItem(OLD_KEY);
-				const old = raw ? L.fromLegacy(JSON.parse(raw), vp()) : null;
-				if (old) store = { ...store, legacy: old };
-				if (raw) localStorage.removeItem(OLD_KEY);
-			} catch {
-				// unreadable old value: start from the defaults
-			}
-		}
 		const page = store.current && pageById(store.current) ? store.current : state.page;
 		const migrating = !store.shared;
 		const base = L.sharedLayout(store, page, defaultFor, vp());
 		// a store from the per-page builds starts the shared layout: the open page's windows are added once (the tool bar too)
 		const seeded = migrating ? L.addMissing(base, defaultFor(page), vp()) : base;
-		// a layout from before plan C: the lists leave the docks for the sidebar, the tool bar leaves the top for the column
-		const planC0 = store.migrated?.includes(PLAN_C) ? seeded : migratePlanC(seeded);
 		// 2.6.7: floating comment tools go back to the column beside the chat, once
-		const planC = store.migrated?.includes(TOOLS_COLUMN) ? planC0 : migrateToolsColumn(planC0);
+		const repaired = store.migrated?.includes(TOOLS_COLUMN) ? seeded : migrateToolsColumn(seeded);
 		// the OS windows of a last session are gone: whatever was popped out is docked back (a pop-out window shows its one window)
-		const layout = POP_ID ? planC : L.popInAll(planC, vp());
+		const layout = POP_ID ? repaired : L.popInAll(repaired, vp());
 		// the list that was open (a list page as the current page, before plan C) is the sidebar's
 		const sidebar = validSidebar(store.sidebar ?? (pageById(page)?.kind === "sidebar" ? { ...L.emptySidebar(), id: page, open: true } : L.emptySidebar()));
-		const migrated = [...new Set([...(store.migrated ?? []), PLAN_C, TOOLS_COLUMN])];
+		const migrated = [...new Set([...(store.migrated ?? []), TOOLS_COLUMN])];
 		state = { ...state, page, store, sidebar, loaded: true, layout, ...(POP_ID ? {} : { store: { ...L.withShared(store, layout, store.visited ?? [page]), sidebar, migrated } }) };
 		notify();
 		scheduleSave();

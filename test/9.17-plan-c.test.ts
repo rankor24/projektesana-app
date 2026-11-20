@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as L from "../src/shared/layout.ts";
-import { defaultLayout, migratePlanC, migrateToolsColumn, viewerShownOn, windowShown } from "../src/shared/pages.ts";
+import { defaultLayout, migrateToolsColumn, viewerShownOn, windowShown } from "../src/shared/pages.ts";
 
 const VP = { w: 1920, h: 1080 };
 
@@ -89,26 +89,6 @@ test("the viewer's windows show only while the viewer is on screen", () => {
 	assert.equal(windowShown("viewer.props", "parskats", false), false);
 	assert.equal(windowShown("viewer.props", "parskats", true), true);
 	assert.equal(windowShown("avoti", "koordinacija", false), true, "a list the user made a window is shared");
-});
-
-test("a layout saved before plan C moves over once: docked lists leave for the sidebar, the top tool bar goes to the column", () => {
-	// the 2.6 defaults: Avoti docked right (a list page), Faili / Avoti / Prasības on a full page, tools on top
-	let old = L.emptyLayout();
-	old = L.dock(L.open(old, "avoti", VP), "avoti", "right", VP);
-	old = L.dock(L.open(old, "faili", VP), "faili", "right", VP);
-	old = L.dock(L.open(old, L.TOOLS, VP), L.TOOLS, "top", VP, { size: 84 });
-	old = L.open(old, "prasibas", VP); // floated by the user: stays
-	old = L.dock(L.open(old, "coord.matrix", VP), "coord.matrix", "bottom", VP);
-	const m = migratePlanC(old);
-	assert.ok(!L.groupOf(m, "avoti") && !L.groupOf(m, "faili"), "docked lists are gone (they open in the sidebar)");
-	assert.equal(L.groupOf(m, "prasibas")!.place.kind, "float", "a list the user floated stays a window");
-	assert.equal(L.groupOf(m, L.TOOLS)!.place.kind, "edge");
-	assert.equal(L.groupOf(m, "coord.matrix")!.place.kind, "dock", "page windows untouched");
-	assert.deepEqual(L.problems(m), []);
-	// a tool bar the user moved elsewhere stays there; running it again changes nothing
-	const moved = L.dock(L.open(L.emptyLayout(), L.TOOLS, VP), L.TOOLS, "bottom", VP);
-	assert.equal(L.groupOf(migratePlanC(moved), L.TOOLS)!.place.kind, "dock");
-	assert.deepEqual(migratePlanC(m), m);
 });
 
 test("the sidebar's state is stored and repaired: a width in range, open only with a list named", () => {
