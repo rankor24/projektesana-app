@@ -18,6 +18,7 @@ import { LEAD_SKILL_DESC_MAX, skillsFor, skillsText, type SkillInfo } from "./sk
 import { LEAD_ROSTER_DESC_MAX, LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
 import type { LevelOf } from "./tools/levels.js";
 import { REVIT_RULES } from "./tools/revit.js";
+import { APP_MAP } from "./app-map.js";
 import { REVIT_LEVELS } from "./tools/revit-levels.js";
 
 // subagents.ts re-exports validateSpec from here and this file reads its level tables: the bindings are only used inside functions, so the cycle is safe.
@@ -213,13 +214,13 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
  *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
 	// the lead's process text is empty unless it is in the profile (the caller decides), so a co-work text stays byte for byte what it was
-	if (!spec) return [SYSTEM_PROMPT, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	if (!spec) return [SYSTEM_PROMPT, APP_MAP, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? ((d.roleText?.id === spec.id ? d.roleText.text : readRole(d.appDir, spec.id)) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
-	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }
 
 /** What a run adds to an agent's standing text later, at its largest: the office knowledge (KNOWLEDGE_MAX characters) and, in process mode, a status of STATUS_MAX characters
