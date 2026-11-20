@@ -45,3 +45,22 @@ test("settings: unknown keys are dropped, Codex is the default provider", () => 
 	assert.equal(next.theme, "light");
 	assert.equal("evil" in next, false);
 });
+
+test("2.6.9 agent bridge: every IPC call has an agent level; token, level and 'never' are enforced; a read call runs", async () => {
+	const { APP_CALL_LEVEL } = await import("../src/shared/app-calls.ts");
+	const { API_NAMES } = await import("../src/shared/api.ts");
+	assert.deepEqual(API_NAMES.filter((n) => !(n in APP_CALL_LEVEL)), [], "every call has a level (the record's type says so too)");
+	const { startAgentBridge } = await import("../src/main/agent-bridge.ts");
+	const handlers = { "stages.dates": (id: string) => ({ project: id }), "facts.decide": () => "decided", "agent.setKey": () => "leaked" } as never;
+	const b = await startAgentBridge({ handlers, registry: {} as never, renderer: {} as never });
+	const call = (body: object, token = b.token) => fetch(`${b.url}/call`, { method: "POST", headers: { "x-bridge-token": token }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...((await r.json()) as object) }));
+	try {
+		assert.equal((await call({ name: "stages.dates", level: "read", args: ["P1"] }, "wrong")).status, 403, "no token, no call");
+		assert.deepEqual(await call({ name: "stages.dates", level: "read", args: ["P1"] }), { status: 200, result: { project: "P1" } });
+		assert.equal((await call({ name: "facts.decide", level: "run", args: [] })).status, 403, "a confirm call cannot go through app_change");
+		assert.equal((await call({ name: "agent.setKey", level: "confirm", args: [] })).status, 403, "never is never");
+		assert.equal((await call({ name: "no.such", level: "read", args: [] })).status, 400);
+	} finally {
+		b.close();
+	}
+});

@@ -20,6 +20,8 @@ export interface ToolCtx {
 	skillsDir?: string;
 	/** the agent this run is for (task 10.2); null = the lead / not set */
 	agent: string | null;
+	/** the main process's bridge for the app_* tools and view_page (main/agent-bridge.ts); absent in tests and without the app */
+	bridge?: { url: string; token: string };
 	/** the thread this run belongs to; null = not set */
 	thread: string | null;
 }
@@ -30,11 +32,18 @@ export function ctxFromEnv(env: NodeJS.ProcessEnv): ToolCtx {
 		if (!v) throw new Error(`tools server: ${k} not set`);
 		return v;
 	};
-	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null, skillsDir: env.PROJEKTESANA_SKILLS || undefined, agent: env.PROJEKTESANA_AGENT || null, thread: env.PROJEKTESANA_THREAD || null };
+	return { projectsDir: need("PROJEKTESANA_PROJECTS"), projectId: env.PROJEKTESANA_PROJECT || null, dataDir: need("PROJEKTESANA_DATA"), appDir: need("PROJEKTESANA_APP"), runDir: env.PROJEKTESANA_RUN || null, skillsDir: env.PROJEKTESANA_SKILLS || undefined, agent: env.PROJEKTESANA_AGENT || null, thread: env.PROJEKTESANA_THREAD || null, ...(env.PROJEKTESANA_BRIDGE && env.PROJEKTESANA_BRIDGE_TOKEN ? { bridge: { url: env.PROJEKTESANA_BRIDGE, token: env.PROJEKTESANA_BRIDGE_TOKEN } } : {}) };
 }
 
 export function ctxEnv(c: ToolCtx): Record<string, string> {
-	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "", PROJEKTESANA_SKILLS: c.skillsDir ?? "", PROJEKTESANA_AGENT: c.agent ?? "", PROJEKTESANA_THREAD: c.thread ?? "" };
+	return { PROJEKTESANA_PROJECTS: c.projectsDir, PROJEKTESANA_PROJECT: c.projectId ?? "", PROJEKTESANA_DATA: c.dataDir, PROJEKTESANA_APP: c.appDir, PROJEKTESANA_RUN: c.runDir ?? "", PROJEKTESANA_SKILLS: c.skillsDir ?? "", PROJEKTESANA_AGENT: c.agent ?? "", PROJEKTESANA_THREAD: c.thread ?? "", ...bridgeEnv(c) };
+}
+
+/** The bridge's address for a tools server: the context's own, else the one main started (main.ts sets it in its environment). */
+function bridgeEnv(c: ToolCtx): Record<string, string> {
+	const url = c.bridge?.url ?? process.env.PROJEKTESANA_BRIDGE;
+	const token = c.bridge?.token ?? process.env.PROJEKTESANA_BRIDGE_TOKEN;
+	return url && token ? { PROJEKTESANA_BRIDGE: url, PROJEKTESANA_BRIDGE_TOKEN: token } : {};
 }
 
 export function storeOf(c: ToolCtx): ProjectStore {

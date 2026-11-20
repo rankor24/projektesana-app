@@ -12,8 +12,13 @@ import { allTools } from "./defs.js";
 const ctx = ctxFromEnv(process.env);
 const server = new McpServer({ name: "projektesana-tools", version: "2.0.0" });
 
-type Out = { content: { type: "text"; text: string }[]; isError?: boolean };
-const out = (v: unknown): Out => ({ content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 1) }] });
+type Out = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
+// a page image (view_page) goes to the model as an image block beside its text, so the model reads the page itself
+const out = (v: unknown): Out => {
+	const img = v && typeof v === "object" && "__image" in v ? (v as { __image: { data: string; mimeType: string }; text: string }) : null;
+	if (img) return { content: [{ type: "text", text: img.text }, { type: "image", data: img.__image.data, mimeType: img.__image.mimeType }] };
+	return { content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 1) }] };
+};
 
 for (const t of allTools()) {
 	if (t.level === "never") continue;

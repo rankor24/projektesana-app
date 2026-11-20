@@ -32,6 +32,7 @@ import { REVIT_LEVELS, REVIT_TOOLS } from "../agent/tools/revit-levels.js";
 import { Ocr } from "../sources/text/ocr.js";
 import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
+import { startAgentBridge } from "./agent-bridge.js";
 import { PageRenderer } from "./offscreen.js";
 
 const here = import.meta.dirname; // dist/main
@@ -258,6 +259,15 @@ const handlers = createHandlers({
 	openUrl,
 });
 registerIpc(handlers, log);
+// the agent's way into every call of the app and to page images (main/agent-bridge.ts); each agent run's tools server gets its
+// address and token (agent/tools/context.ts ctxEnv)
+void startAgentBridge({ handlers, registry, renderer: pageRenderer })
+	.then((b) => {
+		process.env.PROJEKTESANA_BRIDGE = b.url;
+		process.env.PROJEKTESANA_BRIDGE_TOKEN = b.token;
+		app.on("will-quit", () => b.close());
+	})
+	.catch((e: Error) => log(`agent bridge failed: ${e.message}`));
 
 function createWindow(): void {
 	win = new BrowserWindow({
