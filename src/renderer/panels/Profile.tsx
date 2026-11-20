@@ -107,7 +107,8 @@ export function Profile({ projectId }: { projectId: string }) {
 					})}
 				</tbody>
 			</table>
-			<OtherFacts facts={all.filter((f) => !f.key.startsWith("profile.") && f.state !== "rejected")} title={title} onDecide={(id, st) => act(call("facts.decide", projectId, id, st))} />
+			{/* every fact the rows above do not show: an agent's own key (profile.stageDates…, building.001…) must never be invisible */}
+			<OtherFacts facts={all.filter((f) => !PROFILE_KEYS.some((k) => f.key === `profile.${k}`) && f.state !== "rejected")} title={title} onDecide={(id, st) => act(call("facts.decide", projectId, id, st))} />
 		</div>
 	);
 }

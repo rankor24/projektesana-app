@@ -9,6 +9,7 @@ import { RunCard } from "./RunCard";
 import { PlanBlock } from "./PlanBlock";
 import { attachBus } from "../attach-bus";
 import { Icon } from "../icons";
+import { Markdown } from "./Markdown";
 import { effectiveMode, focusForSend } from "../../shared/view-context";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
 import { fmtTokens } from "../../shared/tokens";
@@ -637,7 +638,7 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 						{l.thinking}
 					</details>
 				)}
-				{l.text}
+				<Markdown text={l.text} />
 			</div>
 		);
 	if (l.kind === "run") return null;

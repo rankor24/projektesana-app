@@ -19,6 +19,8 @@ export interface ProjectDeps {
 	hooks: () => PipelineHooks;
 	/** runs after a scan or a role change (checks subscribe in phase 2) */
 	afterChange?: (store: ProjectStore, what: string) => void | Promise<void>;
+	/** a project's first scan has finished: the app starts the agent's first-scan task (main/api.ts) */
+	onFirstScan?: (projectId: string) => void | Promise<void>;
 }
 
 type K = "projects.list" | "projects.summaries" | "projects.dashboard" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.setRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
@@ -51,9 +53,12 @@ export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 			const store = d.registry.store(id);
 			if (!existsSync(store.project.root)) throw new Error(`Projekta mape nav pieejama: ${store.project.root}`);
 			scanning.add(id);
+			// the first scan of a project: no scan summary yet
+			const first = !store.readMeta<ScanSummaryRow | null>("scan", null);
 			void scanProject(store, (p) => d.emit("scan.progress", { projectId: id, ...p }), d.hooks())
 				.then(async () => {
 					await d.afterChange?.(store, "sources");
+					if (first) await d.onFirstScan?.(id);
 				})
 				.catch((e: Error) => d.emit("scan.progress", { projectId: id, phase: "error", done: 0, total: 0, message: e.message }))
 				.finally(() => {

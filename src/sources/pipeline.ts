@@ -6,7 +6,9 @@ import type { Source, Version } from "../core/model.js";
 import type { ProjectStore } from "../core/store.js";
 import type { ScanProgress } from "../shared/api.js";
 import { mergeSources } from "./dedupe.js";
-import { mergeDeliveries, plannedFromSchedule, readDeliveries } from "./deliveries.js";
+import { mergeDeliveries, plannedFromSchedule, readDeliveries, stagesFromSchedule } from "./deliveries.js";
+import { applyBipStageDates } from "../core/stage-dates.js";
+import { revOf } from "../shared/drawing-sets.js";
 import { expandContainers } from "./edoc-sources.js";
 import { hashFiles } from "./hash.js";
 import { applyDocRoles } from "./roles.js";
@@ -187,9 +189,16 @@ function keepBlobs(store: ProjectStore, files: { abs: string; rel: string; size:
 /** Deliveries from 1.4_Nodevumi merged with what is stored (drafts, the user's dates, checks, sent); planned dates from the BIP
  *  grafiks / schedule sources. Used by the scan and after the copy into 1.4 (7.6). */
 export async function refreshDeliveries(store: ProjectStore, root: string, sources: Source[] = store.read("sources")): Promise<void> {
-	const planned = sources
+	// newest revision first ("…_03" before "…_02" before no suffix), then the newest file: a reissued BIP wins over the old one
+	const schedules = sources
 		.filter((s) => s.kind === "document" && (s.role === "Grafiks" || s.role === "BIP / BIM prasības"))
-		.flatMap((s) => plannedFromSchedule(store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "")?.pages ?? []));
+		.sort((a, b) => revOf(b.title) - revOf(a.title) || (b.versions[b.versions.length - 1]?.mtime ?? "").localeCompare(a.versions[a.versions.length - 1]?.mtime ?? ""))
+		.map((s) => store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "")?.pages ?? []);
+	const planned = schedules.flatMap((pages) => plannedFromSchedule(pages));
 	const deliveries = mergeDeliveries(store.read("deliveries"), await readDeliveries(root), planned);
 	if (JSON.stringify(deliveries) !== JSON.stringify(store.read("deliveries"))) store.write("deliveries", deliveries, { kind: "deliveries.read", by: "app", data: { count: deliveries.length } });
+	// the Gantt's stage spans from the newest schedule that has a control-point table (never over the user's or the agent's dates)
+	const stages = schedules.map((pages) => stagesFromSchedule(pages)).find((rows) => rows.length);
+	if (stages) applyBipStageDates(store, stages);
 }
+

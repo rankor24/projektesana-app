@@ -22,6 +22,7 @@ import { layoutHandlers } from "./handlers/layout.js";
 import { planHandlers } from "./handlers/plan.js";
 import { threadHandlers } from "./handlers/threads.js";
 import { processHandlers } from "./handlers/process.js";
+import { FIRST_SCAN_TASK } from "../agent/tasks.js";
 import type { RevitClient } from "../revit/client.js";
 import type { PopoutManager } from "./windows.js";
 
@@ -30,7 +31,15 @@ export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterC
 export function createHandlers(d: AppDeps): Handlers {
 	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);
 	const userName = () => d.settings.get().userName.trim() || undefined;
-	const e = { ...d, afterChange, userName };
+	// a project's first scan: the agent does what the user otherwise asked for message by message (agent/tasks.ts FIRST_SCAN_TASK),
+	// once per project and only when a provider is signed in; without one the task stays in the dock's suggested tasks
+	const onFirstScan = async (projectId: string) => {
+		const store = d.registry.store(projectId);
+		if (store.readMeta<boolean>("first-scan-task", false) || !(await d.session.status()).signedIn) return;
+		store.writeMeta("first-scan-task", true, { kind: "first-scan.task", by: "app" });
+		await d.session.send(projectId, FIRST_SCAN_TASK, []);
+	};
+	const e = { ...d, afterChange, userName, onFirstScan };
 	const projects = projectHandlers(e);
 	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...compare2dHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d), ...processHandlers(d) };
 }

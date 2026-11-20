@@ -1,6 +1,8 @@
 // The agent's read tools for sources and law, extraction candidates, facts as proposals, and the project memory (Atmiņa).
 import { join } from "node:path";
 import { z } from "zod";
+import { seriesPrev } from "../../core/versions.js";
+import { revOf } from "../../shared/drawing-sets.js";
 import { proposeFact } from "../../core/facts.js";
 import { newId, profileOf, type Note, type NoteType } from "../../core/model.js";
 import { OfficeMemory } from "../../core/office-memory.js";
@@ -51,11 +53,15 @@ export const sourceTools: ToolDef[] = [
 	tool({
 		name: "list_sources",
 		level: "read",
-		description: "All input documents of the project (from 01_Projektesana\\1.1_Izejas dati): id, title, office folder, role, text state, pages, signers. Photo surveys are one row each.",
+		description:
+			"All input documents of the project (from 01_Projektesana\\1.1_Izejas dati): id, title, office folder, role, text state, pages, signers, the revision in the name (rev) and the file's date. Several issues of one document: use the newest (highest rev, then latest date); supersededBy names the newer issue of an older one. Name documents by title to the user, never by id. Photo surveys are one row each.",
 		input: { role: z.string().optional().describe("only this role, e.g. PU, Tehniskie noteikumi") },
 		run: (ctx, { role }) => {
-			const rows = storeOf(ctx)
-				.read("sources")
+			const all = storeOf(ctx).read("sources");
+			// the series of reissues (…_01 → …_02 → …_03, core/versions.ts): an older issue points at the one that replaced it
+			const newer = new Map<string, string>();
+			for (const [id, prev] of seriesPrev(all)) newer.set(prev.id, all.find((s) => s.id === id)?.title ?? id);
+			const rows = all
 				.filter((s) => !role || s.role === role)
 				.map((s) => {
 					const v = s.versions[s.versions.length - 1];
@@ -67,6 +73,9 @@ export const sourceTools: ToolDef[] = [
 						kind: s.kind,
 						text: v?.textState,
 						pages: v?.pages,
+						...(revOf(s.title) ? { rev: revOf(s.title) } : {}),
+						...(v?.mtime ? { date: v.mtime.slice(0, 10) } : {}),
+						...(newer.has(s.id) ? { supersededBy: newer.get(s.id) } : {}),
 						...(s.paths.length > 1 ? { places: s.paths.length } : {}),
 						...(s.signers.length ? { signers: s.signers.map((x) => `${x.name} ${x.at ?? ""}`.trim()) } : {}),
 						...(s.container ? { inside: s.container.path } : {}),
@@ -156,7 +165,7 @@ export const sourceTools: ToolDef[] = [
 		name: "set_fact",
 		level: "propose",
 		description:
-			"Propose a fact with its source: the source id, the page and a verbatim quote from that page (read_source). The code checks the quote; a quote not on that page is refused. The user confirms. Keys: profile.workType|group|procedure|stagesInContract|sections|funding|use|totalAreaM2|floorsAbove|floorsBelow|address|cadastralNo, bim.bipPresent, bim.lodByStage, or a dotted key of your own (topo.approvedOn, tn.number, …).",
+			"Propose a fact with its source: the source id, the page and a verbatim quote from that page (read_source). The code checks the quote; a quote not on that page is refused. The user confirms. Keys: profile.workType|group|procedure|stagesInContract|sections|funding|use|totalAreaM2|floorsAbove|floorsBelow|address|cadastralNo, bim.bipPresent, bim.lodByStage. A value for one of those fields always takes its key (the Project panel shows only them as fields); anything else takes a dotted key of your own (topo.approvedOn, tn.number, …) and shows under Citi fakti.",
 		input: { key: z.string(), value: z.string(), sourceId: z.string(), page: z.number().int().min(1), quote: z.string() },
 		run: (ctx, a) => {
 			const f = proposeFact(storeOf(ctx), { key: a.key, value: a.value, source: { sourceId: a.sourceId, page: a.page, quote: a.quote }, by: "agent" });

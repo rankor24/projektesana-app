@@ -31,5 +31,33 @@ export function setStageDates(store: ProjectStore, stage: BimStage, range: { sta
 		next[stage] = { start: range.start, end: range.end };
 	}
 	store.writeMeta(NAME, next, { kind: "stage.dates", by, data: { stage, ...(range ?? {}) } });
+	const from = { ...stageDatesFrom(store) };
+	if (range === null) delete from[stage];
+	else from[stage] = by === "app" ? "bip" : by;
+	store.writeMeta(FROM, from, { kind: "stage.dates.from", by, data: { stage } });
 	return next;
+}
+
+const FROM = "stage-dates-from";
+/** Who set each stage's dates: "bip" (read from the BIP by the scan), "user" or "agent". A stage set before 2.6.8 has none. */
+export function stageDatesFrom(store: ProjectStore): Partial<Record<BimStage, "bip" | "user" | "agent">> {
+	return store.readMeta<Partial<Record<BimStage, "bip" | "user" | "agent">>>(FROM, {});
+}
+
+/**
+ * The stages' spans the scan read from the BIP (sources/deliveries.ts stagesFromSchedule). A stage the user or the agent set,
+ * or one set before the origin was kept, is left as it is; an empty one, or one the BIP set before, takes the BIP's dates.
+ */
+export function applyBipStageDates(store: ProjectStore, rows: { stage: BimStage; start: string; end: string }[]): BimStage[] {
+	const have = readStageDates(store);
+	const from = stageDatesFrom(store);
+	const set: BimStage[] = [];
+	for (const r of rows) {
+		const cur = have[r.stage];
+		if (cur && from[r.stage] !== "bip") continue;
+		if (cur && cur.start === r.start && cur.end === r.end) continue;
+		setStageDates(store, r.stage, { start: r.start, end: r.end }, "app");
+		set.push(r.stage);
+	}
+	return set;
 }

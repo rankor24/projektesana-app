@@ -1,3 +1,4 @@
+import { cpSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -7,7 +8,11 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
 	root: "src/renderer",
 	base: "./",
-	plugins: [react()],
+	plugins: [
+		react(),
+		// pdf.js's image decoders (JBIG2, JPEG 2000) beside the bundle: renderer/pdf-assets.ts points getDocument at them
+		{ name: "pdfjs-wasm", closeBundle: () => cpSync(resolve(import.meta.dirname, "node_modules/pdfjs-dist/wasm"), resolve(import.meta.dirname, "dist/renderer/pdfjs/wasm"), { recursive: true }) },
+	],
 	build: {
 		outDir: "../../dist/renderer",
 		emptyOutDir: true,

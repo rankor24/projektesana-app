@@ -1,5 +1,6 @@
 // PDF preview: pdfjs page canvas + text layer, page navigation, zoom. Selecting text or dragging a region (Apgabals)
 // puts it in the Fokuss with the text inside. `overlay` draws on top of the page (pins, inventory geometry).
+import { PDF_WASM_URL } from "../pdf-assets";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -79,7 +80,7 @@ export function PdfView({
 		load()
 			.then((bytes) => {
 				// pdfjs takes ownership of the buffer it is given: hand it a copy
-				task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+				task = pdfjs.getDocument({ data: new Uint8Array(bytes), wasmUrl: PDF_WASM_URL });
 				return task.promise;
 			})
 			.then((d) => live && (setDoc(d), setPage(Math.min(initialPage ?? 1, d.numPages))))

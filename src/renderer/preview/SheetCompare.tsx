@@ -1,6 +1,7 @@
 // Sheet compare: two issues of a sheet, paired by sheet number. Left: A with the pixel overlay (red = only in A, blue =
 // only in B) after B is laid onto A's sheet frame; zones outlined. Right: the named changes from the vectors (moved lines,
 // changed dimensions, texts). A change becomes a pin on A's page or goes to the agent's Fokuss.
+import { PDF_WASM_URL } from "../pdf-assets";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState } from "react";
@@ -21,7 +22,7 @@ const SCALE = 1.6;
 const MM_PT = 72 / 25.4;
 
 async function renderPage(bytes: Uint8Array, n: number, w?: number, h?: number, frame?: { from: SheetDiffRow["frameA"]; to: SheetDiffRow["frameA"] }): Promise<ImageData> {
-	const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+	const task = pdfjs.getDocument({ data: new Uint8Array(bytes), wasmUrl: PDF_WASM_URL });
 	const doc = await task.promise;
 	try {
 		const page = await doc.getPage(n);

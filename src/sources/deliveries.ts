@@ -5,7 +5,8 @@
 import { readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { dateInName, dateOfFolder, deliveryKindOf, stageOfDelivery } from "../core/stages.js";
-import type { Delivery, DeliveryItem, DeliveryKind } from "../core/model.js";
+import type { BimStage, Delivery, DeliveryItem, DeliveryKind } from "../core/model.js";
+import { datesIn } from "./extract/lv-dates.js";
 import { partDir } from "./projecting.js";
 import { isJunk } from "./roles.js";
 
@@ -82,20 +83,42 @@ export function withStages(list: Omit<Delivery, "stage">[]): Delivery[] {
 	});
 }
 
-/** BIP / grafiks rows that name a delivery kind and a date: "MBP iesniegšana … 01.02.2027". */
+/**
+ * BIP / grafiks rows that name a delivery kind and a date: "MBP iesniegšana … 01.02.2027", or a control-point row
+ * "Skiču projekts | start | submission | done" (dates as figures or words, lv-dates.ts): a row of three dates gives its middle
+ * one, the submission; otherwise the first.
+ */
 export function plannedFromSchedule(pages: string[]): { kind: DeliveryKind; date: string; quote: string; page: number }[] {
 	const out: { kind: DeliveryKind; date: string; quote: string; page: number }[] = [];
 	pages.forEach((p, i) => {
 		for (const raw of p.split("\n")) {
 			const line = raw.replace(/\s+/g, " ").trim();
-			const k = /(skiču\s+projekt\p{L}*|skice|\bMBP\b|minimāl\p{L}*\s+sastāv|\bBP\b|būvprojekt\p{L}*|\bDT\b|darba\s+rasēj\p{L}*|starpnodevum\p{L}*)/iu.exec(line);
-			const d = /(\d{1,2})\.(\d{1,2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2})/.exec(line);
-			if (!k || !d) continue;
-			const iso = d[1] ? `${d[3]}-${d[2].padStart(2, "0")}-${d[1].padStart(2, "0")}` : `${d[4]}-${d[5]}-${d[6]}`;
-			if (Number.isNaN(Date.parse(iso))) continue;
+			const k = /(skiču\s+projekt\p{L}*|skice|\bMBP\b|minimāl\p{L}*\s+sastāv|\bBP\b|būvprojekt\p{L}*|tehnisk\p{L}*\s+projekt\p{L}*|\bDT\b|darba\s+rasēj\p{L}*|starpnodevum\p{L}*)/iu.exec(line);
+			const dates = datesIn(line);
+			if (!k || !dates.length) continue;
 			const w = norm(k[1]);
 			const kind: DeliveryKind = /skic/.test(w) ? "SKICE" : /mbp|minimal/.test(w) ? "MBP" : /starp/.test(w) ? "STARP" : /\bdt\b|darba/.test(w) ? "DT" : "BP";
-			out.push({ kind, date: iso, quote: line, page: i + 1 });
+			out.push({ kind, date: dates.length === 3 ? dates[1] : dates[0], quote: line, page: i + 1 });
+		}
+	});
+	return out;
+}
+
+/**
+ * The stages' spans from a BIP's control-point table: a row naming a stage with two or more dates runs from its first date to
+ * its last ("Projekta koncepcija | 2026. gada 30. septembris | … | 2026. gada 30. novembris").
+ */
+export function stagesFromSchedule(pages: string[]): { stage: BimStage; start: string; end: string; quote: string; page: number }[] {
+	const out: { stage: BimStage; start: string; end: string; quote: string; page: number }[] = [];
+	pages.forEach((p, i) => {
+		for (const raw of p.split("\n")) {
+			const line = raw.replace(/\s+/g, " ").trim();
+			const w = norm(line.slice(0, 60));
+			const stage: BimStage | null = /koncepcij/.test(w) ? "Koncept" : /skicu\s+projekt|^skice/.test(w) ? "Skice" : /tehnisk\w*\s+projekt|buvprojekt/.test(w) ? "Tehniskais" : /detalizacij|darba\s+rasej/.test(w) ? "Detalizācijas" : null;
+			const dates = datesIn(line);
+			if (!stage || dates.length < 2 || out.some((x) => x.stage === stage)) continue;
+			const [start, end] = [dates[0], dates[dates.length - 1]];
+			if (start <= end) out.push({ stage, start, end, quote: line, page: i + 1 });
 		}
 	});
 	return out;
