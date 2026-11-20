@@ -1,7 +1,7 @@
 // One view: top bar, the rail, the work area (the viewer, or a full page, in the middle; a dock group on each of four sides)
 // and the floating windows on top. Every window is in a tab group that floats or docks (task 9.0).
 import { ComparePicker } from "./shell/ComparePicker";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
@@ -41,13 +41,28 @@ import { PANEL_TITLE, WINDOW_TITLE, useWindows, windows, type PanelId } from "./
 import { pageById } from "../shared/pages";
 import { checkRelay, type RelayMsg } from "../shared/popout";
 import { bimcraft } from "./preview/IfcView";
-import { CHAT, TOOLS } from "../shared/layout";
+import { CHAT, THREADS, TOOLS } from "../shared/layout";
+import { ThreadsWindow } from "./shell/ThreadList";
 import { getLang, setLang, tr } from "./i18n";
+
+/**
+ * Mounts its children when it is first shown and then keeps them mounted, hidden: an iframe that is unmounted loads again
+ * (BimCraft with a 120 MB model took seconds on every page change). Hidden means display:none, so it costs no layout.
+ */
+function KeepAlive({ show, children }: { show: boolean; children: ReactNode }) {
+	const [seen, setSeen] = useState(show);
+	useEffect(() => {
+		if (show) setSeen(true);
+	}, [show]);
+	if (!show && !seen) return null;
+	return <div className={`keep ${show ? "" : "keep-hidden"}`}>{children}</div>;
+}
 
 /** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
 function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === CHAT) return <AgentDock />;
 	if (id === TOOLS) return <CommentTools />;
+	if (id === THREADS) return <ThreadsWindow />;
 	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
 	if (id.startsWith("viewer.")) return <ViewerPanel id={id} />;
 	if (id === "coord.matrix") return <CoordMatrixPanel />;
@@ -178,6 +193,8 @@ export function App() {
 	const { tick, projectId, preview } = useUi();
 	// a fact review needs the viewer: its card lives there and opens the cited source (task 9.7), also from a full page with nothing open
 	const reviewing = useFactReview().current !== null;
+	// the viewer is shown on pages that have it, and on a full page only while a file is open or a fact is reviewed
+	const showViewer = !sceneCanvas && !planCanvas && (!fullPage || !!preview || reviewing);
 	const [row, setRow] = useState<ProjectRow | null>(null);
 	useEffect(() => {
 		call("settings.get").then((s) => {
@@ -214,13 +231,15 @@ export function App() {
 									<Panel id={fullPage as PanelId} filter={canvasFilter} />
 								</div>
 							)}
-							{sceneCanvas && (
+							{/* The model viewer and the 3D scene stay mounted once opened and are only hidden: a page change must not load a
+						    120 MB model into BimCraft again. The tree here has the same shape on every page, so React never swaps them. */}
+							<KeepAlive show={sceneCanvas}>
 								<div className="scene-body">
 									<div className="scene-view">
 										<CoordScene />
 									</div>
 								</div>
-							)}
+							</KeepAlive>
 							{planCanvas && (
 								<div className="scene-body">
 									<div className="scene-view">
@@ -228,7 +247,13 @@ export function App() {
 									</div>
 								</div>
 							)}
-							{!sceneCanvas && !planCanvas && (!fullPage || preview || reviewing) && (fullPage ? <Viewer /> : <div className="scene-body"><div className="scene-view"><Viewer /></div></div>)}
+							<KeepAlive show={showViewer}>
+								<div className="scene-body">
+									<div className="scene-view">
+										<Viewer active={showViewer} />
+									</div>
+								</div>
+							</KeepAlive>
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

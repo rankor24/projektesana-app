@@ -29,7 +29,8 @@ export function sourceExt(s: Source): string {
 const PANEL_BTNS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"] as const;
 
 /** The viewer: the file bars, the split, the link buttons and the panes. Replaces the old single preview. */
-export function Viewer() {
+/** `active`: the viewer is on screen. Hidden (another page) it stays loaded but gives up the focus and the chat context. */
+export function Viewer({ active = true }: { active?: boolean }) {
 	const { projectId, preview } = useUi();
 	const v = useViewer();
 	const sources = useLoad<Source[]>(() => (projectId ? call("sources.list", projectId) : Promise.resolve([])), [projectId]);
@@ -44,6 +45,7 @@ export function Viewer() {
 	// what the chat's Auto mode sends: which file is open in the focused pane (selection, camera, page: the views report them)
 	const srcTitle = preview?.kind === "source" ? titleOf(preview.sourceId) : undefined;
 	useEffect(() => {
+		if (!active) return;
 		if (!preview) {
 			ui.setView({ kind: null });
 			return;
@@ -57,7 +59,7 @@ export function Viewer() {
 			ui.setView({ kind: s && sourceExt(s) === ".ifc" ? "ifc" : "source", label: srcTitle ?? preview.sourceId, sourceId: preview.sourceId, path: undefined, ...(preview.page ? { page: preview.page } : {}) });
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [preview, srcTitle]);
+	}, [preview, srcTitle, active]);
 
 	const two = v.panes.length === 2;
 	return (
@@ -100,7 +102,7 @@ export function Viewer() {
 							{two && p.tabs.length > 0 && <button className="ghost small" title={tr("Šajā skatā atvērt otru failu: izvēlies to sarakstā")} onClick={() => viewer.focusPane(i)}>＋</button>}
 						</div>
 						<div className="viewer-pane-body">
-							<ViewPane target={v.tabs.find((t) => t.id === p.active)?.target ?? null} paneIndex={i} focused={v.focused === i} sources={sources.data} loading={sources.loading} />
+							<ViewPane target={v.tabs.find((t) => t.id === p.active)?.target ?? null} paneIndex={i} focused={v.focused === i && active} sources={sources.data} loading={sources.loading} />
 						</div>
 					</div>
 				))}

@@ -36,6 +36,7 @@ export const WINDOW_TITLE: Record<string, string> = {
 	...PANEL_TITLE,
 	chat: tr("Aģents"),
 	tools: tr("Komentāru rīki"),
+	threads: tr("Sarunas"),
 	"viewer.props": tr("Īpašības"),
 	"viewer.tree": tr("Elementu koks"),
 	"viewer.ifcmeta": tr("IFC metadati"),

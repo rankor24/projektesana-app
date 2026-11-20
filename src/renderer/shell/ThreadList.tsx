@@ -2,7 +2,11 @@
 import { useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
 import { LEAD_ID, type QueueView, type Thread, type ThreadState } from "../../shared/thread-types";
-import { agentName, liveState } from "./useThreads";
+import { agentName, liveState, useThreads } from "./useThreads";
+import { THREADS } from "../../shared/layout";
+import { errText } from "../bridge";
+import { ui, useUi } from "../state";
+import { windows } from "../windows";
 import { locale, tr } from "../i18n";
 
 export const STATE_TEXT: Record<ThreadState, string> = {
@@ -91,18 +95,50 @@ export function ThreadList({ threads, specs, queue, current, onSelect, onNew, on
 	);
 }
 
-/** The collapsed header of the list: what the chat shows now; opened, the agents and their threads. */
-export function ThreadPanel({ current, ...list }: Props) {
-	const t = list.threads.find((x) => x.id === current);
+/**
+ * The chat's header line: which conversation the chat shows, and a button that opens the list as a window of its own.
+ * BIM Crew keeps the history out of the chat (a separate "Chat history" panel); an expanded list here pushed the chat out
+ * of the dock. This line never grows.
+ */
+export function ThreadPanel({ current, threads, specs, queue }: { threads: Thread[]; specs: AgentSpec[]; queue: QueueView; current: string | null }) {
+	const t = threads.find((x) => x.id === current);
+	const open = threads.filter((x) => x.state !== "closed").length;
 	return (
-		<details className="threads">
-			<summary>
-				{t && <StateDot state={liveState(t, list.queue)} />}
-				<b>{tr("Sarunas")}</b>
-				<span className="dim">{t ? `${agentName(t.agent, list.specs)} · ${t.title}` : tr("vadošais aģents")}</span>
-			</summary>
-			<ThreadList current={current} {...list} />
-		</details>
+		<div className="threads-line">
+			{t && <StateDot state={liveState(t, queue)} />}
+			<span className="threads-now" title={t ? `${agentName(t.agent, specs)} · ${t.title}` : undefined}>
+				{t ? `${agentName(t.agent, specs)} · ${t.title}` : tr("vadošais aģents")}
+			</span>
+			<button className="small" onClick={() => windows.open(THREADS)} title={tr("Visas sarunas: katram aģentam savas, jauna saruna, slēgšana")}>
+				☰ {tr("Sarunas")}{open > 1 ? ` (${open})` : ""}
+			</button>
+		</div>
+	);
+}
+
+/** The list of conversations as a window: the agents and their threads, a new conversation, closing, the closed ones. */
+export function ThreadsWindow() {
+	const { projectId, thread: selId } = useUi();
+	const T = useThreads(projectId);
+	const [err, setErr] = useState<string | null>(null);
+	if (!projectId) return <div className="threads-win dim">{tr("Atver projektu, lai redzētu sarunas.")}</div>;
+	return (
+		<div className="threads-win">
+			{err && <div className="err small">{err}</div>}
+			<ThreadList
+				threads={T.threads}
+				specs={T.specs}
+				queue={T.queue}
+				current={T.viewId}
+				onSelect={T.select}
+				onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))}
+				onClose={(id) =>
+					void T.close(id)
+						.then(() => id === selId && ui.selectThread(null))
+						.catch((e) => setErr(errText(e)))
+				}
+			/>
+		</div>
 	);
 }
 

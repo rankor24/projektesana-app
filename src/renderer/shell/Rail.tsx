@@ -1,6 +1,7 @@
 // The rail: the pages, grouped (Projekts / Dati / Nodošana), expanded with names or collapsed to icons with the name as a
 // tooltip; Iestatījumi and the collapse button at the bottom. BIM Crew shell/NavRail.tsx is the model.
 import { useState } from "react";
+import { groupOf, THREADS } from "../../shared/layout";
 import { railGroups } from "../../shared/pages";
 import { useWindows, windows } from "../windows";
 import { tr } from "../i18n";
@@ -16,7 +17,7 @@ const readCollapsed = (): boolean => {
 };
 
 export function Rail() {
-	const { page } = useWindows();
+	const { page, layout } = useWindows();
 	const [collapsed, setCollapsed] = useState(readCollapsed);
 	const toggle = () => {
 		setCollapsed(!collapsed);
@@ -41,6 +42,11 @@ export function Rail() {
 			))}
 			<div className="rail-grow" />
 			<div className="rail-foot">
+				{/* BIM Crew's "Chat history": the conversations are a panel of their own, never part of the chat */}
+				<button className={`rail-item ${groupOf(layout, THREADS) ? "on" : ""}`} title={tr("Sarunas — visas sarunas ar aģentiem")} onClick={() => windows.toggle(THREADS)}>
+					<span className="rail-icon"><Icon name="messages" /></span>
+					{!collapsed && <span>{tr("Sarunas")}</span>}
+				</button>
 				<button className={`rail-item ${page === "prasmes" ? "on" : ""}`} title={tr("Prasmes — biroja prasmju bibliotēka")} onClick={() => windows.go("prasmes")}>
 					<span className="rail-icon"><Icon name="zap" /></span>
 					{!collapsed && <span>{tr("Prasmes")}</span>}

@@ -121,3 +121,15 @@ test("maximize fills the screen with a margin and goes back to the old size; a m
 	const d = L.dock(L.open(L.emptyLayout(), "faili", VP), "faili", "right", VP);
 	assert.equal(L.toggleMaximize(d, "faili", VP), d);
 });
+
+test("the conversation list is a window of its own (Chat history), tall and narrow, reachable from every page", () => {
+	assert.ok(L.isWindowId(L.THREADS));
+	const l = L.open(L.emptyLayout(), L.THREADS, VP);
+	const p = L.groupOf(l, L.THREADS)!.place as L.FloatPlace;
+	assert.deepEqual([p.w, p.h], [480, 640], "a list, not half the screen");
+	assert.deepEqual(L.groupOf(l, "chat")!.tabs, ["chat"], "and not a part of the chat's group");
+	for (const page of ["parskats", "versijas", "koordinacija", "telpas"]) assert.ok(pageWindows(page).includes(L.THREADS), page);
+	// it can be docked beside the chat, or joined to it, like any window
+	assert.equal(L.groupOf(L.dock(l, L.THREADS, "right", VP), L.THREADS)!.place.kind, "dock");
+	assert.deepEqual(L.problems(L.mergeInto(l, L.THREADS, "chat")), []);
+});

@@ -18,7 +18,9 @@ export const VERS_PANEL_IDS = ["vers.list", "vers.models", "vers.sheets", "vers.
 export const TELPAS_PANEL_IDS = ["telpas.diffs", "telpas.inventory", "telpas.inv"] as const;
 /** The comment tool bar (9.4): a window like any other, so it can float, dock on any side, join a tab group or pop out. */
 export const TOOLS = "tools";
-export const WINDOW_IDS: readonly string[] = ["chat", TOOLS, ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS, ...VERS_PANEL_IDS, ...TELPAS_PANEL_IDS];
+/** The conversation list (BIM Crew: "Chat history", a panel of its own, never inside the chat): a window like the others. */
+export const THREADS = "threads";
+export const WINDOW_IDS: readonly string[] = ["chat", TOOLS, THREADS, ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS, ...VERS_PANEL_IDS, ...TELPAS_PANEL_IDS];
 export const CHAT = "chat";
 export const isWindowId = (id: unknown): id is string => typeof id === "string" && WINDOW_IDS.includes(id);
 
@@ -91,10 +93,12 @@ export function clampDock(side: Side, size: number, vp: Vp): number {
 export function defaultFloat(vp: Vp): { w: number; h: number } {
 	return { w: Math.max(720, Math.min(Math.round(vp.w * 0.55), 1200)), h: Math.max(520, Math.min(Math.round(vp.h * 0.72), 860)) };
 }
-function cascade(l: Layout, vp: Vp): Geo {
+/** A list wants a tall, narrow window, not half the screen. */
+const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 } };
+function cascade(l: Layout, vp: Vp, id?: string): Geo {
 	const n = l.groups.filter((g) => g.place.kind === "float").length;
 	const off = (n % 6) * 28;
-	return clampGeo({ x: 120 + off, y: 110 + off, ...defaultFloat(vp) }, vp);
+	return clampGeo({ x: 120 + off, y: 110 + off, ...((id && FLOAT_SIZE[id]) || defaultFloat(vp)) }, vp);
 }
 const clampPlace = <P extends Restorable>(p: P, vp: Vp): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp) } : { ...p, size: clampDock(p.side, p.size, vp) });
 
@@ -140,7 +144,7 @@ export function open(l: Layout, id: string, vp: Vp, filter?: string): Layout {
 	if (!isWindowId(id)) return l;
 	const filters = filter === undefined ? l.filters : { ...l.filters, [id]: filter };
 	const g = groupOf(l, id);
-	if (!g) return { ...addGroup(l, id, { kind: "float", z: topZ(l) + 1, ...cascade(l, vp) }), filters };
+	if (!g) return { ...addGroup(l, id, { kind: "float", z: topZ(l) + 1, ...cascade(l, vp, id) }), filters };
 	let place = g.place;
 	if (place.kind === "min") place = place.from;
 	if (place.kind === "dock") place = { ...place, collapsed: false };

@@ -566,7 +566,12 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .threads > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 12px; min-width: 0; }
 .threads > summary::-webkit-details-marker { display: none; }
 .threads > summary > .dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-height: 40vh; overflow: auto; }
+.thread-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.threads-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.threads-now { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+.threads-win { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px 12px; }
+.threads-win .thread-list { margin-top: 0; gap: 12px; }
+.threads-win .tl-thread { padding: 5px 8px; }
 .tl-head { gap: 6px; }
 .tl-thread { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; min-width: 0; }
 .tl-thread:hover { background: var(--elev); }
@@ -706,3 +711,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 /* CadCraft in a frame (DWG): one or two side by side */
 .cad-frame { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; background: var(--bg); }
 .cad-iframe { flex: 1; min-height: 0; min-width: 0; border: none; background: var(--panel); }
+
+/* a view that stays mounted while another page is shown (the model viewer, the 3D scene) */
+.keep { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.keep-hidden { display: none; }

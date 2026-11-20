@@ -81,4 +81,7 @@ export const part7: Record<string, string> = {
 	"Šai lapai nav komentāru rīku: izvēlies Pārskats, Telpas, Koordinācija…": "This page has no comment tools: try Overview, Rooms, Coordination…",
 	"Atver projektu, lai komentētu.": "Open a project to comment.",
 	"Palielināt / atjaunot (arī dubultklikšķis uz virsraksta)": "Maximize / restore (also a double-click on the title)",
+	"Visas sarunas: katram aģentam savas, jauna saruna, slēgšana": "All conversations: each agent has its own, start a new one, close one",
+	"Atver projektu, lai redzētu sarunas.": "Open a project to see the conversations.",
+	"Sarunas — visas sarunas ar aģentiem": "Conversations — all conversations with the agents",
 };

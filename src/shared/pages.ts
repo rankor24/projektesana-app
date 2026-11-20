@@ -139,6 +139,7 @@ export function pageWindows(page: string): string[] {
 	if (!def) return [];
 	const out = new Set(allWindows(defaultLayout(page)));
 	out.add("chat");
+	out.add("threads");
 	if (def.canvas === "scene") out.add("coord.lines");
 	if (def.kind === "sidebar" || def.canvas === "viewer") for (const v of VIEWER_WINDOWS) out.add(v);
 	if (def.kind === "page" && !def.canvas) for (const v of FULL_PAGE_TABS) out.add(v);

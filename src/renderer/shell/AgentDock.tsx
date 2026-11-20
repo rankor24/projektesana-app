@@ -387,7 +387,7 @@ export function AgentDock() {
 						</>
 					)}
 				</div>
-				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} onSelect={T.select} onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))} onClose={closeThread} />
+				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} />
 			</div>
 			<ProcessStrip projectId={projectId} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
