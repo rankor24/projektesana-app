@@ -107,12 +107,12 @@ tr.click:hover td { background: var(--elev); }
 .dock-strip.dock-left .dock-strip-btns, .dock-strip.dock-right .dock-strip-btns { flex-direction: column; }
 .dock-strip-btn { padding: 4px 2px; }
 .dock-strip.dock-left .dock-strip-btn, .dock-strip.dock-right .dock-strip-btn { writing-mode: vertical-rl; }
-.dock-resize { position: absolute; z-index: 5; }
-.dock-resize-left { right: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-.dock-resize-right { left: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-.dock-resize-top { bottom: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; }
-.dock-resize-bottom { top: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; }
-.dock-resize:hover { background: color-mix(in srgb, var(--focus) 40%, transparent); }
+.dock-resize { position: absolute; z-index: 30; }
+.dock-resize-left { right: -6px; top: 0; bottom: 0; width: 12px; cursor: ew-resize; }
+.dock-resize-right { left: -6px; top: 0; bottom: 0; width: 12px; cursor: ew-resize; }
+.dock-resize-top { bottom: -6px; left: 0; right: 0; height: 12px; cursor: ns-resize; }
+.dock-resize-bottom { top: -6px; left: 0; right: 0; height: 12px; cursor: ns-resize; }
+.dock-resize:hover { background: color-mix(in srgb, var(--focus) 55%, transparent); }
 .tg { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .tg-strip { display: flex; align-items: stretch; gap: 1px; min-height: 30px; padding: 0 4px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; overflow: hidden; }
 .tg-tab { display: flex; align-items: center; gap: 4px; padding: 0 10px; cursor: grab; color: var(--dim); font-weight: 600; border-bottom: 2px solid transparent; white-space: nowrap; }
@@ -138,15 +138,18 @@ tr.click:hover td { background: var(--elev); }
 .window-layer { position: fixed; inset: 0; pointer-events: none; z-index: 150; }
 .fw { position: fixed; pointer-events: auto; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); overflow: hidden; }
 .fw-focused { border-color: var(--focus); }
-.fw-rz { position: absolute; z-index: 10; }
-.fw-rz-e { right: 0; top: 32px; bottom: 8px; width: 6px; cursor: ew-resize; }
-.fw-rz-w { left: 0; top: 32px; bottom: 8px; width: 6px; cursor: ew-resize; }
-.fw-rz-s { bottom: 0; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
-.fw-rz-n { top: 0; left: 8px; right: 8px; height: 4px; cursor: ns-resize; }
-.fw-rz-se { right: 0; bottom: 0; width: 12px; height: 12px; cursor: se-resize; }
-.fw-rz-sw { left: 0; bottom: 0; width: 12px; height: 12px; cursor: sw-resize; }
-.fw-rz-ne { right: 0; top: 0; width: 12px; height: 12px; cursor: ne-resize; }
-.fw-rz-nw { left: 0; top: 0; width: 12px; height: 12px; cursor: nw-resize; }
+/* resize handles: thick, easy to hit, lit on hover (BIM Crew: wide transparent zone with an accent bar) */
+.fw-rz { position: absolute; z-index: 20; }
+.fw-rz:hover { background: color-mix(in srgb, var(--focus) 55%, transparent); }
+.fw-rz-e { right: 0; top: 32px; bottom: 16px; width: 10px; cursor: ew-resize; }
+.fw-rz-w { left: 0; top: 32px; bottom: 16px; width: 10px; cursor: ew-resize; }
+.fw-rz-s { bottom: 0; left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
+.fw-rz-n { top: 0; left: 16px; right: 16px; height: 6px; cursor: ns-resize; }
+.fw-rz-se { right: 0; bottom: 0; width: 22px; height: 22px; cursor: se-resize; }
+.fw-rz-sw { left: 0; bottom: 0; width: 22px; height: 22px; cursor: sw-resize; }
+.fw-rz-ne { right: 0; top: 0; width: 22px; height: 22px; cursor: ne-resize; }
+.fw-rz-nw { left: 0; top: 0; width: 22px; height: 22px; cursor: nw-resize; }
+.fw-rz-se::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); border-radius: 0 0 3px 0; opacity: .7; }
 .min-strip { position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
 
 .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; background: var(--elev); font-size: 12px; white-space: nowrap; }
@@ -446,6 +449,8 @@ button.link { background: none; border: none; padding: 0; color: var(--info); te
 .gchip.warn { border-left-color: var(--warn); }
 .gchip.done { text-decoration: line-through; opacity: 0.6; }
 .gchip.proposed { border-style: dashed; border-left-style: dashed; }
+/* the key of the Grafiks calendar (a line of chips in the page's own row; .legend is the viewer's colour legend, floated over the view) */
+.gkey { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .gweek { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
 .gday { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
 .gday.today { border-color: var(--accent); }
@@ -653,32 +658,44 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .cmp-pick-item.on { border-color: var(--accent); }
 .cmp-pick-item .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* the comment tool column (X1, M2): slim, at the left edge of the work area, the plan's purple tool bar */
-.ctool-row { display: flex; flex: 1; min-height: 0; min-width: 0; }
-.ctool-row > .page-scroll { flex: 1; min-width: 0; }
-.ctool-col { position: relative; flex: none; width: 76px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 6px 4px; overflow-y: auto; overflow-x: visible; background: var(--elev); border-right: 1px solid var(--border); box-shadow: inset 2px 0 0 #8e6bbf; }
-.ctool-subject { display: flex; align-items: flex-start; gap: 2px; min-height: 30px; padding: 3px 4px; font-size: 10.5px; line-height: 1.25; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--dim); }
+/* the comment tool bar (X1, M2): a window; a row of tools when it is wide, a column when it is narrow (the plan's purple bar) */
+.ctool-win { container: ctool / inline-size; flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
+.ctool-empty { padding: 10px 12px; }
+.ctool-col { position: relative; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 8px; }
+.ctool-subject { display: flex; align-items: center; gap: 4px; min-width: 150px; max-width: 280px; padding: 3px 8px; font-size: 11.5px; line-height: 1.25; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--dim); }
 .ctool-subject.on { border-style: solid; border-color: #8e6bbf; color: var(--text); }
-.ctool-subject-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
+.ctool-subject-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctool-subject .x { padding: 0 3px; border: none; background: none; line-height: 1; }
-.ctool-ab { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-.ctool-ab button { padding: 1px 0; font-size: 11px; }
+.ctool-ab { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.ctool-ab button { padding: 1px 8px; font-size: 11px; }
 .ctool-ab button.on { background: #8e6bbf; color: #fff; border-color: #8e6bbf; }
-.ctool { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; padding: 5px 2px 4px; background: none; border: 1px solid transparent; border-radius: 6px; }
+.ctool { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; padding: 3px 9px; background: none; border: 1px solid transparent; border-radius: 6px; }
 .ctool:hover:not(:disabled) { background: var(--elev2); }
 .ctool.on { border-color: #8e6bbf; background: rgba(142, 107, 191, 0.18); }
 .ctool:disabled { opacity: 0.4; cursor: default; }
 .ctool-icon { font-size: 15px; line-height: 1.1; }
-.ctool-label { font-size: 10px; line-height: 1.15; text-align: center; color: var(--dim); word-break: break-word; }
-.ctool-sep { height: 1px; margin: 4px 2px; background: var(--border); }
-.ctool-head { font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: center; }
-.ctool-colours { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 2px 4px; }
-.ctool-swatch { width: 100%; aspect-ratio: 1; min-width: 14px; max-width: 18px; padding: 0; border: 2px solid transparent; border-radius: 50%; justify-self: center; }
+.ctool-label { font-size: 12px; line-height: 1.15; color: var(--dim); white-space: nowrap; }
+.ctool-sep { width: 1px; align-self: stretch; min-height: 22px; margin: 0 2px; background: var(--border); }
+.ctool-head { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.ctool-colours { display: inline-flex; gap: 5px; padding: 0 4px; }
+.ctool-swatch { width: 16px; height: 16px; padding: 0; border: 2px solid transparent; border-radius: 50%; }
 .ctool-swatch.on { border-color: var(--text); box-shadow: 0 0 0 1px var(--bg); }
-.ctool-ask, .ctool-flyout { position: fixed; z-index: 70; left: 160px; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--elev); border: 1px solid #8e6bbf; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.ctool-col > .grow { display: none; }
+@container ctool (max-width: 200px) {
+	.ctool-col { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 2px; padding: 6px 4px; }
+	.ctool-subject { min-width: 0; max-width: none; min-height: 30px; align-items: flex-start; }
+	.ctool-subject-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: normal; word-break: break-word; }
+	.ctool { flex-direction: column; gap: 1px; width: 100%; padding: 5px 2px 4px; }
+	.ctool-label { font-size: 10px; text-align: center; white-space: normal; word-break: break-word; }
+	.ctool-sep { width: auto; height: 1px; min-height: 0; margin: 4px 2px; align-self: auto; }
+	.ctool-head { text-align: center; }
+	.ctool-colours { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; }
+	.ctool-col > .grow { display: block; flex: 1; }
+}
+.ctool-ask, .ctool-flyout { position: fixed; z-index: 300; left: 160px; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--elev); border: 1px solid #8e6bbf; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
 .ctool-ask { top: 120px; }
 .ctool-ask textarea { resize: vertical; }
-.ctool-flyout { bottom: 40px; max-height: 50vh; overflow: auto; width: 420px; }
+.ctool-flyout { top: 120px; max-height: 50vh; overflow: auto; width: 420px; }
 .ctool-err { padding: 2px; font-size: 10.5px; }
 
 /* a view beside its list (sheet compare, DWG compare): the columns come from the element's own grid-template-columns */

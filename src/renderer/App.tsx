@@ -41,12 +41,13 @@ import { PANEL_TITLE, WINDOW_TITLE, useWindows, windows, type PanelId } from "./
 import { pageById } from "../shared/pages";
 import { checkRelay, type RelayMsg } from "../shared/popout";
 import { bimcraft } from "./preview/IfcView";
-import { CHAT } from "../shared/layout";
+import { CHAT, TOOLS } from "../shared/layout";
 import { getLang, setLang, tr } from "./i18n";
 
 /** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
 function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === CHAT) return <AgentDock />;
+	if (id === TOOLS) return <CommentTools />;
 	if (id in PANEL_TITLE) return <Panel id={id as PanelId} filter={filter} />;
 	if (id.startsWith("viewer.")) return <ViewerPanel id={id} />;
 	if (id === "coord.matrix") return <CoordMatrixPanel />;
@@ -71,13 +72,12 @@ function NormativiPage() {
 	return <Normativi projectId={projectId} />;
 }
 
-/** A page with comment tools: the panel above, the comment strip under it. */
-function Panel({ id, filter, tools = false }: { id: PanelId; filter?: string; /** the page itself: the comment column goes beside it (a docked panel has the canvas's column) */ tools?: boolean }) {
+/** A page's panel. The comment tools are a window of their own now (the tool bar), not a part of the page. */
+function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	const inner = <PanelBody id={id} filter={filter} />;
-	if (!tools || toolsFor(id).length === 0) return inner;
+	if (toolsFor(id).length === 0) return inner;
 	return (
-		<div className="ctool-row">
-			<CommentTools page={id} />
+		<div className="fill-col">
 			<div className="page-scroll">{inner}</div>
 		</div>
 	);
@@ -211,12 +211,11 @@ export function App() {
 						<main className={`canvas ${fullPage ? "canvas-page" : ""}`}>
 							{fullPage && (
 								<div className="page-body">
-									<Panel id={fullPage as PanelId} filter={canvasFilter} tools />
+									<Panel id={fullPage as PanelId} filter={canvasFilter} />
 								</div>
 							)}
 							{sceneCanvas && (
 								<div className="scene-body">
-									<CommentTools page={page} />
 									<div className="scene-view">
 										<CoordScene />
 									</div>
@@ -224,13 +223,12 @@ export function App() {
 							)}
 							{planCanvas && (
 								<div className="scene-body">
-									<CommentTools page={page} />
 									<div className="scene-view">
 										<TelpasPlan />
 									</div>
 								</div>
 							)}
-							{!sceneCanvas && !planCanvas && (!fullPage || preview || reviewing) && (fullPage ? <Viewer /> : <div className="scene-body"><CommentTools page={page} /><div className="scene-view"><Viewer /></div></div>)}
+							{!sceneCanvas && !planCanvas && (!fullPage || preview || reviewing) && (fullPage ? <Viewer /> : <div className="scene-body"><div className="scene-view"><Viewer /></div></div>)}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>

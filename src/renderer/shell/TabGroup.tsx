@@ -2,7 +2,7 @@
 // floating windows. Tabs drag out (float), onto a screen edge (dock) or onto another strip (join); the empty part of the
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
 import type { ReactNode } from "react";
-import { CHAT, canClose, tabIndexAt, type Group, type Side } from "../../shared/layout";
+import { CHAT, canClose, isMaximized, tabIndexAt, type Group, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
 import { tr } from "../i18n";
@@ -67,7 +67,7 @@ export function TabGroup({
 	const keepChat = group.tabs.includes(CHAT);
 	return (
 		<div className="tg">
-			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "dock" ? windows.undock(own) : windows.dock(own, "right", { whole: true }))}>
+			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "dock" ? windows.undock(own) : windows.maximize(own))}>
 				{group.tabs.map((id) => (
 					<div key={id} data-tab={id} className={`tg-tab ${id === own ? "on" : ""}`} onMouseDown={(e) => startTab(e, id)}>
 						<span>{WINDOW_TITLE[id] ?? id}</span>
@@ -80,6 +80,11 @@ export function TabGroup({
 				))}
 				<span className="tg-grow" />
 				<div className="tg-buttons">
+					{mode === "float" && (
+						<button title={tr("Palielināt / atjaunot (arī dubultklikšķis uz virsraksta)")} onClick={() => windows.maximize(own)}>
+							{isMaximized(layout, own) ? "❐" : "□"}
+						</button>
+					)}
 					{mode === "float" && SIDE_BTN.map((b) => (
 						<button key={b.side} title={b.title} onClick={() => windows.dock(own, b.side, { whole: true })}>
 							{b.glyph}

@@ -4,7 +4,7 @@
 // tabs docked on the right. Every panel is reachable from exactly one page, or is a global window (the project list, the
 // settings). Pure and node-free: the rail, the palette, the top bar's status pill and the tests use the same table.
 // BIM Crew reference: shell/NavRail.tsx and shell/items.tsx (grouped rail items, icon + name, collapse).
-import { allWindows, DEFAULT_DOCK, dock, emptyLayout, mergeInto, open, resizeDock, setActive, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
+import { allWindows, DEFAULT_DOCK, dock, emptyLayout, mergeInto, open, resizeDock, setActive, TOOLS, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
 
 export type PanelName = (typeof PANEL_IDS)[number];
 export type PageGroup = "projekts" | "dati" | "nodosana";
@@ -62,15 +62,26 @@ export const isPageId = (id: string): boolean => PAGES.some((p) => p.id === id);
 
 /** The panels the user opens from the left rail's side pages' tab group on a full page. */
 const FULL_PAGE_TABS: PanelName[] = ["faili", "avoti", "prasibas"];
-export const SIDEBAR_SIZE = 420;
-export const FULL_PAGE_CHAT = 300;
-export const FULL_PAGE_TABS_SIZE = 380;
-export const MATRIX_SIZE = 260;
+export const SIDEBAR_SIZE = 480;
+export const FULL_PAGE_CHAT = 340;
+export const FULL_PAGE_TABS_SIZE = 440;
+export const MATRIX_SIZE = 300;
+/** The comment tool bar docked on top: its tab strip and one row of tools. */
+export const TOOLS_SIZE = 84;
 
 const NOMINAL: Vp = { w: 1600, h: 900 };
 
-/** A page's default layout. Always valid under 9.0 (the tests check it for every page). */
+/**
+ * A page's default layout: its own windows, and the comment tool bar docked on top (a window like the others: it can be
+ * dragged off, docked on any side or joined to a tab group, and then it stays there on every page). Always valid under 9.0.
+ */
 export function defaultLayout(page: string): Layout {
+	const l = baseLayout(page);
+	if (!pageById(page)) return l;
+	return { ...dock(open(l, TOOLS, NOMINAL), TOOLS, "top", NOMINAL, { size: TOOLS_SIZE }), focused: l.focused };
+}
+
+function baseLayout(page: string): Layout {
 	let l = emptyLayout();
 	const def = pageById(page);
 	if (!def) return l;

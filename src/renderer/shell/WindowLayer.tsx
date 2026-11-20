@@ -14,9 +14,20 @@ const SIDE_BOX: Record<string, React.CSSProperties> = {
 	bottom: { left: 0, right: 0, bottom: 0, height: "35%" },
 };
 
+/** The drop hint that follows the pointer while a window is dragged. Its own component: the windows do not render again with it. */
+function DragHintLayer() {
+	const hint = useDragHint();
+	return (
+		<>
+			{hint?.target?.kind === "side" && <div className="drop-side" style={SIDE_BOX[hint.target.side]} />}
+			{hint?.target?.kind === "tabs" && <div className="drop-tabs-note" style={{ left: hint.x + 14, top: hint.y + 14 }}>{tr("kļūs par cilni")}</div>}
+			{hint && <div className="drag-ghost" style={{ left: hint.x + 12, top: hint.y + 12 }}>{hint.label}</div>}
+		</>
+	);
+}
+
 export function WindowLayer({ render }: { render: (id: string, filter?: string) => ReactNode }) {
 	const { layout } = useWindows();
-	const hint = useDragHint();
 	const minimized = layout.groups.filter((g) => g.place.kind === "min");
 	return (
 		<div className="window-layer">
@@ -32,9 +43,7 @@ export function WindowLayer({ render }: { render: (id: string, filter?: string) 
 					))}
 				</div>
 			)}
-			{hint?.target?.kind === "side" && <div className="drop-side" style={SIDE_BOX[hint.target.side]} />}
-			{hint?.target?.kind === "tabs" && <div className="drop-tabs-note" style={{ left: hint.x + 14, top: hint.y + 14 }}>{tr("kļūs par cilni")}</div>}
-			{hint && <div className="drag-ghost" style={{ left: hint.x + 12, top: hint.y + 12 }}>{hint.label}</div>}
+			<DragHintLayer />
 		</div>
 	);
 }

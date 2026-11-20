@@ -1,5 +1,5 @@
 // The Windows menu in the top bar: every window the current page can show, ticked when open. A closed one opens where the
-// page's default keeps it (layout.reopen); "Atjaunot lapas izkārtojumu" puts the page back to its default. Whatever the user
+// page's default keeps it (layout.reopen); "Atjaunot izkārtojumu" puts every window back to this page's default. Whatever the user
 // moves stays as moved and is kept in layout.json, so this is the way back, never a reset that happens by itself.
 import { useEffect, useRef, useState } from "react";
 import { allWindows } from "../../shared/layout";
@@ -44,12 +44,12 @@ export function WindowsMenu() {
 					<button
 						className="win-menu-item"
 						onClick={() => {
-							windows.resetPage();
+							windows.resetLayout();
 							setOpen(false);
 						}}
 					>
 						<span className="win-menu-tick" />
-						{tr("Atjaunot lapas izkārtojumu")}
+						{tr("Atjaunot izkārtojumu")}
 					</button>
 				</div>
 			)}

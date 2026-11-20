@@ -1,7 +1,8 @@
 // The layout model (task 9.0). Every window of the app (a panel, the chat, the viewer's side panels) is in exactly one
 // place: floating over the canvas, docked on one of the four sides, minimised, or popped out to its own OS window.
 // Windows that sit together are a tab group: a group has an ordered list of tabs and the active one, and one place.
-// Each side holds at most one dock group. The chat is never closed, only collapsed. One layout per page (9.1).
+// Each side holds at most one dock group. The chat is never closed, only collapsed. One layout for the whole app, as in BIM
+// Crew: a window stays where the user put it when the page changes; a page adds its own windows the first time it is opened.
 // Pure and node-free: the renderer store, main's layout file and the tests use the same functions. The model of windows,
 // dock sides and tabs is BIM Crew's floating workspace (store.ts WindowState / WindowMode), extended from "one docked
 // window at a time" to a group per side.
@@ -15,7 +16,9 @@ export const VIEWER_PANEL_IDS = ["viewer.props", "viewer.tree", "viewer.ifcmeta"
 export const COORD_PANEL_IDS = ["coord.matrix", "coord.reference", "coord.lines"] as const;
 export const VERS_PANEL_IDS = ["vers.list", "vers.models", "vers.sheets", "vers.revit"] as const;
 export const TELPAS_PANEL_IDS = ["telpas.diffs", "telpas.inventory", "telpas.inv"] as const;
-export const WINDOW_IDS: readonly string[] = ["chat", ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS, ...VERS_PANEL_IDS, ...TELPAS_PANEL_IDS];
+/** The comment tool bar (9.4): a window like any other, so it can float, dock on any side, join a tab group or pop out. */
+export const TOOLS = "tools";
+export const WINDOW_IDS: readonly string[] = ["chat", TOOLS, ...PANEL_IDS, ...VIEWER_PANEL_IDS, ...COORD_PANEL_IDS, ...VERS_PANEL_IDS, ...TELPAS_PANEL_IDS];
 export const CHAT = "chat";
 export const isWindowId = (id: unknown): id is string => typeof id === "string" && WINDOW_IDS.includes(id);
 
@@ -29,7 +32,8 @@ export interface Vp {
 	w: number;
 	h: number;
 }
-export type FloatPlace = { kind: "float"; z: number } & Geo;
+/** `restore`: the geometry to go back to after a maximize (BIM Crew WindowState.restore) */
+export type FloatPlace = { kind: "float"; z: number; restore?: Geo } & Geo;
 export type DockPlace = { kind: "dock"; side: Side; size: number; collapsed: boolean };
 export type Restorable = FloatPlace | DockPlace;
 export type Place = Restorable | { kind: "min"; from: Restorable } | { kind: "pop"; from: Restorable };
@@ -46,11 +50,11 @@ export interface Layout {
 	filters: Record<string, string>;
 }
 
-export const MIN_W = 280;
-export const MIN_H = 180;
-export const MIN_DOCK = 180;
-export const DEFAULT_DOCK = 380;
-export const DEFAULT_DOCK_H = 280;
+export const MIN_W = 360;
+export const MIN_H = 260;
+export const MIN_DOCK = 200;
+export const DEFAULT_DOCK = 440;
+export const DEFAULT_DOCK_H = 320;
 const MAX_DOCK_SHARE = 0.6;
 
 const isVertical = (side: Side) => side === "left" || side === "right";
@@ -76,14 +80,21 @@ export function clampGeo(g: Geo, vp: Vp): Geo {
 	const h = Math.max(MIN_H, Math.min(g.h, vp.h - 16));
 	return { x: Math.max(0, Math.min(g.x, Math.max(0, vp.w - w))), y: Math.max(0, Math.min(g.y, Math.max(0, vp.h - h))), w, h };
 }
+/** A bar docked on the top or bottom may be as slim as the comment tool bar; a side panel needs its width. */
+export const MIN_DOCK_BAR = 72;
 export function clampDock(side: Side, size: number, vp: Vp): number {
-	const max = Math.max(MIN_DOCK, Math.floor((isVertical(side) ? vp.w : vp.h) * MAX_DOCK_SHARE));
-	return Math.max(MIN_DOCK, Math.min(Math.round(size), max));
+	const min = isVertical(side) ? MIN_DOCK : MIN_DOCK_BAR;
+	const max = Math.max(min, Math.floor((isVertical(side) ? vp.w : vp.h) * MAX_DOCK_SHARE));
+	return Math.max(min, Math.min(Math.round(size), max));
+}
+/** A new window opens big enough to work in: about half the screen wide and two thirds high (never under 720 x 520). */
+export function defaultFloat(vp: Vp): { w: number; h: number } {
+	return { w: Math.max(720, Math.min(Math.round(vp.w * 0.55), 1200)), h: Math.max(520, Math.min(Math.round(vp.h * 0.72), 860)) };
 }
 function cascade(l: Layout, vp: Vp): Geo {
 	const n = l.groups.filter((g) => g.place.kind === "float").length;
 	const off = (n % 6) * 28;
-	return clampGeo({ x: 120 + off, y: 110 + off, w: 560, h: 440 }, vp);
+	return clampGeo({ x: 120 + off, y: 110 + off, ...defaultFloat(vp) }, vp);
 }
 const clampPlace = <P extends Restorable>(p: P, vp: Vp): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp) } : { ...p, size: clampDock(p.side, p.size, vp) });
 
@@ -152,16 +163,28 @@ export function setActive(l: Layout, id: string): Layout {
 export function move(l: Layout, id: string, x: number, y: number, vp: Vp): Layout {
 	const g = groupOf(l, id);
 	if (!g || g.place.kind !== "float") return l;
-	const p = g.place;
+	const { restore: _r, ...p } = g.place;
 	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo({ x, y, w: p.w, h: p.h }, vp) } } : k)) };
 }
 
 export function resize(l: Layout, id: string, geo: Geo, vp: Vp): Layout {
 	const g = groupOf(l, id);
 	if (!g || g.place.kind !== "float") return l;
-	const p = g.place;
+	const { restore: _r, ...p } = g.place;
 	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...p, ...clampGeo(geo, vp) } } : k)) };
 }
+
+/** A floating group fills the screen (a margin around it), or goes back to the size it had; a move or resize forgets the old size. */
+export function toggleMaximize(l: Layout, id: string, vp: Vp, margin = 8): Layout {
+	const g = groupOf(l, id);
+	if (!g || g.place.kind !== "float") return l;
+	const { restore, ...p } = g.place;
+	const place: FloatPlace = restore
+		? { ...p, ...clampGeo(restore, vp) }
+		: { ...p, restore: { x: p.x, y: p.y, w: p.w, h: p.h }, ...clampGeo({ x: margin, y: margin, w: vp.w - margin * 2, h: vp.h - margin * 2 }, vp) };
+	return { ...l, groups: l.groups.map((k) => (k === g ? { ...k, place: { ...place, z: topZ(l) + 1 } } : k)), focused: id };
+}
+export const isMaximized = (l: Layout, id: string): boolean => { const p = groupOf(l, id)?.place; return p?.kind === "float" && !!p.restore; };
 
 export function resizeDock(l: Layout, side: Side, size: number, vp: Vp): Layout {
 	const g = dockGroup(l, side);
@@ -402,7 +425,11 @@ const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite
 function fixRestorable(p: unknown, vp: Vp): Restorable | null {
 	const o = p as Record<string, unknown> | null;
 	if (!o || typeof o !== "object") return null;
-	if (o.kind === "float") return { kind: "float", z: num(o.z, 1), ...clampGeo({ x: num(o.x, 0), y: num(o.y, 0), w: num(o.w, 560), h: num(o.h, 440) }, vp) };
+	if (o.kind === "float") {
+			const r = o.restore as Record<string, unknown> | undefined;
+			const restore = r && typeof r === "object" ? clampGeo({ x: num(r.x, 0), y: num(r.y, 0), w: num(r.w, 720), h: num(r.h, 520) }, vp) : undefined;
+			return { kind: "float", z: num(o.z, 1), ...clampGeo({ x: num(o.x, 0), y: num(o.y, 0), w: num(o.w, 720), h: num(o.h, 520) }, vp), ...(restore ? { restore } : {}) };
+		}
 	if (o.kind === "dock" && (SIDES as readonly unknown[]).includes(o.side)) return { kind: "dock", side: o.side as Side, size: clampDock(o.side as Side, num(o.size, defaultSize(o.side as Side)), vp), collapsed: o.collapsed === true };
 	return null;
 }
@@ -415,10 +442,15 @@ function fixPlace(p: unknown, vp: Vp): Place | null {
 	return fixRestorable(p, vp);
 }
 
-// ---- one layout per page ----
+// ---- the store: one layout for the app ----
 
 export interface LayoutStore {
 	version: 1;
+	/** the one layout, shared by every page and every OS window */
+	shared?: Layout;
+	/** pages whose own windows were added to the shared layout (a page adds them once, so a window the user closed stays closed) */
+	visited?: string[];
+	/** the per-page layouts of the first Phase 9 builds: read once to start the shared layout, never written again */
 	pages: Record<string, Layout>;
 	/** the layout of the old single-layout shell, until a page gets its own */
 	legacy?: Layout;
@@ -437,6 +469,34 @@ export function withPage(s: LayoutStore, page: string, l: Layout): LayoutStore {
 	return { ...s, pages: { ...s.pages, [page]: l } };
 }
 
+/** The shared layout; a store from the per-page builds starts it from the layout of the page that was open. */
+export function sharedLayout(s: LayoutStore, page: string, defaultFor: (page: string) => Layout, vp: Vp): Layout {
+	return s.shared ? normalize(s.shared, vp) : layoutFor(s, page, defaultFor, vp);
+}
+export function withShared(s: LayoutStore, l: Layout, visited?: string[]): LayoutStore {
+	return { ...s, shared: l, ...(visited ? { visited } : {}) };
+}
+
+/**
+ * Adds the windows of a page's default layout that the layout does not have, each where the default puts it (beside a
+ * default mate that is open, else docked on its default side). Windows already open stay where they are, every existing group
+ * keeps the tab it had in front, and the focus does not move: a page you open must not rearrange what you arranged.
+ */
+export function addMissing(l: Layout, def: Layout, vp: Vp): Layout {
+	const front = new Map<string, string>();
+	for (const g of l.groups) for (const t of g.tabs) front.set(t, g.active);
+	let next = l;
+	for (const g of def.groups) for (const id of g.tabs) if (!groupOf(next, id)) next = reopen(next, id, def, vp);
+	return {
+		...next,
+		focused: l.focused,
+		groups: next.groups.map((g) => {
+			const was = g.tabs.map((t) => front.get(t)).find((a): a is string => !!a && g.tabs.includes(a));
+			return was && was !== g.active ? { ...g, active: was } : g;
+		}),
+	};
+}
+
 /** Reads a store from whatever was on disk. Damaged → an empty store (every page then uses its default). */
 export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore {
 	if (!text) return emptyStore();
@@ -446,6 +506,8 @@ export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore
 		const pages: Record<string, Layout> = {};
 		for (const [k, v] of Object.entries(j.pages)) if (v && typeof v === "object") pages[k] = normalize(v as Layout, vp);
 		const out: LayoutStore = { version: 1, pages };
+			if (j.shared && typeof j.shared === "object") out.shared = normalize(j.shared as Layout, vp);
+			if (Array.isArray(j.visited)) out.visited = j.visited.filter((x): x is string => typeof x === "string");
 		if (j.legacy) out.legacy = normalize(j.legacy, vp);
 		if (typeof j.current === "string") out.current = j.current;
 		return out;
@@ -462,7 +524,7 @@ export function fromLegacy(raw: unknown, vp: Vp): Layout | null {
 	const olds = o.windows.filter((w) => isWindowId(w.id)).sort((a, b) => num(a.z, 0) - num(b.z, 0));
 	for (const w of olds) {
 		const id = w.id as string;
-		const geo = clampGeo({ x: num(w.x, 120), y: num(w.y, 110), w: num(w.w, 560), h: num(w.h, 440) }, vp);
+		const geo = clampGeo({ x: num(w.x, 120), y: num(w.y, 110), w: num(w.w, 720), h: num(w.h, 520) }, vp);
 		const z = topZ(l) + 1;
 		const mk = (place: Place): Layout => ({ ...l, groups: [...l.groups, { tabs: [id], active: id, place }] });
 		if (w.mode === "docked") l = dock(mk({ kind: "float", z, ...geo }), id, "right", vp);

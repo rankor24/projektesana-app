@@ -2,7 +2,7 @@
 export const part7: Record<string, string> = {
 	"Logi": "Windows",
 	"Šīs lapas logi: atvērt aizvērto, atjaunot izkārtojumu": "This page's windows: reopen a closed one, reset the layout",
-	"Atjaunot lapas izkārtojumu": "Reset this page's layout",
+	"Atjaunot izkārtojumu": "Reset the layout",
 	"Komentāru rīki": "Comment tools",
 	"izvēlies lapā": "pick on the page",
 	"Krāsa: iet līdzi nākamajam komentāram (aģents to lasa)": "Colour: goes with the next comment (the agent reads it)",
@@ -78,4 +78,7 @@ export const part7: Record<string, string> = {
 	"A pa kreisi, B pa labi: viena lapa, kopā ritina un tuvina": "A left, B right: one sheet, scrolled and zoomed together",
 	"A un B vienā lapā: sarkans tikai A, zils tikai B": "A and B on one sheet: red only A, blue only B",
 	"Vienā kolonnā": "One column",
+	"Šai lapai nav komentāru rīku: izvēlies Pārskats, Telpas, Koordinācija…": "This page has no comment tools: try Overview, Rooms, Coordination…",
+	"Atver projektu, lai komentētu.": "Open a project to comment.",
+	"Palielināt / atjaunot (arī dubultklikšķis uz virsraksta)": "Maximize / restore (also a double-click on the title)",
 };

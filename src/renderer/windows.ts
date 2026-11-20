@@ -1,6 +1,8 @@
 // The window layout store (task 9.0): a small external store over the pure layout model (shared/layout.ts) for
-// useSyncExternalStore. The layout is per page and kept in the app's data folder through main (layout.json), not in
-// localStorage; the old `projektesana:windows` value is read once and migrated. BIM Crew's floating-workspace store is
+// useSyncExternalStore. There is ONE layout for the whole app, as in BIM Crew: a window stays where the user put it when
+// the page changes, and a page adds its own windows the first time it is opened. It is kept in the app's data folder through
+// main (layout.json), not in localStorage; the old `projektesana:windows` value and the per-page layouts of the first
+// builds are read once and migrated. BIM Crew's floating-workspace store is
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
@@ -33,6 +35,7 @@ export const PANEL_TITLE: Record<PanelId, string> = {
 export const WINDOW_TITLE: Record<string, string> = {
 	...PANEL_TITLE,
 	chat: tr("Aģents"),
+	tools: tr("Komentāru rīki"),
 	"viewer.props": tr("Īpašības"),
 	"viewer.tree": tr("Elementu koks"),
 	"viewer.ifcmeta": tr("IFC metadati"),
@@ -93,7 +96,7 @@ function scheduleSave() {
 if (typeof window !== "undefined") window.addEventListener("beforeunload", saveNow);
 function commit(next: L.Layout) {
 	if (next === state.layout) return;
-	state = { ...state, layout: next, store: L.withPage(state.store, state.page, next) };
+	state = { ...state, layout: next, store: L.withShared(state.store, next) };
 	notify();
 	scheduleSave();
 }
@@ -119,9 +122,13 @@ export const windows = {
 			}
 		}
 		const page = store.current && pageById(store.current) ? store.current : state.page;
+		const migrating = !store.shared;
+		const base = L.sharedLayout(store, page, defaultFor, vp());
+		// a store from the per-page builds starts the shared layout: the open page's windows are added once (the tool bar too)
+		const seeded = migrating ? L.addMissing(base, defaultFor(page), vp()) : base;
 		// the OS windows of a last session are gone: whatever was popped out is docked back (a pop-out window shows its one window)
-		const layout = POP_ID ? L.layoutFor(store, page, defaultFor, vp()) : L.popInAll(L.layoutFor(store, page, defaultFor, vp()), vp());
-		state = { ...state, page, store, loaded: true, layout, ...(POP_ID ? {} : { store: L.withPage(store, page, layout) }) };
+		const layout = POP_ID ? seeded : L.popInAll(seeded, vp());
+		state = { ...state, page, store, loaded: true, layout, ...(POP_ID ? {} : { store: L.withShared(store, layout, store.visited ?? [page]) }) };
 		notify();
 		scheduleSave();
 		windows.listen();
@@ -133,7 +140,7 @@ export const windows = {
 		on("layout.changed", ({ store, origin }) => {
 			if (origin === ORIGIN) return;
 			const page = POP_ID && store.current && pageById(store.current) ? store.current : state.page;
-			state = { ...state, store, page, layout: L.layoutFor(store, page, defaultFor, vp()) };
+			state = { ...state, store, page, layout: L.sharedLayout(store, page, defaultFor, vp()) };
 			notify();
 		});
 		// the OS window of a popped window was closed: it docks back where it was
@@ -141,13 +148,20 @@ export const windows = {
 			if (!POP_ID) op((l, v) => L.popIn(l, id, v));
 		});
 	},
-	/** The page's layout becomes the one shown; a page that was never laid out gets `def(page)`. */
+	/**
+	 * The page changes; the windows do not. A page that was never opened adds its own windows to the shared layout (each where
+	 * the page's default puts it, nothing that is open is moved); after that it leaves the layout alone, so a window the user
+	 * closed stays closed (the Windows menu brings it back).
+	 */
 	setPage(page: string, canvasFilter?: string) {
 		if (page === state.page && state.loaded) {
 			if (canvasFilter !== state.canvasFilter) (state = { ...state, canvasFilter }), notify();
 			return;
 		}
-		state = { ...state, page, canvasFilter, store: { ...state.store, current: page }, layout: L.layoutFor(state.store, page, defaultFor, vp()) };
+		const seen = state.store.visited ?? [];
+		const first = state.loaded && !seen.includes(page);
+		const layout = first ? L.addMissing(state.layout, defaultFor(page), vp()) : state.layout;
+		state = { ...state, page, canvasFilter, layout, store: { ...L.withShared(state.store, layout, first ? [...seen, page] : seen), current: page } };
 		notify();
 		scheduleSave();
 	},
@@ -179,6 +193,8 @@ export const windows = {
 	setActive: (id: string) => op((l) => L.setActive(l, id)),
 	move: (id: string, x: number, y: number) => op((l, v) => L.move(l, id, x, y, v)),
 	resize: (id: string, g: L.Geo) => op((l, v) => L.resize(l, id, g, v)),
+	/** a floating group fills the screen, or goes back (BIM Crew: the maximize button, a double-click on the title bar) */
+	maximize: (id: string) => op((l, v) => L.toggleMaximize(l, id, v)),
 	resizeDock: (side: L.Side, size: number) => op((l, v) => L.resizeDock(l, side, size, v)),
 	dock: (id: string, side: L.Side, opts?: { whole?: boolean }) => op((l, v) => L.dock(l, id, side, v, opts)),
 	undock: (id: string) => op((l, v) => L.undock(l, id, v)),
@@ -210,8 +226,13 @@ export const windows = {
 		if (L.groupOf(state.layout, id)) return id === L.CHAT ? windows.focus(id) : windows.close(id);
 		op((l, v) => L.reopen(l, id, L.normalize(defaultFor(state.page), v), v));
 	},
-	/** The page goes back to its default layout; other pages keep theirs. */
-	resetPage: () => commit(L.normalize(defaultFor(state.page), vp())),
+	/** Every window goes back to where this page's default puts it (the other pages add theirs again when they are opened). */
+	resetLayout() {
+		const layout = L.normalize(defaultFor(state.page), vp());
+		state = { ...state, layout, store: L.withShared(state.store, layout, [state.page]) };
+		notify();
+		scheduleSave();
+	},
 	get: () => state,
 };
 

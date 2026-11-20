@@ -1,5 +1,6 @@
-// Comment tools (task 9.4, as planned on the board: X1, X2, M1, M2): a slim column at the edge of the work area on every page
-// that has something to comment on. From the top: what the user picked on the page (a row, a cell, a tile, a fact), this
+// Comment tools (task 9.4, as planned on the board: X1, X2, M1, M2): the tool bar, a WINDOW like any other (id "tools"): it
+// floats, docks on any side, joins a tab group or pops out, and stays where the user put it on every page. It lays itself out
+// by its width: a row of tools when it is wide (docked on top, the default), a column when it is narrow (docked at a side). From the top: what the user picked on the page (a row, a cell, a tile, a fact), this
 // page's tools (shared/comment-tools.ts) as icon buttons, the colour (a tool of its own: it goes with the next comment), and on
 // a page with the model open the viewer's tools (pin, marks, sketch, isolate, colour by). A tool that needs words opens a
 // small box beside the column; the comment becomes a pin the agent reads in its next prompt. The page's open comments fold
@@ -11,6 +12,7 @@ import { pinFocus, pinMeaning, pinWhere, targetKind } from "../../shared/pins-vi
 import { call, errText } from "../bridge";
 import { commentSubject, useSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
+import { useWindows } from "../windows";
 import { useLoad } from "../ui";
 import { tr } from "../i18n";
 import { pageMarks } from "../page-marks";
@@ -45,7 +47,8 @@ const SHAPE_OF: Record<string, Markup["shape"]> = { line: "line", circle: "circl
 
 type Asking = { kind: "page"; tool: CommentTool } | { kind: "pin" } | { kind: "sketch" } | { kind: "colourBy" };
 
-export function CommentTools({ page }: { page: string }) {
+export function CommentTools() {
+	const { page } = useWindows();
 	const { projectId } = useUi();
 	const subject = useSubject();
 	const va = useViewerActions();
@@ -58,17 +61,24 @@ export function CommentTools({ page }: { page: string }) {
 	const [list, setList] = useState(false);
 	// the boxes that open beside the column sit just right of it (fixed: the column scrolls and would clip them)
 	const col = useRef<HTMLElement>(null);
-	const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null);
+	const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
 	useEffect(() => {
 		if (!asking && !list) return;
 		const r = col.current?.getBoundingClientRect();
-		if (r) setAnchor({ left: r.right + 6, top: r.top + 8, bottom: window.innerHeight - r.bottom + 8 });
+		// a wide bar opens its box below itself, a narrow column opens it beside itself; never off the screen
+		if (r) setAnchor(r.width > 240 ? { left: Math.min(r.left + 8, window.innerWidth - 320), top: Math.min(r.bottom + 6, window.innerHeight - 260) } : { left: Math.min(r.right + 6, window.innerWidth - 320), top: Math.min(r.top + 8, window.innerHeight - 260) });
 	}, [asking, list]);
 	const pins = useLoad<Pin[]>(() => (projectId ? call("pins.list", projectId) : Promise.resolve([])), [projectId]);
 	const kinds = useMemo(() => new Set(tools.flatMap((t) => t.on)), [tools]);
 	const mine = useMemo(() => (pins.data ?? []).filter((p) => p.state !== "closed" && kinds.has(targetKind(p.target)) && targetKind(p.target) !== "page" && targetKind(p.target) !== "element"), [pins.data, kinds]);
 	const viewer = va && va.ready ? va : null;
-	if (!projectId || (tools.length === 0 && !viewer)) return null;
+	if (!projectId || (tools.length === 0 && !viewer)) {
+		return (
+			<div className="ctool-win">
+				<div className="ctool-empty dim small">{projectId ? tr("Šai lapai nav komentāru rīku: izvēlies Pārskats, Telpas, Koordinācija…") : tr("Atver projektu, lai komentētu.")}</div>
+			</div>
+		);
+	}
 
 	const make = (tool: CommentTool, words: string) => {
 		const target = subject && "thing" in subject.target && subject.target.thing === "change" ? { ...subject.target, side } : (subject?.target ?? null);
@@ -107,6 +117,7 @@ export function CommentTools({ page }: { page: string }) {
 	const isChange = !!subject && "thing" in subject.target && subject.target.thing === "change";
 
 	return (
+		<div className="ctool-win">
 		<aside ref={col} className="ctool-col" aria-label={tr("Komentāru rīki")}>
 			<div className={`ctool-subject ${subject ? "on" : ""}`} title={subject ? pinWhere({ target: subject.target } as Pin) : tr("klikšķini rindu, šūnu vai kartīti, pie kuras komentēt")}>
 				{subject ? (
@@ -159,7 +170,7 @@ export function CommentTools({ page }: { page: string }) {
 			)}
 			{!asking && err && <div className="ctool-err err small">{err}</div>}
 			{list && (
-				<div className="ctool-flyout" style={anchor ? { left: anchor.left, bottom: anchor.bottom } : undefined}>
+				<div className="ctool-flyout" style={anchor ? { left: anchor.left, top: anchor.top } : undefined}>
 					<div className="row">
 						<b>{tr("Komentāri")}</b>
 						<span className="grow" />
@@ -186,6 +197,7 @@ export function CommentTools({ page }: { page: string }) {
 				</div>
 			)}
 		</aside>
+		</div>
 	);
 }
 

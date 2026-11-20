@@ -73,7 +73,7 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 				<button onClick={() => step(1)}>›</button>
 				<button className="ghost" onClick={() => setCursor(today)}>{tr("Šodien")}</button>
 				<span className="grow" />
-				<span className="legend small dim"><span className="gchip planned">{tr("nodevums")}</span> <span className="gchip sent">{tr("nosūtīts")}</span> <span className="gchip clock">{tr("termiņš")}</span> <span className="gchip task">{tr("uzdevums")}</span></span>
+				<span className="gkey small dim"><span className="gchip planned">{tr("nodevums")}</span> <span className="gchip sent">{tr("nosūtīts")}</span> <span className="gchip clock">{tr("termiņš")}</span> <span className="gchip task">{tr("uzdevums")}</span></span>
 			</div>
 			{err && <div className="err" style={{ margin: "0 10px" }}>{err}</div>}
 			{items.error ? <Err error={items.error} /> : null}

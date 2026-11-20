@@ -72,8 +72,8 @@ const openUrl = (url: string) => {
 const popouts = new PopoutManager(
 	(id) => {
 		const w = new BrowserWindow({
-			width: 780,
-			height: 680,
+			width: 1100,
+			height: 800,
 			minWidth: 360,
 			minHeight: 240,
 			title: popTitle(id),
@@ -256,6 +256,8 @@ function createWindow(): void {
 		webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
 	});
 	win.setMenuBarVisibility(false);
+	// the app opens maximized: a workspace of windows wants the whole screen (the size above is what "restore" goes back to)
+	win.maximize();
 	// the main window is the app: closing it quits, even while a hidden helper window is still open
 	win.on("closed", () => app.quit());
 	const wc = win.webContents;

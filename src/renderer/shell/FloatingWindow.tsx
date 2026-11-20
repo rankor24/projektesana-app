@@ -1,38 +1,64 @@
 // A floating tab group: dragged by its strip, resized from eight handles, brought to the front on a click. Adapted from
-// BIM Crew apps/client/src/components/FloatingWindow.tsx: the drag and resize math, the local geometry override during a
-// drag committed once on pointer-up, the eight resize handles. Changed: plain CSS classes, our layout store, and a drag
+// BIM Crew apps/client/src/components/FloatingWindow.tsx: the drag and resize math, the geometry held outside the store during
+// a drag and committed once on pointer-up, the eight resize handles. Changed: plain CSS classes, our layout store, and a drag
 // that ends on a screen edge docks the group, and on another strip joins it (shell/drag.ts).
-import { useCallback, useState, type ReactNode } from "react";
+//
+// Smooth by construction: during a move or a resize nothing in React changes. The new geometry is written straight to the
+// element (one write per animation frame), so the window's contents (a model viewer, a table of hundreds of rows) are not
+// rendered again for every pixel the mouse travels; the store gets the final geometry once, on release. The component is
+// memoised, so the drop hint that follows the pointer (a separate layer) never re-renders the windows either.
+import { memo, useCallback, useRef, type ReactNode } from "react";
 import { clampGeo, MIN_H, MIN_W, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
 import { followMouse, track } from "./drag";
 import { TabGroup } from "./TabGroup";
 
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
+const DIRS: Dir[] = ["e", "w", "s", "n", "se", "sw", "ne", "nw"];
 const vp = () => ({ w: window.innerWidth, h: window.innerHeight });
 
-export function FloatingWindow({ group, focused, render }: { group: Group; focused: boolean; render: (id: string, filter?: string) => ReactNode }) {
+function FloatingWindowView({ group, focused, render }: { group: Group; focused: boolean; render: (id: string, filter?: string) => ReactNode }) {
 	const p = group.place as FloatPlace;
 	const id = group.active;
-	const [live, setLive] = useState<Geo | null>(null);
-	const geo = live ?? { x: p.x, y: p.y, w: p.w, h: p.h };
+	const root = useRef<HTMLDivElement>(null);
+	const frame = useRef(0);
+
+	/** Writes a geometry to the element, at most once per animation frame. */
+	const apply = useCallback((g: Geo) => {
+		cancelAnimationFrame(frame.current);
+		frame.current = requestAnimationFrame(() => {
+			const el = root.current;
+			if (!el) return;
+			el.style.left = `${g.x}px`;
+			el.style.top = `${g.y}px`;
+			el.style.width = `${g.w}px`;
+			el.style.height = `${g.h}px`;
+		});
+	}, []);
+	/** The element shows `g` now (a drag that ends: the store is about to say the same). */
+	const settle = useCallback(
+		(g: Geo) => {
+			cancelAnimationFrame(frame.current);
+			apply(g);
+		},
+		[apply],
+	);
 
 	const onMove = (e: React.MouseEvent) => {
 		if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
 		windows.focus(id);
 		const o = { x: p.x, y: p.y, w: p.w, h: p.h };
-		// the drop position lives here, not in `live`: this closure keeps the `live` of the mouse-down render (null)
 		let final: Geo = o;
 		track(e, id, group.tabs.length > 1 ? `${group.tabs.length} logi` : id, {
 			onMove: (_x, _y, dx, dy) => {
 				final = clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp());
-				setLive(final);
+				apply(final);
 			},
 			onEnd(_x, _y, moved, target) {
-				setLive(null);
 				if (!moved) return;
 				if (target?.kind === "tabs") return windows.mergeGroup(id, target.targetId);
 				if (target?.kind === "side") return windows.dock(id, target.side, { whole: true });
+				settle(final);
 				windows.move(id, final.x, final.y);
 			},
 		});
@@ -62,23 +88,37 @@ export function FloatingWindow({ group, focused, render }: { group: Group; focus
 					y = o.y + (o.h - h);
 				}
 				final = clampGeo({ x, y, w, h }, vp());
-				setLive(final);
+				apply(final);
 			};
 			const up = () => {
+				settle(final);
 				windows.resize(id, final);
-				setLive(null);
 			};
 			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
-		[id, p.x, p.y, p.w, p.h],
+		[id, p.x, p.y, p.w, p.h, apply, settle],
 	);
 
 	return (
-		<div className={`fw ${focused ? "fw-focused" : ""}`} style={{ left: geo.x, top: geo.y, width: geo.w, height: geo.h, zIndex: 200 + p.z }} onMouseDown={() => windows.focus(id)}>
+		<div
+			ref={root}
+			className={`fw ${focused ? "fw-focused" : ""}`}
+			style={{ left: p.x, top: p.y, width: p.w, height: p.h, zIndex: 200 + p.z }}
+			onMouseDown={() => windows.focus(id)}
+			// Alt + drag anywhere on the window moves it (BIM Crew), not only by the title strip
+			onMouseDownCapture={(e) => {
+				if (!e.altKey || e.button !== 0) return;
+				e.preventDefault();
+				e.stopPropagation();
+				onMove(e);
+			}}
+		>
 			<TabGroup group={group} render={render} mode="float" onStripDown={onMove} />
-			{(["e", "w", "s", "n", "se", "sw", "ne", "nw"] as Dir[]).map((d) => (
+			{DIRS.map((d) => (
 				<div key={d} className={`fw-rz fw-rz-${d}`} onMouseDown={(e) => onResize(e, d)} />
 			))}
 		</div>
 	);
 }
+
+export const FloatingWindow = memo(FloatingWindowView);
