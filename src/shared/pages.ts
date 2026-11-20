@@ -66,6 +66,8 @@ export const isListPage = (id: string): boolean => pageById(id)?.kind === "sideb
 export const FULL_PAGE_CHAT = 340;
 /** the width a canvas page's own list docks at (Versijas' changes, Telpas' differences) */
 const PAGE_PANEL_SIZE = 480;
+/** the right panel the list pages stack in (Faili, Avoti, Prasības, Telpas, Normatīvi, Atmiņa: one tab each) */
+export const LIST_DOCK_SIZE = 520;
 export const MATRIX_SIZE = 300;
 
 const NOMINAL: Vp = { w: 1600, h: 900 };
@@ -86,10 +88,8 @@ function baseLayout(page: string): Layout {
 	const def = pageById(page);
 	if (!def) return l;
 	if (def.canvas === "scene") {
-		// the models in one 3D scene on the canvas; the matrix docked at the bottom; the reference a tab beside the chat (the
-		// chat stays the one in front); a cell click opens its lines in a window docked on the right (shell/KoordScene.tsx)
-		l = mergeInto(open(l, "coord.reference", NOMINAL), "coord.reference", "chat");
-		l = setActive(l, "chat");
+		// the models the user ticks in one 3D scene on the canvas; the matrix docked at the bottom; the reference a window of its
+		// own (the page's top strip opens it); a cell click opens its lines in a window docked on the right (shell/KoordScene.tsx)
 		l = dock(open(l, "coord.matrix", NOMINAL), "coord.matrix", "bottom", NOMINAL, { size: MATRIX_SIZE });
 		return { ...l, focused: "chat" };
 	}
@@ -133,7 +133,10 @@ export function pageWindows(page: string): string[] {
 	const out = new Set(allWindows(defaultLayout(page)));
 	out.add("chat");
 	out.add("threads");
-	if (def.canvas === "scene") out.add("coord.lines");
+	if (def.canvas === "scene") {
+		out.add("coord.lines");
+		out.add("coord.reference");
+	}
 	if (def.kind !== "page" || def.canvas === "viewer" || !def.canvas) for (const v of VIEWER_WINDOWS) out.add(v);
 	return [...out];
 }

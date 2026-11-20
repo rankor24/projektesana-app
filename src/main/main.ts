@@ -240,6 +240,13 @@ const handlers = createHandlers({
 		const r = await dialog.showOpenDialog(win!, { title, properties: ["openFile"], filters: [{ name: extensions.join(", "), extensions }] });
 		return r.canceled ? null : r.filePaths[0];
 	},
+	// the screen grab: a rectangle of the window as the user sees it (the model viewer's frame included)
+	capture: async (r) => {
+		if (!win || win.isDestroyed()) throw new Error("Nav loga, ko uzņemt.");
+		const clamp = (n: number) => Math.max(0, Math.round(n));
+		const img = await win.webContents.capturePage({ x: clamp(r.x), y: clamp(r.y), width: Math.max(1, clamp(r.width)), height: Math.max(1, clamp(r.height)) });
+		return new Uint8Array(img.toPNG());
+	},
 	openPath: (p) => shell.openPath(p),
 	openUrl,
 });

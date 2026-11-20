@@ -1,6 +1,7 @@
 // One view: top bar, the rail, the work area (the viewer, or a full page, in the middle; a dock group on each of four sides)
 // and the floating windows on top. Every window is in a tab group that floats or docks (task 9.0).
 import { ComparePicker } from "./shell/ComparePicker";
+import { ScreenGrab } from "./shell/ScreenGrab";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
@@ -271,6 +272,7 @@ export function App() {
 			<WindowLayer render={body} />
 			<CommandPalette />
 			<ComparePicker />
+			<ScreenGrab />
 		</div>
 	);
 }

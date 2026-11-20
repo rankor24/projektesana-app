@@ -18,8 +18,7 @@ const readCollapsed = (): boolean => {
 
 export function Rail() {
 	const { page, layout, sidebar } = useWindows();
-	// "on": the page in the main area; "side": the list open in the sidebar beside a full page
-	const mark = (id: string) => (page === id ? "on" : sidebar.open && sidebar.id === id ? "side" : "");
+	const mark = (id: string) => (page === id ? "on" : "");
 	const [collapsed, setCollapsed] = useState(readCollapsed);
 	const toggle = () => {
 		setCollapsed(!collapsed);
@@ -45,7 +44,7 @@ export function Rail() {
 			<div className="rail-grow" />
 			<div className="rail-foot">
 				{/* BIM Crew's "Chat history": the conversations are a panel of their own, never part of the chat */}
-				<button className={`rail-item ${groupOf(layout, THREADS) ? "on" : ""}`} title={tr("Sarunas — visas sarunas ar aģentiem")} onClick={() => windows.toggle(THREADS)}>
+				<button className={`rail-item ${(sidebar.open && sidebar.id === THREADS) || groupOf(layout, THREADS) ? "on" : ""}`} title={tr("Sarunas — visas sarunas ar aģentiem")} onClick={() => windows.toggleThreads()}>
 					<span className="rail-icon"><Icon name="messages" /></span>
 					{!collapsed && <span>{tr("Sarunas")}</span>}
 				</button>

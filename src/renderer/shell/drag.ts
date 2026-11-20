@@ -1,7 +1,7 @@
 // Dragging a window: one pointer tracker for tabs and floating windows, and the drop hint the layer draws while a window
 // is over a screen edge (it will dock there) or over another window's tab strip (it will join that group).
 import { useSyncExternalStore } from "react";
-import { dropTarget, type DropTarget, type StripRect } from "../../shared/layout";
+import { dropTarget, type DropTarget, type StripRect, type Zone } from "../../shared/layout";
 
 export interface DragHint {
 	label: string;
@@ -20,6 +20,12 @@ export function useDragHint(): DragHint | null {
 		(l) => (listeners.add(l), () => listeners.delete(l)),
 		() => hint,
 	);
+}
+
+/** The work area a window can dock in: what the workspace element covers (the rail and the top bar are outside it). */
+export function workZone(): Zone | undefined {
+	const r = document.querySelector<HTMLElement>(".workspace")?.getBoundingClientRect();
+	return r && r.width > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : undefined;
 }
 
 /** Every tab strip on screen as a rectangle, with a tab id of its group (the strips mark themselves data-strip). */
@@ -100,7 +106,7 @@ export function track(e: { clientX: number; clientY: number }, id: string, label
 	const sx = e.clientX;
 	const sy = e.clientY;
 	let moved = false;
-	const target = (x: number, y: number) => dropTarget({ w: window.innerWidth, h: window.innerHeight }, stripRects(id), x, y, id);
+	const target = (x: number, y: number) => dropTarget({ w: window.innerWidth, h: window.innerHeight }, stripRects(id), x, y, id, workZone());
 	const onMove = (ev: MouseEvent) => {
 		if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < threshold) return;
 		if (!moved) {

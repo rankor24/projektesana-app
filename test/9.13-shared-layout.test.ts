@@ -41,7 +41,8 @@ test("a new window opens big: about half the screen wide, two thirds high, never
 	const l = L.open(L.emptyLayout(), "avoti", VP);
 	const p = L.groupOf(l, "avoti")!.place as L.FloatPlace;
 	assert.deepEqual([p.w, p.h], [big.w, big.h]);
-	assert.ok(L.MIN_W >= 360 && L.MIN_H >= 260, "and cannot be shrunk to a sliver");
+	// the strip has two buttons, so a window may be made small: no 7-button minimum width (BIM Crew: 360)
+	assert.ok(L.MIN_W <= 300 && L.MIN_H <= 220 && L.MIN_W >= 240, "small, but not a sliver");
 });
 
 test("opening a page adds its windows once; a floating window, the dock sizes and the focus stay as the user left them", () => {
@@ -54,7 +55,8 @@ test("opening a page adds its windows once; a floating window, the dock sizes an
 	const before = JSON.stringify([L.groupOf(l, "faili"), L.dockGroup(l, "right")?.place, l.focused]);
 	const next = L.addMissing(l, L.normalize(defaultLayout("koordinacija"), VP), VP);
 	// the new page's windows arrive
-	for (const id of ["coord.matrix", "coord.reference"]) assert.ok(L.groupOf(next, id), id);
+	assert.ok(L.groupOf(next, "coord.matrix"));
+	assert.equal(L.groupOf(next, "coord.reference"), undefined, "the reference opens on demand");
 	assert.equal(L.groupOf(next, "coord.matrix")!.place.kind === "dock" && (L.groupOf(next, "coord.matrix")!.place as L.DockPlace).side, "bottom");
 	// the floating window did not move, the chat is still on the right at 700, the focus did not jump
 	assert.equal(JSON.stringify([L.groupOf(next, "faili"), L.dockGroup(next, "right")?.place, next.focused]).includes('"x":700'), true);
@@ -68,13 +70,14 @@ test("opening a page adds its windows once; a floating window, the dock sizes an
 });
 
 test("a page that joins an existing group does not hide the tab that was in front", () => {
-	// Koordinācija's Reference tab joins the chat's group: the chat stays the tab in front
-	const l = L.normalize(defaultLayout("parskats"), VP);
-	assert.equal(L.groupOf(l, "chat")!.active, "chat");
+	// the matrix joins the bottom dock the user already has (with another window in front): that one stays in front
+	let l = L.normalize(defaultLayout("parskats"), VP);
+	l = L.dock(L.open(l, "avoti", VP), "avoti", "bottom", VP);
+	assert.equal(L.groupOf(l, "avoti")!.active, "avoti");
 	const next = L.addMissing(l, L.normalize(defaultLayout("koordinacija"), VP), VP);
-	const g = L.groupOf(next, "chat")!;
-	assert.ok(g.tabs.includes("coord.reference"));
-	assert.equal(g.active, "chat");
+	const g = L.groupOf(next, "avoti")!;
+	assert.ok(g.tabs.includes("coord.matrix"), "the matrix is a tab of that dock");
+	assert.equal(g.active, "avoti", "and does not take the front");
 });
 
 test("a window the user closed stays closed when the page is opened again (it is added only the first time)", () => {

@@ -41,10 +41,11 @@ test("every page's default layout is valid; the chat is docked left on every pag
 		const chat = L.groupOf(l, "chat")!;
 		assert.equal((chat.place as L.DockPlace).side, "left");
 		if (p.canvas === "scene") {
-			// the page whose canvas is the federated 3D: matrix at the bottom, the reference beside the chat as a tab
+			// the page whose canvas is the federated 3D: matrix at the bottom; the chat alone on the left (the reference is a
+			// window of its own, opened from the page's top strip, and not a tab hidden beside the chat)
 			assert.deepEqual(L.dockGroup(l, "bottom")!.tabs, ["coord.matrix"]);
-			assert.deepEqual(L.dockGroup(l, "left")!.tabs, ["chat", "coord.reference"]);
-			assert.equal(L.dockGroup(l, "left")!.active, "chat", "the chat stays in front");
+			assert.deepEqual(L.dockGroup(l, "left")!.tabs, ["chat"]);
+			assert.equal(L.groupOf(l, "coord.reference"), undefined, "opened on demand");
 			assert.equal(L.dockGroup(l, "right"), undefined, "the cell's lines open on a click");
 			continue;
 		}

@@ -20,11 +20,12 @@ export interface CoreDeps {
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	pickFolder(title: string): Promise<string | null>;
 	pickFile(title: string, extensions: string[]): Promise<string | null>;
+	capture(rect: { x: number; y: number; width: number; height: number }): Promise<Uint8Array>;
 	openPath(p: string): Promise<string>;
 	openUrl(url: string): void;
 }
 
-type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | `agent.${string}` | "queue.restored" | "queue.resumeInterrupted" | "queue.discardInterrupted" | "activity.recent";
+type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | "screen.capture" | `agent.${string}` | "queue.restored" | "queue.resumeInterrupted" | "queue.discardInterrupted" | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
@@ -40,6 +41,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		},
 		"dialog.pickFolder": (title) => d.pickFolder(title),
 		"dialog.pickFile": (title, ext) => d.pickFile(title, ext),
+		"screen.capture": (rect) => d.capture(rect),
 
 		"usage.summary": () => summarizeUsage(readUsage(join(d.settings.dir, "usage.jsonl"))),
 		"agent.status": () => d.session.status(),

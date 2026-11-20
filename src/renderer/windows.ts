@@ -6,7 +6,7 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
-import { defaultLayout, migratePlanC, pageById, PLAN_C, resolveOpen, START_PAGE } from "../shared/pages";
+import { defaultLayout, LIST_DOCK_SIZE, migratePlanC, pageById, PLAN_C, resolveOpen, START_PAGE } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
 import { tr } from "./i18n";
@@ -74,7 +74,7 @@ const vp = (): L.Vp => ({ w: window.innerWidth, h: window.innerHeight });
 let defaultFor: (page: string) => L.Layout = defaultLayout;
 let state: WindowsState = { page: START_PAGE, layout: L.emptyLayout(), sidebar: L.emptySidebar(), store: L.emptyStore(), loaded: false };
 /** a stored sidebar that names something other than a list page shows nothing */
-const validSidebar = (s: L.SidebarState): L.SidebarState => (s.id && pageById(s.id)?.kind === "sidebar" ? s : { ...s, id: null, open: false });
+const validSidebar = (s: L.SidebarState): L.SidebarState => (s.id === L.THREADS ? s : { ...s, id: null, open: false });
 const listeners = new Set<() => void>();
 let listening = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -191,20 +191,30 @@ export const windows = {
 		const def = pageById(t.page)!;
 		windows.setPage(t.page, def.kind === "page" ? t.filter : undefined);
 		if (def.kind === "sidebar") {
-			// a list the user made a window (floating, docked) opens there; otherwise it opens in the sidebar
-			if (L.groupOf(state.layout, def.id)) return op((l, v) => L.open(l, def.id, v, t.filter));
-			const { filter: _f, ...rest } = state.sidebar;
-			setSidebar({ ...rest, id: def.id, open: true, ...(t.filter !== undefined ? { filter: t.filter } : {}) });
+			// a list opens in the right panel, as a tab stacked with the lists that are already there; one the user floated or
+			// moved elsewhere is only brought to the front where it is
+			if (!L.groupOf(state.layout, def.id)) op((l, v) => L.dock(L.open(l, def.id, v), def.id, "right", v, { size: LIST_DOCK_SIZE }));
+			op((l, v) => L.open(l, def.id, v, t.filter));
 		}
 	},
 	/**
-	 * A click on a rail item. As BIM Crew's rail (NavRail: `secondary === "explorer" ? "none" : "explorer"`): the list that is
-	 * showing in the sidebar closes on a second click, and the main area stays as it is. Anything else opens.
+	 * A click on a rail item. A list that is the tab in front in the right panel closes on a second click (the other tabs stay);
+	 * anything else opens.
 	 */
 	railClick(id: string) {
-		const s = state.sidebar;
-		if (pageById(id)?.kind === "sidebar" && s.open && s.id === id && state.page === id && !L.groupOf(state.layout, id)) return setSidebar({ ...s, open: false });
+		if (pageById(id)?.kind === "sidebar" && state.page === id) {
+			const g = L.groupOf(state.layout, id);
+			if (g && g.place.kind === "dock" && !g.place.collapsed && g.active === id) return op((l) => L.close(l, id));
+		}
 		windows.go(id);
+	},
+	/** The conversations are the left side panel (BIM Crew's session sidebar): the rail item and the chat's button open and close it. */
+	toggleThreads() {
+		const s = state.sidebar;
+		if (s.open && s.id === L.THREADS) return setSidebar({ ...s, open: false });
+		// as a window it is brought to the front instead (the user made it one)
+		if (L.groupOf(state.layout, L.THREADS)) return op((l, v) => L.open(l, L.THREADS, v));
+		setSidebar({ ...s, id: L.THREADS, open: true });
 	},
 	/** The sidebar's edge was dragged (a width) or it was closed / reopened from its own header. */
 	setSidebarWidth: (width: number) => setSidebar({ ...state.sidebar, width: L.clampSidebar(width) }),

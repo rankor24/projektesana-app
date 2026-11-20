@@ -1,26 +1,34 @@
 // Everything that floats: the floating tab groups, the strip of minimised windows, and the drop hint while a window is
 // dragged. Docked groups are drawn by the dock areas, not here. Adapted from BIM Crew WindowLayer.tsx.
 import type { ReactNode } from "react";
-import { floatGroups } from "../../shared/layout";
+import { floatGroups, snapZones, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, windows } from "../windows";
-import { useDragHint } from "./drag";
+import { useDragHint, workZone } from "./drag";
 import { FloatingWindow } from "./FloatingWindow";
 import { useShownLayout } from "./visible";
 import { tr } from "../i18n";
 
-const SIDE_BOX: Record<string, React.CSSProperties> = {
-	left: { left: 0, top: 0, bottom: 0, width: "30%" },
-	right: { right: 0, top: 0, bottom: 0, width: "30%" },
-	top: { left: 0, right: 0, top: 0, height: "35%" },
-	bottom: { left: 0, right: 0, bottom: 0, height: "35%" },
+const SIDE_TEXT: Record<Side, string> = {
+	left: tr("Piespraust pa kreisi"),
+	right: tr("Piespraust pa labi"),
+	top: tr("Piespraust augšā"),
+	bottom: tr("Piespraust apakšā"),
 };
 
 /** The drop hint that follows the pointer while a window is dragged. Its own component: the windows do not render again with it. */
 function DragHintLayer() {
 	const hint = useDragHint();
+	// while a window is dragged, every place it can dock in is drawn; the one under the pointer is lit
+	const zone = hint ? workZone() : undefined;
+	const lit = hint?.target?.kind === "side" ? hint.target.side : null;
 	return (
 		<>
-			{hint?.target?.kind === "side" && <div className="drop-side" style={SIDE_BOX[hint.target.side]} />}
+			{zone &&
+				snapZones(zone).map((r) => (
+					<div key={r.side} className={`snap-zone ${lit === r.side ? "on" : ""}`} style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+						<span>{SIDE_TEXT[r.side]}</span>
+					</div>
+				))}
 			{hint?.target?.kind === "tabs" && <div className="drop-tabs-note" style={{ left: hint.x + 14, top: hint.y + 14 }}>{tr("kļūs par cilni")}</div>}
 			{hint && <div className="drag-ghost" style={{ left: hint.x + 12, top: hint.y + 12 }}>{hint.label}</div>}
 		</>

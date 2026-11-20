@@ -109,7 +109,7 @@ export function ThreadPanel({ current, threads, specs, queue }: { threads: Threa
 			<span className="threads-now" title={t ? `${agentName(t.agent, specs)} · ${t.title}` : undefined}>
 				{t ? `${agentName(t.agent, specs)} · ${t.title}` : tr("vadošais aģents")}
 			</span>
-			<button className="small" onClick={() => windows.open(THREADS)} title={tr("Visas sarunas: katram aģentam savas, jauna saruna, slēgšana")}>
+			<button className="small" onClick={() => windows.toggleThreads()} title={tr("Visas sarunas: katram aģentam savas, jauna saruna, slēgšana")}>
 				☰ {tr("Sarunas")}{open > 1 ? ` (${open})` : ""}
 			</button>
 		</div>

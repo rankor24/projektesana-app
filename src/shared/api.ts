@@ -395,6 +395,8 @@ export interface ApiSpec {
 	"plan.set": (id: string, steps: PlanStep[]) => PlanDoc;
 	"dialog.pickFolder": (title: string) => string | null;
 	"dialog.pickFile": (title: string, extensions: string[]) => string | null;
+	/** a rectangle of the app window as a PNG (the screen grab of the comment tools; CSS px of the window) */
+	"screen.capture": (rect: { x: number; y: number; width: number; height: number }) => Uint8Array;
 	"agent.status": () => AgentStatus;
 	"agent.providers": () => ProviderRow[];
 	"agent.setKey": (provider: string, key: string) => void;
@@ -659,6 +661,7 @@ export const API_NAMES = [
 	"plan.set",
 	"dialog.pickFolder",
 	"dialog.pickFile",
+	"screen.capture",
 	"agent.status",
 	"agent.providers",
 	"agent.setKey",

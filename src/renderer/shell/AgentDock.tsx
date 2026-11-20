@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { groupRuns, isRunning } from "../../shared/activity";
 import { useActivity } from "../activity";
 import { RunCard } from "./RunCard";
-import { NoteBox, PlanBlock } from "./PlanBlock";
+import { PlanBlock } from "./PlanBlock";
+import { attachBus } from "../attach-bus";
 import { Icon } from "../icons";
 import { effectiveMode, focusForSend } from "../../shared/view-context";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
@@ -26,7 +27,6 @@ import { ProcessStrip } from "./ProcessStrip";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
-import { RoomFeed } from "./RoomFeed";
 import { Waiting } from "./Waiting";
 import { tr } from "../i18n";
 
@@ -74,7 +74,6 @@ export function AgentDock() {
 	const [notice, setNotice] = useState<{ agent: string } | null>(null);
 	const [pick, setPick] = useState(0);
 	/** Saruna = the thread on screen; Telpa = what the agents say to each other */
-	const [tab, setTab] = useState<"chat" | "room">("chat");
 	const sending = useRef(false);
 
 	// the text is measured a moment after typing stops, not on every key
@@ -188,16 +187,18 @@ export function AgentDock() {
 	);
 
 	useEffect(() => {
-		// a hidden chat cannot scroll: do it again when the tab comes back
-		if (tab === "chat") endRef.current?.scrollIntoView({ block: "end" });
-	}, [lines, tab]);
+		endRef.current?.scrollIntoView({ block: "end" });
+	}, [lines]);
+
+	// a picture from elsewhere in the window (the comment tools' screen grab) joins the attachments like a pasted screenshot
+	const addRef = useRef(addFiles);
+	addRef.current = addFiles;
+	useEffect(() => attachBus.on((f) => void addRef.current(f)), []);
 
 	const closedView = viewThread?.state === "closed";
 	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0 && !closedView;
 	const send = async () => {
 		if (!canSend || runId) return;
-		// the message and its reply land in the chat: show it
-		setTab("chat");
 		setErr(null);
 		const t = text;
 		const files = pending;
@@ -391,21 +392,7 @@ export function AgentDock() {
 			</div>
 			<ProcessStrip projectId={projectId} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
-			<div className="tabs">
-				<button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>{tr("Saruna")}</button>
-				<button className={tab === "room" ? "on" : ""} onClick={() => setTab("room")} title={tr("Ko aģenti saka viens otram")}>{tr("Telpa")}</button>
-			</div>
-			{tab === "room" && (
-				<RoomFeed
-					projectId={projectId}
-					onOpen={(id) => {
-						T.select(id);
-						setTab("chat");
-					}}
-				/>
-			)}
-			{tab === "room" && projectId && <NoteBox projectId={projectId} />}
-			<div className="chat" hidden={tab === "room"}>
+			<div className="chat">
 				{lines.length === 0 && loadedFor === viewKey && (
 					<div className="chat-empty-wrap">
 						<div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? tr("Saruna vēl nav sākta.") : projectId ? tr("Saruna par šo projektu vēl nav sākta.") : tr("nav projekta — saruna bez projekta datiem.")}</div>

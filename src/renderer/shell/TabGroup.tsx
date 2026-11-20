@@ -2,18 +2,11 @@
 // floating windows. Tabs drag out (float), onto a screen edge (dock) or onto another strip (join); the empty part of the
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
 import { useEffect, useRef, type ReactNode } from "react";
-import { Icon, type IconName } from "../icons";
-import { CHAT, canClose, isMaximized, tabIndexAt, TOOLS, type Group, type Side } from "../../shared/layout";
+import { Icon } from "../icons";
+import { CHAT, canClose, tabIndexAt, TOOLS, type Group } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
 import { tr } from "../i18n";
-
-const SIDE_BTN: { side: Side; icon: IconName; title: string }[] = [
-	{ side: "left", icon: "dockLeft", title: tr("Piespraust pa kreisi") },
-	{ side: "right", icon: "dockRight", title: tr("Piespraust pa labi") },
-	{ side: "top", icon: "dockTop", title: tr("Piespraust augšā") },
-	{ side: "bottom", icon: "dockBottom", title: tr("Piespraust apakšā") },
-];
 
 export function TabGroup({
 	group,
@@ -96,16 +89,6 @@ export function TabGroup({
 					<span className="tg-grow" />
 				</div>
 				<div className="tg-buttons">
-					{mode === "float" && (
-						<button title={isMaximized(layout, own) ? tr("Atjaunot izmēru") : tr("Palielināt (arī dubultklikšķis uz virsraksta)")} onClick={() => windows.maximize(own)}>
-							<Icon name={isMaximized(layout, own) ? "winRestore" : "winMax"} size={14} />
-						</button>
-					)}
-					{mode === "float" && SIDE_BTN.map((b) => (
-						<button key={b.side} title={b.title} aria-label={b.title} onClick={() => windows.dock(own, b.side, { whole: true })}>
-							<Icon name={b.icon} size={14} />
-						</button>
-					))}
 					{/* the comment tools' home is the column beside the chat: one click takes them back from wherever they were moved */}
 					{mode !== "edge" && group.tabs.includes(TOOLS) && (
 						<button title={tr("Uz kolonnu blakus čatam")} aria-label={tr("Uz kolonnu blakus čatam")} onClick={() => windows.toEdge(own, { whole: true })}>

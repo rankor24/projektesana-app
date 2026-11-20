@@ -17,6 +17,7 @@ import { useLoad } from "../ui";
 import { tr } from "../i18n";
 import { pageMarks } from "../page-marks";
 import { useViewerActions, type ViewerActions } from "../viewer-actions";
+import { screenGrab } from "./ScreenGrab";
 
 /** One glyph per tool, so the column stays narrow; the label is under it and the hint in the tooltip. */
 const ICON: Record<string, string> = {
@@ -72,13 +73,8 @@ export function CommentTools() {
 	const kinds = useMemo(() => new Set(tools.flatMap((t) => t.on)), [tools]);
 	const mine = useMemo(() => (pins.data ?? []).filter((p) => p.state !== "closed" && kinds.has(targetKind(p.target)) && targetKind(p.target) !== "page" && targetKind(p.target) !== "element"), [pins.data, kinds]);
 	const viewer = va && va.ready ? va : null;
-	if (!projectId || (tools.length === 0 && !viewer)) {
-		return (
-			<div className="ctool-win">
-				<div className="ctool-empty dim small">{projectId ? tr("Šai lapai nav komentāru rīku: izvēlies Pārskats, Telpas, Koordinācija…") : tr("Atver projektu, lai komentētu.")}</div>
-			</div>
-		);
-	}
+	// the screen grab works on every page, with or without a project; the page's own tools come on top of it
+	const own = tools.length > 0 || !!viewer;
 
 	const make = (tool: CommentTool, words: string) => {
 		const target = subject && "thing" in subject.target && subject.target.thing === "change" ? { ...subject.target, side } : (subject?.target ?? null);
@@ -87,6 +83,7 @@ export function CommentTools() {
 		const built = buildPin(tool, target, words, drawn.marks, colour);
 		if (typeof built === "string") return setErr(built);
 		setErr(null);
+		if (!projectId) return;
 		call("pins.add", projectId, built.target, built.text, built.opts)
 			.then((p) => {
 				setText("");
@@ -113,12 +110,20 @@ export function CommentTools() {
 		setText("");
 		setAsking(null);
 	};
-	const toTask = (p: Pin) => call("todos.add", projectId, { title: pinMeaning({ ...p, markup: undefined }).slice(0, 120), note: pinWhere(p), refs: { pinId: p.id, ...(p.findingId ? { findingId: p.findingId } : {}) } }).then(() => ui.bump()).catch((e) => setErr(errText(e)));
+	const toTask = (p: Pin) => !projectId ? undefined : call("todos.add", projectId, { title: pinMeaning({ ...p, markup: undefined }).slice(0, 120), note: pinWhere(p), refs: { pinId: p.id, ...(p.findingId ? { findingId: p.findingId } : {}) } }).then(() => ui.bump()).catch((e) => setErr(errText(e)));
 	const isChange = !!subject && "thing" in subject.target && subject.target.thing === "change";
 
 	return (
 		<div className="ctool-win">
 		<aside ref={col} className="ctool-col" aria-label={tr("Komentāru rīki")}>
+			<ToolButton
+				icon="⛶"
+				label={tr("Ekrāna apgabals")}
+				hint={tr("Atzīmē apgabalu logā, uzzīmē uz tā un nosūti aģentam (jebkurā lapā)")}
+				onClick={() => screenGrab.start(COMMENT_COLOURS.find((c) => c.id === colour)?.hex)}
+			/>
+			<div className="ctool-sep" />
+			{own && projectId && (
 			<div className={`ctool-subject ${subject ? "on" : ""}`} title={subject ? pinWhere({ target: subject.target } as Pin) : tr("klikšķini rindu, šūnu vai kartīti, pie kuras komentēt")}>
 				{subject ? (
 					<>
@@ -131,6 +136,7 @@ export function CommentTools() {
 					<span className="dim">{tr("izvēlies lapā")}</span>
 				)}
 			</div>
+			)}
 			{isChange && (
 				<div className="ctool-ab">
 					<button className={side === "A" ? "on" : ""} onClick={() => setSide("A")}>
@@ -189,7 +195,7 @@ export function CommentTools() {
 							<button className="small ghost" onClick={() => void toTask(p)}>
 								{tr("→ uzdevums")}
 							</button>
-							<button className="small ghost" title={tr("Piezīmi aizver tikai tu")} onClick={() => call("pins.close", projectId, p.id).then(() => (pins.reload(), ui.bump())).catch((e) => setErr(errText(e)))}>
+							<button className="small ghost" title={tr("Piezīmi aizver tikai tu")} onClick={() => call("pins.close", projectId ?? "", p.id).then(() => (pins.reload(), ui.bump())).catch((e) => setErr(errText(e)))}>
 								{tr("aizvērt")}
 							</button>
 						</div>

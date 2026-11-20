@@ -57,8 +57,8 @@ export interface Layout {
 	filters: Record<string, string>;
 }
 
-export const MIN_W = 360;
-export const MIN_H = 260;
+export const MIN_W = 280;
+export const MIN_H = 200;
 export const MIN_DOCK = 200;
 export const DEFAULT_DOCK = 440;
 export const DEFAULT_DOCK_H = 320;
@@ -102,7 +102,7 @@ export function defaultFloat(vp: Vp): { w: number; h: number } {
 	return { w: Math.max(720, Math.min(Math.round(vp.w * 0.55), 1200)), h: Math.max(520, Math.min(Math.round(vp.h * 0.72), 860)) };
 }
 /** A list wants a tall, narrow window, not half the screen. */
-const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 }, [TOOLS]: { w: 560, h: 260 } };
+const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 }, [TOOLS]: { w: 560, h: 260 }, "coord.reference": { w: 680, h: 720 } };
 function cascade(l: Layout, vp: Vp, id?: string): Geo {
 	const n = l.groups.filter((g) => g.place.kind === "float").length;
 	const off = (n % 6) * 28;
@@ -415,11 +415,47 @@ export interface StripRect {
 	w: number;
 	h: number;
 }
-/** What a dragged window drops on: a tab strip first (it joins that group), else a screen edge (it docks there). */
-export function dropTarget(vp: Vp, strips: StripRect[], x: number, y: number, dragging?: string): DropTarget {
+/** The part of the screen a window can dock in: the work area (below the top bar, right of the rail). */
+export interface Zone {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+/** How deep a dock zone reaches into the work area: a clear band, never under 110 px, at most a fifth of the area (260 px). */
+export function snapBand(z: Zone, side: Side): number {
+	const len = isVertical(side) ? z.w : z.h;
+	return Math.round(Math.max(110, Math.min(len * 0.2, 260)));
+}
+/** The four dock zones as rectangles, to draw them while a window is dragged and to hit-test them. */
+export function snapZones(z: Zone): { side: Side; x: number; y: number; w: number; h: number }[] {
+	const l = snapBand(z, "left"), r = snapBand(z, "right"), t = snapBand(z, "top"), b = snapBand(z, "bottom");
+	return [
+		{ side: "left", x: z.x, y: z.y, w: l, h: z.h },
+		{ side: "right", x: z.x + z.w - r, y: z.y, w: r, h: z.h },
+		{ side: "top", x: z.x, y: z.y, w: z.w, h: t },
+		{ side: "bottom", x: z.x, y: z.y + z.h - b, w: z.w, h: b },
+	];
+}
+/** The zone the pointer is in; in a corner (two zones overlap) the one whose edge the pointer is nearer, as a share of its band. */
+export function dockSideInZone(z: Zone, x: number, y: number): Side | null {
+	const hits = snapZones(z)
+		.filter((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+		.map((r) => {
+			const depth = r.side === "left" ? x - r.x : r.side === "right" ? r.x + r.w - x : r.side === "top" ? y - r.y : r.y + r.h - y;
+			return { side: r.side, share: depth / (isVertical(r.side) ? r.w : r.h) };
+		})
+		.sort((a, b) => a.share - b.share);
+	return hits[0]?.side ?? null;
+}
+/**
+ * What a dragged window drops on: a tab strip first (it joins that group), else a dock zone (it docks there). With the work
+ * area's `zone` the zones are the bands at its edges (drawn while dragging); without, the 48 px at the screen's edges.
+ */
+export function dropTarget(vp: Vp, strips: StripRect[], x: number, y: number, dragging?: string, zone?: Zone): DropTarget {
 	const s = strips.find((r) => r.id !== dragging && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
 	if (s) return { kind: "tabs", targetId: s.id };
-	const side = dockSideAt(vp, x, y);
+	const side = zone ? dockSideInZone(zone, x, y) : dockSideAt(vp, x, y);
 	return side ? { kind: "side", side } : null;
 }
 /** The index a tab dropped at pointer x takes among tabs with the given left edges and widths. */
