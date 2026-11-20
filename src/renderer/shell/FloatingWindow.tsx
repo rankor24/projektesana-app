@@ -5,7 +5,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { clampGeo, MIN_H, MIN_W, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
-import { track } from "./drag";
+import { followMouse, track } from "./drag";
 import { TabGroup } from "./TabGroup";
 
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
@@ -21,10 +21,14 @@ export function FloatingWindow({ group, focused, render }: { group: Group; focus
 		if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
 		windows.focus(id);
 		const o = { x: p.x, y: p.y, w: p.w, h: p.h };
+		// the drop position lives here, not in `live`: this closure keeps the `live` of the mouse-down render (null)
+		let final: Geo = o;
 		track(e, id, group.tabs.length > 1 ? `${group.tabs.length} logi` : id, {
-			onMove: (_x, _y, dx, dy) => setLive(clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp())),
+			onMove: (_x, _y, dx, dy) => {
+				final = clampGeo({ ...o, x: o.x + dx, y: o.y + dy }, vp());
+				setLive(final);
+			},
 			onEnd(_x, _y, moved, target) {
-				const final = live ?? o;
 				setLive(null);
 				if (!moved) return;
 				if (target?.kind === "tabs") return windows.mergeGroup(id, target.targetId);
@@ -61,13 +65,10 @@ export function FloatingWindow({ group, focused, render }: { group: Group; focus
 				setLive(final);
 			};
 			const up = () => {
-				document.removeEventListener("mousemove", move);
-				document.removeEventListener("mouseup", up);
 				windows.resize(id, final);
 				setLive(null);
 			};
-			document.addEventListener("mousemove", move);
-			document.addEventListener("mouseup", up);
+			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
 		[id, p.x, p.y, p.w, p.h],
 	);
