@@ -22,6 +22,7 @@ import { AppSettings } from "./settings.js";
 import { PopoutManager } from "./windows.js";
 import { popTitle } from "../shared/popout.js";
 import { Registry } from "../core/registry.js";
+import { snapshotAppData } from "../core/safe-file.js";
 import { ProjectEngine } from "./engine.js";
 import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
 import { revitRead } from "../revit/commands.js";
@@ -47,6 +48,8 @@ const appDir = join(app.getPath("appData"), "Projektesana");
 // Chromium's own caches go to a subfolder, so the app data folder holds only app data
 app.setPath("userData", join(appDir, "chromium"));
 const settings = new AppSettings(appDir, crypto);
+// before anything reads or writes: a copy of settings, project list, layout and the key files (see core/safe-file.ts)
+snapshotAppData(appDir);
 
 mkdirSync(settings.logsDir(), { recursive: true });
 const logFile = join(settings.logsDir(), "app.log");

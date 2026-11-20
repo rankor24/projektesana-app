@@ -1,9 +1,10 @@
 // App-level list of projects: BD code → office folder. Carried from v1 src/kernel/registry.ts (roots only) and extended:
 // the BD code is parsed from the folder name and is the project's id; adding a project creates its data folder.
 // Forgetting a project removes it from this list only. Neither the office folder nor the data folder is ever touched.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { bdCodeOf, type Project } from "./model.js";
+import { readJson, writeAtomic } from "./safe-file.js";
 import { ProjectStore } from "./store.js";
 
 export class Registry {
@@ -13,18 +14,12 @@ export class Registry {
 	) {}
 
 	list(): Project[] {
-		if (!existsSync(this.file)) return [];
-		try {
-			const v = JSON.parse(readFileSync(this.file, "utf8")) as Project[];
-			return Array.isArray(v) ? v.filter((p) => p && typeof p.id === "string" && typeof p.root === "string") : [];
-		} catch {
-			return [];
-		}
+		const v = readJson<Project[]>(this.file, Array.isArray);
+		return (v ?? []).filter((p) => p && typeof p.id === "string" && typeof p.root === "string");
 	}
 
 	private save(l: Project[]) {
-		mkdirSync(dirname(this.file), { recursive: true });
-		writeFileSync(this.file, JSON.stringify(l, null, 1), "utf8");
+		writeAtomic(this.file, JSON.stringify(l, null, 1));
 	}
 
 	get(id: string): Project {

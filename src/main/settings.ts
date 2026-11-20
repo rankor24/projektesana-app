@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_LIMITS, clampLimits } from "../core/messages.js";
+import { readJson, writeAtomic } from "../core/safe-file.js";
 import { DEFAULT_AGENTS } from "../agent/subagents.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import type { Limits } from "../shared/thread-types.js";
@@ -26,15 +27,10 @@ export class AppSettings {
 	}
 
 	get(): Settings {
-		const f = join(this.dir, "settings.json");
-		if (!existsSync(f)) return { ...DEFAULT_SETTINGS };
-		try {
-			const saved = JSON.parse(readFileSync(f, "utf8")) as Partial<Settings>;
-			// a file from before the limits, or one edited by hand, still gives limits inside their ranges
-			return { ...DEFAULT_SETTINGS, ...saved, limits: clampLimits(saved.limits, DEFAULT_LIMITS) };
-		} catch {
-			return { ...DEFAULT_SETTINGS };
-		}
+		const saved = readJson<Partial<Settings>>(join(this.dir, "settings.json"), (v) => !!v && typeof v === "object" && !Array.isArray(v));
+		if (!saved) return { ...DEFAULT_SETTINGS };
+		// a file from before the limits, or one edited by hand, still gives limits inside their ranges
+		return { ...DEFAULT_SETTINGS, ...saved, limits: clampLimits(saved.limits, DEFAULT_LIMITS) };
 	}
 
 	set(patch: Partial<Settings>): Settings {
@@ -45,7 +41,7 @@ export class AppSettings {
 		// a patch may name only some limits: the rest stay as they are
 		if ("limits" in clean) clean.limits = clampLimits(clean.limits as Partial<Limits>, this.get().limits);
 		const s = { ...this.get(), ...clean };
-		writeFileSync(join(this.dir, "settings.json"), JSON.stringify(s, null, 2), "utf8");
+		writeAtomic(join(this.dir, "settings.json"), JSON.stringify(s, null, 2));
 		return s;
 	}
 
