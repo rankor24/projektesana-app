@@ -9,6 +9,7 @@ import { ui } from "../state";
 import type { Markup } from "../../core/model";
 import { MarkupDraw, MarkupShapes } from "./Markup";
 import { findQuote } from "../../shared/fact-review";
+import { tr } from "../i18n";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -37,7 +38,8 @@ export function PdfView({
 	onSketchSent,
 }: {
 	load: () => Promise<Uint8Array>;
-	sourceId: string;
+	/** absent = a file that is not a source: nothing to point the agent at, so selections stay out of the Fokuss */
+	sourceId?: string;
 	title: string;
 	initialPage?: number;
 	overlay?: (page: number, size: PageSize) => ReactNode;
@@ -58,7 +60,9 @@ export function PdfView({
 	const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const [page, setPage] = useState(initialPage ?? 1);
-	useEffect(() => onPage?.(page), [page]); // eslint-disable-line react-hooks/exhaustive-deps
+	useEffect(() => {
+		onPage?.(page);
+	}, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 	const [zoom, setZoom] = useState<number | "fit">("fit");
 	const [mode, setMode] = useState<"text" | "region" | "pin" | "sketch">("text");
 	const [size, setSize] = useState<PageSize | null>(null);
@@ -144,7 +148,7 @@ export function PdfView({
 	const onMouseUp = () => {
 		if (mode !== "text") return;
 		const sel = window.getSelection()?.toString() ?? "";
-		if (sel.trim().length >= 3) ui.focusAdd(textFocus(sourceId, title, page, sel));
+		if (sourceId && sel.trim().length >= 3) ui.focusAdd(textFocus(sourceId, title, page, sel));
 	};
 
 	const rel = (e: React.MouseEvent) => {
@@ -159,7 +163,7 @@ export function PdfView({
 		const w = Math.abs(drag.x1 - drag.x0);
 		const h = Math.abs(drag.y1 - drag.y0);
 		setDrag(null);
-		if (w < 0.005 || h < 0.005) return;
+		if (w < 0.005 || h < 0.005 || !sourceId) return;
 		const box = textDiv.current.getBoundingClientRect();
 		const inside = [...textDiv.current.querySelectorAll("span")]
 			.filter((s) => {
@@ -188,21 +192,20 @@ export function PdfView({
 				<input style={{ width: 46 }} value={page} onChange={(e) => setPage(Math.max(1, Math.min(n || 1, Number(e.target.value) || 1)))} />
 				<span className="dim">/ {n || "…"}</span>
 				<button disabled={page >= n} onClick={() => setPage(page + 1)}>›</button>
-				<button onClick={() => setZoom("fit")} className={zoom === "fit" ? "primary" : ""}>platums</button>
+				<button onClick={() => setZoom("fit")} className={zoom === "fit" ? "primary" : ""}>{tr("platums")}</button>
 				<button onClick={() => setZoom(Math.max(0.25, (size?.scale ?? 1) / 1.25))}>−</button>
 				<button onClick={() => setZoom(Math.min(8, (size?.scale ?? 1) * 1.25))}>+</button>
 				<span className="dim small">{size ? `${Math.round(size.scale * 100)}%` : ""}</span>
 				<span className="grow" />
-				<button className={mode === "text" ? "primary" : ""} onClick={() => setMode("text")} title="Iezīmē tekstu — tas nonāk Fokusā">Teksts</button>
-				<button className={mode === "region" ? "primary" : ""} onClick={() => setMode("region")} title="Velc taisnstūri — apgabals nonāk Fokusā">Apgabals</button>
+				<button className={mode === "text" ? "primary" : ""} onClick={() => setMode("text")} title={tr("Iezīmē tekstu — tas nonāk Fokusā")}>{tr("Teksts")}</button>
+				{sourceId && <button className={mode === "region" ? "primary" : ""} onClick={() => setMode("region")} title={tr("Velc taisnstūri — apgabals nonāk Fokusā")}>{tr("Apgabals")}</button>}
 				{onPageClick && (
-					<button className={mode === "pin" ? "primary" : ""} onClick={() => setMode("pin")} title="Klikšķis lapā pievieno piezīmi">Piezīme</button>
+					<button className={mode === "pin" ? "primary" : ""} onClick={() => setMode("pin")} title={tr("Klikšķis lapā pievieno piezīmi")}>{tr("Piezīme")}</button>
 				)}
 				{toolbar}
 				{sketchNote !== undefined && (
-					<button className={mode === "sketch" ? "primary" : ""} onClick={() => setMode("sketch")} title="Velc taisnstūri lapā: tas ar piezīmi no lauka nonāk aģenta Fokusā kā norādījums">
-						Skice → aģentam
-					</button>
+					<button className={mode === "sketch" ? "primary" : ""} onClick={() => setMode("sketch")} title={tr("Velc taisnstūri lapā: tas ar piezīmi no lauka nonāk aģenta Fokusā kā norādījums")}>
+						{tr("Skice → aģentam")}</button>
 				)}
 			</div>
 			{err && <div className="err">{err}</div>}

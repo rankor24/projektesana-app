@@ -14,6 +14,7 @@ import { Badge, Empty, useLoad } from "../ui";
 import { useViewer, useViewerInfo } from "../viewer-store";
 import { PinPanel, useFilePins } from "./Annotate";
 import { bimcraft } from "./IfcView";
+import { tr } from "../i18n";
 
 export function ViewerPanel({ id }: { id: string }) {
 	if (id === "viewer.props") return <PropsPanel />;
@@ -23,12 +24,12 @@ export function ViewerPanel({ id }: { id: string }) {
 	return <CommentsPanel />;
 }
 
-const NO_MODEL = <Empty title="nav modeļa">Atver IFC modeli (Avoti, Faili vai Versijas): šis logs rāda tā datus.</Empty>;
+const NO_MODEL = <Empty title={tr("nav modeļa")}>{tr("Atver IFC modeli (Avoti, Faili vai Versijas): šis logs rāda tā datus.")}</Empty>;
 
 function PropsPanel() {
 	const info = useViewerInfo();
 	const p = info.props;
-	if (!p) return info.error ? <div className="err">{info.error}</div> : <Empty title="nav elementa">Iezīmē elementu modelī.</Empty>;
+	if (!p) return info.error ? <div className="err">{info.error}</div> : <Empty title={tr("nav elementa")}>{tr("Iezīmē elementu modelī.")}</Empty>;
 	const attrs: [string, string | null][] = [
 		["Klase", p.cls],
 		["Nosaukums", p.name],
@@ -50,12 +51,12 @@ function PropsPanel() {
 					))}
 				</tbody>
 			</table>
-			<button className="small" onClick={() => p.guid && ui.focusAdd({ kind: "element", id: p.guid, label: `${p.cls ?? "elements"} ${p.name ?? ""}`.trim(), data: { guid: p.guid, expressId: p.id, cls: p.cls, name: p.name } })}>→ aģentam</button>
-			{p.sets.length === 0 && <div className="dim small">Īpašību kopu nav.</div>}
+			<button className="small" onClick={() => p.guid && ui.focusAdd({ kind: "element", id: p.guid, label: `${p.cls ?? "elements"} ${p.name ?? ""}`.trim(), data: { guid: p.guid, expressId: p.id, cls: p.cls, name: p.name } })}>{tr("→ aģentam")}</button>
+			{p.sets.length === 0 && <div className="dim small">{tr("Īpašību kopu nav.")}</div>}
 			{p.sets.map((s, i) => (
 				<div key={`${s.name}${i}`}>
 					<div className="section-title">
-						{s.name} {s.fromType && <Badge tone="info">no tipa</Badge>}
+						{s.name} {s.fromType && <Badge tone="info">{tr("no tipa")}</Badge>}
 					</div>
 					<table>
 						<tbody>
@@ -82,7 +83,7 @@ function Node({ n, depth }: { n: TreeNode; depth: number }) {
 			<div className="tree-row" style={{ paddingLeft: depth * 14 }}>
 				<button className="ghost small" disabled={!hasKids} onClick={() => setOpen(!open)}>{hasKids ? (open ? "▾" : "▸") : "·"}</button>
 				<span className="dim small">{n.cls.replace(/^Ifc/, "")}</span> <b>{n.name ?? "—"}</b>
-				{n.elementCount !== undefined && <span className="dim small"> · {n.elementCount} elementi</span>}
+				{n.elementCount !== undefined && <span className="dim small"> {tr("· {elementCount} elementi", { elementCount: n.elementCount })}</span>}
 			</div>
 			{open && n.children.map((c) => <Node key={c.id} n={c} depth={depth + 1} />)}
 			{open &&
@@ -91,7 +92,7 @@ function Node({ n, depth }: { n: TreeNode; depth: number }) {
 						<span className="dim small">{e.cls.replace(/^Ifc/, "")}</span> {e.name ?? e.guid ?? e.id}
 					</div>
 				))}
-			{open && n.elementCount !== undefined && n.elementCount > els.length && <div className="dim small" style={{ paddingLeft: (depth + 1) * 14 + 22 }}>… vēl {n.elementCount - els.length}</div>}
+			{open && n.elementCount !== undefined && n.elementCount > els.length && <div className="dim small" style={{ paddingLeft: (depth + 1) * 14 + 22 }}>{tr("… vēl")} {n.elementCount - els.length}</div>}
 		</div>
 	);
 }
@@ -99,7 +100,7 @@ function Node({ n, depth }: { n: TreeNode; depth: number }) {
 function TreePanel() {
 	const info = useViewerInfo();
 	if (!info.tree) return info.error ? <div className="err">{info.error}</div> : NO_MODEL;
-	if (info.tree.length === 0) return <Empty title="no data">Modelī nav telpiskās struktūras.</Empty>;
+	if (info.tree.length === 0) return <Empty title={tr("no data")}>{tr("Modelī nav telpiskās struktūras.")}</Empty>;
 	return (
 		<div className="pane fill">
 			{info.tree.map((n) => (
@@ -114,15 +115,15 @@ function IfcMetaPanel() {
 	const m = info.meta;
 	if (!m) return info.error ? <div className="err">{info.error}</div> : NO_MODEL;
 	const rows: [string, string | number | null][] = [
-		["Shēma", m.schema],
-		["Projekts", m.project.name],
-		["Garais nosaukums", m.project.longName],
-		["Fāze", m.project.phase],
-		["Programma", m.header.application],
-		["Autors", m.header.author],
-		["Faila datums", m.header.timestamp],
-		["Stāvi", m.storeys],
-		["Elementi", m.elements],
+		[tr("Shēma"), m.schema],
+		[tr("Projekts"), m.project.name],
+		[tr("Garais nosaukums"), m.project.longName],
+		[tr("Fāze"), m.project.phase],
+		[tr("Programma"), m.header.application],
+		[tr("Autors"), m.header.author],
+		[tr("Faila datums"), m.header.timestamp],
+		[tr("Stāvi"), m.storeys],
+		[tr("Elementi"), m.elements],
 	];
 	return (
 		<div className="pane fill">
@@ -131,7 +132,7 @@ function IfcMetaPanel() {
 					{rows.map(([k, v]) => (
 						<tr key={k}>
 							<td className="dim" style={{ width: 130 }}>{k}</td>
-							<td>{v === null || v === "" ? <span className="dim">no data</span> : v}</td>
+							<td>{v === null || v === "" ? <span className="dim">{tr("no data")}</span> : v}</td>
 						</tr>
 					))}
 				</tbody>
@@ -145,14 +146,14 @@ function FileMetaPanel() {
 	const v = useViewer();
 	const tab = activeTab(v);
 	const sources = useLoad<Source[]>(() => (projectId ? call("sources.list", projectId) : Promise.resolve([])), [projectId]);
-	if (!tab) return <Empty title="nav faila">Atver failu.</Empty>;
+	if (!tab) return <Empty title={tr("nav faila")}>{tr("Atver failu.")}</Empty>;
 	const t = tab.target;
 	const s = t.kind === "source" || t.kind === "law" ? sources.data?.find((x) => x.id === t.sourceId) : undefined;
 	const rows: [string, string | null | undefined][] =
 		t.kind === "ifc"
 			? [["Nosaukums", t.label], ["Atsauce", t.path], ["Veids", "IFC modelis"]]
 			: t.kind === "compare"
-				? [["Salīdzinājums", `${t.aLabel} ↔ ${t.bLabel}`], ["Veids", t.mode === "ifc" ? "IFC modeļi" : "lapas"]]
+				? [[tr("Salīdzinājums"), `${t.aLabel} ↔ ${t.bLabel}`], [tr("Veids"), t.mode === "ifc" ? tr("IFC modeļi") : tr("lapas")]]
 				: s
 					? [["Nosaukums", s.title], ["Loma", s.role], ["Veids", sourceExt(s).replace(".", "").toUpperCase() || s.kind], ["Mape", s.folderKey], ["Faili", s.paths.join("\n")]]
 					: [["Avots", t.kind === "source" || t.kind === "law" ? t.sourceId : null]];
@@ -189,8 +190,8 @@ function CommentsPanel() {
 	);
 	const pins = useFilePins(projectId ?? "", belongs);
 	const items = useMemo(() => pins.items, [pins.items]);
-	if (!projectId) return <Empty title="nav projekta" />;
-	if (!t || (t.kind !== "ifc" && t.kind !== "source")) return <Empty title="nav faila">Atver modeli vai dokumentu: šeit ir tā piezīmes.</Empty>;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
+	if (!t || (t.kind !== "ifc" && t.kind !== "source")) return <Empty title={tr("nav faila")}>{tr("Atver modeli vai dokumentu: šeit ir tā piezīmes.")}</Empty>;
 	const select = (p: Pin) => {
 		setActive(p.id);
 		ui.focusAdd({ kind: "pin", id: p.id, label: p.text.slice(0, 50), data: { state: p.state, target: p.target } });

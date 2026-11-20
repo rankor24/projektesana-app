@@ -38,8 +38,9 @@ export class AppSettings {
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits"];
 		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
+		if ("language" in clean && clean.language !== "lv" && clean.language !== "en") delete clean.language;
 		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
 		// a patch may name only some limits: the rest stay as they are
 		if ("limits" in clean) clean.limits = clampLimits(clean.limits as Partial<Limits>, this.get().limits);

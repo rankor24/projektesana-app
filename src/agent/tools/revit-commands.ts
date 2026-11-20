@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { checkWrite } from "../../core/guard.js";
-import { RevitClient, resolveRevitLaunch } from "../../revit/client.js";
+import { RevitClient, resolveRevitLaunch, setBundledRevitDir } from "../../revit/client.js";
 import { revitExport, runSnippet } from "../../revit/exports.js";
 import { makeWorkCopy } from "../../revit/revision.js";
 import { inventoryTables } from "../../sources/room-table.js";
@@ -18,6 +18,7 @@ let client: RevitClient | null = null;
 export function revit(): RevitClient {
 	const serverJs = process.env.PROJEKTESANA_REVIT_JS || null;
 	const node = process.env.PROJEKTESANA_REVIT_NODE || null;
+	setBundledRevitDir(process.env.PROJEKTESANA_REVIT_BUNDLED || null);
 	client ??= new RevitClient(() => resolveRevitLaunch({ revitServerJs: serverJs, revitNode: node }), process.execPath);
 	if (!client.configured()) throw new Error("nav konfigurēts: Revit MCP serveris nav atrasts.");
 	return client;

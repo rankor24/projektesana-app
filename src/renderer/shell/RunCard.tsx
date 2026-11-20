@@ -10,6 +10,7 @@ import { ui } from "../state";
 import { runViewerAction } from "../run-ui";
 import { viewerChips } from "../../shared/ui-instruction";
 import { useLoad } from "../ui";
+import { locale, tr } from "../i18n";
 
 const ICON: Record<ActKind | "thinking" | "note" | "confirm" | "error", string> = {
 	read: "▤",
@@ -25,7 +26,7 @@ const ICON: Record<ActKind | "thinking" | "note" | "confirm" | "error", string> 
 	error: "✗",
 };
 
-const clock = (at: string) => new Date(at).toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const clock = (at: string) => new Date(at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 export function duration(ms: number): string {
 	const s = Math.max(0, Math.round(ms / 1000));
@@ -38,10 +39,10 @@ const openSource = (id: string, page?: number) => ui.show({ kind: "source", sour
 export const summaryOf = (lines: Activity[]): RunSummary | null => [...lines].reverse().find((l) => l.kind === "summary")?.summary ?? null;
 
 function Mark({ status }: { status?: Activity["status"] }) {
-	if (status === "running") return <span className="spin" aria-label="darbojas" />;
-	if (status === "ok") return <span className="ok-mark" aria-label="izdevās">✓</span>;
-	if (status === "failed") return <span className="bad-mark" aria-label="neizdevās">✗</span>;
-	if (status === "stopped") return <span className="dim" aria-label="pārtraukts">—</span>;
+	if (status === "running") return <span className="spin" aria-label={tr("darbojas")} />;
+	if (status === "ok") return <span className="ok-mark" aria-label={tr("izdevās")}>✓</span>;
+	if (status === "failed") return <span className="bad-mark" aria-label={tr("neizdevās")}>✗</span>;
+	if (status === "stopped") return <span className="dim" aria-label={tr("pārtraukts")}>—</span>;
 	return null;
 }
 
@@ -56,7 +57,7 @@ function Step({ a, live }: { a: Activity; live: boolean }) {
 			{a.source && !a.fact && (
 				<button
 					className="ghost small act-open"
-					title="Atvērt avotu priekšskatā"
+					title={tr("Atvērt avotu priekšskatā")}
 					onClick={(e) => {
 						e.preventDefault();
 						openSource(a.source!.id, a.source!.page);
@@ -65,7 +66,7 @@ function Step({ a, live }: { a: Activity; live: boolean }) {
 					↗
 				</button>
 			)}
-			{a.chars ? <span className="dim act-cost" title="Cik konteksta aizņem šī rīka atbilde (aptuveni)">≈{fmtTokens(Math.ceil(a.chars / 3.5))}</span> : null}
+			{a.chars ? <span className="dim act-cost" title={tr("Cik konteksta aizņem šī rīka atbilde (aptuveni)")}>≈{fmtTokens(Math.ceil(a.chars / 3.5))}</span> : null}
 			<Mark status={a.status} />
 			<span className="act-t">{clock(a.at)}</span>
 		</>
@@ -74,9 +75,9 @@ function Step({ a, live }: { a: Activity; live: boolean }) {
 		<div className={`act-fact ${a.status ?? ""}`}>
 			{a.fact.quote && <span className="act-quote">„{a.fact.quote}”</span>}
 			<button className="link small" onClick={() => openSource(a.fact!.sourceId, a.fact!.page ?? undefined)}>
-				atvērt{a.fact.page ? ` lpp. ${a.fact.page}` : ""}
+				{tr("atvērt")}{a.fact.page ? tr(" lpp. {page}", { page: a.fact.page }) : ""}
 			</button>
-			{a.status === "ok" && <span className="dim small">ieteikts — apstiprini: Projekts → profils</span>}
+			{a.status === "ok" && <span className="dim small">{tr("ieteikts — apstiprini: Projekts → profils")}</span>}
 		</div>
 	);
 	const cls = `act-step k-${a.kind} ${a.tool ? `t-${a.tool}` : ""} ${a.status ?? ""} ${a.fact ? "fact" : ""} ${a.lane && a.step?.endsWith("-now") ? "lane" : ""}`;
@@ -105,12 +106,12 @@ function Chips({ s }: { s: RunSummary }) {
 	return (
 		<div className="act-sources">
 			<div className="dim small">
-				Avoti: {read} izlasīti{s.listed !== null ? ` no ${s.listed}` : ""}
-				{s.sources.some((x) => x.state === "reading") ? " · lasa" : ""}
+				{tr("Avoti: {read} izlasīti", { read: read })}{s.listed !== null ? tr(" no {listed}", { listed: s.listed }) : ""}
+				{s.sources.some((x) => x.state === "reading") ? tr(" · lasa") : ""}
 			</div>
 			<div className="act-chips">
 				{s.sources.map((x) => (
-					<button key={x.id} className={`act-chip ${x.state}`} title={`${x.title} — atvērt`} onClick={() => openSource(x.id)}>
+					<button key={x.id} className={`act-chip ${x.state}`} title={tr("{title} — atvērt", { title: x.title })} onClick={() => openSource(x.id)}>
 						{x.state === "read" ? "✓" : x.state === "failed" ? "✗" : "⟳"} {x.title}
 						{x.facts > 0 && <span className="act-chip-n">+{x.facts}</span>}
 					</button>
@@ -134,8 +135,7 @@ function Changes({ project, run }: { project: string; run: string }) {
 	return (
 		<details className="run-undo">
 			<summary className="dim small">
-				Izmaiņas, ko var atsaukt: {live} no {list.length}
-			</summary>
+				{tr("Izmaiņas, ko var atsaukt: {live} no {v}", { live: live, v: list.length })}</summary>
 			{err && <div className="err">{err}</div>}
 			{list.map((r) => (
 				<div key={r.key} className={`undo-row ${r.undone ? "done" : ""}`}>
@@ -143,11 +143,10 @@ function Changes({ project, run }: { project: string; run: string }) {
 						{r.label}
 					</span>
 					{r.undone ? (
-						<span className="dim small">atsaukts</span>
+						<span className="dim small">{tr("atsaukts")}</span>
 					) : (
-						<button className="small ghost" disabled={!r.undoable} title={r.why ?? "Atgriež, kā bija pirms šīs izmaiņas. Nekas netiek dzēsts."} onClick={() => undo(r)}>
-							Atsaukt
-						</button>
+						<button className="small ghost" disabled={!r.undoable} title={r.why ?? tr("Atgriež, kā bija pirms šīs izmaiņas. Nekas netiek dzēsts.")} onClick={() => undo(r)}>
+							{tr("Atsaukt")}</button>
 					)}
 					{!r.undone && !r.undoable && r.why && <span className="dim small">{r.why}</span>}
 				</div>
@@ -206,19 +205,18 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 		>
 			<summary className="run-head">
 				{running ? <span className="pulse" /> : end?.kind === "error" ? <span className="bad-mark">✗</span> : <span className="ok-mark">✓</span>}
-				<span className="run-title">{start?.text ?? "Uzdevums"}</span>
+				<span className="run-title">{start?.text ?? tr("Uzdevums")}</span>
 				<span className="dim small run-meta">
-					{clock(lines[0].at).slice(0, 5)} · {summary?.steps ?? 0} soļi · {duration(took)}
-				</span>
+					{clock(lines[0].at).slice(0, 5)} · {summary?.steps ?? 0} {tr("soļi · {took}", { took: duration(took) })}</span>
 				{summary?.usage && (
-					<span className="dim small run-meta" title={`${summary.usage.turns} modeļa piegājieni; kešatmiņā lasīti ${fmtTokens(summary.usage.cacheRead)}, ierakstīti ${fmtTokens(summary.usage.cacheWrite)}`}>
+					<span className="dim small run-meta" title={tr("{turns} modeļa piegājieni; kešatmiņā lasīti {cacheRead}, ierakstīti {cacheWrite}", { turns: summary.usage.turns, cacheRead: fmtTokens(summary.usage.cacheRead), cacheWrite: fmtTokens(summary.usage.cacheWrite) })}>
 						{usageText(summary.usage)}
 					</span>
 				)}
 			</summary>
 			{start?.detail && (
 				<details className="run-task">
-					<summary className="dim small">Uzdevums aģentam</summary>
+					<summary className="dim small">{tr("Uzdevums aģentam")}</summary>
 					<pre className="act-pre">{start.detail}</pre>
 				</details>
 			)}
@@ -235,11 +233,11 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				{steps.map((l, i) => (
 					<Step key={`${l.step ?? l.kind}-${i}`} a={l} live={running && l === lastStep} />
 				))}
-				{running && steps.length === 0 && <div className="dim small">Aģents sāk darbu…</div>}
+				{running && steps.length === 0 && <div className="dim small">{tr("Aģents sāk darbu…")}</div>}
 			</div>
 			{!running && start?.project && <Changes project={start.project} run={start.run} />}
 			<div className="run-foot small">
-				{changed ? `${running ? "Līdz šim: " : "Izmaiņas: "}${changed}` : running ? "Projektā vēl nekas nav mainīts" : "Projektā nekas netika mainīts"}
+				{changed ? `${running ? tr("Līdz šim: ") : tr("Izmaiņas: ")}${changed}` : running ? tr("Projektā vēl nekas nav mainīts") : tr("Projektā nekas netika mainīts")}
 			</div>
 		</details>
 	);
@@ -253,7 +251,7 @@ function ViewerChips({ lines }: { lines: Activity[] }) {
 	return (
 		<div className="run-chips">
 			{chips.map((c) => (
-				<button key={c.n} className="chip" title="Atkārtot šo darbību skatā (modelis netiek mainīts)" onClick={() => runViewerAction(c.action).then((p) => setErr(p))}>
+				<button key={c.n} className="chip" title={tr("Atkārtot šo darbību skatā (modelis netiek mainīts)")} onClick={() => runViewerAction(c.action).then((p) => setErr(p))}>
 					↪ #{c.n} · {c.label}
 				</button>
 			))}

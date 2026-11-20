@@ -6,6 +6,7 @@ import type { Pin } from "../../core/model";
 import { call, errText } from "../bridge";
 import { listOrder, numbered, type NumberedPin } from "../../shared/pins-view";
 import { Badge, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 export type { NumberedPin };
 
@@ -22,12 +23,11 @@ export function PinPanel({ projectId, items, activeId, onSelect, onChanged, onEr
 	return (
 		<aside className="pin-panel">
 			<div className="pin-head">
-				<b>Piezīmes</b>
+				<b>{tr("Piezīmes")}</b>
 				<span className="dim small">
-					{open} atvērtas no {items.length}
-				</span>
+					{tr("{open} atvērtas no {v}", { open: open, v: items.length })}</span>
 			</div>
-			{items.length === 0 && <div className="dim small" style={{ padding: 10 }}>no data: šim failam piezīmju nav.</div>}
+			{items.length === 0 && <div className="dim small" style={{ padding: 10 }}>{tr("no data: šim failam piezīmju nav.")}</div>}
 			<div className="pin-list">
 				{listOrder(items).map(({ pin, n }) => {
 					const last = pin.comments.at(-1);
@@ -37,28 +37,25 @@ export function PinPanel({ projectId, items, activeId, onSelect, onChanged, onEr
 							<div className="pin-body">
 								<div>{pin.text}</div>
 								<div className="small">
-									<Badge tone={pin.state === "open" ? "warn" : pin.state === "resolved" ? "info" : "dim"}>{pin.state === "open" ? "atvērta" : pin.state === "resolved" ? "gaida tevi" : "aizvērta"}</Badge>{" "}
-									<span className="dim">{pin.by === "agent" ? "aģents" : "tu"}{pin.comments.length ? ` · ${pin.comments.length} komentāri` : ""}</span>
+									<Badge tone={pin.state === "open" ? "warn" : pin.state === "resolved" ? "info" : "dim"}>{pin.state === "open" ? tr("atvērta") : pin.state === "resolved" ? tr("gaida tevi") : tr("aizvērta")}</Badge>{" "}
+									<span className="dim">{pin.by === "agent" ? tr("aģents") : tr("tu")}{pin.comments.length ? tr(" · {length} komentāri", { length: pin.comments.length }) : ""}</span>
 								</div>
 								{last && (
 									<div className="small dim" style={{ marginTop: 2 }}>
-										{last.by === "agent" ? "aģents" : "tu"}: {last.text}
+										{last.by === "agent" ? tr("aģents") : tr("tu")}: {last.text}
 									</div>
 								)}
 								<div className="pin-actions">
 									{pin.state !== "closed" ? (
-										<button className="small" title="Piezīmi aizver tikai tu" onClick={(e) => (e.stopPropagation(), act(() => call("pins.close", projectId, pin.id)))}>
-											Aizvērt
-										</button>
+										<button className="small" title={tr("Piezīmi aizver tikai tu")} onClick={(e) => (e.stopPropagation(), act(() => call("pins.close", projectId, pin.id)))}>
+											{tr("Aizvērt")}</button>
 									) : (
 										<button className="small ghost" onClick={(e) => (e.stopPropagation(), act(() => call("pins.reopen", projectId, pin.id)))}>
-											Atvērt vēlreiz
-										</button>
+											{tr("Atvērt vēlreiz")}</button>
 									)}
 									{pin.state === "resolved" && (
 										<button className="small ghost" onClick={(e) => (e.stopPropagation(), act(() => call("pins.reopen", projectId, pin.id)))}>
-											Nav labi
-										</button>
+											{tr("Nav labi")}</button>
 									)}
 								</div>
 							</div>

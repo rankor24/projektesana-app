@@ -12,6 +12,7 @@ import type { ProjectStore } from "../core/store.js";
 import { dateInName, deliveryKindOf } from "../core/stages.js";
 import type { CopyPlan } from "../shared/nodevums.js";
 import { findDeliveriesDir } from "./deliveries.js";
+import { partDirSync } from "./projecting.js";
 import { draftOf, stagingFingerprint, yymmdd } from "./staging.js";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -66,14 +67,7 @@ export function copyPlan(store: ProjectStore, deliveryId: string): CopyPlan {
 
 /** findDeliveriesDir is async (readdir); the plan is shown on every render, so this one reads synchronously. */
 function findDeliveriesDirSync(root: string): string | null {
-	try {
-		const top = readdirSync(root, { withFileTypes: true }).find((d) => d.isDirectory() && /^01[\s_.-]*projekt/.test(norm(d.name)));
-		if (!top) return null;
-		const inner = readdirSync(join(root, top.name), { withFileTypes: true }).find((d) => d.isDirectory() && /^1\.4(?![.\d])/.test(d.name.trim()));
-		return inner ? join(root, top.name, inner.name) : null;
-	} catch {
-		return null;
-	}
+	return partDirSync(root, "1.4");
 }
 
 const sha256 = (file: string) =>

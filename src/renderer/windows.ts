@@ -7,45 +7,47 @@ import * as L from "../shared/layout";
 import { defaultLayout, pageById, resolveOpen, SIDEBAR_SIZE, START_PAGE } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
+import { tr } from "./i18n";
 
 export const PANELS = L.PANEL_IDS;
 export type PanelId = (typeof L.PANEL_IDS)[number];
 
 export const PANEL_TITLE: Record<PanelId, string> = {
-	projekts: "Projekti",
-	parskats: "Pārskats",
-	koordinacija: "Koordinācija",
-	normativi: "Normatīvi",
-	telpaslapa: "Telpas (lapa)",
-	faili: "Faili",
-	grafiks: "Grafiks",
-	avoti: "Avoti",
-	prasibas: "Prasības",
-	telpas: "Telpas",
-	nodevumi: "Nodevumi",
-	atmina: "Atmiņa",
-	versijas: "Versijas",
-	iestatijumi: "Iestatījumi",
-	prasmes: "Prasmes",
+	projekts: tr("Projekti"),
+	parskats: tr("Pārskats"),
+	koordinacija: tr("Koordinācija"),
+	normativi: tr("Normatīvi"),
+	telpaslapa: tr("Telpas (lapa)"),
+	faili: tr("Faili"),
+	grafiks: tr("Grafiks"),
+	avoti: tr("Avoti"),
+	prasibas: tr("Prasības"),
+	telpas: tr("Telpas"),
+	nodevumi: tr("Nodevumi"),
+	atmina: tr("Atmiņa"),
+	versijas: tr("Versijas"),
+	iestatijumi: tr("Iestatījumi"),
+	prasmes: tr("Prasmes"),
+	agenti: tr("Aģenti"),
 };
 export const WINDOW_TITLE: Record<string, string> = {
 	...PANEL_TITLE,
-	chat: "Aģents",
-	"viewer.props": "Īpašības",
-	"viewer.tree": "Elementu koks",
-	"viewer.ifcmeta": "IFC metadati",
-	"viewer.filemeta": "Faila metadati",
-	"viewer.comments": "Komentāri / BCF",
-	"coord.matrix": "Koordinācijas matrica",
-	"coord.reference": "Atsauce",
-	"coord.lines": "Šūnas labojumi",
-	"vers.list": "Izmaiņas",
-	"vers.models": "Modeļi",
-	"vers.sheets": "Lapu izmaiņas",
-	"vers.revit": "Revit",
-	"telpas.diffs": "Atšķirības",
-	"telpas.inventory": "Inventarizācija",
-	"telpas.inv": "INV Area",
+	chat: tr("Aģents"),
+	"viewer.props": tr("Īpašības"),
+	"viewer.tree": tr("Elementu koks"),
+	"viewer.ifcmeta": tr("IFC metadati"),
+	"viewer.filemeta": tr("Faila metadati"),
+	"viewer.comments": tr("Komentāri / BCF"),
+	"coord.matrix": tr("Koordinācijas matrica"),
+	"coord.reference": tr("Atsauce"),
+	"coord.lines": tr("Šūnas labojumi"),
+	"vers.list": tr("Izmaiņas"),
+	"vers.models": tr("Modeļi"),
+	"vers.sheets": tr("Lapu izmaiņas"),
+	"vers.revit": tr("Revit"),
+	"telpas.diffs": tr("Atšķirības"),
+	"telpas.inventory": tr("Inventarizācija"),
+	"telpas.inv": tr("INV Area"),
 };
 
 export interface WindowsState {
@@ -72,15 +74,23 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function notify() {
 	for (const l of listeners) l();
 }
+let unsaved = false;
+function saveNow() {
+	clearTimeout(saveTimer);
+	if (!unsaved) return;
+	unsaved = false;
+	call("layout.set", state.store, ORIGIN).catch(() => {
+		// the layout is not remembered this time; nothing else changes
+	});
+}
 function scheduleSave() {
 	if (!state.loaded || POP_ID) return; // never overwrite the file with defaults before it was read; a pop-out does not own the layout
+	unsaved = true;
 	clearTimeout(saveTimer);
-	saveTimer = setTimeout(() => {
-		call("layout.set", state.store, ORIGIN).catch(() => {
-			// the layout is not remembered this time; nothing else changes
-		});
-	}, 400);
+	saveTimer = setTimeout(saveNow, 400);
 }
+// the last move before the app closes is kept too (the timer would die with the window)
+if (typeof window !== "undefined") window.addEventListener("beforeunload", saveNow);
 function commit(next: L.Layout) {
 	if (next === state.layout) return;
 	state = { ...state, layout: next, store: L.withPage(state.store, state.page, next) };
@@ -195,6 +205,13 @@ export const windows = {
 		call("layout.popIn", id).catch(() => undefined);
 	},
 	setFilter: (id: string, filter: string | undefined) => op((l) => L.setFilter(l, id, filter)),
+	/** The Windows menu: a closed window opens where the page's default keeps it; an open one closes (the chat never). */
+	toggleOnPage(id: string) {
+		if (L.groupOf(state.layout, id)) return id === L.CHAT ? windows.focus(id) : windows.close(id);
+		op((l, v) => L.reopen(l, id, L.normalize(defaultFor(state.page), v), v));
+	},
+	/** The page goes back to its default layout; other pages keep theirs. */
+	resetPage: () => commit(L.normalize(defaultFor(state.page), vp())),
 	get: () => state,
 };
 

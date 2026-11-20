@@ -1,5 +1,6 @@
 // Revit read state for the panels: connection status and the open model's rooms.
-import { defaultServerJs, type RevitClient } from "../../revit/client.js";
+import { bundledRevitDir, defaultServerJs, localAppDataDir, type RevitClient } from "../../revit/client.js";
+import { addinStatus, installAddins } from "../../revit/addin-install.js";
 import { revitRead, revitSelect, writeInvArea } from "../../revit/commands.js";
 import type { Registry } from "../../core/registry.js";
 import { compareRooms, normNo } from "../../checks/checks/rooms.js";
@@ -17,7 +18,7 @@ import { insideBase } from "../../sources/tree.js";
 import { rootDir } from "./files.js";
 import type { FileRoot } from "../../shared/api.js";
 
-type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
+type K = "revit.views" | "revit.exportView" | "revit.exportIfc" | "revit.workCopy" | "revisions.capture" | "tasks.list" | "models.list" | "models.bytes" | "revisions.list" | "revisions.ifc" | "revit.status" | "revit.addins" | "revit.installAddins" | "revit.rooms" | "revit.select" | "rooms.compare" | "rooms.invAreaPlan" | "rooms.writeInvArea";
 
 export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcraftApp: string; openPath(p: string): Promise<string> }): Pick<Handlers, K> {
 	const exportsDir = (id: string) => {
@@ -81,9 +82,11 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 			if (!g.ok) throw new Error(g.reason);
 			return new Uint8Array(readFileSync(g.path));
 		},
+		"revit.addins": async () => addinStatus(bundledRevitDir()),
+		"revit.installAddins": async (years) => installAddins(bundledRevitDir(), years, join(localAppDataDir(), "Projektesana", "revit-backups", stamp())),
 		"revit.status": async () => {
 			const w = d.revit.where();
-			if (!w) return { state: "nav konfigurēts", document: null, activeView: null, version: null, server: null, message: `Revit MCP serveris nav atrasts: ne Iestatījumos norādītajā ceļā, ne standarta instalācijā (pārbaudīts: ${defaultServerJs()}).` };
+			if (!w) return { state: "nav konfigurēts", document: null, activeView: null, version: null, server: null, message: `Revit MCP serveris nav atrasts: ne Iestatījumos norādītajā ceļā, ne standarta instalācijā (pārbaudīts: ${defaultServerJs()}), ne lietotnes mapē (${bundledRevitDir() ?? "nav iekļauts šajā versijā"}).` };
 			const server = { serverJs: w.serverJs, node: w.node, source: w.source ?? "iestatījumi" } as const;
 			try {
 				const r = await revitRead.instances(d.revit);

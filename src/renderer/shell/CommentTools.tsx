@@ -1,89 +1,257 @@
-// Comment tools (task 9.4): the strip at the foot of every page that has comments. It names what the user picked on the page
-// (a row, a cell, a tile, a fact), offers this page's tools (shared/comment-tools.ts), takes the text, and makes a pin that
-// reaches the agent in its next prompt. Under it the page's own comments, with → aģentam and → uzdevums on each.
-// BIM Crew has no equivalent: its chat is the only place the user points at things.
-import { useMemo, useState } from "react";
-import type { Pin } from "../../core/model";
-import { buildPin, toolsFor, type CommentTool } from "../../shared/comment-tools";
+// Comment tools (task 9.4, as planned on the board: X1, X2, M1, M2): a slim column at the edge of the work area on every page
+// that has something to comment on. From the top: what the user picked on the page (a row, a cell, a tile, a fact), this
+// page's tools (shared/comment-tools.ts) as icon buttons, the colour (a tool of its own: it goes with the next comment), and on
+// a page with the model open the viewer's tools (pin, marks, sketch, isolate, colour by). A tool that needs words opens a
+// small box beside the column; the comment becomes a pin the agent reads in its next prompt. The page's open comments fold
+// out from the foot of the column, with → aģentam and → uzdevums on each.
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Markup, Pin } from "../../core/model";
+import { buildPin, COMMENT_COLOURS, toolsFor, VIEWER_TOOLS, withColour, type CommentColour, type CommentTool } from "../../shared/comment-tools";
 import { pinFocus, pinMeaning, pinWhere, targetKind } from "../../shared/pins-view";
 import { call, errText } from "../bridge";
 import { commentSubject, useSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
 import { useLoad } from "../ui";
+import { tr } from "../i18n";
+import { pageMarks } from "../page-marks";
+import { useViewerActions, type ViewerActions } from "../viewer-actions";
+
+/** One glyph per tool, so the column stays narrow; the label is under it and the hint in the tooltip. */
+const ICON: Record<string, string> = {
+	"tile-note": "✎",
+	"fix-value": "✓",
+	"move-date": "⇥",
+	"cell-note": "✎",
+	"storey-mark": "≡",
+	correct: "✓",
+	"region-note": "▭",
+	"accept-change": "✓",
+	"reject-change": "✕",
+	"colour-room": "◐",
+	"room-note": "✎",
+	"item-note": "✎",
+	block: "⛔",
+	approve: "✓",
+	justify: "¶",
+	accept: "✓",
+	override: "⤼",
+	pin: "📍",
+	line: "╱",
+	circle: "◯",
+	rect: "▭",
+	free: "〰",
+};
+const SHAPE_OF: Record<string, Markup["shape"]> = { line: "line", circle: "circle", rect: "rect", free: "free" };
+
+type Asking = { kind: "page"; tool: CommentTool } | { kind: "pin" } | { kind: "sketch" } | { kind: "colourBy" };
 
 export function CommentTools({ page }: { page: string }) {
 	const { projectId } = useUi();
 	const subject = useSubject();
+	const va = useViewerActions();
 	const tools = toolsFor(page);
+	const [asking, setAsking] = useState<Asking | null>(null);
 	const [text, setText] = useState("");
+	const [colour, setColour] = useState<CommentColour | null>(null);
 	const [side, setSide] = useState<"A" | "B">("A");
 	const [err, setErr] = useState<string | null>(null);
-	const [open, setOpen] = useState(true);
+	const [list, setList] = useState(false);
+	// the boxes that open beside the column sit just right of it (fixed: the column scrolls and would clip them)
+	const col = useRef<HTMLElement>(null);
+	const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null);
+	useEffect(() => {
+		if (!asking && !list) return;
+		const r = col.current?.getBoundingClientRect();
+		if (r) setAnchor({ left: r.right + 6, top: r.top + 8, bottom: window.innerHeight - r.bottom + 8 });
+	}, [asking, list]);
 	const pins = useLoad<Pin[]>(() => (projectId ? call("pins.list", projectId) : Promise.resolve([])), [projectId]);
-	// the comments that belong to this page's kinds of thing, open first
 	const kinds = useMemo(() => new Set(tools.flatMap((t) => t.on)), [tools]);
 	const mine = useMemo(() => (pins.data ?? []).filter((p) => p.state !== "closed" && kinds.has(targetKind(p.target)) && targetKind(p.target) !== "page" && targetKind(p.target) !== "element"), [pins.data, kinds]);
-	if (!projectId || tools.length === 0) return null;
+	const viewer = va && va.ready ? va : null;
+	if (!projectId || (tools.length === 0 && !viewer)) return null;
 
-	const make = (tool: CommentTool) => {
+	const make = (tool: CommentTool, words: string) => {
 		const target = subject && "thing" in subject.target && subject.target.thing === "change" ? { ...subject.target, side } : (subject?.target ?? null);
-		const built = buildPin(tool, target, text);
+		// the marks drawn on the view (the surface drawn on last): "Apgabals" takes its rectangle
+		const drawn = pageMarks.latest();
+		const built = buildPin(tool, target, words, drawn.marks, colour);
 		if (typeof built === "string") return setErr(built);
 		setErr(null);
 		call("pins.add", projectId, built.target, built.text, built.opts)
-			.then((p) => (setText(""), ui.focusAdd(pinFocus(p)), pins.reload(), ui.bump()))
+			.then((p) => {
+				setText("");
+				setAsking(null);
+				if (built.opts.markup?.length && drawn.surface) pageMarks.clear(drawn.surface);
+				ui.focusAdd(pinFocus(p));
+				pins.reload();
+				ui.bump();
+			})
 			.catch((e) => setErr(errText(e)));
 	};
+	const pick = (tool: CommentTool) => {
+		setErr(null);
+		if (tool.needsText) return (setAsking({ kind: "page", tool }), setText(""));
+		make(tool, "");
+	};
+	const submit = () => {
+		if (!asking) return;
+		if (asking.kind === "page") return make(asking.tool, text);
+		if (!viewer) return;
+		if (asking.kind === "pin") viewer.pin(withColour(text, colour));
+		else if (asking.kind === "sketch") viewer.sketch(withColour(text, colour));
+		else viewer.colourBy(text.trim() || "klase");
+		setText("");
+		setAsking(null);
+	};
 	const toTask = (p: Pin) => call("todos.add", projectId, { title: pinMeaning({ ...p, markup: undefined }).slice(0, 120), note: pinWhere(p), refs: { pinId: p.id, ...(p.findingId ? { findingId: p.findingId } : {}) } }).then(() => ui.bump()).catch((e) => setErr(errText(e)));
+	const isChange = !!subject && "thing" in subject.target && subject.target.thing === "change";
 
 	return (
-		<div className="comment-tools">
-			<div className="row">
-				<button className="ghost small" onClick={() => setOpen(!open)} title="Komentāri šajā lapā: tā tu saki aģentam, ko labot">
-					{open ? "▾" : "▸"} Komentāri{mine.length ? ` (${mine.length})` : ""}
-				</button>
+		<aside ref={col} className="ctool-col" aria-label={tr("Komentāru rīki")}>
+			<div className={`ctool-subject ${subject ? "on" : ""}`} title={subject ? pinWhere({ target: subject.target } as Pin) : tr("klikšķini rindu, šūnu vai kartīti, pie kuras komentēt")}>
 				{subject ? (
-					<span className="chip" title={pinWhere({ target: subject.target } as Pin)}>
-						{subject.label}
-						<button className="x" onClick={() => commentSubject.clear()}>×</button>
-					</span>
+					<>
+						<span className="ctool-subject-text">{subject.label}</span>
+						<button className="x" onClick={() => commentSubject.clear()} title={tr("Notīrīt")}>
+							×
+						</button>
+					</>
 				) : (
-					<span className="dim small">klikšķini rindu, šūnu vai kartīti, pie kuras komentēt</span>
-				)}
-				{subject && "thing" in subject.target && subject.target.thing === "change" && (
-					<span className="small">
-						<button className={`small ${side === "A" ? "primary" : "ghost"}`} onClick={() => setSide("A")}>A</button>
-						<button className={`small ${side === "B" ? "primary" : "ghost"}`} onClick={() => setSide("B")}>B</button>
-					</span>
+					<span className="dim">{tr("izvēlies lapā")}</span>
 				)}
 			</div>
-			{open && (
-				<>
+			{isChange && (
+				<div className="ctool-ab">
+					<button className={side === "A" ? "on" : ""} onClick={() => setSide("A")}>
+						A
+					</button>
+					<button className={side === "B" ? "on" : ""} onClick={() => setSide("B")}>
+						B
+					</button>
+				</div>
+			)}
+			{tools.map((t) => (
+				<ToolButton key={t.id} icon={ICON[t.id] ?? "•"} label={tr(t.label)} hint={tr(t.hint)} on={asking?.kind === "page" && asking.tool.id === t.id} onClick={() => pick(t)} />
+			))}
+			<div className="ctool-sep" />
+			<div className="ctool-colours" title={tr("Krāsa: iet līdzi nākamajam komentāram (aģents to lasa)")}>
+				{COMMENT_COLOURS.map((c) => (
+					<button key={c.id} className={`ctool-swatch ${colour === c.id ? "on" : ""}`} style={{ background: c.hex }} aria-label={tr(c.id)} title={tr(c.id)} onClick={() => setColour(colour === c.id ? null : c.id)} />
+				))}
+			</div>
+			{viewer && <ViewerTools va={viewer} asking={asking} ask={(a) => (setAsking(a), setText(""), setErr(null))} />}
+			<div className="grow" />
+			{mine.length > 0 && (
+				<ToolButton icon="💬" label={tr("Komentāri ({n})", { n: mine.length })} hint={tr("Šīs lapas atvērtie komentāri")} on={list} onClick={() => setList(!list)} />
+			)}
+			{asking && (
+				<AskBox
+					at={anchor ? { left: anchor.left, top: anchor.top } : undefined}
+					title={asking.kind === "page" ? tr(asking.tool.label) : asking.kind === "pin" ? tr("Piezīme pie elementa") : asking.kind === "sketch" ? tr("Skice → aģentam") : tr("Krāsot pēc")}
+					hint={asking.kind === "page" ? tr(asking.tool.hint) : asking.kind === "colourBy" ? tr("klase, typename, objecttype vai Pset.Nosaukums") : asking.kind === "pin" ? tr("Iezīmē elementu modelī; piezīme tiek pie tā ar skatu") : tr("Iezīmētie elementi ar šo tekstu aiziet aģentam")}
+					value={text}
+					setValue={setText}
+					colour={asking.kind === "colourBy" ? null : colour}
+					err={err}
+					onSubmit={submit}
+					onCancel={() => (setAsking(null), setErr(null))}
+				/>
+			)}
+			{!asking && err && <div className="ctool-err err small">{err}</div>}
+			{list && (
+				<div className="ctool-flyout" style={anchor ? { left: anchor.left, bottom: anchor.bottom } : undefined}>
 					<div className="row">
-						<input className="grow" placeholder="komentārs aģentam…" value={text} onChange={(e) => setText(e.target.value)} />
+						<b>{tr("Komentāri")}</b>
+						<span className="grow" />
+						<button className="ghost small" onClick={() => setList(false)}>
+							×
+						</button>
 					</div>
-					<div className="row" style={{ flexWrap: "wrap" }}>
-						{tools.map((t) => (
-							<button key={t.id} className="small" title={t.hint} onClick={() => make(t)}>
-								{t.label}
-							</button>
-						))}
-					</div>
-					{err && <div className="err">{err}</div>}
-					{mine.slice(0, 8).map((p) => (
+					{mine.map((p) => (
 						<div key={p.id} className="comment-row small">
 							<span className="grow">
 								{pinMeaning(p)} <span className="dim">· {pinWhere(p)}</span>
 							</span>
-							<button className="small ghost" onClick={() => ui.focusAdd(pinFocus(p))}>→ aģentam</button>
-							<button className="small ghost" onClick={() => void toTask(p)}>→ uzdevums</button>
-							<button className="small ghost" title="Piezīmi aizver tikai tu" onClick={() => call("pins.close", projectId, p.id).then(() => (pins.reload(), ui.bump())).catch((e) => setErr(errText(e)))}>
-								aizvērt
+							<button className="small ghost" onClick={() => ui.focusAdd(pinFocus(p))}>
+								{tr("→ aģentam")}
+							</button>
+							<button className="small ghost" onClick={() => void toTask(p)}>
+								{tr("→ uzdevums")}
+							</button>
+							<button className="small ghost" title={tr("Piezīmi aizver tikai tu")} onClick={() => call("pins.close", projectId, p.id).then(() => (pins.reload(), ui.bump())).catch((e) => setErr(errText(e)))}>
+								{tr("aizvērt")}
 							</button>
 						</div>
 					))}
-				</>
+				</div>
 			)}
+		</aside>
+	);
+}
+
+function ToolButton({ icon, label, hint, on, disabled, onClick }: { icon: string; label: string; hint: string; on?: boolean; disabled?: boolean; onClick: () => void }) {
+	return (
+		<button className={`ctool ${on ? "on" : ""}`} title={hint} disabled={disabled} onClick={onClick}>
+			<span className="ctool-icon">{icon}</span>
+			<span className="ctool-label">{label}</span>
+		</button>
+	);
+}
+
+/** The model viewer's tools (M2): a pin with the camera, marks over the view, the sketch for the agent, isolate, colour by. */
+function ViewerTools({ va, asking, ask }: { va: ViewerActions; asking: Asking | null; ask: (a: Asking) => void }) {
+	const marks = VIEWER_TOOLS.filter((t) => t.id !== "pin");
+	return (
+		<>
+			<div className="ctool-sep" />
+			<div className="ctool-head">{tr("Modelis")}</div>
+			<ToolButton icon={ICON.pin} label={tr("Piezīme")} hint={tr("Piezīme pie iezīmētā elementa, ar skatu")} on={asking?.kind === "pin"} disabled={!va.selected} onClick={() => ask({ kind: "pin" })} />
+			{marks.map((t) => {
+				const shape = SHAPE_OF[t.id];
+				return <ToolButton key={t.id} icon={ICON[t.id] ?? "•"} label={tr(t.label)} hint={tr(t.hint)} on={va.shape === shape} onClick={() => va.setShape(va.shape === shape ? null : shape)} />;
+			})}
+			{va.marks > 0 && <ToolButton icon="⌫" label={tr("Notīrīt ({n})", { n: va.marks })} hint={tr("Notīrīt zīmējumu virs skata")} onClick={va.clearMarks} />}
+			<ToolButton icon="➜" label={tr("Skice")} hint={tr("Iezīmētos elementus ar tekstu nodod aģentam kā norādījumu")} on={asking?.kind === "sketch"} disabled={!va.selected} onClick={() => ask({ kind: "sketch" })} />
+			<ToolButton icon="◎" label={tr("Izolēt")} hint={tr("Rādīt tikai iezīmētos, pārējie pelēki")} disabled={!va.selected} onClick={va.isolate} />
+			<ToolButton icon="◉" label={tr("Rādīt visu")} hint={tr("Atkal rādīt visus elementus")} onClick={va.showAll} />
+			<ToolButton icon="🎨" label={tr("Krāsot pēc")} hint={tr("Krāsot modeli pēc klases vai īpašības")} on={asking?.kind === "colourBy"} onClick={() => ask({ kind: "colourBy" })} />
+		</>
+	);
+}
+
+function AskBox({ at, title, hint, value, setValue, colour, err, onSubmit, onCancel }: { at?: { left: number; top: number }; title: string; hint: string; value: string; setValue: (v: string) => void; colour: CommentColour | null; err: string | null; onSubmit: () => void; onCancel: () => void }) {
+	const ref = useRef<HTMLTextAreaElement>(null);
+	useEffect(() => ref.current?.focus(), []);
+	const hex = COMMENT_COLOURS.find((c) => c.id === colour)?.hex;
+	return (
+		<div className="ctool-ask" style={at} onKeyDown={(e) => e.key === "Escape" && onCancel()}>
+			<div className="row">
+				<b>{title}</b>
+				{hex && <span className="ctool-swatch on" style={{ background: hex }} />}
+			</div>
+			<div className="dim small">{hint}</div>
+			<textarea
+				ref={ref}
+				rows={3}
+				value={value}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && !e.shiftKey) {
+						e.preventDefault();
+						onSubmit();
+					}
+				}}
+			/>
+			{err && <div className="err small">{err}</div>}
+			<div className="row">
+				<span className="grow" />
+				<button className="ghost small" onClick={onCancel}>
+					{tr("Atcelt")}
+				</button>
+				<button className="primary small" onClick={onSubmit}>
+					{tr("Saglabāt")}
+				</button>
+			</div>
 		</div>
 	);
 }

@@ -1,0 +1,21 @@
+import { registerEn } from "../../shared/i18n";
+import { core } from "./en/core";
+import { settings } from "./en/settings";
+import { part1 } from "./en/part1";
+import { part2 } from "./en/part2";
+import { part3 } from "./en/part3";
+import { part4 } from "./en/part4";
+import { part5 } from "./en/part5";
+import { part6 } from "./en/part6";
+import { part7 } from "./en/part7";
+
+registerEn(core);
+registerEn(settings);
+registerEn(part1);
+registerEn(part2);
+registerEn(part3);
+registerEn(part4);
+registerEn(part5);
+registerEn(part6);
+registerEn(part7);
+export { tr, trDyn, getLang, setLang, locale, LANGS } from "../../shared/i18n";

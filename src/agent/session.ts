@@ -9,6 +9,8 @@ import { type Complete } from "./compact.js";
 import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
+import { catalogProvider, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
+import type { ClaudeRunOptions } from "./claude/run.js";
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
@@ -19,7 +21,7 @@ import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
 import { waitingQuestions } from "../core/notes.js";
-import { waitingEksStarts, waitingEscalations, waitingGates } from "../core/process-waiting.js";
+import { eksLastRun, waitingEksStarts, waitingEscalations, waitingGates } from "../core/process-waiting.js";
 import { ProjectStore } from "../core/store.js";
 import { EKS } from "../core/process-def.js";
 import { closeEksQuestions } from "./mail.js";
@@ -61,6 +63,10 @@ export interface SessionDeps {
 	complete?: Complete;
 	/** the agent loop; defaults to pi's, tests inject a scripted one */
 	runAgent?: typeof runPi;
+	/** the Claude subscription engine (Agent SDK), bound to the user's setup-token; absent = not offered (tests, or not built in) */
+	claudeRun?: (o: ClaudeRunOptions) => Promise<void>;
+	/** is a Claude subscription token stored? (the status line) */
+	claudeConnected?: () => boolean;
 	/** is the active Revit document this project's working copy? (6.3) */
 	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
 	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
@@ -77,7 +83,7 @@ export class AgentSession {
 
 	constructor(private d: SessionDeps) {
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => this.threads(projectId).list({ agent: EKS }).map((t) => t.lastAt).sort().at(-1) ?? null) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))) });
 	}
 
 	/** The coordinator answered eks's ask for the recipient: the question note closes. A project that cannot be read has no note to close. */
@@ -156,6 +162,19 @@ export class AgentSession {
 	async status(): Promise<AgentStatus> {
 		const s = this.d.settings();
 		const revit = this.d.revit() ? "savienots" : s.revitServerJs ? "nav savienojuma" : "nav konfigurēts";
+		if (isClaudeSub(s.provider)) {
+			const on = this.d.claudeConnected?.() ?? false;
+			let images: boolean | null = null;
+			let limits: AgentStatus["imageLimits"] = null;
+			try {
+				const m = lookupPiModel(await this.d.runtime(), catalogProvider(s.provider), s.model);
+				images = seesImages(m);
+				limits = imageLimits(m);
+			} catch {
+				// unknown model: the run says why
+			}
+			return { provider: s.provider, providerLabel: CLAUDE_SUB_LABEL, model: s.model || "(noklusējums)", signedIn: on, reason: on ? "setup-token" : "nav pieslēgts", revit, images, imageLimits: limits };
+		}
 		if (!isPiProvider(s.provider)) return { provider: s.provider, providerLabel: s.provider, model: s.model, signedIn: false, reason: `nezināms pakalpojums: ${s.provider}`, revit, images: null, imageLimits: null };
 		const info = piProviderInfo(s.provider);
 		try {
@@ -341,7 +360,7 @@ export class AgentSession {
 	/** The chosen model, or null when it cannot be looked up (the run itself reports why). */
 	private async modelOf(s: Settings): Promise<Model<Api> | null> {
 		try {
-			return lookupPiModel(await this.d.runtime(), s.provider, s.model);
+			return lookupPiModel(await this.d.runtime(), catalogProvider(s.provider), s.model);
 		} catch {
 			return null;
 		}

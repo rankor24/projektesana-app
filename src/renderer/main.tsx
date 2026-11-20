@@ -2,7 +2,9 @@ import { Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { App, PopOut } from "./App";
 import { popIdOf } from "../shared/popout";
+import "./i18n";
 import "./styles.css";
+import { tr } from "./i18n";
 
 /** A render error shows its message and a reload, never a black window. */
 class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -19,9 +21,9 @@ ${info.componentStack ?? ""}`);
 		if (this.state.error)
 			return (
 				<div className="crash">
-					<h2>Kļūda ekrānā</h2>
+					<h2>{tr("Kļūda ekrānā")}</h2>
 					<pre>{this.state.error.stack ?? this.state.error.message}</pre>
-					<button onClick={() => location.reload()}>Pārlādēt (F5)</button>
+					<button onClick={() => location.reload()}>{tr("Pārlādēt (F5)")}</button>
 				</div>
 			);
 		return this.props.children;

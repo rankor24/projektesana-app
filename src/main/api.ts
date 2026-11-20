@@ -9,6 +9,7 @@ import { requirementHandlers } from "./handlers/requirements.js";
 import type { ProjectEngine } from "./engine.js";
 import { revitHandlers } from "./handlers/revit.js";
 import { deliveryHandlers } from "./handlers/deliveries.js";
+import { compare2dHandlers } from "./handlers/compare2d.js";
 import { compareHandlers } from "./handlers/compare.js";
 import { libraryHandlers, type LibraryDeps } from "./handlers/library.js";
 import { fileHandlers } from "./handlers/files.js";
@@ -31,5 +32,5 @@ export function createHandlers(d: AppDeps): Handlers {
 	const userName = () => d.settings.get().userName.trim() || undefined;
 	const e = { ...d, afterChange, userName };
 	const projects = projectHandlers(e);
-	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d), ...processHandlers(d) };
+	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...compare2dHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d), ...processHandlers(d) };
 }

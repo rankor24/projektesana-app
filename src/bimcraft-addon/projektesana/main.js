@@ -184,9 +184,36 @@ export function valueOfProperty(p, property) {
   return null;
 }
 
+/**
+ * Inside the app BimCraft should look like part of it, not a website in a frame: the app's one stylesheet for its frames
+ * (compact.css, shared with CadCraft's bridge: 13 px type, the app's colours) and BimCraft's own dark theme ("model" space);
+ * lengths, areas and volumes default to mm, m², m³. A theme or unit the user picked inside BimCraft stays.
+ */
+export function compactLook(doc = globalThis.document, storage = globalThis.localStorage, href = new URL('./compact.css', import.meta.url).href) {
+  if (!doc?.head || doc.getElementById('pj-compact')) return false;
+  const link = doc.createElement('link');
+  link.id = 'pj-compact';
+  link.rel = 'stylesheet';
+  link.href = href;
+  doc.head.appendChild(link);
+  let space = null;
+  try { space = storage?.getItem('cc-space') ?? null; } catch { /* no storage: the theme follows the system */ }
+  if (!space) doc.documentElement.setAttribute('data-space', 'model');
+  return true;
+}
+const METRIC = [['length', 'mm'], ['area', 'm2'], ['volume', 'm3']];
+async function metricUnits() {
+  try {
+    const u = await import('../../unit-prefs.js');
+    for (const [kind, id] of METRIC) if (!u.starOf(kind)) u.setStar(kind, id);
+  } catch { /* an older BimCraft without unit settings: its own default stays */ }
+}
+
 export function activate(api) {
   const port = globalThis.__pjPort || defaultPort();
   if (!port) return;   // BimCraft on its own: the bridge has nobody to talk to
+  compactLook();
+  void metricUnits();
   const post = (type, body = {}) => port.post({ pj: 1, type, ...body });
   let pending = null;   // the bytes of the next open
 

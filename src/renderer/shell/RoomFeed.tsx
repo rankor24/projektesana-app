@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RoomLine } from "../../shared/thread-types";
 import { call, on } from "../bridge";
 import { windows } from "../windows";
+import { locale, tr, trDyn } from "../i18n";
 
 /** Same cap as main's read: the feed never grows without end while the window stays open. */
 const MAX = 300;
@@ -11,7 +12,7 @@ const MAX = 300;
 /** One line is one thing that happened; the push and the read can both carry it, so identity is what it says and when. */
 const keyOf = (l: RoomLine) => `${l.kind}|${l.at}|${l.from ?? ""}|${l.to ?? ""}|${l.text}`;
 
-const LABEL: Record<RoomLine["kind"], string> = { message: "ziņa", state: "stāvoklis", agreed: "vienošanās", "passed-up": "nodots tālāk", paused: "apturēts" };
+const LABEL: Record<RoomLine["kind"], string> = { message: tr("ziņa"), state: tr("stāvoklis"), agreed: tr("vienošanās"), "passed-up": tr("nodots tālāk"), paused: tr("apturēts") };
 const TONE: Record<RoomLine["kind"], string> = { message: "dim", state: "dim", agreed: "ok", "passed-up": "warn", paused: "bad" };
 
 /** Lines that arrived while the read was on its way are newer than the read; each appears once. */
@@ -50,27 +51,29 @@ export function RoomFeed({ projectId, onOpen }: { projectId: string | null; onOp
 		};
 	}, [projectId]);
 
-	useEffect(() => endRef.current?.scrollIntoView?.({ block: "end" }), [lines]);
+	// a block body: Chromium's scrollIntoView returns a Promise, and an effect that returns it hands React a "cleanup" it cannot call
+	useEffect(() => {
+		endRef.current?.scrollIntoView?.({ block: "end" });
+	}, [lines]);
 
 	return (
 		<div className="chat room-feed">
-			{lines.length === 0 && <div className="dim small chat-empty">{err ?? "Telpā vēl nekā nav: aģenti viens ar otru vēl nav runājuši."}</div>}
+			{lines.length === 0 && <div className="dim small chat-empty">{err ?? tr("Telpā vēl nekā nav: aģenti viens ar otru vēl nav runājuši.")}</div>}
 			{lines.map((l) => (
-				<div key={keyOf(l)} className={`room-line ${l.threadId ? "link" : ""}`} onClick={() => l.threadId && onOpen(l.threadId)} title={l.threadId ? "Atvērt sarunu" : undefined}>
-					<span className="dim small room-time">{new Date(l.at).toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit" })}</span>
+				<div key={keyOf(l)} className={`room-line ${l.threadId ? "link" : ""}`} onClick={() => l.threadId && onOpen(l.threadId)} title={l.threadId ? tr("Atvērt sarunu") : undefined}>
+					<span className="dim small room-time">{new Date(l.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</span>
 					<span className={`badge ${TONE[l.kind]}`}>{LABEL[l.kind]}</span>
-					<span className="room-text">{l.text}</span>
+					<span className="room-text">{trDyn(l.text)}</span>
 					{l.noteId && (
 						<button
 							className="ghost small"
-							title="Atvērt Atmiņu (tur ir šī vienošanās vai jautājums)"
+							title={tr("Atvērt Atmiņu (tur ir šī vienošanās vai jautājums)")}
 							onClick={(e) => {
 								e.stopPropagation();
-								windows.open("atmina");
+								windows.open("atmina", l.noteId);
 							}}
 						>
-							Atmiņa
-						</button>
+							{tr("Atmiņa")}</button>
 					)}
 				</div>
 			))}

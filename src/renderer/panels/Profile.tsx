@@ -6,22 +6,23 @@ import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { commentSubject } from "../comment-subject";
 import { Badge, Err, useLoad } from "../ui";
+import { locale, tr } from "../i18n";
 
 const LABEL: Record<ProfileKey, string> = {
-	workType: "Būvniecības veids",
-	group: "Ēkas grupa",
-	procedure: "Procedūra",
-	stagesInContract: "Stadijas līgumā",
-	sections: "Sadaļas",
-	funding: "Finansējums",
-	"bim.bipPresent": "BIP ir",
-	"bim.lodByStage": "LOD pa stadijām",
-	use: "Lietošanas veids",
-	totalAreaM2: "Kopējā platība, m²",
-	floorsAbove: "Virszemes stāvi",
-	floorsBelow: "Pazemes stāvi",
-	address: "Adrese",
-	cadastralNo: "Kadastra apzīmējums",
+	workType: tr("Būvniecības veids"),
+	group: tr("Ēkas grupa"),
+	procedure: tr("Procedūra"),
+	stagesInContract: tr("Stadijas līgumā"),
+	sections: tr("Sadaļas"),
+	funding: tr("Finansējums"),
+	"bim.bipPresent": tr("BIP ir"),
+	"bim.lodByStage": tr("LOD pa stadijām"),
+	use: tr("Lietošanas veids"),
+	totalAreaM2: tr("Kopējā platība, m²"),
+	floorsAbove: tr("Virszemes stāvi"),
+	floorsBelow: tr("Pazemes stāvi"),
+	address: tr("Adrese"),
+	cadastralNo: tr("Kadastra apzīmējums"),
 };
 
 /** Keys that hold several values at once (one fact per stage / section). */
@@ -41,24 +42,23 @@ export function Profile({ projectId }: { projectId: string }) {
 	const Cite = ({ f }: { f: Fact }) =>
 		"sourceId" in f.source ? (
 			<button className="ghost small" title={f.source.quote} onClick={() => "sourceId" in f.source && ui.show({ kind: "source", sourceId: f.source.sourceId, page: f.source.page })}>
-				{title(f.source.sourceId)}, lpp. {f.source.page}
-			</button>
+				{tr("{sourceId}, lpp. {page}", { sourceId: title(f.source.sourceId), page: f.source.page })}</button>
 		) : (
 			<span className="dim small">
-				{f.source.name || USER_LABEL}, {new Date(f.source.at).toLocaleDateString("lv-LV")}
+				{f.source.name || USER_LABEL}, {new Date(f.source.at).toLocaleDateString(locale())}
 			</span>
 		);
 
 	return (
 		<div className="pane fill">
 			{err && <div className="err">{err}</div>}
-			<div className="dim small">Vērtības ar avotu un citātu. Aģenta priekšlikumi stājas spēkā, kad tos apstiprini. Ja dokumenta nav — ieraksti pats.</div>
+			<div className="dim small">{tr("Vērtības ar avotu un citātu. Aģenta priekšlikumi stājas spēkā, kad tos apstiprini. Ja dokumenta nav — ieraksti pats.")}</div>
 			<table>
 				<thead>
 					<tr>
-						<th style={{ width: 170 }}>Profils</th>
-						<th>Vērtība</th>
-						<th>Avots</th>
+						<th style={{ width: 170 }}>{tr("Profils")}</th>
+						<th>{tr("Vērtība")}</th>
+						<th>{tr("Avots")}</th>
 						<th />
 					</tr>
 				</thead>
@@ -73,33 +73,33 @@ export function Profile({ projectId }: { projectId: string }) {
 									<b>{LABEL[key]}</b>
 								</td>
 								<td colSpan={3}>
-									{shown.length === 0 && <span className="dim">no data</span>}
+									{shown.length === 0 && <span className="dim">{tr("no data")}</span>}
 									{shown.map((f) => (
 										<div key={f.id} className="row" style={{ marginBottom: 2 }}>
 											<span style={{ minWidth: 160 }}>
-												{f.value} {f.state === "confirmed" ? <Badge tone="ok">apstiprināts</Badge> : <Badge tone="warn">priekšlikums ({f.by === "agent" ? "aģents" : f.by})</Badge>}
+												{f.value} {f.state === "confirmed" ? <Badge tone="ok">{tr("apstiprināts")}</Badge> : <Badge tone="warn">{tr("priekšlikums (")}{f.by === "agent" ? tr("aģents") : f.by})</Badge>}
 											</span>
 											<Cite f={f} />
 											{"quote" in f.source && <span className="quote small grow">{f.source.quote}</span>}
 											{f.state === "proposed" && (
 												<>
-													<button className="small" onClick={() => act(call("facts.decide", projectId, f.id, "confirmed"))}>Apstiprināt</button>
-													<button className="small ghost" onClick={() => act(call("facts.decide", projectId, f.id, "rejected"))}>Noraidīt</button>
+													<button className="small" onClick={() => act(call("facts.decide", projectId, f.id, "confirmed"))}>{tr("Apstiprināt")}</button>
+													<button className="small ghost" onClick={() => act(call("facts.decide", projectId, f.id, "rejected"))}>{tr("Noraidīt")}</button>
 												</>
 											)}
 											{f.state === "confirmed" && !MULTI.has(key) && (
-												<button className="small ghost" onClick={() => act(call("facts.decide", projectId, f.id, "rejected"))}>Atsaukt</button>
+												<button className="small ghost" onClick={() => act(call("facts.decide", projectId, f.id, "rejected"))}>{tr("Atsaukt")}</button>
 											)}
 										</div>
 									))}
 									{edit?.key === key ? (
 										<div className="row">
 											<input autoFocus value={edit.value} onChange={(e) => setEdit({ key, value: e.target.value })} />
-											<button className="small primary" disabled={!edit.value.trim()} onClick={() => act(call("facts.setByUser", projectId, k, edit.value)).then(() => setEdit(null))}>Saglabāt</button>
-											<button className="small ghost" onClick={() => setEdit(null)}>Atcelt</button>
+											<button className="small primary" disabled={!edit.value.trim()} onClick={() => act(call("facts.setByUser", projectId, k, edit.value)).then(() => setEdit(null))}>{tr("Saglabāt")}</button>
+											<button className="small ghost" onClick={() => setEdit(null)}>{tr("Atcelt")}</button>
 										</div>
 									) : (
-										<button className="small ghost" onClick={() => setEdit({ key, value: "" })}>+ ierakstīt pats</button>
+										<button className="small ghost" onClick={() => setEdit({ key, value: "" })}>{tr("+ ierakstīt pats")}</button>
 									)}
 								</td>
 							</tr>
@@ -116,7 +116,7 @@ function OtherFacts({ facts, title, onDecide }: { facts: Fact[]; title: (id: str
 	if (!facts.length) return null;
 	return (
 		<>
-			<div className="section-title">Citi fakti</div>
+			<div className="section-title">{tr("Citi fakti")}</div>
 			<table>
 				<tbody>
 					{facts.map((f) => (
@@ -126,8 +126,7 @@ function OtherFacts({ facts, title, onDecide }: { facts: Fact[]; title: (id: str
 							<td className="small">
 								{"sourceId" in f.source ? (
 									<button className="ghost small" title={f.source.quote} onClick={() => "sourceId" in f.source && ui.show({ kind: "source", sourceId: f.source.sourceId, page: f.source.page })}>
-										{title(f.source.sourceId)}, lpp. {f.source.page}
-									</button>
+										{tr("{sourceId}, lpp. {page}", { sourceId: title(f.source.sourceId), page: f.source.page })}</button>
 								) : (
 									f.source.name || USER_LABEL
 								)}
@@ -135,11 +134,11 @@ function OtherFacts({ facts, title, onDecide }: { facts: Fact[]; title: (id: str
 							<td>
 								{f.state === "proposed" ? (
 									<>
-										<button className="small" onClick={() => onDecide(f.id, "confirmed")}>Apstiprināt</button>
-										<button className="small ghost" onClick={() => onDecide(f.id, "rejected")}>Noraidīt</button>
+										<button className="small" onClick={() => onDecide(f.id, "confirmed")}>{tr("Apstiprināt")}</button>
+										<button className="small ghost" onClick={() => onDecide(f.id, "rejected")}>{tr("Noraidīt")}</button>
 									</>
 								) : (
-									<Badge tone="ok">apstiprināts</Badge>
+									<Badge tone="ok">{tr("apstiprināts")}</Badge>
 								)}
 							</td>
 						</tr>

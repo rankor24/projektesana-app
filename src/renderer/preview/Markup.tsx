@@ -4,8 +4,9 @@
 import { useRef, useState } from "react";
 import type { Markup } from "../../core/model";
 import { MAX_FREE_POINTS } from "../../shared/pins-view";
+import { tr } from "../i18n";
 
-export const SHAPE_LABEL: Record<Markup["shape"], string> = { line: "Līnija", circle: "Aplis", rect: "Taisnstūris", free: "Zīmēt" };
+export const SHAPE_LABEL: Record<Markup["shape"], string> = { line: tr("Līnija"), circle: tr("Aplis"), rect: tr("Taisnstūris"), free: tr("Zīmēt") };
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 function shapeEl(m: Markup, key: number, color: string) {
@@ -71,12 +72,12 @@ export function MarkupTools({ shape, setShape, count, onClear }: { shape: Markup
 	return (
 		<>
 			{(Object.keys(SHAPE_LABEL) as Markup["shape"][]).map((s) => (
-				<button key={s} className={shape === s ? "primary" : ""} title={`${SHAPE_LABEL[s]}: velc skatā; atzīmējums tiek pie nākamās piezīmes`} onClick={() => setShape(shape === s ? null : s)}>
+				<button key={s} className={shape === s ? "primary" : ""} title={tr("{v}: velc skatā; atzīmējums tiek pie nākamās piezīmes", { v: SHAPE_LABEL[s] })} onClick={() => setShape(shape === s ? null : s)}>
 					{SHAPE_LABEL[s]}
 				</button>
 			))}
 			{count > 0 && (
-				<button className="ghost small" onClick={onClear} title="Dzēst vēl nesaglabātos atzīmējumus">
+				<button className="ghost small" onClick={onClear} title={tr("Dzēst vēl nesaglabātos atzīmējumus")}>
 					× {count}
 				</button>
 			)}

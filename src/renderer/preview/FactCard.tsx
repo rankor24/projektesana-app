@@ -10,6 +10,7 @@ import { call, errText } from "../bridge";
 import { factReview, useFactReview } from "../fact-review";
 import { ui, useUi } from "../state";
 import { useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const labelOf = (key: string) => PROFILE_LABEL[key.replace(/^profile\./, "") as keyof typeof PROFILE_LABEL] ?? key;
 
@@ -25,7 +26,10 @@ export function FactCard() {
 
 	// the walk is the waiting proposals as they are when the review starts; a decided fact leaves it (afterDecision)
 	useEffect(() => {
-		if (r.current === null) return setQueue([]);
+		if (r.current === null) {
+			setQueue([]);
+			return;
+		}
 		setQueue((q) => (q.length === 0 || r.current === "" ? live : q.filter((i) => live.some((l) => l.factId === i.factId))));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [live, r.current === null]);
@@ -102,40 +106,39 @@ export function FactCard() {
 				<b>{item.label}</b>
 				<span className="dim small">{position(queue, item.factId)}</span>
 				<span className="grow" />
-				<button className="ghost small" title="Iepriekšējais (←)" onClick={() => go(-1)} disabled={!step(queue, item.factId, -1)}>◀</button>
-				<button className="ghost small" title="Nākamais (→)" onClick={() => go(1)} disabled={!step(queue, item.factId, 1)}>▶</button>
-				<button className="ghost small" title="Beigt pārskatu" onClick={() => factReview.stop()}>×</button>
+				<button className="ghost small" title={tr("Iepriekšējais (←)")} onClick={() => go(-1)} disabled={!step(queue, item.factId, -1)}>◀</button>
+				<button className="ghost small" title={tr("Nākamais (→)")} onClick={() => go(1)} disabled={!step(queue, item.factId, 1)}>▶</button>
+				<button className="ghost small" title={tr("Beigt pārskatu")} onClick={() => factReview.stop()}>×</button>
 			</div>
 			<div className="fact-value">{item.value}</div>
 			<div className="small dim">
-				{srcTitle}, lpp. {item.page} · {item.by === "agent" ? "aģenta priekšlikums" : item.by}
+				{tr("{srcTitle}, lpp. {page} ·", { srcTitle: srcTitle, page: item.page })} {item.by === "agent" ? tr("aģenta priekšlikums") : item.by}
 			</div>
 			<div className="quote small">{item.quote}</div>
-			<div className="small dim">{r.found === "whole" ? "Citāts ir iezīmēts lapā." : r.found === "start" ? "Lapā iezīmēts citāta sākums (rindas sadalītas citādi)." : "Citāts lapā nav atrasts (skenēta lapa?): lasi to šeit."}</div>
+			<div className="small dim">{r.found === "whole" ? tr("Citāts ir iezīmēts lapā.") : r.found === "start" ? tr("Lapā iezīmēts citāta sākums (rindas sadalītas citādi).") : tr("Citāts lapā nav atrasts (skenēta lapa?): lasi to šeit.")}</div>
 			{problem && <div className="err small">{problem}</div>}
 			{err && <div className="err small">{err}</div>}
 			<div className="row">
-				<button className="primary" disabled={!!problem} title="Enter" onClick={confirm}>Apstiprināt</button>
-				<button title="Delete" onClick={reject}>Noraidīt</button>
+				<button className="primary" disabled={!!problem} title={tr("Enter")} onClick={confirm}>{tr("Apstiprināt")}</button>
+				<button title={tr("Delete")} onClick={reject}>{tr("Noraidīt")}</button>
 			</div>
 			<div className="row">
-				<input className="grow" placeholder="ierakstīt pats…" value={own} onChange={(e) => setOwn(e.target.value)} onKeyDown={(e) => e.key === "Enter" && writeOwn()} />
-				<button className="small" disabled={!own.trim()} onClick={writeOwn}>Saglabāt</button>
+				<input className="grow" placeholder={tr("ierakstīt pats…")} value={own} onChange={(e) => setOwn(e.target.value)} onKeyDown={(e) => e.key === "Enter" && writeOwn()} />
+				<button className="small" disabled={!own.trim()} onClick={writeOwn}>{tr("Saglabāt")}</button>
 			</div>
 			{others.length > 0 && (
 				<div className="small">
-					<div className="dim">Citas vērtības šim laukam:</div>
+					<div className="dim">{tr("Citas vērtības šim laukam:")}</div>
 					{others.map((o) => {
 						const inWalk = queue.find((q) => q.factId === o.id);
 						return (
 							<div key={o.id} className="row">
 								<span className="grow">
-									{o.value} <span className="dim">· {o.state === "confirmed" ? "apstiprināts" : o.state === "proposed" ? "priekšlikums" : o.state}</span>
+									{o.value} <span className="dim">· {o.state === "confirmed" ? tr("apstiprināts") : o.state === "proposed" ? tr("priekšlikums") : o.state}</span>
 								</span>
 								{inWalk && (
 									<button className="small ghost" onClick={() => factReview.go(o.id)}>
-										pārskatīt
-									</button>
+										{tr("pārskatīt")}</button>
 								)}
 							</div>
 						);

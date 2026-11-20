@@ -8,6 +8,8 @@ import { sourceFocus } from "../../shared/focus-items";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
+import { comparePicker, fileItem } from "../shell/ComparePicker";
 
 const PREVIEW = new Set([".pdf", ".ifc", ".docx", ".doc", ".xlsx", ".xls", ".txt", ".rtf", ".msg"]);
 const extOf = (n: string) => (/\.[^.\\/]+$/.exec(n)?.[0] ?? "").toLowerCase();
@@ -16,7 +18,7 @@ const parentOf = (rel: string) => rel.split("::")[0].replace(/[\\/][^\\/]*$/, ""
 
 export function Faili() {
 	const { projectId, tick } = useUi();
-	if (!projectId) return <Empty title="nav projekta">Atver projektu panelī Projekts.</Empty>;
+	if (!projectId) return <Empty title={tr("nav projekta")}>{tr("Atver projektu panelī Projekts.")}</Empty>;
 	return <FileTree key={projectId} projectId={projectId} tick={tick} />;
 }
 
@@ -60,6 +62,10 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 		const ext = extOf(e.name);
 		if (e.sourceId && PREVIEW.has(ext)) return ui.show({ kind: "source", sourceId: e.sourceId });
 		if (ext === ".ifc" && !e.rel.includes("::")) return ui.show({ kind: "ifc", path: root === "projekts" ? e.rel : `file:${root}:${e.rel}`, label: e.name });
+		// a PDF the scan did not register still opens in the app's viewer, not in the PC's PDF program
+		if (ext === ".pdf" && !e.rel.includes("::")) return ui.show({ kind: "pdf", path: `file:${root}:${e.rel}`, label: e.name });
+		// a DWG is drawn in the app (CadCraft's reader), not handed to the PC's CAD program
+		if (ext === ".dwg" && !e.rel.includes("::")) return ui.show({ kind: "dwg", path: e.sourceId ? `src:${e.sourceId}` : `file:${root}:${e.rel}`, label: e.name });
 		call("files.open", projectId, root, e.rel).catch((x) => setErr(errText(x)));
 	};
 
@@ -77,26 +83,32 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 					{e.kind === "dir" ? "📁 " : e.rel.includes("::") ? "↳ " : ""}
 					{e.name}
 				</span>
-				{e.role && <Badge tone={e.roleFrom === "unconfirmed" ? "warn" : "info"} title={e.roleFrom ? `loma: ${e.roleFrom}` : undefined}>{e.role}</Badge>}
-				{e.kind === "file" && !e.sourceId && root === "projekts" && !e.rel.includes("::") && <span className="dim small" title="Skenēšana šo failu nav reģistrējusi kā avotu: aģents to nelasa">nav avots</span>}
+				{e.role && <Badge tone={e.roleFrom === "unconfirmed" ? "warn" : "info"} title={e.roleFrom ? tr("loma: {roleFrom}", { roleFrom: e.roleFrom }) : undefined}>{e.role}</Badge>}
+				{e.kind === "file" && !e.sourceId && root === "projekts" && !e.rel.includes("::") && <span className="dim small" title={tr("Skenēšana šo failu nav reģistrējusi kā avotu: aģents to nelasa")}>{tr("nav avots")}</span>}
 				<span className="grow" />
 				<span className="dim small ftree-meta">
-					{e.kind === "dir" ? `${e.files}${e.capped ? "+" : ""} faili` : `${size(e.size)}${e.mtime ? ` · ${e.mtime.slice(0, 10)}` : ""}`}
+					{e.kind === "dir" ? tr("{files}{v} faili", { files: e.files, v: e.capped ? "+" : "" }) : `${size(e.size)}${e.mtime ? ` · ${e.mtime.slice(0, 10)}` : ""}`}
 				</span>
 				<span className="ftree-actions">
 					{e.kind === "file" && (
 						<button className="small" onClick={() => openFile(e)}>
-							Atvērt
+							{tr("Atvērt")}</button>
+					)}
+					{e.kind === "file" && !e.rel.includes("::") && fileItem("", e.name, e.mtime) && (
+						<button
+							className="small ghost"
+							title={tr("Salīdzināt ar citu failu (A | B)")}
+							onClick={() => comparePicker.open(extOf(e.name) === ".ifc" ? (root === "projekts" ? e.rel : fileItem(`file:${root}:${e.rel}`, e.name, e.mtime)) : e.sourceId ? `src:${e.sourceId}` : fileItem(`file:${root}:${e.rel}`, e.name, e.mtime))}
+						>
+							⇄
 						</button>
 					)}
 					{e.sourceId && (
-						<button className="small ghost" title="Nodod aģentam kā Fokuss" onClick={() => ui.focusAdd(sourceFocus(e.sourceId!, e.name, e.role ?? ""))}>
-							+ Fokuss
-						</button>
+						<button className="small ghost" title={tr("Nodod aģentam kā Fokuss")} onClick={() => ui.focusAdd(sourceFocus(e.sourceId!, e.name, e.role ?? ""))}>
+							{tr("+ Fokuss")}</button>
 					)}
-					<button className="small ghost" title="Atver mapi Explorerī" onClick={() => call("files.open", projectId, root, e.kind === "dir" ? e.rel : parentOf(e.rel)).catch((x) => setErr(errText(x)))}>
-						Explorerī
-					</button>
+					<button className="small ghost" title={tr("Atver mapi Explorerī")} onClick={() => call("files.open", projectId, root, e.kind === "dir" ? e.rel : parentOf(e.rel)).catch((x) => setErr(errText(x)))}>
+						{tr("Explorerī")}</button>
 				</span>
 			</div>
 		);
@@ -104,7 +116,7 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 
 	const level = (rel: string, depth: number): React.ReactNode => {
 		const l = lists[rel];
-		if (!l) return <div className="dim small" style={{ paddingLeft: 8 + depth * 16 }}>ielādē…</div>;
+		if (!l) return <div className="dim small" style={{ paddingLeft: 8 + depth * 16 }}>{tr("ielādē…")}</div>;
 		const f = q.trim().toLowerCase();
 		const shown = f && !found ? l.entries.filter((e) => e.kind === "dir" || e.name.toLowerCase().includes(f)) : l.entries;
 		return (
@@ -115,11 +127,10 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 						{open.has(e.kind === "file" ? `${e.rel}::` : e.rel) && level(e.kind === "file" ? `${e.rel}::` : e.rel, depth + 1)}
 					</div>
 				))}
-				{shown.length === 0 && <div className="dim small" style={{ paddingLeft: 8 + depth * 16 }}>{l.entries.length ? "nekas neatbilst filtram" : "tukša mape"}</div>}
+				{shown.length === 0 && <div className="dim small" style={{ paddingLeft: 8 + depth * 16 }}>{l.entries.length ? tr("nekas neatbilst filtram") : tr("tukša mape")}</div>}
 				{l.hidden > 0 && (
 					<div className="dim small" style={{ paddingLeft: 8 + depth * 16 }}>
-						… vēl {l.hidden} nav parādīti (izmanto meklēšanu)
-					</div>
+						{tr("… vēl {hidden} nav parādīti (izmanto meklēšanu)", { hidden: l.hidden })}</div>
 				)}
 			</>
 		);
@@ -130,19 +141,17 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 		<div className="fill-col">
 			<div className="tabs">
 				{(roots.data ?? []).map((r) => (
-					<button key={r.key} className={r.key === root ? "on" : ""} disabled={!r.exists} title={r.exists ? undefined : "Mapes vēl nav"} onClick={() => setRoot(r.key)}>
+					<button key={r.key} className={r.key === root ? "on" : ""} disabled={!r.exists} title={r.exists ? undefined : tr("Mapes vēl nav")} onClick={() => setRoot(r.key)}>
 						{r.label}
 					</button>
 				))}
 			</div>
 			<div className="row" style={{ padding: "6px 10px" }}>
-				<input className="grow" placeholder="filtrs ielādētajiem vai meklēt visos nosaukumos…" value={q} onChange={(e) => (setQ(e.target.value), setFound(null))} onKeyDown={(e) => e.key === "Enter" && q.trim().length >= 2 && search()} />
+				<input className="grow" placeholder={tr("filtrs ielādētajiem vai meklēt visos nosaukumos…")} value={q} onChange={(e) => (setQ(e.target.value), setFound(null))} onKeyDown={(e) => e.key === "Enter" && q.trim().length >= 2 && search()} />
 				<button disabled={q.trim().length < 2} onClick={search}>
-					Meklēt
-				</button>
+					{tr("Meklēt")}</button>
 				<button className="ghost" onClick={() => (setLists({}), setOpen(new Set()), void load(""))}>
-					Atsvaidzināt
-				</button>
+					{tr("Atsvaidzināt")}</button>
 			</div>
 			{err && <div className="err" style={{ margin: "0 10px" }}>{err}</div>}
 			{roots.error ? <Err error={roots.error} /> : null}
@@ -150,13 +159,12 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 				{found ? (
 					<>
 						<div className="row small" style={{ padding: "2px 10px" }}>
-							<b>Atrasts: {found.entries.length}</b>
-							{found.hidden > 0 && <span className="dim">(rādīti pirmie {found.entries.length}; precizē vaicājumu)</span>}
+							<b>{tr("Atrasts: {v}", { v: found.entries.length })}</b>
+							{found.hidden > 0 && <span className="dim">{tr("(rādīti pirmie {v}; precizē vaicājumu)", { v: found.entries.length })}</span>}
 							<button className="ghost small" onClick={() => setFound(null)}>
-								Atpakaļ uz koku
-							</button>
+								{tr("Atpakaļ uz koku")}</button>
 						</div>
-						{found.entries.length === 0 && <div className="dim small" style={{ padding: 10 }}>Nekas neatbilst «{q}».</div>}
+						{found.entries.length === 0 && <div className="dim small" style={{ padding: 10 }}>{tr("Nekas neatbilst «{q}».", { q: q })}</div>}
 						{found.entries.map((e) => (
 							<div key={e.rel}>
 								{rowOf(e, 0)}
@@ -167,7 +175,7 @@ function FileTree({ projectId, tick }: { projectId: string; tick: number }) {
 						))}
 					</>
 				) : current && !current.exists ? (
-					<Empty title="nav mapes">Šī saknes mape vēl nav izveidota.</Empty>
+					<Empty title={tr("nav mapes")}>{tr("Šī saknes mape vēl nav izveidota.")}</Empty>
 				) : (
 					level("", 0)
 				)}

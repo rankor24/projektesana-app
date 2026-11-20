@@ -383,9 +383,11 @@ export function requestGate(store: GateStore, project: string, agent: string, a:
 	return r.state;
 }
 
+export const GATE_MOVED = "Šie vārti vairs negaida lēmumu; kartīte tiks atjaunota.";
+
 /** The user's decision on the waiting gate: `gate.approve` or `gate.return` (a comment is required). The decision line is added to the gate note as a new
  *  version of it; the earlier one stays in the project's versions. Only the user's IPC handler calls this: no tool does. */
-export function decideGate(store: GateStore, d: { approve: boolean; comment?: string; fix?: string[] }, now = new Date()): ProcessState {
+export function decideGate(store: GateStore, d: { approve: boolean; comment?: string; fix?: string[]; noteId?: string }, now = new Date()): ProcessState {
 	const cur = readProcess(store);
 	if (!cur) throw new Error("Procesa režīms nav ieslēgts.");
 	// the decision comes over IPC: check it at runtime
@@ -401,6 +403,8 @@ export function decideGate(store: GateStore, d: { approve: boolean; comment?: st
 	}
 	const at = now.toISOString();
 	const waiting = cur.stage === "mācības" || cur.stage === "done" ? undefined : [...cur.gates].reverse().find((g) => g.stage === cur.stage && g.state === "waiting");
+	// the card names the gate it showed: a decision read off one gate must not pass another (a returned and re-requested gate, a stage moved on meanwhile)
+	if (typeof d.noteId === "string" && waiting?.noteId !== d.noteId) throw new Error(GATE_MOVED);
 	const r = step(cur, d.approve ? { type: "gate.approve", at, ...(comment ? { comment } : {}), fix } : { type: "gate.return", at, comment });
 	if (!r.ok) throw new Error(r.error);
 	writeProcess(store, r.state, "user", "gate", { was: cur });

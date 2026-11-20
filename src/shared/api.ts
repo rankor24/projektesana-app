@@ -17,6 +17,7 @@ import type { QueueView, RoomLine, Thread, WaitingItem } from "./thread-types.js
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
+import type { DwgCompare, DwgView } from "./compare2d.js";
 import type { RelayMsg } from "./popout.js";
 import type { PlanDoc } from "../core/model.js";
 import type { ProcessState } from "../core/process.js";
@@ -112,6 +113,8 @@ export interface ProviderRow {
 	configured: boolean;
 	method?: string;
 	keyUrl?: string;
+	/** how to get the key when there is no page for it (the Claude subscription: `claude setup-token`); also the field's placeholder */
+	keyHelp?: string;
 	models: { id: string; name: string; legacy: boolean; efforts: string[]; defaultEffort: string }[];
 }
 
@@ -178,7 +181,7 @@ export interface RevitStatusRow {
 	version: string | null;
 	message?: string;
 	/** the MCP server the app starts, and how it was found */
-	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" } | null;
+	server?: { serverJs: string; node: string | null; source: "iestatījumi" | "automātiski" | "iekļauts" } | null;
 }
 
 /** Where the Faili tab can look (task 8.3): the office folder, the drafts' staging, the app's own data for the project. */
@@ -315,7 +318,7 @@ export interface VersionRow {
 	label: string;
 	detail?: string;
 	/** compare A (older) → B (newer), when both exist */
-	compare?: { a: string; b: string; mode: "sheet" | "ifc"; aLabel: string; bLabel: string };
+	compare?: { a: string; b: string; mode: import("./compare2d.js").CompareMode; aLabel: string; bLabel: string };
 	/** open in the preview */
 	open?: { sourceId?: string; ifc?: string };
 }
@@ -508,8 +511,9 @@ export interface ApiSpec {
 	"process.setMode": (projectId: string, mode: "cowork" | "process") => ProcessState;
 	/** Changes doc type, depth per stage or agents. Needs a `why`; `bpv` must stay, ids must exist, S6 and S7 cannot be skipped. Each change is logged in profile.changes. */
 	"process.setProfile": (projectId: string, p: { docType?: DocType; depth?: Partial<Record<Stage, Depth>>; agents?: string[]; why: string }) => ProcessState;
-	/** The user decides the waiting gate: approve (H5: `fix` = the remark ids to correct) or return (a comment is required). The only way a gate is passed; no agent tool does it. */
-	"process.gate": (projectId: string, d: { approve: boolean; comment?: string; fix?: string[] }) => ProcessState;
+	/** The user decides the waiting gate: approve (H5: `fix` = the remark ids to correct) or return (a comment is required). The only way a gate is passed; no agent tool does it.
+	 *  `noteId`: the gate note the card showed; the decision is refused when another gate waits now (the user decided on what they read). */
+	"process.gate": (projectId: string, d: { approve: boolean; comment?: string; fix?: string[]; noteId?: string }) => ProcessState;
 	/** Writes the decision, question, risk and change registers, the status page and one file per gate into <project data>\export\00_vadiba (never the office folder); returns the paths. */
 	"process.export": (projectId: string) => string[];
 	/** The user records a change the client asked for (process mode): a `change` note at the stage that is on, and bpv is asked to judge its impact (process_change_impact). Refused in co-work. */
@@ -555,6 +559,10 @@ export interface ApiSpec {
 	/** the user cancels a decision: a new decision note that names it; nothing is deleted */
 	"notes.cancel": (id: string, noteId: string, reason: string) => Note;
 	"revit.status": () => RevitStatusRow;
+	/** the Revit add-in years shipped with the app / already installed */
+	"revit.addins": () => { year: string; available: boolean; installed: boolean }[];
+	/** copies the shipped add-in into the user's Revit add-ins folder; one line per year */
+	"revit.installAddins": (years: string[]) => string[];
 	"revit.views": () => { id: string; name: string; type: string }[];
 	"revit.exportView": (id: string, viewId: string, name: string) => string;
 	"revit.exportIfc": (id: string) => string;
@@ -567,6 +575,16 @@ export interface ApiSpec {
 	"sheets.bytes": (id: string, ref: string) => Uint8Array;
 	"versions.between": (id: string, from: string, to: string) => VersionRow[];
 	"sheets.diff": (id: string, a: string, b: string) => SheetDiffRow[];
+	/** one DWG as lines per space (CadCraft's reader) */
+	"dwg.view": (id: string, ref: string) => DwgView;
+	/** two DWGs, `a` the older: added / removed / changed per space (CadCraft's DWGCOMPARE) */
+	"dwg.compare": (id: string, a: string, b: string) => DwgCompare;
+	/** the text of two documents for the word diff; `note` says when one has no text to compare */
+	"compare.text": (id: string, a: string, b: string) => { a: string; b: string; note: string | null };
+	/** a DWG's bytes for CadCraft's frame */
+	"dwg.bytes": (id: string, ref: string) => Uint8Array;
+	/** CadCraft is installed (resources/cadcraft): DWG opens in it, else in the plain line view */
+	"dwg.craft": () => boolean;
 	/** the labelled changes between two issues of a sheet traced to elements of the model (task 8.11); oldIfc = the model of the older issue, when there is one */
 	"sheets.trace": (id: string, a: string, b: string, newIfc: string, oldIfc: string | null) => TraceView;
 	"bimcraft.status": () => BimcraftStatusRow;
@@ -755,6 +773,8 @@ export const API_NAMES = [
 	"notes.review",
 	"notes.cancel",
 	"revit.status",
+	"revit.addins",
+	"revit.installAddins",
 	"revit.views",
 	"revit.exportView",
 	"revit.exportIfc",
@@ -767,6 +787,11 @@ export const API_NAMES = [
 	"sheets.bytes",
 	"versions.between",
 	"sheets.diff",
+	"dwg.view",
+	"dwg.compare",
+	"compare.text",
+	"dwg.bytes",
+	"dwg.craft",
 	"sheets.trace",
 	"models.diff",
 	"bimcraft.status",

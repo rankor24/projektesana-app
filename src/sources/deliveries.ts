@@ -6,19 +6,14 @@ import { readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { dateInName, dateOfFolder, deliveryKindOf, stageOfDelivery } from "../core/stages.js";
 import type { Delivery, DeliveryItem, DeliveryKind } from "../core/model.js";
+import { partDir } from "./projecting.js";
 import { isJunk } from "./roles.js";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export async function findDeliveriesDir(root: string): Promise<string | null> {
-	try {
-		const top = (await readdir(root, { withFileTypes: true })).find((d) => d.isDirectory() && /^01[\s_.-]*projekt/.test(norm(d.name)));
-		if (!top) return null;
-		const inner = (await readdir(join(root, top.name), { withFileTypes: true })).find((d) => d.isDirectory() && /^1\.4(?![.\d])/.test(d.name.trim()));
-		return inner ? join(root, top.name, inner.name) : null;
-	} catch {
-		return null;
-	}
+/** 1.4_Nodevumi under 01_Projektesana, or straight in the project folder (projecting.ts). */
+export function findDeliveriesDir(root: string): Promise<string | null> {
+	return partDir(root, "1.4");
 }
 
 const SHEET = /^([A-Z]{1,5}[A-Z0-9]{0,3}[-_ ]?\d+(?:[.\-]\d+)*[a-z]?)[_ ]+(.+)$/i;

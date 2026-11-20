@@ -7,12 +7,13 @@ import { STAGES } from "../../core/process-def";
 import { DOC_TYPE_LABEL, depthChoices, depthOfDocType, profilePatch, type ProfileDraft } from "../../shared/process-view";
 import { call, errText } from "../bridge";
 import { useProcess } from "../state";
+import { tr } from "../i18n";
 
 const DOC_TYPES = Object.keys(DOC_TYPE_LABEL) as DocType[];
 const FOLDER = "export/00_vadiba";
 
 /** The refusal of a missing bpv names Iestatījumi already; the pointer is added only when the text lacks it. */
-const withPointer = (m: string) => (/bpv/i.test(m) && !m.includes("Iestatījumi") ? `${m} (Iestatījumi → Aģenti)` : m);
+const withPointer = (m: string) => (/bpv/i.test(m) && !m.includes("Iestatījumi") ? `${m} (${tr("Iestatījumi")} → ${tr("Aģenti")})` : m);
 
 export function ProcessBlock({ projectId }: { projectId: string }) {
 	const s = useProcess(projectId);
@@ -51,17 +52,18 @@ export function ProcessBlock({ projectId }: { projectId: string }) {
 	return (
 		<section className="pblock">
 			<div className="row">
-				<div className="section-title">Darba režīms</div>
-				<div className="seg" role="group" aria-label="Darba režīms">
-					<button className={mode === "cowork" ? "on" : ""} disabled={busy} onClick={() => setMode("cowork")} title="Aģenti strādā pēc tavas komandas; stadiju un vārtu nav">
-						Kopdarbs
-					</button>
-					<button className={mode === "process" ? "on" : ""} disabled={busy} onClick={() => setMode("process")} title="Biroja process S1–S7 ar cilvēka vārtiem H1–H7">
-						Process
-					</button>
+				<div className="section-title">{tr("Darba režīms")}</div>
+				<div className="seg" role="group" aria-label={tr("Darba režīms")}>
+					<button className={mode === "cowork" ? "on" : ""} disabled={busy} onClick={() => setMode("cowork")} title={tr("Aģenti strādā pēc tavas komandas; stadiju un vārtu nav")}>
+						{tr("Kopdarbs")}</button>
+					<button className={mode === "process" ? "on" : ""} disabled={busy} onClick={() => setMode("process")} title={tr("Biroja process S1–S7 ar cilvēka vārtiem H1–H7")}>
+						{tr("Process")}</button>
 				</div>
-				{s && s.mode === "process" && <span className="dim small">{s.stage === "mācības" ? "stadija: mācības" : s.stage === "done" ? "process pabeigts" : `stadija: ${s.stage}`}</span>}
+				{s && s.mode === "process" && <span className="dim small">{s.stage === "mācības" ? tr("stadija: mācības") : s.stage === "done" ? tr("process pabeigts") : tr("stadija: {stage}", { stage: s.stage })}</span>}
 			</div>
+			{s && s.mode === "process" && s.profile.depth.S5 !== "izlaiž" && !s.profile.agents.includes("eks") && (
+				<div className="warn-text small pblock-msg">{tr("S5 ekspertīzei vajag aģentu eks: pievieno to profilā (vai Iestatījumi → Aģenti) vai iestati S5 uz \"izlaiž\".")}</div>
+			)}
 			{err && <div className="err pblock-msg">{err}</div>}
 			{info && <div className="small pblock-msg">{info}</div>}
 			{s && s.mode === "process" && <ProfileEditor key={`${projectId}|${JSON.stringify([s.docType, s.profile.depth, s.profile.agents])}`} projectId={projectId} s={s} specs={specs} run={run} busy={busy} />}
@@ -80,16 +82,16 @@ function ProfileEditor({ projectId, s, specs, run, busy }: { projectId: string; 
 	const [local, setLocal] = useState<string | null>(null);
 	const known = new Set(specs.map((a) => a.id));
 	// an agent of the profile that no longer exists is listed, so that it is not dropped without being seen
-	const agents = [...specs.map((a) => ({ id: a.id, name: a.name })), ...draft.agents.filter((a) => !known.has(a)).map((a) => ({ id: a, name: `${a} (nav iestatījumos)` }))];
+	const agents = [...specs.map((a) => ({ id: a.id, name: a.name })), ...draft.agents.filter((a) => !known.has(a)).map((a) => ({ id: a, name: tr("{a} (nav iestatījumos)", { a }) }))];
 	const patch = profilePatch(s, draft);
 
 	const save = () => {
 		if (!draft.why.trim()) {
-			setLocal("Profila maiņai vajag pamatojumu.");
+			setLocal(tr("Profila maiņai vajag pamatojumu."));
 			return;
 		}
 		if (!patch) {
-			setLocal("Nekas nav mainīts.");
+			setLocal(tr("Nekas nav mainīts."));
 			return;
 		}
 		setLocal(null);
@@ -101,24 +103,23 @@ function ProfileEditor({ projectId, s, specs, run, busy }: { projectId: string; 
 		<div className="pprofile">
 			<div className="row">
 				<button className="small ghost" onClick={() => setOpen(!open)}>
-					{open ? "Slēpt procesa profilu" : "Procesa profils"}
+					{open ? tr("Slēpt procesa profilu") : tr("Procesa profils")}
 				</button>
 				<span className="dim small">
-					{DOC_TYPE_LABEL[s.docType]} · aģenti: {s.profile.agents.join(", ")}
-				</span>
+					{tr("{v} · aģenti: {v2}", { v: tr(DOC_TYPE_LABEL[s.docType]), v2: s.profile.agents.join(", ") })}</span>
 			</div>
 			{open && (
 				<>
 					<label className="row small">
-						<span className="dim">Dokumenta veids</span>
+						<span className="dim">{tr("Dokumenta veids")}</span>
 						<select value={draft.docType} onChange={(e) => setDraft((d) => ({ ...d, docType: e.target.value as DocType, depth: depthOfDocType(e.target.value as DocType) }))}>
 							{DOC_TYPES.map((t) => (
 								<option key={t} value={t}>
-									{DOC_TYPE_LABEL[t]}
+									{tr(DOC_TYPE_LABEL[t])}
 								</option>
 							))}
 						</select>
-						<span className="dim">(jauns veids atjauno dziļumu pa stadijām)</span>
+						<span className="dim">{tr("(jauns veids atjauno dziļumu pa stadijām)")}</span>
 					</label>
 					<div className="pdepth">
 						{STAGES.map((st: Stage) => (
@@ -127,7 +128,7 @@ function ProfileEditor({ projectId, s, specs, run, busy }: { projectId: string; 
 								<select value={draft.depth[st]} onChange={(e) => setDraft((d) => ({ ...d, depth: { ...d.depth, [st]: e.target.value as Depth } }))}>
 									{depthChoices(st).map((x) => (
 										<option key={x} value={x}>
-											{x}
+											{tr(x)}
 										</option>
 									))}
 								</select>
@@ -135,23 +136,22 @@ function ProfileEditor({ projectId, s, specs, run, busy }: { projectId: string; 
 						))}
 					</div>
 					<div className="row small">
-						<span className="dim">Aģenti profilā</span>
+						<span className="dim">{tr("Aģenti profilā")}</span>
 						{agents.map((a) => (
-							<label key={a.id} className="pagent" title={a.id === "bpv" ? "Projekta vadītājs ir vienmēr" : a.id}>
+							<label key={a.id} className="pagent" title={a.id === "bpv" ? tr("Projekta vadītājs ir vienmēr") : a.id}>
 								<input type="checkbox" checked={a.id === "bpv" || draft.agents.includes(a.id)} disabled={a.id === "bpv"} onChange={() => toggle(a.id)} />
 								{a.name}
 							</label>
 						))}
 					</div>
 					<label className="small pwhy">
-						<span className="dim">Pamatojums (obligāts)</span>
-						<input value={draft.why} onChange={(e) => setDraft((d) => ({ ...d, why: e.target.value }))} placeholder="Kāpēc profils mainās" />
+						<span className="dim">{tr("Pamatojums (obligāts)")}</span>
+						<input value={draft.why} onChange={(e) => setDraft((d) => ({ ...d, why: e.target.value }))} placeholder={tr("Kāpēc profils mainās")} />
 					</label>
 					<div className="row">
 						<button className="primary" disabled={busy} onClick={save}>
-							Saglabāt profilu
-						</button>
-						{!patch && <span className="dim small">nekas nav mainīts</span>}
+							{tr("Saglabāt profilu")}</button>
+						{!patch && <span className="dim small">{tr("nekas nav mainīts")}</span>}
 					</div>
 					{local && <div className="err pblock-msg">{local}</div>}
 				</>
@@ -169,7 +169,7 @@ function Actions({ projectId, stage, run, busy }: { projectId: string; stage: st
 			<div className="row">
 				<button
 					disabled={busy}
-					title="Reģistri un vārtu kopsavilkumi failos lietotnes datu mapē; biroja mapē nekas netiek rakstīts"
+					title={tr("Reģistri un vārtu kopsavilkumi failos lietotnes datu mapē; biroja mapē nekas netiek rakstīts")}
 					onClick={() =>
 						run(async () => {
 							const files = await call("process.export", projectId);
@@ -179,34 +179,29 @@ function Actions({ projectId, stage, run, busy }: { projectId: string; stage: st
 						})
 					}
 				>
-					Eksportēt reģistrus
-				</button>
-				<button disabled={busy} onClick={() => setAsking(!asking)} title="Pasūtītāja pieprasīta izmaiņa: aģents bpv novērtē ietekmi">
-					Klienta izmaiņa…
-				</button>
+					{tr("Eksportēt reģistrus")}</button>
+				<button disabled={busy} onClick={() => setAsking(!asking)} title={tr("Pasūtītāja pieprasīta izmaiņa: aģents bpv novērtē ietekmi")}>
+					{tr("Klienta izmaiņa…")}</button>
 				{stage === "mācības" && (
 					<>
-						<button disabled={busy} onClick={() => run(async () => `Pajautāti: ${(await call("process.learn", projectId)).asked.join(", ") || "neviens"}`)} title="Katram profila aģentam uzdevums: ierakstīt projekta mācības biroja atmiņā kā priekšlikumus">
-							Mācības
-						</button>
-						<button disabled={busy} className="primary" onClick={() => run(async () => void (await call("process.finish", projectId)))} title="Mācību priekšlikumi ir pārskatīti">
-							Pabeigt
-						</button>
+						<button disabled={busy} onClick={() => run(async () => tr("Pajautāti: {asked}", { asked: (await call("process.learn", projectId)).asked.join(", ") || tr("neviens") }))} title={tr("Katram profila aģentam uzdevums: ierakstīt projekta mācības biroja atmiņā kā priekšlikumus")}>
+							{tr("Mācības")}</button>
+						<button disabled={busy} className="primary" onClick={() => run(async () => void (await call("process.finish", projectId)))} title={tr("Mācību priekšlikumi ir pārskatīti")}>
+							{tr("Pabeigt")}</button>
 					</>
 				)}
 			</div>
 			{folder && (
 				<div className="row small">
-					<span className="dim">Mape:</span>
+					<span className="dim">{tr("Mape:")}</span>
 					<span className="mono pfolder">{folder}</span>
 					<button className="small ghost" onClick={() => run(() => call("files.open", projectId, "dati", FOLDER))}>
-						Atvērt mapi
-					</button>
+						{tr("Atvērt mapi")}</button>
 				</div>
 			)}
 			{asking && (
 				<div className="pchange">
-					<textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ko pasūtītājs prasa mainīt?" />
+					<textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={tr("Ko pasūtītājs prasa mainīt?")} />
 					<div className="row">
 						<button
 							className="primary"
@@ -216,15 +211,13 @@ function Actions({ projectId, stage, run, busy }: { projectId: string; stage: st
 									const n = await call("process.change", projectId, text.trim());
 									setText("");
 									setAsking(false);
-									return `Izmaiņa nosūtīta aģentam bpv (piezīme ${n.id}).`;
+									return tr("Izmaiņa nosūtīta aģentam bpv (piezīme {id}).", { id: n.id });
 								})
 							}
 						>
-							Sūtīt
-						</button>
+							{tr("Sūtīt")}</button>
 						<button className="ghost" onClick={() => setAsking(false)}>
-							Aizvērt
-						</button>
+							{tr("Aizvērt")}</button>
 					</div>
 				</div>
 			)}
@@ -234,10 +227,10 @@ function Actions({ projectId, stage, run, busy }: { projectId: string; stage: st
 
 /** Newest first: what changed in the profile and why. */
 function History({ changes }: { changes: { at: string; what: string; why: string }[] }) {
-	if (changes.length === 0) return <div className="dim small">Profila izmaiņu vēl nav.</div>;
+	if (changes.length === 0) return <div className="dim small">{tr("Profila izmaiņu vēl nav.")}</div>;
 	return (
 		<div className="phistory">
-			<div className="dim small">Profila izmaiņu vēsture</div>
+			<div className="dim small">{tr("Profila izmaiņu vēsture")}</div>
 			{[...changes].reverse().map((c, i) => (
 				<div key={i} className="ps-recent small">
 					<span className="dim mono">{c.at.slice(0, 10)}</span>

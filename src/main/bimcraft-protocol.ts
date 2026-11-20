@@ -9,6 +9,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
 
 export const BIMCRAFT_SCHEME = "bimcraft";
+/** CadCraft (getcadcraft/cadcraft, DWG): the same dev-server layout, its own scheme and copy (resources/cadcraft) */
+export const CADCRAFT_SCHEME = "cadcraft";
 
 const TYPES: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
@@ -39,12 +41,17 @@ const inside = (base: string, rel: string): string | null => {
 
 export interface BimcraftSite {
 	dir: string;
+	/** the app's slug in /assets/apps/<slug>/dev/ and its entry module <slug>.js */
+	slug: string;
 	vendorPins: Record<string, string>;
 	isolate: string;
 }
 
-export function bimcraftSite(dir: string): BimcraftSite | null {
-	if (!existsSync(join(dir, "index.html")) || !existsSync(join(dir, "app", "bimcraft.js"))) return null;
+export const bimcraftSite = (dir: string): BimcraftSite | null => craftSite(dir, "bimcraft");
+
+/** A CadCraft-family app copied by its sync script (index.html, app/, site/, vendor/, app.json), or null when it is missing. */
+export function craftSite(dir: string, slug: string): BimcraftSite | null {
+	if (!existsSync(join(dir, "index.html")) || !existsSync(join(dir, "app", `${slug}.js`))) return null;
 	const meta = JSON.parse(readFileSync(join(dir, "app.json"), "utf8")) as { vendor?: Record<string, string> };
 	let isolate = "";
 	try {
@@ -52,14 +59,14 @@ export function bimcraftSite(dir: string): BimcraftSite | null {
 	} catch {
 		// no isolation asked
 	}
-	return { dir, vendorPins: meta.vendor ?? {}, isolate };
+	return { dir, slug, vendorPins: meta.vendor ?? {}, isolate };
 }
 
 /** URL path → file in the copy, or null (404). */
 export function mapBimcraftPath(site: BimcraftSite, pathname: string): string | null {
 	if (pathname === "/" || pathname === "/index.html") return join(site.dir, "index.html");
 	let m = /^\/assets\/apps\/([a-z0-9-]+)\/dev\/(.*)$/.exec(pathname);
-	if (m) return m[1] === "bimcraft" ? inside(join(site.dir, "app"), m[2]) : null;
+	if (m) return m[1] === site.slug ? inside(join(site.dir, "app"), m[2]) : null;
 	m = /^\/assets\/vendor\/([a-z0-9._-]+)\/([a-z0-9._-]+)\/(.*)$/.exec(pathname);
 	if (m && m[1] !== "bootstrap-icons") {
 		const ver = m[2] === "current" ? site.vendorPins[m[1]] : m[2];

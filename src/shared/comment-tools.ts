@@ -38,9 +38,10 @@ export const TOOLS_BY_PAGE: Record<string, CommentTool[]> = {
 		{ id: "accept-change", label: "Pieņemt izmaiņu", hint: "Izmaiņa ir pareiza", intent: "accept", on: ["change"], needsText: false },
 		{ id: "reject-change", label: "Noraidīt izmaiņu", hint: "Izmaiņa nav pareiza: raksti, kāpēc", intent: "reject", on: ["change"], needsText: true },
 	],
+	// no "Robeža" (boundary) tool: the Telpas plan is tiles sized by area, not a floor drawing, so a boundary drawn on it would mean nothing.
+	// It comes back with a real plan; the intent stays in PIN_INTENTS for pins already made.
 	telpas: [
 		{ id: "colour-room", label: "Krāsot telpu", hint: "Telpa, kuru aģentam jāiekrāso modelī vai uz plāna", intent: "colour", on: ["room"], needsText: false },
-		{ id: "boundary", label: "Robeža", hint: "Zīmē telpas robežu un uzraksti", intent: "boundary", on: ["room"], needsText: true, marks: ["free", "rect"] },
 		NOTE("room-note", ["room"], "Piezīme telpai"),
 	],
 	nodevumi: [
@@ -66,6 +67,21 @@ export const VIEWER_TOOLS: CommentTool[] = [
 	{ id: "free", label: "Zīmēt", hint: "Brīvs zīmējums", intent: "mark", on: ["element", "page"], needsText: true, marks: ["free"] },
 ];
 
+/**
+ * Colour is a comment tool too (X2): the user steers by colour ("this in red: wrong", "these green: fine"). The colour picked in
+ * the column goes with the next comment as words the agent reads ("[krāsa: sarkana]"), on any page and any tool.
+ */
+export const COMMENT_COLOURS = [
+	{ id: "sarkana", hex: "#e15759" },
+	{ id: "oranža", hex: "#f28e2b" },
+	{ id: "dzeltena", hex: "#edc948" },
+	{ id: "zaļa", hex: "#59a14f" },
+	{ id: "zila", hex: "#4e79a7" },
+	{ id: "violeta", hex: "#b07aa1" },
+] as const;
+export type CommentColour = (typeof COMMENT_COLOURS)[number]["id"];
+export const withColour = (text: string, colour: CommentColour | null | undefined): string => (colour ? `${text} [krāsa: ${colour}]` : text);
+
 export const pagesWithTools = (): string[] => Object.keys(TOOLS_BY_PAGE);
 export const toolsFor = (page: string): CommentTool[] => TOOLS_BY_PAGE[page] ?? [];
 
@@ -89,7 +105,7 @@ export interface BuiltPin {
  * The pin a tool makes on a selection. A tool with no text uses its own label as the text ("Pieņemt izmaiņu"); a region tool
  * puts its first rectangle into the change's region. Returns a problem in words when it cannot be made.
  */
-export function buildPin(tool: CommentTool, subject: PinTarget | null, text: string, markup: Markup[] = []): BuiltPin | string {
+export function buildPin(tool: CommentTool, subject: PinTarget | null, text: string, markup: Markup[] = [], colour: CommentColour | null = null): BuiltPin | string {
 	const bad = toolProblem(tool, subject, text);
 	if (bad) return bad;
 	let target = subject as PinTarget;
@@ -100,7 +116,7 @@ export function buildPin(tool: CommentTool, subject: PinTarget | null, text: str
 		const [[x0, y0], [x1, y1]] = r.points;
 		target = { ...target, region: { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) } };
 	}
-	const t = text.trim() || tool.label;
+	const t = withColour(text.trim() || tool.label, colour);
 	const prob = checkTarget(target) ?? checkMarkup(marks.length ? marks : undefined);
 	return prob ? prob : { target, text: t, opts: { intent: tool.intent, ...(marks.length ? { markup: marks } : {}) } };
 }

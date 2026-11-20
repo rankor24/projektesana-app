@@ -7,8 +7,11 @@ import type { Source } from "../../core/model";
 import { activeTab, targetLabel, type ViewTarget } from "../../shared/viewer";
 import { call } from "../bridge";
 import { SourcePdf } from "../preview/SourcePdf";
+import { PdfView } from "../preview/PdfView";
 import { IfcView } from "../preview/IfcView";
 import { SheetCompare } from "../preview/SheetCompare";
+import { DwgCompareView, DwgView } from "../preview/DwgView";
+import { TextCompare } from "../preview/TextCompare";
 import { TextView } from "../preview/TextView";
 import { LawView } from "../preview/LawView";
 import { ui, useUi } from "../state";
@@ -16,6 +19,7 @@ import { Empty, useLoad } from "../ui";
 import { viewer, useViewer } from "../viewer-store";
 import { FactCard } from "../preview/FactCard";
 import { WINDOW_TITLE, windows } from "../windows";
+import { tr } from "../i18n";
 
 export function sourceExt(s: Source): string {
 	const name = s.container?.inner ?? s.paths.find((p) => !p.includes("::")) ?? s.paths[0]?.split("::")[1] ?? "";
@@ -40,8 +44,12 @@ export function Viewer() {
 	// what the chat's Auto mode sends: which file is open in the focused pane (selection, camera, page: the views report them)
 	const srcTitle = preview?.kind === "source" ? titleOf(preview.sourceId) : undefined;
 	useEffect(() => {
-		if (!preview) return ui.setView({ kind: null });
+		if (!preview) {
+			ui.setView({ kind: null });
+			return;
+		}
 		if (preview.kind === "ifc") ui.setView({ kind: "ifc", label: preview.label, path: preview.path, sourceId: undefined });
+		else if (preview.kind === "pdf" || preview.kind === "dwg") ui.setView({ kind: "source", label: preview.label, sourceId: undefined, path: preview.path });
 		else if (preview.kind === "compare") ui.setView({ kind: "compare", label: `${preview.aLabel} ↔ ${preview.bLabel}`, path: `${preview.a}|${preview.b}`, sourceId: undefined });
 		else if (preview.kind === "law") ui.setView({ kind: "law", label: "likums", sourceId: preview.sourceId, path: undefined });
 		else {
@@ -55,19 +63,19 @@ export function Viewer() {
 	return (
 		<section className="preview viewer">
 			<div className="viewer-top">
-				<span className="dim small">Skats</span>
-				<button className="ghost small" title="Sadalīt: divi skati blakus" disabled={!activeTab(v)} onClick={() => viewer.split("h")}>◫</button>
-				<button className="ghost small" title="Sadalīt: viens virs otra" disabled={!activeTab(v)} onClick={() => viewer.split("v")}>⬒</button>
-				{two && <button className="ghost small" title="Atpakaļ uz vienu skatu" onClick={() => viewer.unsplit()}>▭</button>}
+				<span className="dim small">{tr("Skats")}</span>
+				<button className="ghost small" title={tr("Sadalīt: divi skati blakus")} disabled={!activeTab(v)} onClick={() => viewer.split("h")}>◫</button>
+				<button className="ghost small" title={tr("Sadalīt: viens virs otra")} disabled={!activeTab(v)} onClick={() => viewer.split("v")}>⬒</button>
+				{two && <button className="ghost small" title={tr("Atpakaļ uz vienu skatu")} onClick={() => viewer.unsplit()}>▭</button>}
 				{two && (
 					<>
-						<label className="small" title="Abu modeļu kamera kustas kopā"><input type="checkbox" checked={v.linkedCamera} onChange={(e) => viewer.linkCamera(e.target.checked)} /> kamera</label>
-						<label className="small" title="Abu dokumentu lapa mainās kopā"><input type="checkbox" checked={v.linkedPage} onChange={(e) => viewer.linkPage(e.target.checked)} /> lapa</label>
+						<label className="small" title={tr("Abu modeļu kamera kustas kopā")}><input type="checkbox" checked={v.linkedCamera} onChange={(e) => viewer.linkCamera(e.target.checked)} /> {tr("kamera")}</label>
+						<label className="small" title={tr("Abu dokumentu lapa mainās kopā")}><input type="checkbox" checked={v.linkedPage} onChange={(e) => viewer.linkPage(e.target.checked)} /> {tr("lapa")}</label>
 					</>
 				)}
 				<span className="grow" />
 				{PANEL_BTNS.map((id) => (
-					<button key={id} className="ghost small" title="Atvērt logu — to var vilkt un piespraust malās" onClick={() => windows.openWindow(id)}>
+					<button key={id} className="ghost small" title={tr("Atvērt logu — to var vilkt un piespraust malās")} onClick={() => windows.openWindow(id)}>
 						{WINDOW_TITLE[id]}
 					</button>
 				))}
@@ -82,14 +90,14 @@ export function Viewer() {
 									<div key={id} className={`viewer-tab ${p.active === id ? "on" : ""}`} onClick={() => viewer.activate(id, i)} title={targetLabel(t.target, titleOf)}>
 										<span>{targetLabel(t.target, titleOf)}</span>
 										{two && v.panes[1 - i].tabs.includes(id) === false && (
-											<button className="ghost small" title="Uz otru skatu" onClick={(e) => (e.stopPropagation(), viewer.moveTab(id, 1 - i))}>⇄</button>
+											<button className="ghost small" title={tr("Uz otru skatu")} onClick={(e) => (e.stopPropagation(), viewer.moveTab(id, 1 - i))}>⇄</button>
 										)}
-										<button className="x" title="Aizvērt" onClick={(e) => (e.stopPropagation(), viewer.close(id))}>×</button>
+										<button className="x" title={tr("Aizvērt")} onClick={(e) => (e.stopPropagation(), viewer.close(id))}>×</button>
 									</div>
 								);
 							})}
-							{p.tabs.length === 0 && !two && <span className="dim small" style={{ padding: "6px 10px" }}>nav atvērtu failu</span>}
-							{two && p.tabs.length > 0 && <button className="ghost small" title="Šajā skatā atvērt otru failu: izvēlies to sarakstā" onClick={() => viewer.focusPane(i)}>＋</button>}
+							{p.tabs.length === 0 && !two && <span className="dim small" style={{ padding: "6px 10px" }}>{tr("nav atvērtu failu")}</span>}
+							{two && p.tabs.length > 0 && <button className="ghost small" title={tr("Šajā skatā atvērt otru failu: izvēlies to sarakstā")} onClick={() => viewer.focusPane(i)}>＋</button>}
 						</div>
 						<div className="viewer-pane-body">
 							<ViewPane target={v.tabs.find((t) => t.id === p.active)?.target ?? null} paneIndex={i} focused={v.focused === i} sources={sources.data} loading={sources.loading} />
@@ -107,16 +115,22 @@ function ViewPane({ target, paneIndex, focused, sources, loading }: { target: Vi
 	const { projectId } = useUi();
 	// the law library is global: its acts open without a project
 	if (target?.kind === "law") return <LawView key={target.sourceId} sourceId={target.sourceId} quote={target.quote} />;
-	if (!projectId) return <Empty title="nav projekta">Atver vai pievieno projektu (augšā: projekta nosaukums).</Empty>;
-	if (!target) return <Empty title="nav avota">Izvēlies avotu sarakstā Avoti vai failu sarakstā Faili.</Empty>;
+	if (!projectId) return <Empty title={tr("nav projekta")}>{tr("Atver vai pievieno projektu (augšā: projekta nosaukums).")}</Empty>;
+	if (!target) return <Empty title={tr("nav avota")}>{tr("Izvēlies avotu sarakstā Avoti vai failu sarakstā Faili.")}</Empty>;
 	const modelLoad = (ref: string) => () => (ref.startsWith("rev:") ? call("revisions.ifc", projectId, ref.slice(4)) : call("models.bytes", projectId, ref));
 	if (target.kind === "ifc") return <IfcView projectId={projectId} key={target.path} name={target.label} load={modelLoad(target.path)} paneIndex={paneIndex} focused={focused} />;
 	if (target.kind === "compare" && target.mode === "ifc")
 		return <IfcView projectId={projectId} key={`${target.a}|${target.b}`} name={target.aLabel} load={modelLoad(target.a)} compareWith={{ name: target.bLabel, load: modelLoad(target.b) }} paneIndex={paneIndex} focused={focused} />;
-	if (target.kind === "compare") return <SheetCompare projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} only={target.only} />;
+	// a PDF from the Faili tab that the scan did not register: view only, no pins or geometry (those hang on a source)
+	if (target.kind === "pdf") return <PdfView key={target.path} load={() => call("sheets.bytes", projectId, target.path)} title={target.label} onPage={(pg) => focused && ui.setView({ page: pg })} />;
+	if (target.kind === "dwg") return <DwgView key={target.path} projectId={projectId} path={target.path} title={target.label} />;
+	if (target.kind === "compare" && target.mode === "dwg") return <DwgCompareView key={`${target.a}|${target.b}`} projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} />;
+	if (target.kind === "compare" && target.mode === "text") return <TextCompare key={`${target.a}|${target.b}`} projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} />;
+	if (target.kind === "compare") return <SheetCompare projectId={projectId} a={target.a} b={target.b} aLabel={target.aLabel} bLabel={target.bLabel} only={target.only} paneIndex={paneIndex} />;
 	const s = sources?.find((x) => x.id === target.sourceId);
-	if (!s) return <Empty title="nav avota">{loading ? "…" : "Avots vairs nav sarakstā."}</Empty>;
+	if (!s) return <Empty title={tr("nav avota")}>{loading ? "…" : tr("Avots vairs nav sarakstā.")}</Empty>;
 	// an IFC the scan found (Avoti, the agent's show_source): the 3D view, not the text view that has nothing to show
+	if (sourceExt(s) === ".dwg") return <DwgView key={s.id} projectId={projectId} path={`src:${s.id}`} title={s.title} />;
 	if (sourceExt(s) === ".ifc") return <IfcView projectId={projectId} key={s.id} name={s.title} load={() => call("models.bytes", projectId, `src:${s.id}`)} paneIndex={paneIndex} focused={focused} />;
 	return sourceExt(s) === ".pdf" ? (
 		<SourcePdf key={s.id} projectId={projectId} sourceId={s.id} title={s.title} page={target.page} quote={target.quote} paneIndex={paneIndex} focused={focused} />

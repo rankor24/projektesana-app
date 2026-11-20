@@ -11,4 +11,6 @@ real/
 !test/fixtures/**
 resources/tessdata/
 resources/bimcraft/
+resources/cadcraft/
 .bimcraft-check/
+resources/revit-mcp/

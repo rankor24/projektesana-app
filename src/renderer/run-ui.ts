@@ -7,6 +7,7 @@ import { ui } from "./state";
 import { viewer } from "./viewer-store";
 import { windows, type PanelId } from "./windows";
 import { checkViewerAction, type UiInstruction, type ViewerAction } from "../shared/ui-instruction";
+import { tr } from "./i18n";
 
 /** One viewer action; a pin id is looked up for its camera. Returns a problem in words, or null. */
 export async function runViewerAction(a: ViewerAction): Promise<string | null> {
@@ -17,7 +18,7 @@ export async function runViewerAction(a: ViewerAction): Promise<string | null> {
 			if (a.guid) return bimcraft.send({ pj: 1, type: "fly", guid: a.guid }), null;
 			const pins = ui.get().projectId ? await call("pins.list", ui.get().projectId!) : ([] as Pin[]);
 			const p = pins.find((x) => x.id === a.pin);
-			if (!p || !("elementGuid" in p.target)) return "Piezīme nav uz modeļa elementa.";
+			if (!p || !("elementGuid" in p.target)) return tr("Piezīme nav uz modeļa elementa.");
 			bimcraft.send({ pj: 1, type: "fly", ...(p.target.camera ? { camera: p.target.camera } : { guid: p.target.elementGuid }) });
 			return null;
 		}
@@ -28,7 +29,9 @@ export async function runViewerAction(a: ViewerAction): Promise<string | null> {
 		case "colour":
 			return bimcraft.send({ pj: 1, type: "colour", property: a.property, ...(a.guids ? { guids: a.guids } : {}) }), null;
 		case "split":
-			if (a.a && a.b) viewer.compareSplit({ target: { kind: "source", sourceId: a.a }, label: a.a }, { target: { kind: "source", sourceId: a.b }, label: a.b }, a.dir ?? "h");
+			// the agent's compare: the same view as the Salīdzināt dialog (CadCraft for DWG, sheets for PDF, words for documents)
+			if (a.a && a.b && a.compare) ui.show({ kind: "compare", a: `src:${a.a}`, b: `src:${a.b}`, aLabel: a.compare.aLabel, bLabel: a.compare.bLabel, mode: a.compare.mode });
+			else if (a.a && a.b) viewer.compareSplit({ target: { kind: "source", sourceId: a.a }, label: a.a }, { target: { kind: "source", sourceId: a.b }, label: a.b }, a.dir ?? "h");
 			else viewer.split(a.dir ?? "h");
 			return null;
 	}

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { dockGroup, type DockPlace, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { TabGroup } from "./TabGroup";
+import { tr } from "../i18n";
 
 export function DockArea({ side, render }: { side: Side; render: (id: string, filter?: string) => ReactNode }) {
 	const { layout } = useWindows();
@@ -33,7 +34,7 @@ export function DockArea({ side, render }: { side: Side; render: (id: string, fi
 			{p.collapsed && (
 				<div className="dock-strip-btns">
 					{g.tabs.map((id) => (
-						<button key={id} className="dock-strip-btn" title={`Atvērt ${WINDOW_TITLE[id] ?? id}`} onClick={() => windows.open(id)}>
+						<button key={id} className="dock-strip-btn" title={tr("Atvērt {id}", { id: WINDOW_TITLE[id] ?? id })} onClick={() => windows.open(id)}>
 							{WINDOW_TITLE[id] ?? id}
 						</button>
 					))}

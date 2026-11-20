@@ -8,6 +8,7 @@ import { call } from "../bridge";
 import { useUi } from "../state";
 import { windows } from "../windows";
 import { duration, summaryOf } from "./RunCard";
+import { tr } from "../i18n";
 
 const LINGER_MS = 8000;
 
@@ -54,10 +55,10 @@ export function StatusStrip() {
 				return (
 					<div key={run} className={`strip-run ${end ? (end.kind === "error" ? "failed" : "done") : "running"}`}>
 						{end ? <span className={end.kind === "error" ? "bad-mark" : "ok-mark"}>{end.kind === "error" ? "✗" : "✓"}</span> : <span className="pulse" />}
-						<b>{app ? "Lietotne" : "Aģents"}</b>
-						<span className="strip-title">{start?.text ?? "Uzdevums"}</span>
-						{other && <span className="badge dim">cits projekts</span>}
-						<span className="strip-now">{end ? (end.kind === "error" ? end.text : changed || "Pabeigts") : (cur?.text ?? "sāk…")}</span>
+						<b>{app ? tr("Lietotne") : tr("Aģents")}</b>
+						<span className="strip-title">{start?.text ?? tr("Uzdevums")}</span>
+						{other && <span className="badge dim">{tr("cits projekts")}</span>}
+						<span className="strip-now">{end ? (end.kind === "error" ? end.text : changed || tr("Pabeigts")) : (cur?.text ?? tr("sāk…"))}</span>
 						{progress !== null && !end && (
 							<span className="strip-bar" aria-hidden>
 								<span style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -65,16 +66,15 @@ export function StatusStrip() {
 						)}
 						<span className="grow" />
 						<span className="dim small">
-							{!app && s ? `solis ${s.steps}${s.sources.length ? ` · ${read}${s.listed !== null ? `/${s.listed}` : ""} avoti` : ""} · ` : ""}
+							{!app && s ? tr("solis {steps}{v} · ", { steps: s.steps, v: s.sources.length ? ` · ${read}${s.listed !== null ? `/${s.listed}` : ""} avoti` : "" }) : ""}
 							{duration(took)}
 						</span>
 						{app ? (
-							<button className="ghost small" onClick={() => windows.open("projekts")}>Projekts</button>
+							<button className="ghost small" onClick={() => windows.open("projekts")}>{tr("Projekts")}</button>
 						) : (
 							!end && (
 								<button className="small" onClick={() => void call("agent.stop")}>
-									Apturēt
-								</button>
+									{tr("Apturēt")}</button>
 							)
 						)}
 					</div>

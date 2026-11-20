@@ -1,5 +1,6 @@
 // App-wide renderer state: the open project, what the preview shows, and the Fokuss (what the agent is pointed at).
 // A small external store, same pattern as windows.ts.
+import type { CompareMode } from "../shared/compare2d";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { FocusItem } from "../shared/api";
 import type { PinCamera } from "../core/model";
@@ -7,7 +8,7 @@ import type { ProcessState } from "../core/process";
 import { call, on } from "./bridge";
 import type { ViewKind, ViewMode, ViewState } from "../shared/view-context";
 
-export type PreviewTarget = { kind: "source"; sourceId: string; page?: number; quote?: string } | { kind: "ifc"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc"; only?: boolean } | { kind: "law"; sourceId: string; quote?: string } | null;
+export type PreviewTarget = { kind: "source"; sourceId: string; page?: number; quote?: string } | { kind: "ifc"; path: string; label: string } | { kind: "pdf"; path: string; label: string } | { kind: "dwg"; path: string; label: string } | { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: CompareMode; only?: boolean } | { kind: "law"; sourceId: string; quote?: string } | null;
 
 interface UiState {
 	projectId: string | null;

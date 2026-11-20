@@ -4,6 +4,7 @@
 import type { ChatAttachment, FileCost } from "../shared/api";
 import { IMAGE_TOKENS } from "../shared/tokens";
 import { call } from "./bridge";
+import { tr } from "./i18n";
 
 export interface Pending extends ChatAttachment {
 	/** local key for the strip */
@@ -39,7 +40,7 @@ function base64(blob: Blob): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const r = new FileReader();
 		r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
-		r.onerror = () => reject(r.error ?? new Error("Neizdevās nolasīt failu."));
+		r.onerror = () => reject(r.error ?? new Error(tr("Neizdevās nolasīt failu.")));
 		r.readAsDataURL(blob);
 	});
 }
@@ -50,14 +51,14 @@ function draw(img: ImageBitmap, edge: number): HTMLCanvasElement {
 	c.width = Math.max(1, Math.round(img.width * k));
 	c.height = Math.max(1, Math.round(img.height * k));
 	const g = c.getContext("2d");
-	if (!g) throw new Error("Attēlu neizdevās sagatavot (canvas).");
+	if (!g) throw new Error(tr("Attēlu neizdevās sagatavot (canvas)."));
 	g.imageSmoothingQuality = "high";
 	g.drawImage(img, 0, 0, c.width, c.height);
 	return c;
 }
 
 const toBlob = (c: HTMLCanvasElement, type: string, q?: number) =>
-	new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("Attēlu neizdevās saspiest."))), type, q));
+	new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error(tr("Attēlu neizdevās saspiest.")))), type, q));
 
 /** The image as the model gets it: as it is when small enough, else downscaled; PNG first (sharp text), JPEG if PNG stays too big. */
 async function shrink(f: File, img: ImageBitmap, lim: Limits): Promise<Blob> {
@@ -70,7 +71,7 @@ async function shrink(f: File, img: ImageBitmap, lim: Limits): Promise<Blob> {
 		const jpg = await toBlob(c, "image/jpeg", q);
 		if (jpg.size <= lim.maxBytes) return jpg;
 	}
-	throw new Error(`Attēls "${f.name}" ir par lielu arī pēc samazināšanas.`);
+	throw new Error(tr("Attēls “{name}” ir par lielu arī pēc samazināšanas.", { name: f.name }));
 }
 
 const withExt = (name: string, mime: string) => {
@@ -87,7 +88,7 @@ export async function readAttachment(f: File, limits?: Limits | null): Promise<P
 		try {
 			img = await createImageBitmap(f);
 		} catch {
-			throw new Error(`"${name}" nav nolasāms attēls.`);
+			throw new Error(tr("“{name}” nav nolasāms attēls.", { name }));
 		}
 		try {
 			const blob = await shrink(f, img, limits ?? DEFAULT_LIMITS);
@@ -97,7 +98,7 @@ export async function readAttachment(f: File, limits?: Limits | null): Promise<P
 			img.close();
 		}
 	}
-	if (f.size > MAX_DOC_BYTES) throw new Error(`"${name}" ir ${(f.size / 1024 / 1024).toFixed(1)} MB; pieņem līdz 30 MB.`);
+	if (f.size > MAX_DOC_BYTES) throw new Error(tr("“{name}” ir {mb} MB; pieņem līdz 30 MB.", { name, mb: (f.size / 1024 / 1024).toFixed(1) }));
 	const att = { name, mimeType: f.type || "application/octet-stream", data: await base64(f) };
 	// the main process reads the text; a scanned PDF or an unknown format is refused here, not when sending
 	const cost = await call("agent.measureFile", att);

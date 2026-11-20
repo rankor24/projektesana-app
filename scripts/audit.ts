@@ -116,10 +116,11 @@ const testsFor = (id: string) =>
 const rows: string[] = [];
 const problems: string[] = [];
 for (const line of plan.split("\n")) {
-	const m = /^\| (\d\.\d+) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \|$/.exec(line);
+	// \d+: phases 10 and up have two digits (the rows of phases 10–14 were once skipped without a word, and the warning below had the same blind spot)
+	const m = /^\| (\d+\.\d+) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \|$/.exec(line);
 	if (!m) {
 		// a task row that does not parse was skipped without a word once (8.8: a carriage return where `\r` was meant)
-		if (/^\| \d\.\d+ \|/.test(line)) problems.push(`${line.slice(2, 8).trim()}: plan row does not parse (a control character or a missing cell?)`);
+		if (/^\| \d+\.\d+ \|/.test(line)) problems.push(`${line.slice(2, 8).trim()}: plan row does not parse (a control character or a missing cell?)`);
 		continue;
 	}
 	const [, id, build, filesCol, testsCol] = m;
@@ -136,8 +137,11 @@ for (const line of plan.split("\n")) {
 		problems.push(`${id}: ${full} missing`);
 		return `✗ ${full}`;
 	}).filter(Boolean);
-	const t = testsFor(id);
-	const needsTest = !/^—/.test(testsCol.trim());
+	// a task's tests may live in an earlier task's file the row names (13.5's handlers are in test/13.1-agents.test.ts)
+	const named = files.filter((f) => /^test\/.+\.test\.ts$/.test(f) && exists(f)).map((f) => f.slice("test/".length));
+	const t = [...new Set([...testsFor(id), ...named])];
+	// "—" or "none …" in the tests column: a UI task or a spike, checked by typecheck / build or by its record
+	const needsTest = !/^(—|none\b)/i.test(testsCol.trim());
 	if (needsTest && !t.length) problems.push(`${id}: no test file`);
 	const base = t.length ? "built and tested" : needsTest ? "✗ no test" : "built (UI)";
 	const status = [base, REAL[id] && `real: ${REAL[id]}`, LIVE[id] && `live: ${LIVE[id]}`].filter(Boolean).join("; ");
@@ -146,7 +150,9 @@ for (const line of plan.split("\n")) {
 
 // the agent tool table
 const toolTable = plan.slice(plan.indexOf("## Agent tools"), plan.indexOf("Skills:"));
-const planned = [...toolTable.matchAll(/`([a-z_]+)(?:\(|`)/g)].map((x) => x[1]).filter((x) => !["send_code_to_revit", "delete_element"].includes(x));
+// the table's prose also backticks values that are not tools: agent ids, note types, a scope's answers
+const NOT_TOOLS = ["send_code_to_revit", "delete_element", "bpv", "eks", "decision", "question", "partial", "full"];
+const planned = [...toolTable.matchAll(/`([a-z_]+)(?:\(|`)/g)].map((x) => x[1]).filter((x) => !NOT_TOOLS.includes(x));
 // run_subagent and delegate are tools of the main process (they start model runs), not of the tools server
 const have = new Set([...allTools().map((t) => t.name), ...Object.keys(REVIT_LEVELS), ...Object.keys(MAIN_TOOL_LEVELS)]);
 const missingTools = [...new Set(planned)].filter((t) => !have.has(t));

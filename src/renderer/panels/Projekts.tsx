@@ -8,6 +8,7 @@ import { ui, useUi } from "../state";
 import { windows } from "../windows";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { Dashboard } from "./Dashboard";
+import { locale, tr } from "../i18n";
 
 export function Projekts() {
 	// the project list; opening a project shows its page (Pārskats) and the list window closes
@@ -30,10 +31,10 @@ export function useScanProgress(projectId: string | null): ScanProgress | null {
 	return p;
 }
 
-const PHASE: Record<ScanProgress["phase"], string> = { walk: "mapes", hash: "kontrolsummas", text: "teksts", done: "gatavs", error: "kļūda" };
+const PHASE: Record<ScanProgress["phase"], string> = { walk: tr("mapes"), hash: tr("kontrolsummas"), text: tr("teksts"), done: tr("gatavs"), error: tr("kļūda") };
 
 export function ScanBar({ p }: { p: ScanProgress }) {
-	if (p.phase === "error") return <div className="err">Nolasīšana neizdevās: {p.message}</div>;
+	if (p.phase === "error") return <div className="err">{tr("Nolasīšana neizdevās: {message}", { message: p.message })}</div>;
 	const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
 	return (
 		<div className="pane" style={{ padding: "4px 0" }}>
@@ -65,7 +66,7 @@ function ProjectList({ onOpen }: { onOpen: () => void }) {
 	const add = async () => {
 		setErr(null);
 		try {
-			const root = await call("dialog.pickFolder", "Projekta mape (nosaukums sākas ar BD kodu)");
+			const root = await call("dialog.pickFolder", tr("Projekta mape (nosaukums sākas ar BD kodu)"));
 			if (!root) return;
 			const p = await call("projects.add", root);
 			ui.setProject(p.id);
@@ -79,12 +80,12 @@ function ProjectList({ onOpen }: { onOpen: () => void }) {
 	return (
 		<div className="pane fill">
 			<div className="row">
-				<button className="primary" onClick={add}>Pievienot projektu…</button>
-				<span className="dim small">Izvēlies biroja projekta mapi. Lasīta tiek tikai 01_Projektesana\1.1_Izejas dati; mapē nekas netiek rakstīts.</span>
+				<button className="primary" onClick={add}>{tr("Pievienot projektu…")}</button>
+				<span className="dim small">{tr("Izvēlies biroja projekta mapi. Lasīta tiek tikai 01_Projektesana\\1.1_Izejas dati; mapē nekas netiek rakstīts.")}</span>
 			</div>
 			{err && <div className="err">{err}</div>}
 			{list.error ? <Err error={list.error} /> : null}
-			{list.data && list.data.length === 0 && <Empty title="nav projekta">Pievieno pirmo projektu.</Empty>}
+			{list.data && list.data.length === 0 && <Empty title={tr("nav projekta")}>{tr("Pievieno pirmo projektu.")}</Empty>}
 			{list.data && list.data.length > 0 && (
 				<Dashboard
 					projects={list.data}
@@ -93,7 +94,7 @@ function ProjectList({ onOpen }: { onOpen: () => void }) {
 					onOpen={(id) => (ui.setProject(id), onOpen())}
 					onScan={(id) => call("projects.scan", id).catch((e) => setErr(errText(e)))}
 					onForget={(id) => {
-						if (confirm(`Noņemt ${id} no saraksta? Biroja mape un app dati paliek.`)) call("projects.forget", id).then(() => (id === projectId && ui.setProject(null), list.reload()));
+						if (confirm(tr("Noņemt {id} no saraksta? Biroja mape un app dati paliek.", { id }))) call("projects.forget", id).then(() => (id === projectId && ui.setProject(null), list.reload()));
 					}}
 				/>
 			)}
@@ -110,12 +111,12 @@ export function RoleQuestions({ projectId }: { projectId: string }) {
 	if (!q.data?.length) return null;
 	return (
 		<div className="confirm">
-			<b>Brīvo mapju loma (jautā vienreiz, atceras šim projektam)</b>
+			<b>{tr("Brīvo mapju loma (jautā vienreiz, atceras šim projektam)")}</b>
 			{err && <div className="err">{err}</div>}
 			{q.data.map((r) => (
 				<div key={r.folderKey} className="row">
 					<span className="mono">{r.folderName}</span>
-					<span className="dim small">{r.files} faili</span>
+					<span className="dim small">{tr("{files} faili", { files: r.files })}</span>
 					<span className="grow" />
 					<select defaultValue={r.proposed} id={`role-${r.folderKey}`}>
 						{r.options.map((o) => (
@@ -130,8 +131,7 @@ export function RoleQuestions({ projectId }: { projectId: string }) {
 								.catch((e) => setErr(errText(e)));
 						}}
 					>
-						Apstiprināt
-					</button>
+						{tr("Apstiprināt")}</button>
 				</div>
 			))}
 		</div>
@@ -140,13 +140,11 @@ export function RoleQuestions({ projectId }: { projectId: string }) {
 
 function ScanSummary({ projectId }: { projectId: string }) {
 	const s = useLoad<ScanSummaryRow | null>(() => call("projects.scanSummary", projectId), [projectId]);
-	if (!s.data) return <div className="dim small">run scan — projekts vēl nav nolasīts.</div>;
+	if (!s.data) return <div className="dim small">{tr("run scan — projekts vēl nav nolasīts.")}</div>;
 	const d = s.data;
 	return (
 		<div className="small dim">
-			Nolasīts {new Date(d.at).toLocaleString("lv-LV")}: {d.files} faili, {d.surveys} fotofiksācijas
-			{d.skipped.archive ? `, arhīvā ${d.skipped.archive} faili netiek lasīti` : ""}. Jauni {d.added}, mainīti {d.changed}, pazuduši {d.gone}.
-			{d.problems.map((p) => (
+			{tr("Nolasīts {v}: {files} faili, {surveys} fotofiksācijas", { v: new Date(d.at).toLocaleString(locale()), files: d.files, surveys: d.surveys })}{d.skipped.archive ? tr(", arhīvā {archive} faili netiek lasīti", { archive: d.skipped.archive }) : ""}{tr(". Jauni {added}, mainīti {changed}, pazuduši {gone}.", { added: d.added, changed: d.changed, gone: d.gone })}{d.problems.map((p) => (
 				<div key={p} className="err">
 					{p}
 				</div>

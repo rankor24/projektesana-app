@@ -21,7 +21,8 @@ export interface PiProviderInfo {
 }
 
 export const PI_PROVIDERS: readonly PiProviderInfo[] = [
-	// Claude: API key only. Claude.ai subscription OAuth is not allowed for third-party apps.
+	// Claude on pi: API key only (pi's own Claude.ai OAuth stays blocked, credentials.ts). A Claude subscription runs on the
+	// separate Agent SDK engine instead: provider `claude-sub`, src/agent/claude/ (approved for this app 2026-11-19).
 	{ id: "anthropic", auth: ["api_key"], defaultModel: "claude-sonnet-5-5", label: "Claude", keyUrl: "https://console.anthropic.com/settings/keys" },
 	// ChatGPT subscription (Plus/Pro) through pi's OpenAI Codex OAuth.
 	{ id: "openai-codex", auth: ["oauth"], label: "ChatGPT / Codex" },

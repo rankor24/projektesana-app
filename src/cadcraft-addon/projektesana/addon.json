@@ -1,0 +1,13 @@
+{
+  "id": "projektesana",
+  "name": "Projektēšanas App",
+  "version": "2.6.0",
+  "apps": ["cadcraft"],
+  "api": "1.0",
+  "license": "Apache-2.0",
+  "entry": "./main.js",
+  "permissions": ["files"],
+  "description": "The bridge between CadCraft and Projektēšanas App: opens the DWG the app hands it, draws the changes of a compare over the drawing (never into it), follows and sets the view for a linked second drawing, and takes the app's look.",
+  "author": "SIA BŪVDIZAINS",
+  "default": "on"
+}

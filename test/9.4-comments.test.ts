@@ -177,8 +177,8 @@ test("a tool builds its pin: the intent, the label as the text when none is type
 	assert.equal(r.target && "thing" in r.target && r.target.thing === "change" && r.target.region?.w.toFixed(2), "0.30");
 	assert.deepEqual(r.opts.markup?.length, 1);
 	assert.match(buildPin(tool("region-note"), change, "lūk", [{ shape: "rect", points: [[0.5, 0.6], [1.7, 0.3]] }]) as string, /ārpus lapas/, "a region off the page is refused");
-	const b = buildPin(tool("boundary"), { thing: "room", no: "5" }, "robeža", [{ shape: "line", points: [[0, 0], [1, 1]] }, { shape: "free", points: [[0.1, 0.1], [0.2, 0.2]] }]) as Exclude<ReturnType<typeof buildPin>, string>;
-	assert.deepEqual(b.opts.markup?.map((m) => m.shape), ["free"], "only the shapes the tool takes are kept");
+	const b = buildPin(tool("region-note"), change, "lūk", [{ shape: "line", points: [[0, 0], [1, 1]] }, { shape: "rect", points: [[0.1, 0.1], [0.2, 0.2]] }]) as Exclude<ReturnType<typeof buildPin>, string>;
+	assert.deepEqual(b.opts.markup?.map((m) => m.shape), ["rect"], "only the shapes the tool takes are kept");
 	// what a built pin does in the store
 	const s = store();
 	const made = addPin(s, c.target, c.text, "user", c.opts);

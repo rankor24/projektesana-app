@@ -11,6 +11,7 @@ import { factReview } from "../fact-review";
 import { pinFocus } from "../../shared/pins-view";
 import { PdfView } from "./PdfView";
 import { PinPanel, useFilePins } from "./Annotate";
+import { tr } from "../i18n";
 
 type Geo = Awaited<ReturnType<typeof call<"rooms.geometry">>>;
 
@@ -81,7 +82,7 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 							</>
 						}
 						onPageClick={(pg, x, y) => {
-							if (!note.trim()) return setErr("Ieraksti piezīmi laukā virs lapas, tad klikšķini lapā.");
+							if (!note.trim()) return setErr(tr("Ieraksti piezīmi laukā virs lapas, tad klikšķini lapā."));
 							setErr(null);
 							const marks = drawn.filter((d) => d.page === pg).map((d) => d.m);
 							call("pins.add", projectId, { sourceId, page: pg, x, y }, note.trim(), marks.length ? { intent: "mark", markup: marks } : undefined)

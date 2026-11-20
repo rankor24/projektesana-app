@@ -2,6 +2,7 @@
 // process; its tool result carries the instruction and the chat dock carries it out. Viewer actions (task 9.5) change only
 // the view, never the model or any project data; the run card keeps them as chips the user can press again.
 
+import type { CompareMode } from "./compare2d.js";
 export const PANEL_NAMES = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa"] as const;
 
 /** One thing done to the viewer. The guids are IFC GlobalIds. */
@@ -13,7 +14,7 @@ export type ViewerAction =
 	/** by the value of a property or attribute, with a legend; an empty property clears the colours */
 	| { action: "colour"; property: string; guids?: string[] }
 	/** two angles of the open model, or two files (source ids) side by side */
-	| { action: "split"; dir?: "h" | "v"; a?: string; b?: string };
+	| { action: "split"; dir?: "h" | "v"; a?: string; b?: string; compare?: { mode: CompareMode; aLabel: string; bLabel: string } };
 
 export interface UiInstruction {
 	open_panel?: { name: (typeof PANEL_NAMES)[number]; filter?: string };
@@ -51,6 +52,7 @@ export function checkViewerAction(a: ViewerAction): string | null {
 		case "split":
 			if (a.dir !== undefined && a.dir !== "h" && a.dir !== "v") return "split: dir is h or v";
 			if ((a.a === undefined) !== (a.b === undefined)) return "split: two files need both a and b (source ids)";
+			if (a.compare !== undefined && (a.a === undefined || !["sheet", "dwg", "text", "ifc"].includes(a.compare?.mode) || typeof a.compare.aLabel !== "string" || typeof a.compare.bLabel !== "string")) return "split: a compare needs a, b and its mode";
 			return a.a !== undefined && (typeof a.a !== "string" || typeof a.b !== "string" || !a.a || !a.b || a.a === a.b) ? "split: two different source ids" : null;
 		default:
 			return "unknown viewer action";

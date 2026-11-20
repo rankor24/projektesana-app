@@ -3,6 +3,7 @@
 // serving the window while a network folder is read. Nothing is opened or hashed here; that is the worker's job (1.3).
 import { readdir, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
+import { partDir } from "./projecting.js";
 import { FIXED_ROLES, folderKeyOf, IMAGE_EXT, isJunk, proposeFreeRole, surveyDateOf, VIDEO_EXT } from "./roles.js";
 
 export interface ScannedFile {
@@ -83,12 +84,11 @@ async function dirs(p: string) {
 	return (await readdir(p, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name, "lv", { numeric: true }));
 }
 
-/** Finds 01_Projektesana\1.1_Izejas dati with tolerance for case and diacritics (01_Projektēšana, 1.1 Izejas dati). */
+/** Finds 1.1_Izejas dati with tolerance for case and diacritics (01_Projektēšana, 1.1 Izejas Dati), under 01_Projektesana or straight in the
+ *  project folder (projecting.ts). An unreadable project folder throws, so the scan can say so. */
 export async function findInputs(root: string): Promise<string | null> {
-	const top = (await dirs(root)).find((d) => d.isDirectory() && /^01[\s_.-]*projekt/.test(norm(d.name)));
-	if (!top) return null;
-	const inner = (await dirs(join(root, top.name))).find((d) => d.isDirectory() && /^1\.1(?![.\d])/.test(d.name.trim()));
-	return inner ? join(root, top.name, inner.name) : null;
+	await dirs(root);
+	return partDir(root, "1.1");
 }
 
 async function countFiles(p: string, depth = 0): Promise<{ n: number; images: number; videos: number; bytes: number; latest: number }> {
@@ -123,7 +123,7 @@ export async function scanInputs(root: string, confirmed: Record<string, string>
 	const res: ScanResult = { inputsRel: null, files: [], surveys: [], folders: [], skipped: { archive: 0, junk: 0 }, problems: [] };
 	const inputs = await findInputs(root).catch((e: Error) => (res.problems.push(`Mapi nevar nolasīt: ${e.message}`), null));
 	if (!inputs) {
-		if (!res.problems.length) res.problems.push("Nav mapes 01_Projektesana\\1.1_Izejas dati.");
+		if (!res.problems.length) res.problems.push("Nav mapes 1.1_Izejas dati (ne 01_Projektesana mapē, ne projekta mapē).");
 		return res;
 	}
 	res.inputsRel = relative(root, inputs);

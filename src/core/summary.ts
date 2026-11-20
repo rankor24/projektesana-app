@@ -3,7 +3,7 @@
 // first; `attentionAcross` merges those lists over all projects for the top of the dashboard.
 import { clockOf, type Clock, type ClockItem } from "../rules/clocks.js";
 import type { BimStage, Delivery, Finding } from "./model.js";
-import type { AttentionItem, ProjectDashboard, ProjectSummary } from "./summary-types.js";
+import type { AttentionItem, ProjectDashboard, ProjectSummary, FolderCount } from "./summary-types.js";
 import type { ProjectStore } from "./store.js";
 import { readHistory } from "./history.js";
 import { versionsBetween } from "./versions.js";
@@ -65,6 +65,16 @@ export function projectSummary(store: ProjectStore, today: string, missing = fal
 export { attentionAcross } from "../shared/dashboard.js";
 export type { AttentionItem, Level, ProjectSummary } from "./summary-types.js";
 
+/** The folders of the last scan with how many models each holds and how many files changed since `since` (P4). */
+export function folderCounts(folders: { folderKey: string; name: string; files: number }[], sources: { folderKey: string; paths: string[]; versions: { mtime: string }[] }[], since: string): FolderCount[] {
+	return folders.map((f) => {
+		const mine = sources.filter((s) => s.folderKey === f.folderKey);
+		const models = mine.filter((s) => /\.(ifc|rvt)$/i.test(s.paths[0]?.split("::").pop() ?? "")).length;
+		const changed = mine.filter((s) => (s.versions[s.versions.length - 1]?.mtime ?? "").slice(0, 10) >= since).length;
+		return { key: f.folderKey, name: f.name, files: f.files, models, changed };
+	});
+}
+
 /** The project's own page (task 9.6): every number from the stores, `today` fixes the dates (and the 30 days of changes). */
 export function projectDashboard(store: ProjectStore, today: string, missing = false): ProjectDashboard {
 	const summary = projectSummary(store, today, missing);
@@ -81,7 +91,7 @@ export function projectDashboard(store: ProjectStore, today: string, missing = f
 		findings: store.read("findings"),
 		clocks: store.readMeta<ClockItem[]>("clocks", []).map((c) => clockOf(c, today)),
 		facts,
-		folders: (scan?.folders ?? []).map((f) => ({ key: f.folderKey, name: f.name, files: f.files })),
+		folders: folderCounts(scan?.folders ?? [], store.read("sources"), shiftDay(today, -30)),
 		versions: versionsBetween(store, shiftDay(today, -30), today),
 		history: readHistory(store),
 		hasCoordinationReference: !!store.readMeta<unknown>("coordination", null),

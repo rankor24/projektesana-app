@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { railGroups } from "../../shared/pages";
 import { useWindows, windows } from "../windows";
+import { tr } from "../i18n";
+import { Icon, PAGE_ICON } from "../icons";
 
 const KEY = "projektesana:rail";
 const readCollapsed = (): boolean => {
@@ -28,28 +30,34 @@ export function Rail() {
 		<nav className={`rail ${collapsed ? "rail-collapsed" : ""}`}>
 			{railGroups().map((g) => (
 				<div key={g.id} className="rail-group">
-					{!collapsed && <div className="rail-group-title">{g.title}</div>}
+					{!collapsed && <div className="rail-group-title">{tr(g.title)}</div>}
 					{g.pages.map((p) => (
-						<button key={p.id} className={`rail-item ${page === p.id ? "on" : ""}`} title={`${p.title} — ${p.hint}`} onClick={() => windows.go(p.id)}>
-							<span className="rail-icon">{p.icon}</span>
-							{!collapsed && <span>{p.title}</span>}
+						<button key={p.id} className={`rail-item ${page === p.id ? "on" : ""}`} title={`${tr(p.title)} — ${tr(p.hint)}`} onClick={() => windows.go(p.id)}>
+							<span className="rail-icon">{PAGE_ICON[p.id] ? <Icon name={PAGE_ICON[p.id]} /> : p.icon}</span>
+							{!collapsed && <span>{tr(p.title)}</span>}
 						</button>
 					))}
 				</div>
 			))}
 			<div className="rail-grow" />
-			<button className="rail-item" title="Prasmes — biroja prasmju bibliotēka" onClick={() => windows.go("prasmes")}>
-				<span className="rail-icon">✦</span>
-				{!collapsed && <span>Prasmes</span>}
-			</button>
-			<button className="rail-item" title="Iestatījumi" onClick={() => windows.go("iestatijumi")}>
-				<span className="rail-icon">⚙</span>
-				{!collapsed && <span>Iestatījumi</span>}
-			</button>
-			<button className="rail-item" title={collapsed ? "Izvērst joslu" : "Sakļaut joslu"} onClick={toggle}>
-				<span className="rail-icon">{collapsed ? "»" : "«"}</span>
-				{!collapsed && <span>Sakļaut</span>}
-			</button>
+			<div className="rail-foot">
+				<button className={`rail-item ${page === "prasmes" ? "on" : ""}`} title={tr("Prasmes — biroja prasmju bibliotēka")} onClick={() => windows.go("prasmes")}>
+					<span className="rail-icon"><Icon name="zap" /></span>
+					{!collapsed && <span>{tr("Prasmes")}</span>}
+				</button>
+				<button className={`rail-item ${page === "agenti" ? "on" : ""}`} title={tr("Aģenti — saraksts, lomas, ierobežojumi")} onClick={() => windows.go("agenti")}>
+					<span className="rail-icon"><Icon name="bot" /></span>
+					{!collapsed && <span>{tr("Aģenti")}</span>}
+				</button>
+				<button className={`rail-item ${page === "iestatijumi" ? "on" : ""}`} title={tr("Iestatījumi")} onClick={() => windows.go("iestatijumi")}>
+					<span className="rail-icon"><Icon name="sliders" /></span>
+					{!collapsed && <span>{tr("Iestatījumi")}</span>}
+				</button>
+				<button className="rail-item" title={collapsed ? tr("Izvērst joslu") : tr("Sakļaut joslu")} onClick={toggle}>
+					<span className="rail-icon"><Icon name={collapsed ? "panelOpen" : "panelClose"} /></span>
+					{!collapsed && <span>{tr("Sakļaut")}</span>}
+				</button>
+			</div>
 		</nav>
 	);
 }

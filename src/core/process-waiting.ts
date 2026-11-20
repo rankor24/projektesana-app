@@ -42,6 +42,11 @@ export function waitingGates(projectsDir: string): Gate[] {
 
 type EksStart = Extract<WaitingItem, { kind: "start-eks" }>;
 
+/** When eks last began a run (R48): the newest `lastAt` of its threads that have run. A run's start sets both `runs` and `lastAt`; a thread only opened has
+ *  `runs: 0`, so opening an empty eks conversation does not count as the expert having started. */
+export const eksLastRun = (threads: readonly { runs: number; lastAt: string }[]): string | null =>
+	threads.filter((t) => t.runs > 0).map((t) => t.lastAt).sort().at(-1) ?? null;
+
 /** When S5 began: the newest approval of H4 or the newest "S4 izlaista" of the profile (a skip, or a profile that passes S4 over). Later gate decisions or profile changes inside S5 do not move it,
  *  or the card would come back after eks had worked. Without either (a state written by hand) the newest decision or profile change of any kind. */
 function stageStart(s: ProcessState): string {

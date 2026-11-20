@@ -51,6 +51,16 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 				const auth = await m.piAuthState(rt, p.id);
 				const models = m.listPiModels(rt, p.id).map((x) => ({ id: x.id, name: x.name, legacy: x.legacy, efforts: x.efforts, defaultEffort: x.defaultEffort }));
 				rows.push({ id: p.id, label: p.label, auth: p.auth, configured: auth.configured, method: auth.method, keyUrl: p.keyUrl, models });
+				// right after Claude by API key: the same models through the user's own Claude subscription (the Agent SDK engine)
+				if (p.id === "anthropic") {
+					const c = await import("../../agent/claude/provider.js");
+					const on = !!d.settings.apiKey(c.CLAUDE_SUB);
+					const subModels = models.map((x) => {
+						const efforts = x.efforts.filter((e) => c.claudeEffort(e));
+						return { ...x, efforts, defaultEffort: efforts.includes(x.defaultEffort) ? x.defaultEffort : efforts.includes("medium") ? "medium" : (efforts[0] ?? "") };
+					});
+					rows.push({ id: c.CLAUDE_SUB, label: c.CLAUDE_SUB_LABEL, auth: ["api_key"], configured: on, method: on ? "api_key" : undefined, keyHelp: c.CLAUDE_SUB_TOKEN_HELP, models: subModels });
+				}
 			}
 			return rows;
 		},

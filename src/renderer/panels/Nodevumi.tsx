@@ -12,6 +12,7 @@ import { Badge, Empty, Err, useLoad } from "../ui";
 import { windows } from "../windows";
 import { commentSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
+import { tr } from "../i18n";
 
 const KINDS = ["MBP", "BP", "SKICE", "DT", "STARP"] as const;
 const GROUPS: ChecklistGroup[] = ["Lapas", "Modelis", "Likums", "Saskaņojumi"];
@@ -25,7 +26,7 @@ export function Nodevumi({ filter }: { filter?: string }) {
 	const list = useLoad<Delivery[]>(() => (projectId ? call("deliveries.list", projectId) : Promise.resolve([])), [projectId]);
 	const findings = useLoad<Finding[]>(() => (projectId ? call("findings.list", projectId) : Promise.resolve([])), [projectId]);
 	const [err, setErr] = useState<string | null>(null);
-	if (!projectId) return <Empty title="nav projekta" />;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
 	const reload = () => (list.reload(), findings.reload());
 	const all = list.data ?? [];
 	const active = all.filter((d) => d.draft && !d.sent).sort((a, b) => (filter === a.id ? -1 : filter === b.id ? 1 : b.draft!.startedAt.localeCompare(a.draft!.startedAt)));
@@ -44,11 +45,9 @@ export function Nodevumi({ filter }: { filter?: string }) {
 			{list.error ? <Err error={list.error} /> : null}
 			{active.length === 0 && (
 				<div className="confirm" style={{ gap: 8 }}>
-					<b style={{ fontSize: "1.1em" }}>Nodot projektu</b>
+					<b style={{ fontSize: "1.1em" }}>{tr("Nodot projektu")}</b>
 					<span className="dim small">
-						Izvēlies nodevuma veidu un datumu. Lietotne izveido sarakstu ar to, kas šim nodevumam jāsatur (MK 529, lapas, IFC, TN), un aģents to
-						kopā ar tevi aizpilda atsevišķā mapē. Uz 1.4_Nodevumi tas nonāk tikai ar tavu klikšķi.
-					</span>
+						{tr("Izvēlies nodevuma veidu un datumu. Lietotne izveido sarakstu ar to, kas šim nodevumam jāsatur (MK 529, lapas, IFC, TN), un aģents to kopā ar tevi aizpilda atsevišķā mapē. Uz 1.4_Nodevumi tas nonāk tikai ar tavu klikšķi.")}</span>
 					<StartForm onStart={start} />
 				</div>
 			)}
@@ -57,20 +56,20 @@ export function Nodevumi({ filter }: { filter?: string }) {
 			))}
 			{active.length > 0 && (
 				<details>
-					<summary className="dim small click">+ vēl viens nodevums</summary>
+					<summary className="dim small click">{tr("+ vēl viens nodevums")}</summary>
 					<StartForm onStart={start} />
 				</details>
 			)}
 			<details open={active.length === 0 && history.length > 0}>
-				<summary className="section-title click">Iepriekšējie un plānotie nodevumi ({history.length})</summary>
+				<summary className="section-title click">{tr("Iepriekšējie un plānotie nodevumi ({v})", { v: history.length })}</summary>
 				{history.length === 0 ? (
-					<span className="dim small">1.4_Nodevumi vēl nav nodevumu.</span>
+					<span className="dim small">{tr("1.4_Nodevumi vēl nav nodevumu.")}</span>
 				) : (
 					history.map((d) => <HistoryRow key={d.id} d={d} projectId={projectId} blocking={blockingFor(d.id)} onStart={start} onChanged={reload} onErr={setErr} />)
 				)}
 			</details>
 			<details>
-				<summary className="section-title click">Tehnisko noteikumu un saskaņojumu termiņi (darbdienas)</summary>
+				<summary className="section-title click">{tr("Tehnisko noteikumu un saskaņojumu termiņi (darbdienas)")}</summary>
 				<Clocks projectId={projectId} />
 			</details>
 		</div>
@@ -82,15 +81,14 @@ function StartForm({ onStart }: { onStart: (kind: string, date: string) => void 
 	const [date, setDate] = useState(todayIso());
 	return (
 		<div className="row">
-			<select value={kind} onChange={(e) => setKind(e.target.value)} title="nodevuma veids">
+			<select value={kind} onChange={(e) => setKind(e.target.value)} title={tr("nodevuma veids")}>
 				{KINDS.map((k) => (
 					<option key={k}>{k}</option>
 				))}
 			</select>
-			<input type="date" value={date} onChange={(e) => setDate(e.target.value)} title="nodevuma datums (mapes YYMMDD)" />
+			<input type="date" value={date} onChange={(e) => setDate(e.target.value)} title={tr("nodevuma datums (mapes YYMMDD)")} />
 			<button className="primary" disabled={!date} onClick={() => onStart(kind, date)}>
-				Nodot projektu
-			</button>
+				{tr("Nodot projektu")}</button>
 		</div>
 	);
 }
@@ -138,32 +136,27 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 				<Badge>{d.kind}</Badge>
 				<b>{d.label}</b>
 				<span className="dim small">
-					{d.stage} · datums {draft.date} · {d.items.length} faili
-				</span>
+					{tr("{stage} · datums {date} · {v} faili", { stage: d.stage, date: draft.date, v: d.items.length })}</span>
 				<span className="grow" />
-				<button className="small ghost" title="Pievieno Fokusam; tad aģenta dokā uzdevums “Nodot projektu”" onClick={toAgent}>
-					→ aģentam
-				</button>
+				<button className="small ghost" title={tr("Pievieno Fokusam; tad aģenta dokā uzdevums “Nodot projektu”")} onClick={toAgent}>
+					{tr("→ aģentam")}</button>
 				{!copied && (
 					<button className="small ghost" onClick={() => run("Atver", () => call("deliveries.openStaging", projectId, d.id))}>
-						Atvērt mapi
-					</button>
+						{tr("Atvērt mapi")}</button>
 				)}
 			</div>
 
 			<div className="row small">
 				<Step n={1} on={!last && !copied} done={rows.length > 0 && count("trūkst") === 0}>
-					Gatavo: {count("gatavs") + count("pamatots")} gatavi, {count("trūkst")} trūkst, {count("pārbaudi")} pārbaudīt
-				</Step>
+					{tr("Gatavo:")} {count("gatavs") + count("pamatots")} {tr("gatavi, {v} trūkst, {v2} pārbaudīt", { v: count("trūkst"), v2: count("pārbaudi") })}</Step>
 				<Step n={2} on={!!last && !copied} done={!!last && last.open === 0}>
-					{last ? `Pārbaudīts: ${last.open} atvērti` : "Sagatavot"}
+					{last ? tr("Pārbaudīts: {open} atvērti", { open: last.open }) : tr("Sagatavot")}
 				</Step>
 				<Step n={3} on={copied && !d.sent} done={copied}>
-					{copied ? `Nokopēts: ${draft.copiedTo}` : "Kopēt uz 1.4"}
+					{copied ? tr("Nokopēts: {copiedTo}", { copiedTo: draft.copiedTo }) : tr("Kopēt uz 1.4")}
 				</Step>
 				<Step n={4} on={false} done={!!d.sent}>
-					Nosūtīts
-				</Step>
+					{tr("Nosūtīts")}</Step>
 			</div>
 
 			{busy && <span className="dim small">{busy}…</span>}
@@ -173,22 +166,18 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 
 			<div className="row">
 				{!copied && (
-					<button disabled={!!busy || d.items.length === 0} title={d.items.length ? "" : "nodevumā nav failu"} onClick={() => run("Pārbauda", () => call("deliveries.prepare", projectId, d.id), (r) => `Pārbaudīts: ${(r as { open: number }).open} atvērti atradumi`)}>
-						Sagatavot (pārbaudīt)
-					</button>
+					<button disabled={!!busy || d.items.length === 0} title={d.items.length ? "" : tr("nodevumā nav failu")} onClick={() => run(tr("Pārbauda"), () => call("deliveries.prepare", projectId, d.id), (r) => tr("Pārbaudīts: {open} atvērti atradumi", { open: (r as { open: number }).open }))}>
+						{tr("Sagatavot (pārbaudīt)")}</button>
 				)}
 				{!copied && (
-					<button disabled={!!busy || !last} title={last ? "" : "vispirms sagatavo"} onClick={() => setCopyOpen(!copyOpen)}>
-						Kopēt uz 1.4_Nodevumi…
-					</button>
+					<button disabled={!!busy || !last} title={last ? "" : tr("vispirms sagatavo")} onClick={() => setCopyOpen(!copyOpen)}>
+						{tr("Kopēt uz 1.4_Nodevumi…")}</button>
 				)}
-				<button className="primary" disabled={!!busy || !canSend} title={!copied ? "vispirms nokopē uz 1.4_Nodevumi" : blocking.length ? `${blocking.length} atvērti atradumi` : ""} onClick={() => run("Atzīmē", () => call("deliveries.markSent", projectId, d.id))}>
-					Atzīmēt kā nosūtītu
-				</button>
+				<button className="primary" disabled={!!busy || !canSend} title={!copied ? tr("vispirms nokopē uz 1.4_Nodevumi") : blocking.length ? tr("{length} atvērti atradumi", { length: blocking.length }) : ""} onClick={() => run(tr("Atzīmē"), () => call("deliveries.markSent", projectId, d.id))}>
+					{tr("Atzīmēt kā nosūtītu")}</button>
 				{last && blocking.length > 0 && (
 					<button className="small ghost" onClick={() => windows.open("prasibas", "findings")}>
-						{blocking.length} atvērti atradumi — skatīt
-					</button>
+						{tr("{v} atvērti atradumi — skatīt", { v: blocking.length })}</button>
 				)}
 			</div>
 
@@ -198,7 +187,7 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 						<span className="dim small">…</span>
 					) : plan.data.blockers.length ? (
 						<>
-							<b className="small">Kopēt vēl nevar:</b>
+							<b className="small">{tr("Kopēt vēl nevar:")}</b>
 							<ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
 								{plan.data.blockers.map((b) => (
 									<li key={b}>{b}</li>
@@ -208,16 +197,13 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 					) : (
 						<>
 							<span className="small">
-								Kopēs {plan.data.files} failus ({mb(plan.data.bytes)}) uz jaunu mapi biroja projektā. Nekas netiek pārrakstīts; katrs fails tiek salīdzināts ar oriģinālu.
-							</span>
+								{tr("Kopēs {files} failus ({bytes}) uz jaunu mapi biroja projektā. Nekas netiek pārrakstīts; katrs fails tiek salīdzināts ar oriģinālu.", { files: plan.data.files, bytes: mb(plan.data.bytes) })}</span>
 							<span className="mono small">{plan.data.target}</span>
 							<div className="row">
-								<button className="primary" disabled={!!busy} onClick={() => run("Kopē", () => call("deliveries.copy", projectId, d.id), (r) => `Nokopēti ${(r as { files: number }).files} faili`).then(() => setCopyOpen(false))}>
-									Kopēt
-								</button>
+								<button className="primary" disabled={!!busy} onClick={() => run(tr("Kopē"), () => call("deliveries.copy", projectId, d.id), (r) => tr("Nokopēti {files} faili", { files: (r as { files: number }).files })).then(() => setCopyOpen(false))}>
+									{tr("Kopēt")}</button>
 								<button className="ghost" onClick={() => setCopyOpen(false)}>
-									Atcelt
-								</button>
+									{tr("Atcelt")}</button>
 							</div>
 						</>
 					)}
@@ -230,10 +216,10 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 				return (
 					<div key={g}>
 						<div className="section-title">
-							{g}
+							{tr(g)}
 							{g === "Lapas" && (
 								<span className="dim small" style={{ fontWeight: 400, marginLeft: 8 }}>
-									{withRevit ? (checklist.data?.revitNote ? `Revit: ${checklist.data.revitNote}` : "salīdzināts ar atvērto modeli") : ""}
+									{withRevit ? (checklist.data?.revitNote ? tr("Revit: {revitNote}", { revitNote: checklist.data.revitNote }) : tr("salīdzināts ar atvērto modeli")) : ""}
 								</span>
 							)}
 						</div>
@@ -248,11 +234,11 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 										part={part}
 										setPart={setPart}
 										onCompare={() => setWithRevit(true)}
-										onSheets={(replace) => run("Eksportē lapas no Revit", () => call("deliveries.stageSheets", projectId, d.id, { replace }), (x) => {
+										onSheets={(replace) => run(tr("Eksportē lapas no Revit"), () => call("deliveries.stageSheets", projectId, d.id, { replace }), (x) => {
 											const s = x as { exported: string[]; kept: string[]; unknown: string[]; total: number };
-											return `Lapas: eksportētas ${s.exported.length}, atstātas ${s.kept.length} (no ${s.total})`;
+											return tr("Lapas: eksportētas {exported}, atstātas {kept} (no {total})", { exported: s.exported.length, kept: s.kept.length, total: s.total });
 										})}
-										onIfc={(replace) => run("Eksportē IFC", () => call("deliveries.stageIfc", projectId, d.id, { part, replace }), (x) => `IFC: ${fileName((x as { file: string }).file)}`)}
+										onIfc={(replace) => run(tr("Eksportē IFC"), () => call("deliveries.stageIfc", projectId, d.id, { part, replace }), (x) => tr("IFC: {file}", { file: fileName((x as { file: string }).file) }))}
 										onFile={pickFile}
 										onPick={() => commentSubject.pick({ thing: "item", delivery: d.id, item: r.id }, `punkts: ${r.label.slice(0, 40)}`)}
 										onAgent={() =>
@@ -267,16 +253,14 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 			})}
 
 			<div className="section-title">
-				Faili nodevumā ({d.items.length})
-				{!copied && (
+				{tr("Faili nodevumā ({v})", { v: d.items.length })}{!copied && (
 					<button className="small ghost" style={{ marginLeft: 8 }} disabled={!!busy} onClick={pickFile}>
-						+ fails
-					</button>
+						{tr("+ fails")}</button>
 				)}
 			</div>
 			{!copied && d.items.length > 0 && <RenamePanel projectId={projectId} deliveryId={d.id} busy={!!busy} run={run} />}
 			{d.items.length === 0 ? (
-				<span className="dim small">Vēl nav failu. Eksportē lapas no Revit vai pievieno failu; aģentam — uzdevums “Nodot projektu”.</span>
+				<span className="dim small">{tr("Vēl nav failu. Eksportē lapas no Revit vai pievieno failu; aģentam — uzdevums “Nodot projektu”.")}</span>
 			) : (
 				<table>
 					<tbody>
@@ -289,9 +273,9 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 									{!copied && (
 										<button
 											className="small ghost"
-											title="Izņemt no nodevuma"
+											title={tr("Izņemt no nodevuma")}
 											disabled={!!busy}
-											onClick={() => window.confirm(`Izņemt “${fileName(i.file)}” no nodevuma?`) && run("Izņem", () => call("deliveries.unstage", projectId, d.id, fileName(i.file)))}
+											onClick={() => window.confirm(tr("Izņemt “{file}” no nodevuma?", { file: fileName(i.file) })) && run(tr("Izņem"), () => call("deliveries.unstage", projectId, d.id, fileName(i.file)))}
 										>
 											✕
 										</button>
@@ -308,7 +292,7 @@ function DraftCard({ d, projectId, blocking, onChanged }: { d: Delivery; project
 
 type RunFn = (label: string, fn: () => Promise<unknown>, done?: (r: unknown) => string | null) => Promise<void>;
 const RENAME_TONE = { same: "dim", rename: "ok", input: "warn", conflict: "bad" } as const;
-const RENAME_LABEL = { same: "kārtībā", rename: "pārdēvēs", input: "jānorāda", conflict: "konflikts" } as const;
+const RENAME_LABEL = { same: tr("kārtībā"), rename: tr("pārdēvēs"), input: tr("jānorāda"), conflict: tr("konflikts") } as const;
 
 /** Pārdēvēt (8.12): the plan first (old → new), the user fixes what could not be decided, then Piemērot; Atsaukt takes the batch back. */
 function RenamePanel({ projectId, deliveryId, busy, run }: { projectId: string; deliveryId: string; busy: boolean; run: RunFn }) {
@@ -342,32 +326,29 @@ function RenamePanel({ projectId, deliveryId, busy, run }: { projectId: string; 
 	if (!open)
 		return (
 			<div style={{ margin: "6px 0" }}>
-				<button className="small ghost" disabled={busy} onClick={() => setOpen(true)} title="Nosaukumi pēc biroja kārtības vai BIS augšupielādei">
-					Pārdēvēt
-				</button>
+				<button className="small ghost" disabled={busy} onClick={() => setOpen(true)} title={tr("Nosaukumi pēc biroja kārtības vai BIS augšupielādei")}>
+					{tr("Pārdēvēt")}</button>
 				{batch && (
 					<button className="small ghost" style={{ marginLeft: 8 }} disabled={busy} onClick={undo}>
-						Atsaukt pēdējo pārdēvēšanu
-					</button>
+						{tr("Atsaukt pēdējo pārdēvēšanu")}</button>
 				)}
 			</div>
 		);
 	return (
 		<div className="card" style={{ margin: "6px 0", padding: 8 }}>
 			<div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-				<b>Pārdēvēt</b>
+				<b>{tr("Pārdēvēt")}</b>
 				<select value={mode} onChange={(e) => setMode(e.target.value as RenameMode)}>
-					<option value="office">Biroja kārta: LAPAS-NR_nosaukums</option>
-					<option value="bis">BIS: NUMURS_MARKA_REVĪZIJA_LAPAS</option>
+					<option value="office">{tr("Biroja kārta: LAPAS-NR_nosaukums")}</option>
+					<option value="bis">{tr("BIS: NUMURS_MARKA_REVĪZIJA_LAPAS")}</option>
 				</select>
 				{mode === "bis" && (
 					<label className="small">
-						revīzija <input style={{ width: 48 }} value={revision} onChange={(e) => setRevision(e.target.value)} />
+						{tr("revīzija")} <input style={{ width: 48 }} value={revision} onChange={(e) => setRevision(e.target.value)} />
 					</label>
 				)}
 				<button className="small ghost" onClick={close}>
-					Aizvērt
-				</button>
+					{tr("Aizvērt")}</button>
 			</div>
 			{plan.error ? <Err error={plan.error} /> : null}
 			<table>
@@ -379,7 +360,7 @@ function RenamePanel({ projectId, deliveryId, busy, run }: { projectId: string; 
 								<td className="mono small">{r.file}</td>
 								<td>→</td>
 								<td className="mono small">
-									{needsName(r) ? <input style={{ width: "100%" }} value={typed[r.file] ?? ""} placeholder={r.to ?? "jaunais nosaukums ar paplašinājumu"} onChange={(e) => setTyped({ ...typed, [r.file]: e.target.value })} /> : r.to}
+									{needsName(r) ? <input style={{ width: "100%" }} value={typed[r.file] ?? ""} placeholder={r.to ?? tr("jaunais nosaukums ar paplašinājumu")} onChange={(e) => setTyped({ ...typed, [r.file]: e.target.value })} /> : r.to}
 									{p && (
 										<div className="small" style={{ color: "var(--bad)" }}>
 											{p}
@@ -402,17 +383,16 @@ function RenamePanel({ projectId, deliveryId, busy, run }: { projectId: string; 
 					className="primary"
 					disabled={busy || bad || pairs.length === 0}
 					onClick={() =>
-						run("Pārdēvē", () => call("deliveries.renameApply", projectId, deliveryId, pairs), (r) => {
+						run(tr("Pārdēvē"), () => call("deliveries.renameApply", projectId, deliveryId, pairs), (r) => {
 							const x = r as RenameResult;
 							setBatch(x.batch);
 							close();
-							return `Pārdēvēti ${x.applied}${x.errors.length ? `; ${x.errors.join("; ")}` : ""}`;
+							return tr("Pārdēvēti {applied}{errors}", { applied: x.applied, errors: x.errors.length ? `; ${x.errors.join("; ")}` : "" });
 						})
 					}
 				>
-					Piemērot ({pairs.length})
-				</button>
-				<span className="dim small">Tikai nodevuma starpmapē; neko nepārraksta; var atsaukt.</span>
+					{tr("Piemērot ({v})", { v: pairs.length })}</button>
+				<span className="dim small">{tr("Tikai nodevuma starpmapē; neko nepārraksta; var atsaukt.")}</span>
 			</div>
 		</div>
 	);
@@ -447,7 +427,7 @@ function ChecklistLine(p: {
 	return (
 		<tr className="click" onClick={p.onPick}>
 			<td style={{ whiteSpace: "nowrap" }}>
-				<Badge tone={TONE[r.status]}>{r.status}</Badge>
+				<Badge tone={TONE[r.status]}>{tr(r.status)}</Badge>
 			</td>
 			<td>
 				{r.label}
@@ -459,52 +439,43 @@ function ChecklistLine(p: {
 				{r.action === "revit_sheets" && (
 					<>
 						{!p.withRevit && (
-							<button className="small ghost" disabled={p.busy} onClick={p.onCompare} title="Nolasa atvērtā modeļa lapu sarakstu">
-								Salīdzināt ar Revit
-							</button>
+							<button className="small ghost" disabled={p.busy} onClick={p.onCompare} title={tr("Nolasa atvērtā modeļa lapu sarakstu")}>
+								{tr("Salīdzināt ar Revit")}</button>
 						)}
-						<button className="small" disabled={p.busy} onClick={() => p.onSheets(false)} title="Visas modeļa lapas, katra savā PDF; esošās paliek">
-							Eksportēt lapas
-						</button>
+						<button className="small" disabled={p.busy} onClick={() => p.onSheets(false)} title={tr("Visas modeļa lapas, katra savā PDF; esošās paliek")}>
+							{tr("Eksportēt lapas")}</button>
 						{r.files.length > 0 && (
-							<button className="small ghost" disabled={p.busy} onClick={() => window.confirm("Eksportēt visas lapas no jauna (esošie PDF tiek aizstāti)?") && p.onSheets(true)}>
-								no jauna
-							</button>
+							<button className="small ghost" disabled={p.busy} onClick={() => window.confirm(tr("Eksportēt visas lapas no jauna (esošie PDF tiek aizstāti)?")) && p.onSheets(true)}>
+								{tr("no jauna")}</button>
 						)}
 					</>
 				)}
 				{r.action === "revit_ifc" && r.status !== "neobligāts" && (
 					<>
-						<input value={p.part} onChange={(e) => p.setPart(e.target.value)} title="daļa faila nosaukumā (AR, BK, …)" style={{ width: 48 }} />
-						<button className="small" disabled={p.busy} onClick={() => p.onIfc(r.files.length > 0 && window.confirm("Aizstāt esošo IFC?"))}>
-							Eksportēt IFC
-						</button>
+						<input value={p.part} onChange={(e) => p.setPart(e.target.value)} title={tr("daļa faila nosaukumā (AR, BK, …)")} style={{ width: 48 }} />
+						<button className="small" disabled={p.busy} onClick={() => p.onIfc(r.files.length > 0 && window.confirm(tr("Aizstāt esošo IFC?")))}>
+							{tr("Eksportēt IFC")}</button>
 					</>
 				)}
 				{r.action === "revit_ifc" && r.status === "neobligāts" && (
 					<button className="small ghost" disabled={p.busy} onClick={() => p.onIfc(false)}>
-						Eksportēt IFC
-					</button>
+						{tr("Eksportēt IFC")}</button>
 				)}
 				{(r.action === "file" || r.action === "justify") && r.status !== "gatavs" && r.status !== "pamatots" && (
 					<button className="small" disabled={p.busy} onClick={p.onFile}>
-						Pievienot failu
-					</button>
+						{tr("Pievienot failu")}</button>
 				)}
 				{r.action === "coordination" && (
 					<button className="small" onClick={() => windows.open("prasibas", "coordination")}>
-						Koordinācija
-					</button>
+						{tr("Koordinācija")}</button>
 				)}
 				{r.action === "requirements" && (
 					<button className="small" onClick={() => windows.open("prasibas")}>
-						Prasības
-					</button>
+						{tr("Prasības")}</button>
 				)}
 				{r.status !== "gatavs" && r.status !== "neobligāts" && (
-					<button className="small ghost" title="Pievieno Fokusam: aģents paskaidro vai piedāvā pamatojumu" onClick={p.onAgent}>
-						→ aģentam
-					</button>
+					<button className="small ghost" title={tr("Pievieno Fokusam: aģents paskaidro vai piedāvā pamatojumu")} onClick={p.onAgent}>
+						{tr("→ aģentam")}</button>
 				)}
 			</td>
 		</tr>
@@ -524,25 +495,22 @@ function HistoryRow({ d, projectId, blocking, onStart, onChanged, onErr }: { d: 
 					{open ? "▾" : "▸"} {d.label}
 				</b>
 				<span className="dim small">
-					{d.submittedDate ? `mape ${d.submittedDate}` : planned ? "plānots" : "bez datuma mapes"}
-					{d.plannedDate ? ` · plānots ${d.plannedDate}${d.plannedFrom === "bip" ? " (BIP)" : ""}` : ""} · {d.items.length} faili
-				</span>
-				{d.sent ? <Badge tone="ok">nosūtīts {d.sent.at.slice(0, 10)}</Badge> : last ? <Badge tone={last.open ? "bad" : "ok"}>pārbaudīts: {last.open} atvērti</Badge> : null}
+					{d.submittedDate ? tr("mape {submittedDate}", { submittedDate: d.submittedDate }) : planned ? tr("plānots") : tr("bez datuma mapes")}
+					{d.plannedDate ? tr(" · plānots {plannedDate}{v}", { plannedDate: d.plannedDate, v: d.plannedFrom === "bip" ? " (BIP)" : "" }) : ""} {tr("· {v} faili", { v: d.items.length })}</span>
+				{d.sent ? <Badge tone="ok">{tr("nosūtīts {v}", { v: d.sent.at.slice(0, 10) })}</Badge> : last ? <Badge tone={last.open ? "bad" : "ok"}>{tr("pārbaudīts: {open} atvērti", { open: last.open })}</Badge> : null}
 				<span className="grow" />
 				{planned && ["SKICE", "MBP", "BP", "DT", "STARP"].includes(d.kind) && d.plannedDate && (
 					<button className="small primary" onClick={() => onStart(d.kind, d.plannedDate!)}>
-						Nodot šo
-					</button>
+						{tr("Nodot šo")}</button>
 				)}
-				{!planned && !d.sent && !d.draft && d.items.length > 0 && <button className="small" onClick={() => act(call("deliveries.prepare", projectId, d.id))}>Sagatavot</button>}
+				{!planned && !d.sent && !d.draft && d.items.length > 0 && <button className="small" onClick={() => act(call("deliveries.prepare", projectId, d.id))}>{tr("Sagatavot")}</button>}
 				{!planned && !d.sent && !d.draft && d.items.length > 0 && (
-					<button className="small" disabled={!last || blocking.length > 0} title={blocking.length ? `${blocking.length} atvērti atradumi` : !last ? "vispirms sagatavo" : ""} onClick={() => act(call("deliveries.markSent", projectId, d.id))}>
-						Atzīmēt kā nosūtītu
-					</button>
+					<button className="small" disabled={!last || blocking.length > 0} title={blocking.length ? tr("{length} atvērti atradumi", { length: blocking.length }) : !last ? tr("vispirms sagatavo") : ""} onClick={() => act(call("deliveries.markSent", projectId, d.id))}>
+						{tr("Atzīmēt kā nosūtītu")}</button>
 				)}
 				<input
 					type="date"
-					title="plānotais datums"
+					title={tr("plānotais datums")}
 					defaultValue={d.plannedDate ?? ""}
 					onBlur={(e) => e.target.value !== (d.plannedDate ?? "") && act(call("deliveries.setPlanned", projectId, d.id, e.target.value || null))}
 				/>
@@ -552,7 +520,7 @@ function HistoryRow({ d, projectId, blocking, onStart, onChanged, onErr }: { d: 
 					<tbody>
 						{d.items.map((i) => (
 							<tr key={i.file}>
-								<td className="mono small">{i.sheetNo ?? <Badge tone="warn">nav Nr.</Badge>}</td>
+								<td className="mono small">{i.sheetNo ?? <Badge tone="warn">{tr("nav Nr.")}</Badge>}</td>
 								<td>{i.title}</td>
 								<td className="dim small mono">{fileName(i.file)}</td>
 							</tr>
@@ -572,26 +540,26 @@ function Clocks({ projectId }: { projectId: string }) {
 	return (
 		<>
 			{err && <div className="err">{err}</div>}
-			{(clocks.data ?? []).length === 0 && <span className="dim small">Nav pieprasītu TN vai saskaņojumu.</span>}
+			{(clocks.data ?? []).length === 0 && <span className="dim small">{tr("Nav pieprasītu TN vai saskaņojumu.")}</span>}
 			<table>
 				<tbody>
 					{(clocks.data ?? []).map((c) => (
 						<tr key={c.id}>
 							<td>{c.label}</td>
-							<td className="small">pieprasīts {c.requestedOn}</td>
+							<td className="small">{tr("pieprasīts {requestedOn}", { requestedOn: c.requestedOn })}</td>
 							<td className="small">
-								termiņš {c.due} <span className="dim">({c.point}{c.extended ? ", pagarināts līdz 20 d.d." : ""})</span>
+								{tr("termiņš {due}", { due: c.due })} <span className="dim">({c.point}{c.extended ? tr(", pagarināts līdz 20 d.d.") : ""})</span>
 							</td>
 							<td>
 								<Badge tone={c.state === "saņemts" ? "ok" : c.state === "kavē" ? "bad" : c.daysLeft <= 3 ? "warn" : "dim"} title={c.caveat}>
-									{c.state === "saņemts" ? `saņemts ${c.receivedOn}` : c.state === "kavē" ? `kavē ${-c.daysLeft} d.d.` : `${c.daysLeft} d.d.`}
+									{c.state === "saņemts" ? tr("saņemts {receivedOn}", { receivedOn: c.receivedOn }) : c.state === "kavē" ? tr("kavē {daysLeft} d.d.", { daysLeft: -c.daysLeft }) : tr("{daysLeft} d.d.", { daysLeft: c.daysLeft })}
 								</Badge>
 							</td>
 							<td>
 								{!c.receivedOn && (
 									<>
-										<button className="small" onClick={() => act(call("clocks.update", projectId, c.id, { receivedOn: todayIso() }))}>saņemts šodien</button>
-										<button className="small ghost" onClick={() => act(call("clocks.update", projectId, c.id, { extended: !c.extended }))}>{c.extended ? "11/15 d.d." : "pagarināts"}</button>
+										<button className="small" onClick={() => act(call("clocks.update", projectId, c.id, { receivedOn: todayIso() }))}>{tr("saņemts šodien")}</button>
+										<button className="small ghost" onClick={() => act(call("clocks.update", projectId, c.id, { extended: !c.extended }))}>{c.extended ? tr("11/15 d.d.") : tr("pagarināts")}</button>
 									</>
 								)}
 							</td>
@@ -601,18 +569,17 @@ function Clocks({ projectId }: { projectId: string }) {
 			</table>
 			<div className="row">
 				<select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as "tn" | "approval" })}>
-					<option value="tn">TN pieprasījums</option>
-					<option value="approval">saskaņojums</option>
+					<option value="tn">{tr("TN pieprasījums")}</option>
+					<option value="approval">{tr("saskaņojums")}</option>
 				</select>
-				<input className="grow" placeholder="izdevējs (piem., tīkla īpašnieks)" value={draft.issuer} onChange={(e) => setDraft({ ...draft, issuer: e.target.value })} />
+				<input className="grow" placeholder={tr("izdevējs (piem., tīkla īpašnieks)")} value={draft.issuer} onChange={(e) => setDraft({ ...draft, issuer: e.target.value })} />
 				<select value={draft.issuerKind} onChange={(e) => setDraft({ ...draft, issuerKind: e.target.value as "state_municipal" | "network_owner" })}>
-					<option value="network_owner">inženierbūves īpašnieks</option>
-					<option value="state_municipal">valsts / pašvaldība</option>
+					<option value="network_owner">{tr("inženierbūves īpašnieks")}</option>
+					<option value="state_municipal">{tr("valsts / pašvaldība")}</option>
 				</select>
 				<input type="date" value={draft.requestedOn} onChange={(e) => setDraft({ ...draft, requestedOn: e.target.value })} />
 				<button disabled={!draft.issuer.trim() || !draft.requestedOn} onClick={() => act(call("clocks.add", projectId, draft)).then(() => setDraft({ ...draft, issuer: "", requestedOn: "" }))}>
-					Pievienot
-				</button>
+					{tr("Pievienot")}</button>
 			</div>
 		</>
 	);

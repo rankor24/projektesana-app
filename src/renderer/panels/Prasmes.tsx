@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { SkillInfo } from "../../shared/skill-types";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const SYNCED_GROUP = "Revit prasmes (iebūvētās)";
 const NO_GROUP = "Bez grupas";
@@ -52,11 +53,11 @@ export function Prasmes() {
 	};
 	const importFolder = () =>
 		run(async () => {
-			const folder = await call("dialog.pickFolder", "Mape ar prasmēm (<grupa>\\<prasme>\\SKILL.md)");
+			const folder = await call("dialog.pickFolder", tr("Mape ar prasmēm (<grupa>\\<prasme>\\SKILL.md)"));
 			if (!folder) return;
 			const r = await call("skills.import", folder);
 			setRefused(r.refused);
-			setMsg(r.imported.length || r.refused.length ? `Importētas ${r.imported.length} prasmes; nav importētas ${r.refused.length}.` : "Mapē nav neviena SKILL.md.");
+			setMsg(r.imported.length || r.refused.length ? tr("Importētas {imported} prasmes; nav importētas {refused}.", { imported: r.imported.length, refused: r.refused.length }) : tr("Mapē nav neviena SKILL.md."));
 			lib.reload();
 		});
 	const open = (s: SkillInfo) =>
@@ -80,34 +81,31 @@ export function Prasmes() {
 			const next = specs.map(({ fixedTokens: _t, ...spec }) => (spec.id === agent ? { ...spec, skills: ticks } : spec));
 			await call("agents.save", next);
 			setPicked(null);
-			setMsg("Saglabāts. Aģents jaunās prasmes redz nākamajā uzdevumā.");
+			setMsg(tr("Saglabāts. Aģents jaunās prasmes redz nākamajā uzdevumā."));
 			agents.reload();
 		});
 
 	return (
 		<div className="page-scroll">
 			<div className="row">
-				<button onClick={importFolder}>Importēt mapi…</button>
+				<button onClick={importFolder}>{tr("Importēt mapi…")}</button>
 				<button className="ghost" onClick={() => (lib.reload(), agents.reload())}>
-					Atjaunot
-				</button>
+					{tr("Atjaunot")}</button>
 				<span className="dim small grow">
-					Biroja prasmes: {office.length}, melnrakstos {drafts}, vietturu {placeholders}. Aģents saņem tikai gatavās: bez vietturiem un atzīmētas kā pārbaudītas. Tekstu labo savā redaktorā, mapē skills lietotnes datu mapē.
-				</span>
+					{tr("Biroja prasmes: {v}, melnrakstos {drafts}, vietturu {placeholders}. Aģents saņem tikai gatavās: bez vietturiem un atzīmētas kā pārbaudītas. Tekstu labo savā redaktorā, mapē skills lietotnes datu mapē.", { v: office.length, drafts: drafts, placeholders: placeholders })}</span>
 			</div>
 			{err && <div className="err">{err}</div>}
 			{msg && <div className="small">{msg}</div>}
 			{refused.map((r) => (
 				<div key={r.name} className="small dim">
-					Nav importēta {r.name}: {r.why}
-				</div>
+					{tr("Nav importēta {name}: {why}", { name: r.name, why: r.why })}</div>
 			))}
 			{lib.error ? <Err error={lib.error} /> : null}
 
-			<div className="section-title">Aģentam</div>
+			<div className="section-title">{tr("Aģentam")}</div>
 			<div className="row">
 				<select value={agent} onChange={(e) => pick(e.target.value)}>
-					<option value="">— izvēlies aģentu —</option>
+					<option value="">{tr("— izvēlies aģentu —")}</option>
 					{specs.map((s) => (
 						<option key={s.id} value={s.id}>
 							{s.name || s.id}
@@ -115,15 +113,14 @@ export function Prasmes() {
 					))}
 				</select>
 				<button disabled={!current || picked === null} onClick={save}>
-					Saglabāt prasmes
-				</button>
-				{picked !== null && <span className="small">nesaglabāts</span>}
-				{agents.data?.shipped && <span className="dim small">Aģentu saraksts ir piegādātais; saglabājot tas tiek ierakstīts.</span>}
+					{tr("Saglabāt prasmes")}</button>
+				{picked !== null && <span className="small">{tr("nesaglabāts")}</span>}
+				{agents.data?.shipped && <span className="dim small">{tr("Aģentu saraksts ir piegādātais; saglabājot tas tiek ierakstīts.")}</span>}
 			</div>
-			{!specs.length && !agents.loading && <div className="dim small">Nav speciālistu: aģenti tiek veidoti Iestatījumi → Aģenti.</div>}
+			{!specs.length && !agents.loading && <div className="dim small">{tr("Nav speciālistu: aģenti tiek veidoti Iestatījumi → Aģenti.")}</div>}
 
 			{!skills.length && !lib.loading ? (
-				<Empty title="nav prasmju">Importē biroja prasmju mapi (poga augšā).</Empty>
+				<Empty title={tr("nav prasmju")}>{tr("Importē biroja prasmju mapi (poga augšā).")}</Empty>
 			) : (
 				byGroup(skills).map((g) => (
 					<div key={g.group}>
@@ -133,22 +130,21 @@ export function Prasmes() {
 						{g.skills.map((s) => (
 							<div key={s.name} className="confirm">
 								<div className="row">
-									{current && <input type="checkbox" checked={ticks.includes(s.name)} onChange={(e) => tick(s.name, e.target.checked)} title={`Dot ${current.name || current.id}`} />}
+									{current && <input type="checkbox" checked={ticks.includes(s.name)} onChange={(e) => tick(s.name, e.target.checked)} title={tr("Dot {id}", { id: current.name || current.id })} />}
 									<b className="mono">{s.name}</b>
-									<Badge tone={s.state === "ready" ? "ok" : "warn"}>{s.state === "ready" ? "gatavs" : "melnraksts"}</Badge>
-									{s.origin === "office" && s.placeholders > 0 && <Badge tone="bad">vietturi: {s.placeholders}</Badge>}
+									<Badge tone={s.state === "ready" ? "ok" : "warn"}>{s.state === "ready" ? tr("gatavs") : tr("melnraksts")}</Badge>
+									{s.origin === "office" && s.placeholders > 0 && <Badge tone="bad">{tr("vietturi: {placeholders}", { placeholders: s.placeholders })}</Badge>}
 									<span className="grow" />
 									{s.origin === "office" && (
-										<label className="small" title={s.placeholders > 0 && !s.tested ? `Vēl ir ${s.placeholders} vietturi` : "Aprēķina testa piemērs ir pārbaudīts"}>
-											<input type="checkbox" checked={s.tested} disabled={s.placeholders > 0 && !s.tested} onChange={(e) => tested(s, e.target.checked)} /> Pārbaudīts
-										</label>
+										<label className="small" title={s.placeholders > 0 && !s.tested ? tr("Vēl ir {placeholders} vietturi", { placeholders: s.placeholders }) : tr("Aprēķina testa piemērs ir pārbaudīts")}>
+											<input type="checkbox" checked={s.tested} disabled={s.placeholders > 0 && !s.tested} onChange={(e) => tested(s, e.target.checked)} /> {tr("Pārbaudīts")}</label>
 									)}
 									<button className="small ghost" onClick={() => open(s)}>
-										{shown?.name === s.name ? "Aizvērt" : "Atvērt"}
+										{shown?.name === s.name ? tr("Aizvērt") : tr("Atvērt")}
 									</button>
 								</div>
 								<div className="small dim">{s.description}</div>
-								{current && ticks.includes(s.name) && s.state === "draft" && <div className="small">Nav gatava: aģents to nesaņems, kamēr nebūs gatava.</div>}
+								{current && ticks.includes(s.name) && s.state === "draft" && <div className="small">{tr("Nav gatava: aģents to nesaņems, kamēr nebūs gatava.")}</div>}
 								{shown?.name === s.name && <pre className="mono small" style={{ whiteSpace: "pre-wrap", maxHeight: 360, overflow: "auto", userSelect: "text" }}>{shown.text}</pre>}
 							</div>
 						))}

@@ -1,0 +1,29 @@
+/* One look for the frames inside Projektēšanas App: BimCraft (IFC) and CadCraft (DWG) take the app's own type, sizes and
+   colours, so a model, a drawing, a PDF and a document read as one program. Both bridge add-ons link this file (the sync
+   scripts copy it next to each add-on); only the apps' own design tokens and a few spacings are set, nothing of their
+   layout or behaviour. Source: src/craft-style/compact.css. */
+
+/* the apps size everything in rem from a fluid 16–20 px root; the app is 13 px */
+html { font-size: 13px !important; }
+
+/* the app's palette on the apps' tokens (their dark "model" space is switched on by the bridge) */
+:root,
+:root[data-space="model"] {
+  --font: "Segoe UI", system-ui, sans-serif;
+  --sheet: #161a21;
+  --sheet-2: #1b2028;
+  --ink: #e8ecf3;
+  --ink-2: #aab4c4;
+  --grid: #262d38;
+  --line: #3e4757;
+  --action: #5b9bff;
+  --on-action: #08111f;
+  --placeholder: #8893a5;
+  --radius: 6px;
+}
+body { font-family: var(--font) !important; }
+
+/* tool buttons and panel rows were sized for touch; a mouse needs less */
+.bc-tool, .cc-in-tool { padding-top: .2rem !important; padding-bottom: .2rem !important; }
+.cc-in-tool.cc-in-big { min-width: 3rem !important; }
+.bc-sec { padding-top: .45rem !important; padding-bottom: .45rem !important; }

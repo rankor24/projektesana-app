@@ -8,7 +8,7 @@ import { createPiRuntime } from "../src/agent/pi/models.ts";
 import { AgentSession } from "../src/agent/session.ts";
 import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { allTools } from "../src/agent/tools/defs.ts";
-import { type GateArgs, type ProcessState, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, recordClientChange, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
+import { type GateArgs, type ProcessState, GATE_MOVED, changeProfile, decideGate, gateSummary, initial as initialState, readProcess, recordClientChange, requestGate, skipStage, switchMode, writeProcess } from "../src/core/process.ts";
 import { STAGE_CARD } from "../src/core/process-def.ts";
 import { waitingEscalations, waitingGates } from "../src/core/process-waiting.ts";
 import { ProjectStore } from "../src/core/store.ts";
@@ -152,6 +152,18 @@ test("14.3 process.gate approve moves the stage on, takes the item out, appends 
 	assert.deepEqual(r.told.at(-1), { projectId: "BD999", what: ["process"] });
 	assert.equal(r.sessionTold.length, 1, "Gaida tevi is told");
 	assert.equal(r.store.events().some((e) => e.kind === "process.gate" && e.by === "user"), true, "logged as the user's");
+});
+
+test("14.3 process.gate bound to the gate the card showed: another gate's note is refused and nothing moves; the shown one passes", async () => {
+	const r = rig({ mode: "process" });
+	await r.call("bpv", "process_request_gate", ARGS as never);
+	const [n] = gateNotes(r.store);
+	const before = readProcess(r.store);
+	assert.throws(() => r.h["process.gate"]("BD999", { approve: true, noteId: "n-other" }), { message: GATE_MOVED });
+	assert.deepEqual(readProcess(r.store), before, "a refused decision writes nothing");
+	assert.equal(r.h["process.gate"]("BD999", { approve: true, noteId: n.id }).stage, "S2");
+	// the gate is decided: the same card clicked again is refused, not applied to whatever waits next
+	assert.throws(() => r.h["process.gate"]("BD999", { approve: true, noteId: n.id }), { message: GATE_MOVED });
 });
 
 test("14.3 process.gate return needs a comment; a returned gate leaves the list, the stage repeats, and the next request is iteration 2", async () => {

@@ -4,9 +4,10 @@ import type { Wave } from "../../shared/thread-types";
 import { waveLine } from "../../shared/wave";
 import { StateDot } from "./ThreadList";
 import { agentName, type LaneItem } from "./useThreads";
+import { tr } from "../i18n";
 
 export function Lane({ lane, specs, onOpen, onStop }: { lane: LaneItem; specs: AgentSpec[]; onOpen: (threadId: string) => void; onStop: (threadId: string) => void }) {
-	const step = lane.state === "queued" ? "gaida rindā" : (lane.step ?? "strādā…");
+	const step = lane.state === "queued" ? tr("gaida rindā") : (lane.step ?? tr("strādā…"));
 	return (
 		<div className="run-lane" onClick={() => onOpen(lane.threadId)} title={lane.title}>
 			<StateDot state={lane.state} />
@@ -20,8 +21,7 @@ export function Lane({ lane, specs, onOpen, onStop }: { lane: LaneItem; specs: A
 					onStop(lane.threadId);
 				}}
 			>
-				Apturēt
-			</button>
+				{tr("Apturēt")}</button>
 		</div>
 	);
 }
@@ -46,18 +46,17 @@ export function LaneBar({ lanes, specs, paused, wave, elsewhere, onOpen, onStop,
 	return (
 		<div className="run-lanes">
 			<div className="row lanes-head small">
-				<span className="dim">Darbi:</span>
+				<span className="dim">{tr("Darbi:")}</span>
 				<b>{lanes.length}</b>
-				{elsewhere > 0 && <span className="dim">· citos projektos {elsewhere}</span>}
-				{paused && <span className="badge warn">rinda apturēta</span>}
+				{elsewhere > 0 && <span className="dim">{tr("· citos projektos {elsewhere}", { elsewhere: elsewhere })}</span>}
+				{paused && <span className="badge warn">{tr("rinda apturēta")}</span>}
 				<span className="grow" />
 				{wave && <span className={`small ${wave.paused ? "badge warn" : "dim"}`}>{waveLine(wave)}</span>}
-				<button className="small" onClick={onTogglePause} title={paused ? "Rindā gaidošie darbi sāks darbu" : "Kas jau strādā, turpina; jauni darbi gaida"}>
-					{paused ? "Turpināt rindu" : "Pauzēt rindu"}
+				<button className="small" onClick={onTogglePause} title={paused ? tr("Rindā gaidošie darbi sāks darbu") : tr("Kas jau strādā, turpina; jauni darbi gaida")}>
+					{paused ? tr("Turpināt rindu") : tr("Pauzēt rindu")}
 				</button>
-				<button className="small danger" onClick={onStopAll} disabled={lanes.length === 0 && elsewhere === 0} title="Aptur visus darbus, arī citos projektos">
-					Apturēt visu
-				</button>
+				<button className="small danger" onClick={onStopAll} disabled={lanes.length === 0 && elsewhere === 0} title={tr("Aptur visus darbus, arī citos projektos")}>
+					{tr("Apturēt visu")}</button>
 			</div>
 			{lanes.map((l) => (
 				<Lane key={`${l.threadId}:${l.state}`} lane={l} specs={specs} onOpen={onOpen} onStop={onStop} />

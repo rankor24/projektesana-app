@@ -3,15 +3,16 @@ import { useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
 import { LEAD_ID, type QueueView, type Thread, type ThreadState } from "../../shared/thread-types";
 import { agentName, liveState } from "./useThreads";
+import { locale, tr } from "../i18n";
 
 export const STATE_TEXT: Record<ThreadState, string> = {
-	idle: "brīva",
-	queued: "gaida rindā",
-	running: "strādā",
-	"waiting-confirm": "gaida tavu apstiprinājumu",
-	"waiting-reply": "gaida atbildi",
-	interrupted: "pārtraukta",
-	closed: "slēgta",
+	idle: tr("brīva"),
+	queued: tr("gaida rindā"),
+	running: tr("strādā"),
+	"waiting-confirm": tr("gaida tavu apstiprinājumu"),
+	"waiting-reply": tr("gaida atbildi"),
+	interrupted: tr("pārtraukta"),
+	closed: tr("slēgta"),
 };
 
 /** Five dots: idle, running, queued, waiting (both kinds), interrupted. */
@@ -21,7 +22,7 @@ export function StateDot({ state }: { state: ThreadState }) {
 	return <span className={`tdot ${DOT[state]}`} title={STATE_TEXT[state]} />;
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString("lv", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string) => new Date(iso).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 interface Props {
 	threads: Thread[];
@@ -49,12 +50,11 @@ export function ThreadList({ threads, specs, queue, current, onSelect, onNew, on
 					<div key={id} className="tl-agent">
 						<div className="row tl-head">
 							<b>{agentName(id, specs)}</b>
-							{gone && <span className="badge dim" title="Speciālists ir noņemts Iestatījumos">noņemts</span>}
+							{gone && <span className="badge dim" title={tr("Speciālists ir noņemts Iestatījumos")}>{tr("noņemts")}</span>}
 							<span className="grow" />
 							{!gone && (
 								<button className="ghost small" onClick={() => onNew(id)}>
-									Jauna saruna
-								</button>
+									{tr("Jauna saruna")}</button>
 							)}
 						</div>
 						{own.map((t) => {
@@ -68,7 +68,7 @@ export function ThreadList({ threads, specs, queue, current, onSelect, onNew, on
 									{t.state !== "closed" && (
 										<button
 											className="ghost small x"
-											title={busy ? "Nevar slēgt, kamēr saruna strādā" : "Slēgt sarunu (pieraksts paliek)"}
+											title={busy ? tr("Nevar slēgt, kamēr saruna strādā") : tr("Slēgt sarunu (pieraksts paliek)")}
 											disabled={busy}
 											onClick={(e) => {
 												e.stopPropagation();
@@ -81,13 +81,12 @@ export function ThreadList({ threads, specs, queue, current, onSelect, onNew, on
 								</div>
 							);
 						})}
-						{own.length === 0 && <div className="dim small tl-none">nav sarunu</div>}
+						{own.length === 0 && <div className="dim small tl-none">{tr("nav sarunu")}</div>}
 					</div>
 				);
 			})}
 			<label className="small dim tl-closed">
-				<input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} /> Rādīt slēgtās
-			</label>
+				<input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} /> {tr("Rādīt slēgtās")}</label>
 		</div>
 	);
 }
@@ -99,8 +98,8 @@ export function ThreadPanel({ current, ...list }: Props) {
 		<details className="threads">
 			<summary>
 				{t && <StateDot state={liveState(t, list.queue)} />}
-				<b>Sarunas</b>
-				<span className="dim">{t ? `${agentName(t.agent, list.specs)} · ${t.title}` : "vadošais aģents"}</span>
+				<b>{tr("Sarunas")}</b>
+				<span className="dim">{t ? `${agentName(t.agent, list.specs)} · ${t.title}` : tr("vadošais aģents")}</span>
 			</summary>
 			<ThreadList current={current} {...list} />
 		</details>
@@ -125,10 +124,9 @@ export function MentionPop({ options, active, onPick }: { options: AgentSpec[]; 
 export function SentNotice({ name, onOpen, onClose }: { name: string; onOpen: () => void; onClose: () => void }) {
 	return (
 		<div className="row small notice">
-			<span>Nosūtīts: {name}.</span>
+			<span>{tr("Nosūtīts: {name}.", { name: name })}</span>
 			<button className="ghost small" onClick={onOpen}>
-				Atvērt sarunu
-			</button>
+				{tr("Atvērt sarunu")}</button>
 			<button className="ghost small x" onClick={onClose}>
 				×
 			</button>

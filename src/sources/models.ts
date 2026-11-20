@@ -9,6 +9,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 import type { ProjectStore } from "../core/store.js";
+import { projectingDir } from "./projecting.js";
 import type { ModelOrigin, ModelRow } from "../shared/api.js";
 
 export type ModelFile = ModelRow;
@@ -31,14 +32,9 @@ const sortModels = (a: ModelFile, b: ModelFile) =>
 
 export async function listModels(root: string): Promise<ModelFile[]> {
 	const out: ModelFile[] = [];
-	let top;
-	try {
-		top = (await readdir(root, { withFileTypes: true })).find((d) => d.isDirectory() && /^01[\s_.-]*projekt/.test(norm(d.name)));
-	} catch {
-		return out;
-	}
-	if (!top) return out;
-	const base = join(root, top.name);
+	// 01_Projektesana, or the project folder itself when it holds 1.1 … 1.4 (projecting.ts)
+	const base = await projectingDir(root);
+	if (!base) return out;
 	let seen = 0;
 	// `part` = the first-level folder (1.1 / 1.2 / 1.4 / other); `section` = the folder under it
 	const walk = async (p: string, part: string, section: string | null, archived: boolean, depth: number) => {

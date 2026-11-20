@@ -32,6 +32,8 @@ export interface Settings {
 	/** empty = the model's default effort */
 	effort: Effort | "";
 	theme: "auto" | "light" | "dark";
+	/** interface language (what the AI writes stays Latvian) */
+	language: "lv" | "en";
 	/** Revit MCP server entry (build/index.js). null = not configured */
 	revitServerJs: string | null;
 	/** node.exe that runs the Revit MCP server. null = Electron's own node */
@@ -46,7 +48,7 @@ export interface Settings {
 	limits: Limits;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

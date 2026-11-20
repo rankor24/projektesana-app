@@ -60,6 +60,9 @@ export function cellLines(matrix: CoordMatrix, file: string, group: ReportGroupN
 	return (cell?.lines ?? []).map((l) => ({ text: `${l.w}: ${l.now} → ${l.to}`, ...(l.ask ? { ask: l.ask } : {}) }));
 }
 
+/** The questions still to decide on a model's row (K4): its remarks that carry an "ask", every group together. */
+export const rowQuestions = (r: MatrixRow): string[] => r.cells.flatMap((c) => c.lines.filter((l) => l.ask).map((l) => `${c.group}: ${l.ask}`));
+
 /** What a cell shows: a tick, the count, or a dash. */
 export const cellText = (c: MatrixCell): string => (c.state === "ok" ? "✓" : c.state === "fix" ? String(c.count) : "—");
 

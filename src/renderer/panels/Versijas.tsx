@@ -1,6 +1,7 @@
 // Versijas (task 9.9 splits it into windows around the viewer): "kas mainījās starp" two dates — sources, deliveries, revisions and the app's own data in one list, each linked
 // to its compare view (sheet compare for PDFs, BimCraft's compare for IFC). Below: the project's IFC models, to open one or
 // compare two.
+import { comparePicker } from "../shell/ComparePicker";
 import { useState, useSyncExternalStore } from "react";
 import type { VersionRow } from "../../shared/api";
 import { changeId, filterRows, kindCounts, KIND_LABEL, KINDS, modesFor, planFor, type ChangeKind, type CompareMode, type OpenPlan } from "../../shared/versions-view";
@@ -9,6 +10,7 @@ import { call, errText } from "../bridge";
 import { commentSubject } from "../comment-subject";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -43,7 +45,7 @@ export function VersList() {
 	const [msg, setMsg] = useState<string | null>(null);
 	const p = usePicked();
 	const rows = useLoad<VersionRow[]>(() => (projectId ? call("versions.between", projectId, from, to) : Promise.resolve([])), [projectId, from, to]);
-	if (!projectId) return <Empty title="nav projekta" />;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
 	const all = rows.data ?? [];
 	const shown = filterRows(all, kinds);
 	const counts = kindCounts(all);
@@ -56,10 +58,15 @@ export function VersList() {
 	return (
 		<div className="pane fill">
 			<div className="row">
+				<button className="primary" onClick={() => comparePicker.open()} title={tr("Jebkuri divi faili: PDF, DWG, IFC, DOCX, XLSX")}>
+					⇄ {tr("Salīdzināt divus failus…")}
+				</button>
+			</div>
+			<div className="row">
 				<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
 				<span>–</span>
 				<input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-				<span className="dim small">{shown.length} no {all.length}</span>
+				<span className="dim small">{tr("{v} no {v2}", { v: shown.length, v2: all.length })}</span>
 			</div>
 			<div className="row" style={{ flexWrap: "wrap" }}>
 				{KINDS.map((k) => (
@@ -69,23 +76,22 @@ export function VersList() {
 				))}
 				{kinds.size > 0 && (
 					<button className="small ghost" onClick={() => setKinds(new Set())}>
-						visi
-					</button>
+						{tr("visi")}</button>
 				)}
 			</div>
 			{modes.length > 0 && (
 				<div className="row">
-					<span className="dim small">Skats:</span>
+					<span className="dim small">{tr("Skats:")}</span>
 					{modes.map((m) => (
-						<button key={m} className={`small ${p.mode === m ? "primary" : ""}`} onClick={() => p.row && pick(p.row, m)} title={m === "side" ? "A un B blakus, kamera kopā" : m === "overlay" ? "viens skats ar abiem" : "tikai izmaiņas"}>
-							{m === "side" ? "blakus" : m === "overlay" ? "pārklāt" : "tikai izmaiņas"}
+						<button key={m} className={`small ${p.mode === m ? "primary" : ""}`} onClick={() => p.row && pick(p.row, m)} title={m === "side" ? tr("A un B blakus, kamera kopā") : m === "overlay" ? tr("viens skats ar abiem") : tr("tikai izmaiņas")}>
+							{m === "side" ? tr("blakus") : m === "overlay" ? tr("pārklāt") : tr("tikai izmaiņas")}
 						</button>
 					))}
 				</div>
 			)}
 			{msg && <div className="dim small">{msg}</div>}
 			{rows.error ? <Err error={rows.error} /> : null}
-			{all.length === 0 && !rows.loading && <Empty title="no data">Šajā laikā izmaiņu nav.</Empty>}
+			{all.length === 0 && !rows.loading && <Empty title={tr("no data")}>{tr("Šajā laikā izmaiņu nav.")}</Empty>}
 			<table>
 				<tbody>
 					{shown.map((r, i) => (
@@ -98,7 +104,7 @@ export function VersList() {
 								{r.label}
 								{r.detail && <div className="dim small">{r.detail}</div>}
 							</td>
-							<td className="small dim">{r.compare ? (r.compare.mode === "ifc" ? "3D" : "lapa") : ""}</td>
+							<td className="small dim">{r.compare ? (r.compare.mode === "ifc" ? tr("3D") : tr("lapa")) : ""}</td>
 						</tr>
 					))}
 				</tbody>
@@ -112,13 +118,13 @@ export function VersModels() {
 	const { projectId } = useUi();
 	const models = useLoad(() => (projectId ? call("models.list", projectId) : Promise.resolve([])), [projectId]);
 	const [pick, setPick] = useState<string[]>([]);
-	if (!projectId) return <Empty title="nav projekta" />;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
 	const name = (rel: string) => models.data?.find((m) => m.rel === rel)?.name ?? rel;
 	return (
 		<div className="pane fill">
-			<div className="section-title">Modeļi (visi projekta IFC: izejas dati, daļas, nodevumi, uzmetumi, revīzijas)</div>
+			<div className="section-title">{tr("Modeļi (visi projekta IFC: izejas dati, daļas, nodevumi, uzmetumi, revīzijas)")}</div>
 			{models.error ? <Err error={models.error} /> : null}
-			{models.data?.length === 0 && <div className="dim small">no data: projekta mapē, uzmetumos un revīzijās IFC failu nav.</div>}
+			{models.data?.length === 0 && <div className="dim small">{tr("no data: projekta mapē, uzmetumos un revīzijās IFC failu nav.")}</div>}
 			<table>
 				<tbody>
 					{(models.data ?? []).map((m) => (
@@ -135,15 +141,14 @@ export function VersModels() {
 								{m.archived && (
 									<>
 										{" "}
-										<Badge tone="dim" title="arhīvs: vecāks par failu sadaļas mapē">arhīvs</Badge>
+										<Badge tone="dim" title={tr("arhīvs: vecāks par failu sadaļas mapē")}>{tr("arhīvs")}</Badge>
 									</>
 								)}
 							</td>
 							<td className="small dim">
-								{(m.size / 1048576).toFixed(1)} MB · {m.mtime.slice(0, 10)}
-							</td>
+								{tr("{v} MB · {v2}", { v: (m.size / 1048576).toFixed(1), v2: m.mtime.slice(0, 10) })}</td>
 							<td>
-								<button className="small" onClick={() => ui.show({ kind: "ifc", path: m.rel, label: m.name })}>3D</button>
+								<button className="small" onClick={() => ui.show({ kind: "ifc", path: m.rel, label: m.name })}>{tr("3D")}</button>
 							</td>
 						</tr>
 					))}
@@ -152,16 +157,14 @@ export function VersModels() {
 			{pick.length === 2 && (
 				<div className="row">
 					<button className="primary" onClick={() => ui.show({ kind: "compare", a: pick[0], b: pick[1], aLabel: name(pick[0]), bLabel: name(pick[1]), mode: "ifc" })}>
-						Pārklāt {name(pick[0])} → {name(pick[1])}
-					</button>
+						{tr("Pārklāt {v} → {v2}", { v: name(pick[0]), v2: name(pick[1]) })}</button>
 					<button
 						onClick={() => {
 							const [a, b] = pick;
 							runPlan(planFor({ at: "", kind: "data", label: "", compare: { a, b, mode: "ifc", aLabel: name(a), bLabel: name(b) } }, "side"));
 						}}
 					>
-						Blakus, kamera kopā
-					</button>
+						{tr("Blakus, kamera kopā")}</button>
 				</div>
 			)}
 		</div>
@@ -174,25 +177,24 @@ export function VersSheets() {
 	const p = usePicked();
 	const c = p.row?.compare;
 	const rows = useLoad(() => (projectId && c && c.mode === "sheet" ? call("sheets.diff", projectId, c.a, c.b) : Promise.resolve([])), [projectId, c?.a, c?.b]);
-	if (!projectId) return <Empty title="nav projekta" />;
-	if (!c || c.mode !== "sheet") return <Empty title="nav lapu pāra">Izvēlies izmaiņu sarakstā lapu versiju: te būs tās lapas un kas tajās mainījies.</Empty>;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
+	if (!c || c.mode !== "sheet") return <Empty title={tr("nav lapu pāra")}>{tr("Izvēlies izmaiņu sarakstā lapu versiju: te būs tās lapas un kas tajās mainījies.")}</Empty>;
 	return (
 		<div className="pane fill">
 			<div className="row">
 				<b>{c.aLabel} ↔ {c.bLabel}</b>
 				<span className="grow" />
 				<button className="small" onClick={() => ui.show({ kind: "compare", a: c.a, b: c.b, aLabel: c.aLabel, bLabel: c.bLabel, mode: "sheet", only: true })}>
-					Tikai izmaiņas
-				</button>
+					{tr("Tikai izmaiņas")}</button>
 			</div>
 			{rows.error ? <Err error={rows.error} /> : null}
-			{rows.data?.length === 0 && <div className="dim small">Lapu pāru nav vai neviena nemainījās.</div>}
+			{rows.data?.length === 0 && <div className="dim small">{tr("Lapu pāru nav vai neviena nemainījās.")}</div>}
 			<table>
 				<tbody>
 					{(rows.data ?? []).map((r, i) => (
 						<tr key={i}>
-							<td className="mono small">{r.sheetNo ?? `lpp. ${r.a}`}</td>
-							<td className="small">{r.summary.length ? r.summary.join("; ") : <span className="dim">nemainīta</span>}</td>
+							<td className="mono small">{r.sheetNo ?? tr("lpp. {a}", { a: r.a })}</td>
+							<td className="small">{r.summary.length ? r.summary.join("; ") : <span className="dim">{tr("nemainīta")}</span>}</td>
 						</tr>
 					))}
 				</tbody>
@@ -203,7 +205,7 @@ export function VersSheets() {
 
 export function VersRevit() {
 	const { projectId } = useUi();
-	if (!projectId) return <Empty title="nav projekta" />;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
 	return (
 		<div className="pane fill">
 			<RevitSection projectId={projectId} />
@@ -232,7 +234,7 @@ function RevitSection({ projectId }: { projectId: string }) {
 	const st = status.data;
 	return (
 		<>
-			<div className="section-title">Revit</div>
+			<div className="section-title">{tr("Revit")}</div>
 			<div className="row small">
 				<Badge tone={st?.state === "savienots" ? "ok" : "dim"}>{st?.state ?? "…"}</Badge>
 				{st?.document && <span>{st.document}</span>}
@@ -241,20 +243,18 @@ function RevitSection({ projectId }: { projectId: string }) {
 			{st?.state === "savienots" && (
 				<>
 					<div className="row">
-						<button disabled={!!busy} title="Saglabā atvērto modeli kā <nosaukums>_WORK.rvt projekta datu mapē; aģents strādā tikai tajā" onClick={() => run("Darba kopija", () => call("revit.workCopy", projectId))}>
-							Darba kopija
-						</button>
-						<button disabled={!!busy} onClick={() => run("IFC eksports", () => call("revit.exportIfc", projectId))}>IFC eksports</button>
+						<button disabled={!!busy} title={tr("Saglabā atvērto modeli kā <nosaukums>_WORK.rvt projekta datu mapē; aģents strādā tikai tajā")} onClick={() => run("Darba kopija", () => call("revit.workCopy", projectId))}>
+							{tr("Darba kopija")}</button>
+						<button disabled={!!busy} onClick={() => run("IFC eksports", () => call("revit.exportIfc", projectId))}>{tr("IFC eksports")}</button>
 						<button disabled={!!busy} onClick={() => run("Revīzija", () => call("revisions.capture", projectId, "Saglabāta ar roku", []).then((r) => `${r.id}${r.diffFromPrev ? ` +${r.diffFromPrev.added} −${r.diffFromPrev.removed} ~${r.diffFromPrev.changed}` : ""}`))}>
-							Fiksēt revīziju
-						</button>
+							{tr("Fiksēt revīziju")}</button>
 					</div>
 					<div className="row">
-						<button disabled={!!busy} onClick={() => run("Skati", () => call("revit.views").then((v) => (setViews(v), `${v.length} skati`)))}>Nolasīt skatus</button>
+						<button disabled={!!busy} onClick={() => run("Skati", () => call("revit.views").then((v) => (setViews(v), `${v.length} skati`)))}>{tr("Nolasīt skatus")}</button>
 						{views && (
 							<>
 								<select value={view} onChange={(e) => setView(e.target.value)}>
-									<option value="">— skats —</option>
+									<option value="">{tr("— skats —")}</option>
 									{views.map((v) => (
 										<option key={v.id} value={v.id}>
 											{v.type}: {v.name}
@@ -262,8 +262,7 @@ function RevitSection({ projectId }: { projectId: string }) {
 									))}
 								</select>
 								<button disabled={!view || !!busy} onClick={() => run("PDF eksports", () => call("revit.exportView", projectId, view, views.find((v) => v.id === view)?.name ?? "skats"))}>
-									PDF
-								</button>
+									{tr("PDF")}</button>
 							</>
 						)}
 					</div>

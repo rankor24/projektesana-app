@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { groupRuns, isRunning } from "../../shared/activity";
 import { useActivity } from "../activity";
 import { RunCard } from "./RunCard";
-import { PlanBlock } from "./PlanBlock";
+import { NoteBox, PlanBlock } from "./PlanBlock";
+import { Icon } from "../icons";
 import { effectiveMode, focusForSend } from "../../shared/view-context";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
 import { fmtTokens } from "../../shared/tokens";
@@ -27,6 +28,7 @@ import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
 import { RoomFeed } from "./RoomFeed";
 import { Waiting } from "./Waiting";
+import { tr } from "../i18n";
 
 type Line =
 	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
@@ -341,20 +343,23 @@ export function AgentDock() {
 		>
 			<div className="agent-head">
 				<div className="row">
-					<b>Aģents</b>
+					<b>{tr("Aģents")}</b>
 					{st ? (
 						<button className={`chip ${st.signedIn ? "" : "bad"}`} onClick={() => windows.open("iestatijumi")} title={st.reason}>
-							{st.providerLabel} · {st.model} · {st.signedIn ? "pieslēgts" : "nav pieslēgts"}
+							{st.providerLabel} · {st.model} · {st.signedIn ? tr("pieslēgts") : tr("nav pieslēgts")}
 						</button>
 					) : (
 						<span className="dim small">…</span>
 					)}
-					<span className="badge dim" title="Revit MCP">Revit: {st?.revit ?? "…"}</span>
+					<span className="badge dim" title={tr("Revit MCP")}>{tr("Revit:")} {st?.revit ?? "…"}</span>
 					<span className="grow" />
+					{/* the ring and compaction are the lead's conversation; another thread has no meter of its own yet */}
+					{ctx.data && leadPath && <ContextRing c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} draft={draftCost} />}
 					{leadPath && (
 						<button
-							className="ghost small"
-							title="Sākt jaunu sarunu ar vadošo aģentu (pieraksts paliek)"
+							className="icon-btn"
+							title={tr("Sākt jaunu sarunu ar vadošo aģentu (pieraksts paliek)")}
+							aria-label={tr("jauna saruna")}
 							onClick={() =>
 								call("agent.reset", projectId).then(() => {
 									ui.selectThread(null);
@@ -362,14 +367,14 @@ export function AgentDock() {
 								})
 							}
 						>
-							jauna saruna
+							<Icon name="plus" />
 						</button>
 					)}
 				</div>
 				<div className="focus-head">
-					<span className="dim">Fokuss:</span>
+					<span className="dim">{tr("Fokuss:")}</span>
 					{focus.length === 0 ? (
-						<span className="dim">nekas</span>
+						<span className="dim">{tr("nekas")}</span>
 					) : (
 						<>
 							{focus.map((f) => (
@@ -378,19 +383,17 @@ export function AgentDock() {
 									<button className="x" onClick={() => ui.focusRemove(f.kind, f.id)}>×</button>
 								</span>
 							))}
-							<button className="ghost small" onClick={() => ui.focusClear()}>notīrīt</button>
+							<button className="ghost small" onClick={() => ui.focusClear()}>{tr("notīrīt")}</button>
 						</>
 					)}
 				</div>
-				{/* the meter and compaction are the lead's conversation; another thread has no meter of its own yet */}
-				{ctx.data && leadPath && <ContextMeter c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} />}
 				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} onSelect={T.select} onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))} onClose={closeThread} />
 			</div>
 			<ProcessStrip projectId={projectId} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
 			<div className="tabs">
-				<button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>Saruna</button>
-				<button className={tab === "room" ? "on" : ""} onClick={() => setTab("room")} title="Ko aģenti saka viens otram">Telpa</button>
+				<button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>{tr("Saruna")}</button>
+				<button className={tab === "room" ? "on" : ""} onClick={() => setTab("room")} title={tr("Ko aģenti saka viens otram")}>{tr("Telpa")}</button>
 			</div>
 			{tab === "room" && (
 				<RoomFeed
@@ -401,14 +404,40 @@ export function AgentDock() {
 					}}
 				/>
 			)}
+			{tab === "room" && projectId && <NoteBox projectId={projectId} />}
 			<div className="chat" hidden={tab === "room"}>
-				{lines.length === 0 && loadedFor === viewKey && <div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? "Saruna vēl nav sākta." : projectId ? "Saruna par šo projektu vēl nav sākta." : "nav projekta — saruna bez projekta datiem."}</div>}
+				{lines.length === 0 && loadedFor === viewKey && (
+					<div className="chat-empty-wrap">
+						<div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? tr("Saruna vēl nav sākta.") : projectId ? tr("Saruna par šo projektu vēl nav sākta.") : tr("nav projekta — saruna bez projekta datiem.")}</div>
+						{(tasks.data ?? []).length > 0 && (
+							<div>
+								<div className="suggest-title">{tr("Ieteiktās darbības")}</div>
+								<div className="suggest-list">
+									{(tasks.data ?? []).map((t) => (
+										<button
+											key={t.id}
+											className="suggest"
+											title={t.text}
+											onClick={() => {
+												setText(t.text);
+												inputRef.current?.focus();
+											}}
+										>
+											<span className="grow">{t.label}</span>
+											<Icon name="arrowRight" size={14} />
+										</button>
+									))}
+								</div>
+							</div>
+						)}
+					</div>
+				)}
 				{lines.map((l, i) =>
 					l.kind === "run" ? (
 						runs.get(l.runId) ? (
 							<RunCard key={l.runId} lines={runs.get(l.runId)!} latest={l.runId === lastRun} />
 						) : (
-							<div key={l.runId} className="dim small">{l.queued ? "Gaida rindā" : "strādā…"}</div>
+							<div key={l.runId} className="dim small">{l.queued ? tr("Gaida rindā") : tr("strādā…")}</div>
 						)
 					) : (
 						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
@@ -439,90 +468,87 @@ export function AgentDock() {
 				onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
 			/>
 			<div className="chat-input">
-				<PlanBlock projectId={projectId} />
-				<div className="row">
-					<span className="dim small">Uzdevumi:</span>
-					{(tasks.data ?? []).map((t) => (
-						<button key={t.id} className="small ghost" title={t.text} onClick={() => setText(t.text)}>
-							{t.label}
-						</button>
-					))}
-				</div>
-				{(pending.length > 0 || reading > 0) && (
-					<div className="attach-strip">
-						{pending.map((p) => (
-							<div key={p.key} className={`attach ${p.kind}`} title={`${p.name} · ${sizeText(p.size)}${p.cost.pages ? ` · ${p.cost.pages} lpp.` : ""}${p.cost.cut ? " · garāks par limitu, iet tikai sākums" : ""}`}>
-								{p.thumb ? <img src={p.thumb} alt={p.name} /> : <span className="attach-doc">{p.name.split(".").pop()?.toUpperCase()}</span>}
-								<span className="attach-name">{p.name}</span>
-								<span className={`attach-cost ${p.cost.cut ? "warn" : ""}`}>
-									{p.cost.pages ? `${p.cost.pages} lpp. · ` : ""}≈{fmtTokens(p.cost.tokens)}
-									{p.cost.cut ? " (sākums)" : ""}
-								</span>
-								<button className="x" title="Noņemt" onClick={() => setPending((ps) => ps.filter((x) => x.key !== p.key))}>×</button>
-							</div>
-						))}
-						{reading > 0 && <span className="dim small">sagatavo {reading}…</span>}
+				{/* only the warning stays by the message; the full count of what it adds is in the context popover */}
+				{leadPath && draftCost?.over && (
+					<div className="draft-cost small warn" title={tr("Aptuvens: teksts + Fokuss + atvērtās piezīmes + pielikumi. Precīzu skaitu pēc atbildes dod modelis.")}>
+						{tr("Šī ziņa pievienos ≈{total}: teksts {text} · fokuss {focus} · piezīmes {pins}", { total: fmtTokens(draftCost.total), text: fmtTokens(draftCost.text), focus: fmtTokens(draftCost.focus), pins: fmtTokens(draftCost.pins) })}
+						{tr(" — pārsniegs saspiešanas robežu: saruna tiks saspiesta pirms atbildes")}
 					</div>
 				)}
-				{leadPath && draftCost && (
-					<div className={`draft-cost small ${draftCost.over ? "warn" : "dim"}`} title="Aptuvens: teksts + Fokuss + atvērtās piezīmes + pielikumi. Precīzu skaitu pēc atbildes dod modelis.">
-						Šī ziņa pievienos ≈{fmtTokens(draftCost.total)}: teksts {fmtTokens(draftCost.text)} · fokuss {fmtTokens(draftCost.focus)} · piezīmes {fmtTokens(draftCost.pins)}{draftCost.plan > 0 && ` · plāns ${fmtTokens(draftCost.plan)}`}
-						{draftCost.files > 0 && ` · pielikumi ${fmtTokens(draftCost.files)}`}
-						{draftCost.over && " — pārsniegs saspiešanas robežu: saruna tiks saspiesta pirms atbildes"}
-					</div>
-				)}
-				{blind && <div className="attach-warn small">Modelis {st?.model} neredz attēlus — Iestatījumos izvēlies citu modeli vai noņem attēlu.</div>}
+				{blind && <div className="attach-warn small">{tr("Modelis {model} neredz attēlus — Iestatījumos izvēlies citu modeli vai noņem attēlu.", { model: st?.model })}</div>}
 				<MentionPop options={options} active={Math.min(pick, options.length - 1)} onPick={choose} />
-				<textarea
-					ref={inputRef}
-					rows={3}
-					value={text}
-					placeholder={closedView ? "Saruna ir slēgta" : st && !st.signedIn ? "nav pieslēgts — atver Iestatījumi" : "Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu"}
-					onChange={(e) => {
-						setText(e.target.value);
-						setPick(0);
-					}}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) return void send();
-						if (options.length === 0) return;
-						const at = Math.min(pick, options.length - 1);
-						if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-							e.preventDefault();
-							setPick((at + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
-						} else if (e.key === "Tab" || e.key === "Enter") {
-							e.preventDefault();
-							choose(options[at].id);
-						}
-					}}
-				/>
-				<div className="row">
-					<button className="ghost" title="Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)" onClick={() => fileRef.current?.click()}>
-						📎
-					</button>
-					<input
-						ref={fileRef}
-						type="file"
-						multiple
-						accept={ACCEPT}
-						hidden
+				<div className="composer">
+					<PlanBlock projectId={projectId} />
+					{(pending.length > 0 || reading > 0) && (
+						<div className="attach-strip composer-attach">
+							{pending.map((p) => (
+								<div key={p.key} className={`attach ${p.kind}`} title={`${p.name} · ${sizeText(p.size)}${p.cost.pages ? ` · ${p.cost.pages} lpp.` : ""}${p.cost.cut ? " · garāks par limitu, iet tikai sākums" : ""}`}>
+									{p.thumb ? <img src={p.thumb} alt={p.name} /> : <span className="attach-doc">{p.name.split(".").pop()?.toUpperCase()}</span>}
+									<span className="attach-name">{p.name}</span>
+									<span className={`attach-cost ${p.cost.cut ? "warn" : ""}`}>
+										{p.cost.pages ? tr("{pages} lpp. · ", { pages: p.cost.pages }) : ""}≈{fmtTokens(p.cost.tokens)}
+										{p.cost.cut ? tr(" (sākums)") : ""}
+									</span>
+									<button className="x" title={tr("Noņemt")} onClick={() => setPending((ps) => ps.filter((x) => x.key !== p.key))}>×</button>
+								</div>
+							))}
+							{reading > 0 && <span className="dim small">{tr("sagatavo {reading} …", { reading: reading })}</span>}
+						</div>
+					)}
+					<textarea
+						ref={inputRef}
+						rows={2}
+						value={text}
+						placeholder={closedView ? tr("Saruna ir slēgta") : st && !st.signedIn ? tr("nav pieslēgts — atver Iestatījumi") : tr("Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu")}
 						onChange={(e) => {
-							void addFiles([...(e.target.files ?? [])]);
-							e.target.value = "";
+							setText(e.target.value);
+							setPick(0);
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) return void send();
+							if (options.length === 0) return;
+							const at = Math.min(pick, options.length - 1);
+							if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+								e.preventDefault();
+								setPick((at + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
+							} else if (e.key === "Tab" || e.key === "Enter") {
+								e.preventDefault();
+								choose(options[at].id);
+							}
 						}}
 					/>
-					<div className="view-toggle" title="Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.">
-						<span className="dim small">Skats:</span>
-						<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>Auto</button>
-						<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>Manuāli</button>
-					</div>
-					<span className="grow" />
-					{runId ? (
-						<button onClick={stop}>Apturēt</button>
-					) : (
-						<button className="primary" disabled={!canSend || blind} onClick={send}>
-							Sūtīt
+					<div className="composer-bar">
+						<button className="icon-btn" title={tr("Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)")} aria-label={tr("Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)")} onClick={() => fileRef.current?.click()}>
+							<Icon name="paperclip" />
 						</button>
-					)}
+						<input
+							ref={fileRef}
+							type="file"
+							multiple
+							accept={ACCEPT}
+							hidden
+							onChange={(e) => {
+								void addFiles([...(e.target.files ?? [])]);
+								e.target.value = "";
+							}}
+						/>
+						<div className="view-toggle" title={tr("Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.")}>
+							<span className="dim small">{tr("Skats:")}</span>
+							<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>{tr("Auto")}</button>
+							<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>{tr("Manuāli")}</button>
+						</div>
+						<span className="grow" />
+						{runId ? (
+							<button className="stop-btn" onClick={stop}>
+								<Icon name="square" size={12} />
+								{tr("Apturēt")}
+							</button>
+						) : (
+							<button className="send-btn" title={tr("Sūtīt")} aria-label={tr("Sūtīt")} disabled={!canSend || blind} onClick={send}>
+								<Icon name="send" />
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
 		</aside>
@@ -544,17 +570,17 @@ function apply(ls: Line[], e: RunEvent): Line[] {
 			// one line per compaction: "start" opens it, "done" / "failed" replace it
 			const line: Line =
 				e.phase === "start"
-					? { kind: "compact", phase: "start", text: `Saruna ir ${fmtTokens(e.before)} tokenu — saspiež vecāko daļu…` }
+					? { kind: "compact", phase: "start", text: tr("Saruna ir {tokens} tokenu — saspiež vecāko daļu…", { tokens: fmtTokens(e.before) }) }
 					: e.phase === "done"
 						? { kind: "compact", phase: "done", text: `Saruna saspiesta: ${fmtTokens(e.before)} → ≈${fmtTokens(e.after ?? 0)} tokeni` }
-						: { kind: "compact", phase: "failed", text: `Saspiešana neizdevās, darbs turpinās bez tās: ${e.message ?? ""}` };
+						: { kind: "compact", phase: "failed", text: tr("Saspiešana neizdevās, darbs turpinās bez tās: {message}", { message: e.message ?? "" }) };
 			return last?.kind === "compact" && last.phase === "start" ? [...ls.slice(0, -1), line] : [...ls, line];
 		}
 		case "confirm":
 			return [...ls, { kind: "confirm", id: e.id, tool: e.tool, batch: e.batch }];
 		case "retry": {
 			// one line per run of restarts: the next attempt replaces the previous one
-			const line: Line = { kind: "retry", text: `Savienojums pārtrūka (${e.message}). Atkārto ${e.attempt}/${e.of} pēc ${Math.round(e.delayMs / 1000)} s…` };
+			const line: Line = { kind: "retry", text: tr("Savienojums pārtrūka ({message}). Atkārto {attempt}/{of} pēc {s} s…", { message: e.message, attempt: e.attempt, of: e.of, s: Math.round(e.delayMs / 1000) }) };
 			return last?.kind === "retry" ? [...ls.slice(0, -1), line] : [...ls, line];
 		}
 		case "error":
@@ -593,7 +619,7 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 			<div className="msg assistant">
 				{l.thinking && (
 					<details className="thinking">
-						<summary>domāšana</summary>
+						<summary>{tr("domāšana")}</summary>
 						{l.thinking}
 					</details>
 				)}
@@ -612,15 +638,15 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 		return (
 			<div className="confirm">
 				<div>
-					<b>Apstiprini partiju:</b> {l.tool}
+					<b>{tr("Apstiprini partiju:")}</b> {l.tool}
 				</div>
 				<pre>{l.batch}</pre>
 				{l.answered ? (
-					<span className={`badge ${l.allow === undefined ? "dim" : l.allow ? "ok" : "bad"}`}>{l.allow === undefined ? "atbildēts" : l.allow ? "atļauts" : "noraidīts"}</span>
+					<span className={`badge ${l.allow === undefined ? "dim" : l.allow ? "ok" : "bad"}`}>{l.allow === undefined ? tr("atbildēts") : l.allow ? tr("atļauts") : tr("noraidīts")}</span>
 				) : (
 					<div className="row">
-						<button className="primary" onClick={() => onAnswer(l.id, true)}>Atļaut</button>
-						<button onClick={() => onAnswer(l.id, false)}>Noraidīt</button>
+						<button className="primary" onClick={() => onAnswer(l.id, true)}>{tr("Atļaut")}</button>
+						<button onClick={() => onAnswer(l.id, false)}>{tr("Noraidīt")}</button>
 					</div>
 				)}
 			</div>
@@ -629,8 +655,65 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 	return <div className="err">{l.text}</div>;
 }
 
+type Draft = NonNullable<ContextInfo["draft"]> & { files: number; total: number; over: boolean };
+
+/**
+ * The context in the dock header is a small ring (the share of the model's window in use); a click opens the detail: the bar,
+ * where it goes, Saspiest, and what the message being typed will add. The ring turns amber near the compaction mark and red past it.
+ */
+function ContextRing({ c, busy, compacting, onCompact, draft }: { c: ContextInfo; busy: boolean; compacting: boolean; onCompact: () => void; draft: Draft | null }) {
+	const [open, setOpen] = useState(false);
+	const btnRef = useRef<HTMLButtonElement>(null);
+	const popRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const down = (e: PointerEvent) => {
+			const t = e.target as Node;
+			if (!popRef.current?.contains(t) && !btnRef.current?.contains(t)) setOpen(false);
+		};
+		const key = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setOpen(false);
+		};
+		document.addEventListener("pointerdown", down);
+		document.addEventListener("keydown", key);
+		return () => {
+			document.removeEventListener("pointerdown", down);
+			document.removeEventListener("keydown", key);
+		};
+	}, [open]);
+	const used = c.used ?? c.fixedEstimate;
+	const frac = Math.min(1, used / c.window);
+	const pct = Math.round(frac * 100);
+	const color = used >= c.compactAt ? "var(--bad)" : used >= c.compactAt * 0.8 ? "var(--warn)" : "var(--accent)";
+	const R = 8;
+	const len = 2 * Math.PI * R;
+	return (
+		<>
+			<button ref={btnRef} className="icon-btn" aria-expanded={open} aria-label={`${tr("Konteksts")} ${pct}%`} title={`${tr("Konteksts")} ${pct}% · ${fmtTokens(used)} / ${fmtTokens(c.window)}`} onClick={() => setOpen(!open)}>
+				<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+					<circle cx="11" cy="11" r={R} fill="none" stroke="var(--elev2)" strokeWidth="2.5" />
+					<circle cx="11" cy="11" r={R} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${Math.max(frac, 0.012) * len} ${len}`} transform="rotate(-90 11 11)" />
+				</svg>
+			</button>
+			{open && (
+				<div ref={popRef} className="ctx-pop" role="dialog" aria-label={tr("Konteksts")}>
+					<ContextMeter c={c} busy={busy} compacting={compacting} onCompact={onCompact} />
+					{draft && (
+						<div className={`small ${draft.over ? "warn" : "dim"}`} title={tr("Aptuvens: teksts + Fokuss + atvērtās piezīmes + pielikumi. Precīzu skaitu pēc atbildes dod modelis.")}>
+							{tr("Šī ziņa pievienos ≈{total}: teksts {text} · fokuss {focus} · piezīmes {pins}", { total: fmtTokens(draft.total), text: fmtTokens(draft.text), focus: fmtTokens(draft.focus), pins: fmtTokens(draft.pins) })}
+							{draft.plan > 0 && tr(" · plāns {plan}", { plan: fmtTokens(draft.plan) })}
+							{draft.files > 0 && tr(" · pielikumi {files}", { files: fmtTokens(draft.files) })}
+							{draft.over && tr(" — pārsniegs saspiešanas robežu: saruna tiks saspiesta pirms atbildes")}
+						</div>
+					)}
+				</div>
+			)}
+		</>
+	);
+}
+
 const PART_COLOR = { fixed: "#888780", chat: "#7F77DD", docs: "#1D9E75", tools: "#D4537E", images: "#D85A30" } as const;
-const PART_LABEL = { fixed: "pamats (noteikumi, rīki)", chat: "saruna", docs: "dokumentu teksts", tools: "rīku atbildes", images: "attēli" } as const;
+const PART_LABEL = { fixed: tr("pamats (noteikumi, rīki)"), chat: tr("saruna"), docs: tr("dokumentu teksts"), tools: tr("rīku atbildes"), images: tr("attēli") } as const;
 
 /** How full the model's context is: the bar is the model's window, the red mark is where compaction starts. */
 function ContextMeter({ c, busy, compacting, onCompact }: { c: ContextInfo; busy: boolean; compacting: boolean; onCompact: () => void }) {
@@ -641,28 +724,28 @@ function ContextMeter({ c, busy, compacting, onCompact }: { c: ContextInfo; busy
 	const k = used / sum;
 	const pct = Math.round((used / c.window) * 100);
 	const hot = used >= c.compactAt;
-	const label = c.source === "usage" ? "provaidera skaits" : c.source === "estimate" ? "aptuveni" : "tikai pamats, saruna vēl nav sākta";
+	const label = c.source === "usage" ? tr("provaidera skaits") : c.source === "estimate" ? tr("aptuveni") : tr("tikai pamats, saruna vēl nav sākta");
 	return (
 		<div className="ctx">
-			<div className="ctx-bar" title={`Konteksta logs ${c.window.toLocaleString("lv")} tokenu; saspiešana sākas pie ${c.compactAt.toLocaleString("lv")}`}>
+			<div className="ctx-bar" title={tr("Konteksta logs {v} tokenu; saspiešana sākas pie {v2}", { v: c.window.toLocaleString("lv"), v2: c.compactAt.toLocaleString("lv") })}>
 				{(Object.keys(PART_COLOR) as (keyof typeof PART_COLOR)[]).map((key) => (parts[key] > 0 ? <div key={key} style={{ width: `${((parts[key] * k) / c.window) * 100}%`, background: PART_COLOR[key] }} title={`${PART_LABEL[key]}: ≈${fmtTokens(parts[key] * k)}`} /> : null))}
 				<div className="ctx-line" style={{ left: `${(c.compactAt / c.window) * 100}%` }} />
 			</div>
 			<div className="row ctx-text small">
 				<span className={hot ? "warn" : ""} title={label}>
-					Konteksts {c.used === null ? "≈" : ""}
+					{tr("Konteksts")} {c.used === null ? "≈" : ""}
 					{fmtTokens(used)} / {fmtTokens(c.window)} ({pct}%)
 				</span>
-				{c.lastAdded ? <span className="dim" title="Cik pēdējā ziņa kopā ar atbildi un rīkiem pievienoja kontekstam">· pēdējā +{fmtTokens(c.lastAdded)}</span> : null}
-				{c.imageCount > 0 ? <span className="dim">· {c.imageCount} att.</span> : null}
-				{c.compactions > 0 ? <span className="dim">· saspiests {c.compactions}×</span> : null}
+				{c.lastAdded ? <span className="dim" title={tr("Cik pēdējā ziņa kopā ar atbildi un rīkiem pievienoja kontekstam")}>{tr("· pēdējā +{lastAdded}", { lastAdded: fmtTokens(c.lastAdded) })}</span> : null}
+				{c.imageCount > 0 ? <span className="dim">{tr("· {imageCount} att.", { imageCount: c.imageCount })}</span> : null}
+				{c.compactions > 0 ? <span className="dim">{tr("· saspiests {compactions}×", { compactions: c.compactions })}</span> : null}
 				<span className="grow" />
-				<button className="ghost small" disabled={busy || c.used === null} onClick={onCompact} title="Aizstāt vecāko sarunu ar kopsavilkumu tagad (pats notiek pie sarkanās atzīmes)">
-					{compacting ? "saspiež…" : "saspiest"}
+				<button className="ghost small" disabled={busy || c.used === null} onClick={onCompact} title={tr("Aizstāt vecāko sarunu ar kopsavilkumu tagad (pats notiek pie sarkanās atzīmes)")}>
+					{compacting ? tr("saspiež…") : tr("saspiest")}
 				</button>
 			</div>
 			<details className="small ctx-more">
-				<summary className="dim">kur paliek konteksts</summary>
+				<summary className="dim">{tr("kur paliek konteksts")}</summary>
 				<table>
 					<tbody>
 						{(Object.keys(PART_COLOR) as (keyof typeof PART_COLOR)[]).map((key) => (
@@ -675,12 +758,12 @@ function ContextMeter({ c, busy, compacting, onCompact }: { c: ContextInfo; busy
 							</tr>
 						))}
 						<tr>
-							<td className="dim">saspiešana sākas pie</td>
+							<td className="dim">{tr("saspiešana sākas pie")}</td>
 							<td className="num">{fmtTokens(c.compactAt)}</td>
 						</tr>
 					</tbody>
 				</table>
-				<div className="dim">Pamatā ir noteikumi, prasmes un lietotnes rīku apraksti. Revit rīki nāk klāt, kad Revit ir savienots. Vecie ekrānuzņēmumi sarunā tiek aizstāti ar īsu piezīmi, kad to ir vairāk par 6 (paliek jaunākie 3).</div>
+				<div className="dim">{tr("Pamatā ir noteikumi, prasmes un lietotnes rīku apraksti. Revit rīki nāk klāt, kad Revit ir savienots. Vecie ekrānuzņēmumi sarunā tiek aizstāti ar īsu piezīmi, kad to ir vairāk par 6 (paliek jaunākie 3).")}</div>
 			</details>
 		</div>
 	);

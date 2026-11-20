@@ -8,8 +8,9 @@ import type { ApplicableRow, LibraryCategory, LibraryRow } from "../../shared/ap
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
-const CAT: Record<LibraryCategory, string> = { likums: "likums", mk: "MK / LBN", lvs: "LVS", es: "ES" };
+const CAT: Record<LibraryCategory, string> = { likums: tr("likums"), mk: tr("MK / LBN"), lvs: tr("LVS"), es: tr("ES") };
 const STATE_TONE: Record<ApplicableRow["state"], "ok" | "warn" | "dim"> = { attiecas: "ok", "nav zināms": "warn", neattiecas: "dim" };
 const ORDER: ApplicableRow["state"][] = ["attiecas", "nav zināms", "neattiecas"];
 
@@ -50,7 +51,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 				<tbody>
 					<tr className="group-head click" onClick={() => setOpen(!open)}>
 						<td colSpan={5}>
-							{open ? "▾" : "▸"} Normatīvi <span className="dim">({lib.data?.length ?? "…"}) · bibliotēka kopīga visiem projektiem</span>
+							{open ? "▾" : "▸"} {tr("Normatīvi")} <span className="dim">({lib.data?.length ?? "…"}{tr(") · bibliotēka kopīga visiem projektiem")}</span>
 						</td>
 					</tr>
 					{open && (
@@ -58,7 +59,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 							<tr>
 								<td colSpan={5}>
 									<div className="row">
-										<input className="grow" placeholder="https://likumi.lv/ta/id/…" value={url} onChange={(e) => setUrl(e.target.value)} />
+										<input className="grow" placeholder={tr("https://likumi.lv/ta/id/…")} value={url} onChange={(e) => setUrl(e.target.value)} />
 										<select className="small" value={cat} onChange={(e) => setCat(e.target.value as LibraryCategory)}>
 											{(Object.keys(CAT) as LibraryCategory[]).map((c) => (
 												<option key={c} value={c}>
@@ -67,11 +68,10 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 											))}
 										</select>
 										<button disabled={!url.trim() || !!busy} onClick={() => run("url", () => call("library.addUrl", url, cat), () => setUrl(""))}>
-											{busy === "url" ? "Lasa…" : "Pievienot no likumi.lv"}
+											{busy === "url" ? tr("Lasa…") : tr("Pievienot no likumi.lv")}
 										</button>
-										<button disabled={!!busy} title="Maksas LVS / EN / ISO standarts vai cits akts, kas tev ir failā" onClick={() => addFile(cat === "likums" || cat === "mk" ? "lvs" : cat)}>
-											Pievienot savu failu
-										</button>
+										<button disabled={!!busy} title={tr("Maksas LVS / EN / ISO standarts vai cits akts, kas tev ir failā")} onClick={() => addFile(cat === "likums" || cat === "mk" ? "lvs" : cat)}>
+											{tr("Pievienot savu failu")}</button>
 									</div>
 									{err && <div className="err">{err}</div>}
 									{note && <div className="dim small">{note}</div>}
@@ -83,26 +83,25 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 									<td>
 										{s.title}{" "}
 										{s.changedOn && (
-											<Badge tone="warn" title="Pārlasot likumi.lv teksts atšķīrās no saglabātā; vecā versija saglabāta blakus">
-												mainīts {s.changedOn}
-											</Badge>
+											<Badge tone="warn" title={tr("Pārlasot likumi.lv teksts atšķīrās no saglabātā; vecā versija saglabāta blakus")}>
+												{tr("mainīts {changedOn}", { changedOn: s.changedOn })}</Badge>
 										)}
 									</td>
 									<td className="small">{CAT[s.category]}</td>
-									<td className="small">nolasīts {s.readOn}</td>
-									<td className="small">{s.paragraphs} rindk.</td>
+									<td className="small">{tr("nolasīts {readOn}", { readOn: s.readOn })}</td>
+									<td className="small">{tr("{paragraphs} rindk.", { paragraphs: s.paragraphs })}</td>
 									<td className="small" onClick={(e) => e.stopPropagation()}>
 										{s.kind === "url" && (
-											<button className="ghost small" disabled={!!busy} title="Nolasīt vēlreiz no likumi.lv" onClick={() => run(`re:${s.id}`, () => call("library.reread", s.id), (r) => setNote((r as { changed: boolean }).changed ? `${s.title}: teksts mainījies, saglabāta jaunā versija.` : `${s.title}: teksts nav mainījies.`))}>
+											<button className="ghost small" disabled={!!busy} title={tr("Nolasīt vēlreiz no likumi.lv")} onClick={() => run(`re:${s.id}`, () => call("library.reread", s.id), (r) => setNote((r as { changed: boolean }).changed ? `${s.title}: teksts mainījies, saglabāta jaunā versija.` : `${s.title}: teksts nav mainījies.`))}>
 												{busy === `re:${s.id}` ? "…" : "↻"}
 											</button>
 										)}
 										{s.kind !== "builtin" && (
-											<button className="ghost small" disabled={!!busy} title="Noņemt no bibliotēkas (faili paliek bibliotēkas mapē)" onClick={() => run(`rm:${s.id}`, () => call("library.remove", s.id))}>
+											<button className="ghost small" disabled={!!busy} title={tr("Noņemt no bibliotēkas (faili paliek bibliotēkas mapē)")} onClick={() => run(`rm:${s.id}`, () => call("library.remove", s.id))}>
 												✕
 											</button>
 										)}
-										{s.kind === "builtin" && <span className="dim">iebūvēts</span>}
+										{s.kind === "builtin" && <span className="dim">{tr("iebūvēts")}</span>}
 									</td>
 								</tr>
 							))}
@@ -111,7 +110,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 					{projectId && (
 						<tr className="group-head">
 							<td colSpan={5}>
-								Piemērojamie normatīvi <span className="dim">· pēc apstiprinātiem profila faktiem{app.data ? ` · saraksts sastādīts ${app.data.readOn}` : ""}</span>
+								{tr("Piemērojamie normatīvi")} <span className="dim">{tr("· pēc apstiprinātiem profila faktiem")}{app.data ? tr(" · saraksts sastādīts {readOn}", { readOn: app.data.readOn }) : ""}</span>
 							</td>
 						</tr>
 					)}
@@ -129,25 +128,25 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 								<Fragment key={r.id}>
 									<tr className={r.inLibrary && selectedId === r.inLibrary.id ? "sel" : ""}>
 										<td>
-											<Badge tone={STATE_TONE[r.state]}>{r.state}</Badge> {r.title}
+											<Badge tone={STATE_TONE[r.state]}>{tr(r.state)}</Badge> {r.title}
 											<div className="dim small">
-												{[...r.because, ...r.missing.map((m) => `nav zināms: ${m}`), ...r.notMatched.map((m) => `neattiecas: ${m}`)].join(" · ")}
+												{[...r.because, ...r.missing.map((m) => tr("nav zināms: {m}", { m })), ...r.notMatched.map((m) => tr("neattiecas: {m}", { m }))].join(" · ")}
 											</div>
 											<div className="dim small" title={r.why.quote}>
-												pamatojums:{" "}
+												{tr("pamatojums:")}{" "}
 												<a href={r.why.url} target="_blank" rel="noreferrer">
 													{r.why.act}, {r.why.point}
 												</a>
 												{r.quoteFound === true && (
 													<>
 														{" "}
-														<Badge tone="ok" title="Citāts atrasts bibliotēkā saglabātajā tekstā">citāts pārbaudīts</Badge>
+														<Badge tone="ok" title={tr("Citāts atrasts bibliotēkā saglabātajā tekstā")}>{tr("citāts pārbaudīts")}</Badge>
 													</>
 												)}
 												{r.quoteFound === false && (
 													<>
 														{" "}
-														<Badge tone="bad" title="Citāts nav atrasts bibliotēkā saglabātajā tekstā: akts, iespējams, grozīts — pārlasi un pārbaudi">citāts nav atrasts</Badge>
+														<Badge tone="bad" title={tr("Citāts nav atrasts bibliotēkā saglabātajā tekstā: akts, iespējams, grozīts — pārlasi un pārbaudi")}>{tr("citāts nav atrasts")}</Badge>
 													</>
 												)}
 												{r.caveat && <div>{r.caveat}</div>}
@@ -156,26 +155,23 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 										<td className="small">{CAT[r.category]}</td>
 										<td colSpan={3} className="small">
 											{r.inLibrary ? (
-												<button className="ghost small" title="Atvērt priekšskatā pie pamatojuma rindkopas" onClick={() => show(r.inLibrary!.id, r.kind === "likumi" && r.why.actId === r.actId ? r.why.quote : undefined)}>
-													bibliotēkā · nolasīts {r.inLibrary.readOn}
-													{r.inLibrary.changedOn ? ` · mainīts ${r.inLibrary.changedOn}` : ""}
+												<button className="ghost small" title={tr("Atvērt priekšskatā pie pamatojuma rindkopas")} onClick={() => show(r.inLibrary!.id, r.kind === "likumi" && r.why.actId === r.actId ? r.why.quote : undefined)}>
+													{tr("bibliotēkā · nolasīts {readOn}", { readOn: r.inLibrary.readOn })}{r.inLibrary.changedOn ? tr(" · mainīts {changedOn}", { changedOn: r.inLibrary.changedOn }) : ""}
 												</button>
 											) : r.kind === "likumi" ? (
 												<>
-													<span className="dim">nav bibliotēkā</span>{" "}
+													<span className="dim">{tr("nav bibliotēkā")}</span>{" "}
 													<button className="small" disabled={!!busy} onClick={() => run(`app:${r.id}`, () => call("library.addUrl", r.url!, r.category, r.title))}>
-														{busy === `app:${r.id}` ? "Lasa…" : "Ielādēt no likumi.lv"}
+														{busy === `app:${r.id}` ? tr("Lasa…") : tr("Ielādēt no likumi.lv")}
 													</button>
 												</>
 											) : (
 												<>
-													<span className="dim">maksas standarts — pievieno savu PDF</span>{" "}
+													<span className="dim">{tr("maksas standarts — pievieno savu PDF")}</span>{" "}
 													<a href={r.catalogue!} target="_blank" rel="noreferrer">
-														LVS katalogs
-													</a>{" "}
+														{tr("LVS katalogs")}</a>{" "}
 													<button className="small" disabled={!!busy} onClick={() => addFile("lvs", r.title)}>
-														Pievienot PDF
-													</button>
+														{tr("Pievienot PDF")}</button>
 												</>
 											)}
 										</td>
@@ -187,8 +183,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 							<td colSpan={5} className="dim small">
 								{out.length > 0 && (
 									<button className="ghost small" onClick={() => setShowOut(!showOut)}>
-										{showOut ? "Slēpt" : "Rādīt"} neattiecīgos ({out.length})
-									</button>
+										{showOut ? tr("Slēpt") : tr("Rādīt")} {tr("neattiecīgos ({v})", { v: out.length })}</button>
 								)}{" "}
 								{app.data.notRead}
 							</td>

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { call } from "../bridge";
 import { ui } from "../state";
 import { Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -12,7 +13,10 @@ export function LawView({ sourceId, quote }: { sourceId: string; quote?: string 
 	const t = useLoad(() => call("library.paragraphs", sourceId), [sourceId]);
 	const hit = useRef<HTMLDivElement | null>(null);
 	const q = quote ? norm(quote) : null;
-	useEffect(() => hit.current?.scrollIntoView({ block: "center" }), [t.data, q]);
+	// a block body: scrollIntoView returns a Promise in Chromium, which React would take as the effect's cleanup
+	useEffect(() => {
+		hit.current?.scrollIntoView({ block: "center" });
+	}, [t.data, q]);
 	if (t.error) return <Err error={t.error} />;
 	if (!t.data) return <Empty title="…" />;
 	const { source, paragraphs } = t.data;
@@ -24,8 +28,7 @@ export function LawView({ sourceId, quote }: { sourceId: string; quote?: string 
 			<div className="viewer-bar">
 				<b>{source.title}</b>
 				<span className="dim small">
-					{paragraphs.length} rindkopas · nolasīts {source.readOn}
-					{source.changedOn ? ` · mainīts ${source.changedOn}` : ""}
+					{tr("{v} rindkopas · nolasīts {readOn}", { v: paragraphs.length, readOn: source.readOn })}{source.changedOn ? tr(" · mainīts {changedOn}", { changedOn: source.changedOn }) : ""}
 					{source.url && (
 						<>
 							{" · "}

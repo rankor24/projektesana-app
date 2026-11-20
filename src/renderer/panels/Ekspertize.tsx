@@ -7,6 +7,7 @@ import { REMARK_STATE_LABEL, type ExpertRemark, type RemarkState } from "../../s
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const STATE_TONE: Record<RemarkState, "warn" | "ok" | "dim"> = { open: "warn", done: "ok", na: "dim" };
 const NONE = "nenoteikta";
@@ -46,8 +47,8 @@ export function Ekspertize({ projectId }: { projectId: string }) {
 			const r = await call("expert.read", projectId, pick);
 			setMsg(
 				r.found === 0
-					? "Kods šajā dokumentā neatrada nevienu piezīmi (izkārtojums nav no zināmajiem). Palūdz aģentam: «izlasi ekspertīzes atzinumu un pievieno piezīmes»."
-					: `Atrastas ${r.found} piezīmes${r.added < r.found ? `, jaunas ${r.added}` : ""}${r.meta.auditor ? `. Eksperts: ${r.meta.auditor}` : ""}.`,
+					? tr("Kods šajā dokumentā neatrada nevienu piezīmi (izkārtojums nav no zināmajiem). Palūdz aģentam: «izlasi ekspertīzes atzinumu un pievieno piezīmes».")
+					: tr("Atrastas {found} piezīmes{added}{auditor}.", { found: r.found, added: r.added < r.found ? tr(", jaunas {n}", { n: r.added }) : "", auditor: r.meta.auditor ? tr(". Eksperts: {name}", { name: r.meta.auditor }) : "" }),
 			);
 		});
 		setBusy(false);
@@ -62,24 +63,23 @@ export function Ekspertize({ projectId }: { projectId: string }) {
 		<div className="pane fill">
 			<div className="row">
 				<select value={pick} onChange={(e) => setPick(e.target.value)} style={{ maxWidth: 420 }}>
-					<option value="">— kurš dokuments ir ekspertīzes atzinums? —</option>
+					<option value="">{tr("— kurš dokuments ir ekspertīzes atzinums? —")}</option>
 					{sources.map((x) => (
 						<option key={x.id} value={x.id}>
-							{x.title} · {x.pages} lpp.{x.remarks ? ` · ${x.remarks} piezīmes` : ""}
+							{tr("{title} · {pages} lpp.", { title: x.title, pages: x.pages })}{x.remarks ? tr(" · {remarks} piezīmes", { remarks: x.remarks }) : ""}
 							{x.role === "Ekspertīzes atzinums" ? " ✓" : ""}
 						</option>
 					))}
 				</select>
 				<button className="primary" disabled={!pick || busy} onClick={read}>
-					Nolasīt atzinumu
-				</button>
+					{tr("Nolasīt atzinumu")}</button>
 				{msg && <span className="small">{msg}</span>}
 			</div>
 			{err && <div className="err">{err}</div>}
 			{view.error ? <Err error={view.error} /> : null}
 			{data && data.remarks.length === 0 && (
-				<Empty title="ekspertīzes piezīmju vēl nav">
-					{sources.length === 0 ? "Projektā nav nolasīta dokumenta. Pārbaudi Avoti: vajag PDF, DOCX vai MD ar nolasītu tekstu." : "Izvēlies dokumentu, kas ir ekspertīzes atzinums, un spied “Nolasīt atzinumu”. Dokuments saņem lomu “Ekspertīzes atzinums”."}
+				<Empty title={tr("ekspertīzes piezīmju vēl nav")}>
+					{sources.length === 0 ? tr("Projektā nav nolasīta dokumenta. Pārbaudi Avoti: vajag PDF, DOCX vai MD ar nolasītu tekstu.") : tr("Izvēlies dokumentu, kas ir ekspertīzes atzinums, un spied “Nolasīt atzinumu”. Dokuments saņem lomu “Ekspertīzes atzinums”.")}
 				</Empty>
 			)}
 			{s && s.total > 0 && (
@@ -87,35 +87,33 @@ export function Ekspertize({ projectId }: { projectId: string }) {
 					<div className="row">
 						{(["open", "done", "na", "all"] as const).map((k) => (
 							<button key={k} className={show === k ? "primary" : ""} onClick={() => setShow(k)}>
-								{k === "all" ? "visas" : REMARK_STATE_LABEL[k]} ({k === "all" ? s.total : s[k]})
+								{k === "all" ? tr("visas") : tr(REMARK_STATE_LABEL[k])} ({k === "all" ? s.total : s[k]})
 							</button>
 						))}
-						{s.openCritical > 0 && <Badge tone="bad">{s.openCritical} kritiskas atvērtas</Badge>}
-						<input className="grow" placeholder="meklēt piezīmē vai atbildīgajā…" value={q} onChange={(e) => setQ(e.target.value)} />
+						{s.openCritical > 0 && <Badge tone="bad">{tr("{openCritical} kritiskas atvērtas", { openCritical: s.openCritical })}</Badge>}
+						<input className="grow" placeholder={tr("meklēt piezīmē vai atbildīgajā…")} value={q} onChange={(e) => setQ(e.target.value)} />
 					</div>
 					<div className="row">
-						<span className="dim small">daļa:</span>
+						<span className="dim small">{tr("daļa:")}</span>
 						<button className={daļa === "" ? "primary" : ""} onClick={() => setDaļa("")}>
-							visas
-						</button>
+							{tr("visas")}</button>
 						{s.byDaļa.map((g) => (
 							<span key={g.key} style={{ display: "inline-flex", gap: 2 }}>
-								<button className={daļa === g.key ? "primary" : ""} onClick={() => setDaļa(daļa === g.key ? "" : g.key)} title={`${g.open} atvērtas no ${g.total}`}>
+								<button className={daļa === g.key ? "primary" : ""} onClick={() => setDaļa(daļa === g.key ? "" : g.key)} title={tr("{open} atvērtas no {total}", { open: g.open, total: g.total })}>
 									{g.key} {g.open}/{g.total}
 								</button>
 								<button
 									className="small ghost"
-									title={`Labojumu saraksts: ${g.key}`}
+									title={tr("Labojumu saraksts: {key}", { key: g.key })}
 									onClick={() => act(async () => setList({ title: g.key, text: await call("expert.fixList", projectId, g.key === NONE ? null : g.key) }))}
 								>
-									saraksts
-								</button>
+									{tr("saraksts")}</button>
 							</span>
 						))}
 					</div>
 					{s.byResponsible.some((g) => g.key !== "nenorādīts") && (
 						<div className="small dim">
-							atbildīgie: {s.byResponsible.map((g) => `${g.key} ${g.open}/${g.total}`).join(" · ")}
+							{tr("atbildīgie:")} {s.byResponsible.map((g) => `${g.key} ${g.open}/${g.total}`).join(" · ")}
 						</div>
 					)}
 				</>
@@ -123,38 +121,36 @@ export function Ekspertize({ projectId }: { projectId: string }) {
 			{list && (
 				<div className="confirm">
 					<div className="row">
-						<b className="grow">Labojumu saraksts — {list.title}</b>
+						<b className="grow">{tr("Labojumu saraksts — {title}", { title: list.title })}</b>
 						<button
 							className="small"
 							onClick={() => {
 								try {
 									void navigator.clipboard.writeText(list.text);
-									setMsg("Saraksts nokopēts.");
+									setMsg(tr("Saraksts nokopēts."));
 								} catch {
-									setMsg("Nokopēt neizdevās: iezīmē tekstu un kopē pats.");
+									setMsg(tr("Nokopēt neizdevās: iezīmē tekstu un kopē pats."));
 								}
 							}}
 						>
-							Kopēt
-						</button>
+							{tr("Kopēt")}</button>
 						<button className="small ghost" onClick={() => setList(null)}>
-							Aizvērt
-						</button>
+							{tr("Aizvērt")}</button>
 					</div>
 					<pre className="small" style={{ whiteSpace: "pre-wrap", maxHeight: 280, overflow: "auto" }}>
 						{list.text}
 					</pre>
-					<div className="small dim">Aģents var to ielikt Word dokumentā nodevumā (write_document).</div>
+					<div className="small dim">{tr("Aģents var to ielikt Word dokumentā nodevumā (write_document).")}</div>
 				</div>
 			)}
 			{rows.length > 0 && (
 				<table>
 					<thead>
 						<tr>
-							<th>Daļa</th>
-							<th>Piezīme atzinumā</th>
-							<th>Atbildīgais</th>
-							<th>Statuss</th>
+							<th>{tr("Daļa")}</th>
+							<th>{tr("Piezīme atzinumā")}</th>
+							<th>{tr("Atbildīgais")}</th>
+							<th>{tr("Statuss")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -164,7 +160,7 @@ export function Ekspertize({ projectId }: { projectId: string }) {
 					</tbody>
 				</table>
 			)}
-			{data && data.remarks.length > 0 && rows.length === 0 && <Empty title="nekas neatbilst filtram" />}
+			{data && data.remarks.length > 0 && rows.length === 0 && <Empty title={tr("nekas neatbilst filtram")} />}
 		</div>
 	);
 }
@@ -175,50 +171,44 @@ function Row({ r, title, naOpen, reason, setReason, onNa, onCancelNa, projectId,
 	return (
 		<tr>
 			<td style={{ whiteSpace: "nowrap" }}>
-				<input style={{ width: 54 }} value={dl} placeholder="daļa" onChange={(e) => setDl(e.target.value)} onBlur={() => dl.trim().toUpperCase() !== (r.daļa ?? "") && act(() => call("expert.edit", projectId, r.id, { daļa: dl }))} />
+				<input style={{ width: 54 }} value={dl} placeholder={tr("daļa")} onChange={(e) => setDl(e.target.value)} onBlur={() => dl.trim().toUpperCase() !== (r.daļa ?? "") && act(() => call("expert.edit", projectId, r.id, { daļa: dl }))} />
 			</td>
 			<td>
-				{r.critical && <Badge tone="bad">kritiska</Badge>} {r.code && <span className="mono small dim">{r.code} </span>}
+				{r.critical && <Badge tone="bad">{tr("kritiska")}</Badge>} {r.code && <span className="mono small dim">{r.code} </span>}
 				{r.quote}
 				<div className="small dim">
-					<button className="small ghost" title="Atvērt atzinumu šajā lapā" onClick={() => ui.show({ kind: "source", sourceId: r.sourceId, page: r.page })}>
-						{title}, {r.page}. lpp.
-					</button>
+					<button className="small ghost" title={tr("Atvērt atzinumu šajā lapā")} onClick={() => ui.show({ kind: "source", sourceId: r.sourceId, page: r.page })}>
+						{tr("{title}, {page}. lpp.", { title: title, page: r.page })}</button>
 					{r.section ? ` · ${r.section}` : ""}
-					{r.by === "agent" ? " · aģenta atrasta" : ""}
+					{r.by === "agent" ? tr(" · aģenta atrasta") : ""}
 				</div>
-				{r.reply && <div className="small">Atbilde dokumentā: <i>{r.reply}</i></div>}
-				{r.note && <div className="small">{r.state === "na" ? "Pamatojums" : "Piezīme"}: <i>{r.note}</i></div>}
+				{r.reply && <div className="small">{tr("Atbilde dokumentā:")} <i>{r.reply}</i></div>}
+				{r.note && <div className="small">{r.state === "na" ? tr("Pamatojums") : tr("Piezīme")}: <i>{r.note}</i></div>}
 				{naOpen && (
 					<div className="row">
-						<input className="grow" autoFocus placeholder="Kāpēc piezīme nav aktuāla (obligāts)" value={reason} onChange={(e) => setReason(e.target.value)} />
+						<input className="grow" autoFocus placeholder={tr("Kāpēc piezīme nav aktuāla (obligāts)")} value={reason} onChange={(e) => setReason(e.target.value)} />
 						<button disabled={reason.trim().length < 5} onClick={() => act(async () => { await call("expert.setState", projectId, r.id, "na", reason); setNaFor(null); })}>
-							Nav aktuāls
-						</button>
+							{tr("Nav aktuāls")}</button>
 						<button className="small ghost" onClick={onCancelNa}>
-							Atcelt
-						</button>
+							{tr("Atcelt")}</button>
 					</div>
 				)}
 			</td>
 			<td>
-				<input style={{ width: 130 }} value={who} placeholder="nav norādīts" onChange={(e) => setWho(e.target.value)} onBlur={() => who.trim() !== (r.responsible ?? "") && act(() => call("expert.edit", projectId, r.id, { responsible: who }))} />
+				<input style={{ width: 130 }} value={who} placeholder={tr("nav norādīts")} onChange={(e) => setWho(e.target.value)} onBlur={() => who.trim() !== (r.responsible ?? "") && act(() => call("expert.edit", projectId, r.id, { responsible: who }))} />
 			</td>
 			<td style={{ whiteSpace: "nowrap" }}>
-				<Badge tone={STATE_TONE[r.state]}>{REMARK_STATE_LABEL[r.state]}</Badge>{" "}
+				<Badge tone={STATE_TONE[r.state]}>{tr(REMARK_STATE_LABEL[r.state])}</Badge>{" "}
 				{r.state === "open" ? (
 					<>
 						<button className="small" onClick={() => act(() => call("expert.setState", projectId, r.id, "done", null))}>
-							Izpildīts
-						</button>
+							{tr("Izpildīts")}</button>
 						<button className="small ghost" onClick={onNa}>
-							Nav aktuāls
-						</button>
+							{tr("Nav aktuāls")}</button>
 					</>
 				) : (
 					<button className="small ghost" onClick={() => act(() => call("expert.setState", projectId, r.id, "open", null))}>
-						Atvērt atkal
-					</button>
+						{tr("Atvērt atkal")}</button>
 				)}
 			</td>
 		</tr>

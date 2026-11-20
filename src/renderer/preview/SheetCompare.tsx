@@ -10,6 +10,10 @@ import { ui } from "../state";
 import { Badge, Empty } from "../ui";
 import { computeDiff, type DiffZone } from "./pixel-diff";
 import { TracePanel } from "./TracePanel";
+import { tr } from "../i18n";
+import type { Markup } from "../../core/model";
+import { MarkupDraw, MarkupShapes, MarkupTools } from "./Markup";
+import { pageMarks, paneSurface, usePageMarks } from "../page-marks";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -44,13 +48,27 @@ async function renderPage(bytes: Uint8Array, n: number, w?: number, h?: number, 
 	}
 }
 
-export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false }: { projectId: string; a: string; b: string; aLabel: string; bLabel: string; /** list only the sheets that differ (9.9) */ only?: boolean }) {
+export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false, paneIndex = 0 }: { projectId: string; a: string; b: string; aLabel: string; bLabel: string; /** list only the sheets that differ (9.9) */ only?: boolean; paneIndex?: number }) {
 	const [rows, setRows] = useState<SheetDiffRow[] | null>(null);
 	const [i, setI] = useState(0);
+	// marks drawn on the sheet (fractions of it), for the page's comment strip ("Apgabals" takes the rectangle); they belong to one sheet
+	const surface = paneSurface(paneIndex);
+	const marks = usePageMarks().by[surface] ?? [];
+	const [shape, setShape] = useState<Markup["shape"] | null>(null);
+	useEffect(() => () => pageMarks.clear(surface), [surface, i]);
 	const [zones, setZones] = useState<DiffZone[]>([]);
 	const [err, setErr] = useState<string | null>(null);
 	const canvas = useRef<HTMLCanvasElement>(null);
 	const bytes = useRef<{ a: Uint8Array; b: Uint8Array } | null>(null);
+	// A | B (9.9 / V2): both issues side by side on the same sheet, scrolled and zoomed together
+	const [mode, setMode] = useState<"overlay" | "split">("overlay");
+	const [zoom, setZoom] = useState(1);
+	const sides = useRef<{ a: ImageData; b: ImageData } | null>(null);
+	const canA = useRef<HTMLCanvasElement>(null);
+	const canB = useRef<HTMLCanvasElement>(null);
+	const scA = useRef<HTMLDivElement>(null);
+	const scB = useRef<HTMLDivElement>(null);
+	const [drawn, setDrawn] = useState(0);
 
 	useEffect(() => {
 		let live = true;
@@ -70,11 +88,13 @@ export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false }: 
 
 	useEffect(() => {
 		const r = rows?.[i];
-		if (!r || !bytes.current || !canvas.current) return;
+		if (!r || !bytes.current) return;
 		let live = true;
 		(async () => {
 			const ia = await renderPage(bytes.current!.a, r.a);
 			const ib = await renderPage(bytes.current!.b, r.b, ia.width, ia.height, { from: r.frameB, to: r.frameA });
+			sides.current = { a: ia, b: ib };
+			setDrawn((n) => n + 1);
 			const { diff, zones: z } = computeDiff(ia, ib);
 			if (!live || !canvas.current) return;
 			const c = canvas.current;
@@ -87,14 +107,32 @@ export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false }: 
 		return () => {
 			live = false;
 		};
-	}, [rows, i]);
+	}, [rows, i, mode]);
+
+	useEffect(() => {
+		if (mode !== "split" || !sides.current) return;
+		for (const [c, img] of [
+			[canA.current, sides.current.a],
+			[canB.current, sides.current.b],
+		] as const) {
+			if (!c) continue;
+			c.width = img.width;
+			c.height = img.height;
+			c.getContext("2d")!.putImageData(img, 0, 0);
+		}
+	}, [mode, drawn]);
+	const syncScroll = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+		if (!from || !to) return;
+		if (Math.abs(to.scrollTop - from.scrollTop) > 1) to.scrollTop = from.scrollTop;
+		if (Math.abs(to.scrollLeft - from.scrollLeft) > 1) to.scrollLeft = from.scrollLeft;
+	};
 
 	if (err) return <div className="err">{err}</div>;
-	if (!rows) return <Empty title="salīdzina…" />;
-	if (!rows.length) return <Empty title="no data">Lapas nav sapārotas.</Empty>;
+	if (!rows) return <Empty title={tr("salīdzina…")} />;
+	if (!rows.length) return <Empty title={tr("no data")}>{tr("Lapas nav sapārotas.")}</Empty>;
 	const r = rows[i];
 	const pin = (text: string, x: number, y: number) =>
-		a.startsWith("src:") ? call("pins.add", projectId, { sourceId: a.slice(4), page: r.a, x, y }, text).catch((e) => setErr(errText(e))) : setErr("Piezīmi var likt tikai avotam (A ir fails ārpus avotiem).");
+		a.startsWith("src:") ? call("pins.add", projectId, { sourceId: a.slice(4), page: r.a, x, y }, text).catch((e) => setErr(errText(e))) : setErr(tr("Piezīmi var likt tikai avotam (A ir fails ārpus avotiem)."));
 	return (
 		<div className="fill-col">
 			<div className="viewer-bar">
@@ -102,33 +140,67 @@ export function SheetCompare({ projectId, a, b, aLabel, bLabel, only = false }: 
 				<select value={i} onChange={(e) => setI(Number(e.target.value))}>
 					{rows.map((x, k) => (
 						<option key={k} value={k}>
-							{x.sheetNo ?? `lpp. ${x.a}`} ({x.summary.length} izmaiņas)
-						</option>
+							{x.sheetNo ?? tr("lpp. {a}", { a: x.a })} {tr("({v} izmaiņas)", { v: x.summary.length })}</option>
 					))}
 				</select>
-				<Badge tone="bad">sarkans: tikai A</Badge>
-				<Badge tone="info">zils: tikai B</Badge>
-				<span className="dim small">{zones.length} zonas</span>
+				<div className="seg">
+					<button className={mode === "overlay" ? "on" : ""} onClick={() => setMode("overlay")} title={tr("A un B vienā lapā: sarkans tikai A, zils tikai B")}>
+						{tr("Pārklājums")}
+					</button>
+					<button className={mode === "split" ? "on" : ""} onClick={() => setMode("split")} title={tr("A pa kreisi, B pa labi: viena lapa, kopā ritina un tuvina")}>
+						{tr("A | B")}
+					</button>
+				</div>
+				{mode === "split" && (
+					<>
+						<button className="small" onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))}>−</button>
+						<button className="small" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
+						<button className="small" onClick={() => setZoom((z) => Math.min(6, z * 1.25))}>+</button>
+					</>
+				)}
+				<Badge tone="bad">{tr("sarkans: tikai A")}</Badge>
+				<Badge tone="info">{tr("zils: tikai B")}</Badge>
+				<span className="dim small">{tr("{v} zonas", { v: zones.length })}</span>
+				<span className="grow" />
+				<MarkupTools shape={shape} setShape={setShape} count={marks.length} onClear={() => pageMarks.clear(surface)} />
 			</div>
 			<div className="split" style={{ gridTemplateColumns: "minmax(0,1fr) 340px", flex: 1, minHeight: 0 }}>
+				{mode === "split" ? (
+					<div className="dwg-split">
+						<div className="dwg-split-side">
+							<div className="dwg-split-label">A · {aLabel}</div>
+							<div ref={scA} className="viewer-body" onScroll={() => syncScroll(scA.current, scB.current)}>
+								<canvas ref={canA} style={{ background: "#fff", width: `${zoom * 100}%` }} />
+							</div>
+						</div>
+						<div className="dwg-split-side">
+							<div className="dwg-split-label">B · {bLabel}</div>
+							<div ref={scB} className="viewer-body" onScroll={() => syncScroll(scB.current, scA.current)}>
+								<canvas ref={canB} style={{ background: "#fff", width: `${zoom * 100}%` }} />
+							</div>
+						</div>
+					</div>
+				) : (
 				<div className="viewer-body">
 					<div style={{ position: "relative", display: "inline-block" }}>
 						<canvas ref={canvas} style={{ background: "#fff", maxWidth: "100%" }} />
 						{zones.map((z) => (
 							<div key={z.id} className="region" style={{ left: z.x, top: z.y, width: z.width, height: z.height }} />
 						))}
+						<MarkupShapes marks={marks} />
+						{shape && <MarkupDraw shape={shape} onDone={(m) => pageMarks.add(surface, m)} />}
 					</div>
 				</div>
+				)}
 				<div className="pane fill" style={{ borderLeft: "1px solid var(--border)" }}>
-					<div className="section-title">Izmaiņas (no vektoriem)</div>
-					{r.summary.length === 0 && <div className="dim">Vektoros izmaiņu nav.</div>}
+					<div className="section-title">{tr("Izmaiņas (no vektoriem)")}</div>
+					{r.summary.length === 0 && <div className="dim">{tr("Vektoros izmaiņu nav.")}</div>}
 					{r.summary.map((s, k) => (
 						<div key={k} className="row small">
 							<span className="grow">{s}</span>
-							<button className="small ghost" onClick={() => pin(`${r.sheetNo ?? ""}: ${s}`, r.where[k]?.x ?? 0.5, r.where[k]?.y ?? 0.5)}>piezīme</button>
+							<button className="small ghost" onClick={() => pin(`${r.sheetNo ?? ""}: ${s}`, r.where[k]?.x ?? 0.5, r.where[k]?.y ?? 0.5)}>{tr("piezīme")}</button>
 							<button className="small ghost" onClick={() => ui.focusAdd({ kind: "text", id: `cmp:${a}:${b}:${r.a}:${k}`, label: `${r.sheetNo ?? ""}: ${s}`.slice(0, 60), data: { a: aLabel, b: bLabel, sheet: r.sheetNo, change: s } })}>
-								→ aģentam
-							</button>
+								{tr("→ aģentam")}</button>
 						</div>
 					))}
 					<TracePanel projectId={projectId} a={a} b={b} />

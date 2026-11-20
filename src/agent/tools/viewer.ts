@@ -1,6 +1,8 @@
 // The agent's viewer and panel tools (auto, annotate). The tools server is its own process, so these return a `__ui`
 // instruction; the chat dock carries it out in the window (opens a panel, acts on the viewer). They never change the model or
 // any project data: viewer_* only change what the user sees, and the run card keeps each as a chip the user can press again.
+import type { Source } from "../../core/model.js";
+import { pairMode, type CompareMode } from "../../shared/compare2d.js";
 import { z } from "zod";
 import { tool, type ToolDef } from "./tool.js";
 import { checkViewerAction, MAX_GUIDS, PANEL_NAMES, uiResult, type ViewerAction } from "../../shared/ui-instruction.js";
@@ -78,14 +80,27 @@ export const viewerTools: ToolDef[] = [
 	tool({
 		name: "viewer_split",
 		level: "annotate",
-		description: "Split the viewer: two angles of the open model, or two sources (a, b = source ids) side by side.",
-		input: { dir: z.enum(["h", "v"]).optional(), a: z.string().optional(), b: z.string().optional() },
+		description: "Split the viewer: two angles of the open model, or two sources (a, b = source ids) side by side; compare: true shows what changed (PDF, DWG, DOCX).",
+		input: { dir: z.enum(["h", "v"]).optional(), a: z.string().optional(), b: z.string().optional(), compare: z.boolean().optional() },
 		run: (ctx, a) => {
 			if (a.a && a.b) {
-				const ids = new Set(storeOf(ctx).read("sources").map((s) => s.id));
-				for (const id of [a.a, a.b]) if (!ids.has(id)) throw new Error(`Avots ${id} nav atrasts.`);
+				const sources = storeOf(ctx).read("sources");
+				const pair = [a.a, a.b].map((id) => sources.find((s) => s.id === id));
+				for (const [i, s] of pair.entries()) if (!s) throw new Error(`Avots ${[a.a, a.b][i]} nav atrasts.`);
+				if (a.compare) {
+					const [x, y] = compareOrder(pair as Source[]);
+					const mode = pairMode(fileOfSource(x), fileOfSource(y));
+					if (typeof mode === "string" && !["sheet", "dwg", "text", "ifc"].includes(mode)) throw new Error(mode);
+					return viewerResult(`Salīdzina: ${x.title} → ${y.title}.`, { action: "split", a: x.id, b: y.id, compare: { mode: mode as CompareMode, aLabel: labelOf(x), bLabel: labelOf(y) } });
+				}
 			}
 			return viewerResult(a.a ? "Divi faili blakus." : "Skats sadalīts divos.", { action: "split", ...(a.dir ? { dir: a.dir } : {}), ...(a.a ? { a: a.a } : {}), ...(a.b ? { b: a.b } : {}) });
 		},
 	}),
 ];
+
+// ---- compare: the older file is A, labels with their dates (the same as the Salīdzināt dialog) ----
+const fileOfSource = (s: Source) => s.container?.inner ?? s.paths[0]?.split("::").pop() ?? s.title;
+const dateOf = (s: Source) => (s.versions[s.versions.length - 1]?.mtime ?? "").slice(0, 10);
+const labelOf = (s: Source) => `${s.title} · ${dateOf(s)}`;
+const compareOrder = ([x, y]: Source[]): [Source, Source] => (dateOf(y) && dateOf(x) && dateOf(y) < dateOf(x) ? [y, x] : [x, y]);

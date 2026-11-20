@@ -15,6 +15,7 @@ import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
 import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
+import { catalogProvider, isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
 import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
@@ -77,6 +78,9 @@ export interface Conversation {
 	messages: AgentMessage[];
 	/** tokens the last run added to the context (estimated from the provider's counts); null = not known */
 	lastAdded: number | null;
+	/** Claude subscription engine: the SDK session holding the conversation (`messages` stays empty), and its size at the last turn */
+	sessionId?: string;
+	tokens?: number;
 }
 
 export class ThreadRunner {
@@ -216,7 +220,8 @@ export class ThreadRunner {
 				writeFileSync(join(runDir, "focus.json"), JSON.stringify(focus), "utf8");
 				this.remember(thread, "user", text, files.refs);
 
-				const env = ctxEnv({ ...this.d.ctx, projectId, runDir, agent: spec ? spec.id : LEAD_ID, thread: thread.id });
+				const envOf = (agent: string) => ctxEnv({ ...this.d.ctx, projectId, runDir, agent, thread: thread.id });
+				const env = envOf(spec ? spec.id : LEAD_ID);
 				const appTools = allTools().map((t) => t.name);
 				const app = appLevels();
 				const appSet = new Set(appTools);
@@ -316,7 +321,12 @@ export class ThreadRunner {
 				const { provider, modelId, effort, key } = this.modelFor(s, spec);
 				const conv = this.conversations.get(thread.id);
 				const rt = await this.d.runtime();
-				const model = lookupPiModel(rt, provider, modelId);
+				const model = lookupPiModel(rt, catalogProvider(provider), modelId);
+				// the engine: the Claude Agent SDK for a Claude subscription, pi for every other provider (lanes use the same one)
+				const claude = isClaudeSub(provider);
+				if (claude && !this.d.claudeRun) throw new Error(NOT_CONNECTED);
+				const engine = claude ? this.d.claudeRun! : (this.d.runAgent ?? runPi);
+				const resume = claude && conv && conv.key === key ? conv.sessionId : undefined;
 				// the plan lines the user changed belong to the lead: a specialist neither carries nor clears them
 				// this project's mailbox: the thread's open topics go into every prompt, and the mail tools write into it
 				const mailbox = this.d.mail?.(projectId);
@@ -333,7 +343,8 @@ export class ThreadRunner {
 				}
 
 				const standing = this.standing(s, spec, revitTools, false, projectId);
-				const seed = this.transcriptSeed(thread);
+				// a resumed SDK session already holds the conversation: the earlier lines are not repeated (history stays [] for that engine)
+				const seed = resume ? { summary: null, earlier: [] } : this.transcriptSeed(thread);
 				const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
 				const st = { toolsRan: false, overflowed: null as string | null, retried: false };
@@ -348,6 +359,11 @@ export class ThreadRunner {
 							i.dataChanged?.(["process"]);
 						}
 						if (e.type === "usage") {
+							// the Claude session's size, for the context meter (the SDK holds the messages)
+							if (claude && !e.model) {
+								const c = this.conversations.get(thread.id);
+								if (c && c.key === key) c.tokens = e.input + e.cacheRead + e.cacheWrite + e.output;
+							}
 							try {
 								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
 							} catch {
@@ -368,14 +384,15 @@ export class ThreadRunner {
 					};
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
 					const lanes = spec ? [] : subagentTools({
-						run: this.d.runAgent ?? runPi,
+						run: engine,
 						base: { runtime: rt, provider, modelId, effort },
 						// a lane has no Revit (a second connection to the one Revit): no Revit rules in its text, no Revit server below
 						standing: (sp) => this.standing(s, sp, new Set(), true),
-						mcpFor: (allowed) => {
+						// a delegated specialist's tools run as that specialist, in the lead's thread (the parent conversation): the log names who did the work
+						mcpFor: (allowed, agentId) => {
 							const m: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
 							const mine = allowed.filter((n) => appSet.has(n));
-							if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
+							if (mine.length) m["projektesana-tools"] = { ...this.d.toolsServer(agentId ? envOf(agentId) : env), allow: mine };
 							return m;
 						},
 						levelOf,
@@ -421,7 +438,7 @@ export class ThreadRunner {
 							})
 						: [];
 					const extraTools = [...lanes, ...mail];
-					await (this.d.runAgent ?? runPi)({
+					await engine({
 						runtime: rt,
 						provider,
 						modelId,
@@ -434,7 +451,13 @@ export class ThreadRunner {
 						beforeToolCall,
 						afterToolCall,
 						history: h,
-						onMessages: (messages) => this.conversations.set(thread.id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }),
+						...(claude
+							? {
+									resume,
+									// the session id comes with the run's first message: kept at once, so a stopped run still continues its session
+									onSession: (sessionId: string) => this.conversations.set(thread.id, { key, messages: [], lastAdded: null, sessionId, tokens: conv?.key === key ? conv.tokens : undefined }),
+								}
+							: { onMessages: (messages: AgentMessage[]) => this.conversations.set(thread.id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }) }),
 						onEvent: handle,
 						extraTools: extraTools.length ? extraTools : undefined,
 					});
@@ -510,16 +533,18 @@ export class ThreadRunner {
 		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text, declarations and model
 		const agent = this.specOf(thread);
 		const mf = this.modelFor(s, agent);
-		const model = lookupPiModel(await this.d.runtime(), mf.provider, mf.modelId);
+		const model = lookupPiModel(await this.d.runtime(), catalogProvider(mf.provider), mf.modelId);
 		const conv = this.conversations.get(thread.id);
 		const live = conv && conv.key === mf.key && conv.messages.length > 0 ? conv : null;
 		const est = live ? estimateContext(live.messages) : null;
 		const b = live ? breakdown(live.messages) : null;
+		// a Claude session: its size is what the SDK reported for the last turn; there is no breakdown (the messages are the SDK's)
+		const sdkTokens = !live && conv && conv.key === mf.key && conv.sessionId ? (conv.tokens ?? null) : null;
 		return {
 			window: model.contextWindow,
 			compactAt: compactLine(model.contextWindow),
-			used: est ? est.tokens : null,
-			source: est ? est.source : "none",
+			used: est ? est.tokens : sdkTokens,
+			source: est ? est.source : sdkTokens !== null ? "usage" : "none",
 			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
 			imageCount: b?.imageCount ?? 0,
 			messages: live?.messages.length ?? 0,
@@ -534,6 +559,7 @@ export class ThreadRunner {
 	/** Summarizes the thread's in-memory conversation now; the caller guards against a run going on. */
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
 		const mf = this.modelFor(this.d.settings(), this.specOf(thread));
+		if (isClaudeSub(mf.provider)) throw new Error("Claude abonementa sarunu Claude saspiež pats, kad tā tuvojas limitam. Jaunai tēmai sāc jaunu sarunu.");
 		const conv = this.conversations.get(thread.id);
 		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();

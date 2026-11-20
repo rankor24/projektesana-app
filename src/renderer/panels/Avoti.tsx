@@ -1,6 +1,7 @@
 // Avoti: the only file list in the app (design doc 1, cause 8: v1 repeated a huge list on two pages).
 // One list grouped by office folder; per row: title, role, versions, duplicate paths, signers, text state, pages.
 // Photo surveys are one row each (date, count). A click opens the source in the preview and puts it in the Fokuss.
+import { comparePicker } from "../shell/ComparePicker";
 import { Fragment, useMemo, useState } from "react";
 import type { Source } from "../../core/model";
 import type { ScanSummaryRow } from "../../shared/api";
@@ -12,14 +13,15 @@ import { Badge, Empty, Err, useLoad } from "../ui";
 import { RoleQuestions, ScanBar, useScanProgress } from "./Projekts";
 import { Normativi } from "./Normativi";
 import { sourceExt } from "../shell/Preview";
+import { locale, tr } from "../i18n";
 
 const STATE: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "dim" | "info" }> = {
-	ok: { label: "teksts", tone: "ok" },
-	ocr: { label: "OCR", tone: "info" },
-	empty: { label: "bez teksta", tone: "warn" },
-	unsupported: { label: "netiek lasīts", tone: "dim" },
-	error: { label: "kļūda", tone: "bad" },
-	pending: { label: "gaida", tone: "dim" },
+	ok: { label: tr("teksts"), tone: "ok" },
+	ocr: { label: tr("OCR"), tone: "info" },
+	empty: { label: tr("bez teksta"), tone: "warn" },
+	unsupported: { label: tr("netiek lasīts"), tone: "dim" },
+	error: { label: tr("kļūda"), tone: "bad" },
+	pending: { label: tr("gaida"), tone: "dim" },
 };
 
 const latest = (s: Source) => s.versions[s.versions.length - 1];
@@ -49,7 +51,7 @@ export function Avoti({ filter }: { filter?: string }) {
 		return (
 			<div className="pane fill">
 				<Normativi projectId={null} />
-				<Empty title="nav projekta">Atver projektu panelī Projekts.</Empty>
+				<Empty title={tr("nav projekta")}>{tr("Atver projektu panelī Projekts.")}</Empty>
 			</div>
 		);
 
@@ -65,27 +67,26 @@ export function Avoti({ filter }: { filter?: string }) {
 		<div className="pane fill">
 			<div className="row">
 				<button className="primary" onClick={() => call("projects.scan", projectId).catch((e) => setErr(errText(e)))}>
-					Nolasīt vēlreiz
-				</button>
-				<input className="grow" placeholder="Meklēt nosaukumā, lomā, ceļā, parakstītājā…" value={q} onChange={(e) => setQ(e.target.value)} />
-				<span className="dim small">{sources.data ? `${sources.data.length} avoti` : ""}</span>
+					{tr("Nolasīt vēlreiz")}</button>
+				<input className="grow" placeholder={tr("Meklēt nosaukumā, lomā, ceļā, parakstītājā…")} value={q} onChange={(e) => setQ(e.target.value)} />
+				<span className="dim small">{sources.data ? tr("{length} avoti", { length: sources.data.length }) : ""}</span>
 			</div>
 			{err && <div className="err">{err}</div>}
 			{progress && <ScanBar p={progress} />}
 			<RoleQuestions projectId={projectId} />
 			<Normativi projectId={projectId} />
 			{sources.error ? <Err error={sources.error} /> : null}
-			{sources.data && sources.data.length === 0 && !progress && <Empty title="run scan">Projekts vēl nav nolasīts.</Empty>}
-			{summary.data && summary.data.skipped.archive > 0 && <div className="dim small">Arhīva mapēs {summary.data.skipped.archive} faili netiek lasīti.</div>}
+			{sources.data && sources.data.length === 0 && !progress && <Empty title={tr("run scan")}>{tr("Projekts vēl nav nolasīts.")}</Empty>}
+			{summary.data && summary.data.skipped.archive > 0 && <div className="dim small">{tr("Arhīva mapēs {archive} faili netiek lasīti.", { archive: summary.data.skipped.archive })}</div>}
 			{groups.length > 0 && (
 				<table>
 					<thead>
 						<tr>
-							<th>Nosaukums</th>
-							<th>Loma</th>
-							<th>Teksts</th>
-							<th>Lapas</th>
-							<th>Versijas</th>
+							<th>{tr("Nosaukums")}</th>
+							<th>{tr("Loma")}</th>
+							<th>{tr("Teksts")}</th>
+							<th>{tr("Lapas")}</th>
+							<th>{tr("Versijas")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -114,35 +115,32 @@ export function Avoti({ filter }: { filter?: string }) {
 														{sourceExt(s) === ".ifc" && (
 															<>
 																{" "}
-																<Badge tone="info" title="Atveras 3D skatā">3D</Badge>
+																<Badge tone="info" title={tr("Atveras 3D skatā")}>{tr("3D")}</Badge>
 															</>
 														)}
 														{s.kind === "photoSurvey" && s.survey && (
 															<span className="dim">
 																{" "}
-																— {s.survey.date ?? "bez datuma"}, {s.survey.count} foto
-															</span>
+																— {s.survey.date ?? tr("bez datuma")}{tr(", {count} foto", { count: s.survey.count })}</span>
 														)}
 														{s.paths.length > 1 && (
 															<>
 																{" "}
 																<Badge tone="info" title={s.paths.join("\n")}>
-																	{s.paths.length} vietās
-																</Badge>
+																	{tr("{v} vietās", { v: s.paths.length })}</Badge>
 															</>
 														)}
 														{s.signers.length > 0 && (
 															<>
 																{" "}
 																<Badge tone="ok" title={s.signers.map((x) => `${x.name} ${x.at ?? ""}`).join("\n")}>
-																	{s.signers.length} paraksti
-																</Badge>
+																	{tr("{v} paraksti", { v: s.signers.length })}</Badge>
 															</>
 														)}
 														{s.paths.length === 0 && (
 															<>
 																{" "}
-																<Badge tone="bad">vairs nav mapē</Badge>
+																<Badge tone="bad">{tr("vairs nav mapē")}</Badge>
 															</>
 														)}
 													</td>
@@ -151,7 +149,7 @@ export function Avoti({ filter }: { filter?: string }) {
 															<select
 																className="small"
 																value={s.role}
-																title={s.roleFrom === "document" ? "Loma iestatīta šim dokumentam (ne mapei)" : "Loma no mapes. Izvēlies citu, ja šis dokuments ir kas cits (piem., kadastra lieta PU mapē)"}
+																title={s.roleFrom === "document" ? tr("Loma iestatīta šim dokumentam (ne mapei)") : tr("Loma no mapes. Izvēlies citu, ja šis dokuments ir kas cits (piem., kadastra lieta PU mapē)")}
 																onChange={(e) => call("sources.setRole", projectId, s.id, e.target.value).then(() => sources.reload()).catch((x) => setErr(errText(x)))}
 															>
 																{(DOC_ROLES.includes(s.role) ? DOC_ROLES : [s.role, ...DOC_ROLES]).map((r) => (
@@ -164,8 +162,8 @@ export function Avoti({ filter }: { filter?: string }) {
 														{s.roleFrom === "document" && (
 															<>
 																{" "}
-																<Badge tone="info" title="Loma iestatīta šim dokumentam">dokumentam</Badge>{" "}
-																<button className="ghost small" title="Atpakaļ uz mapes lomu" onClick={() => call("sources.setRole", projectId, s.id, null).then(() => sources.reload()).catch((x) => setErr(errText(x)))}>
+																<Badge tone="info" title={tr("Loma iestatīta šim dokumentam")}>{tr("dokumentam")}</Badge>{" "}
+																<button className="ghost small" title={tr("Atpakaļ uz mapes lomu")} onClick={() => call("sources.setRole", projectId, s.id, null).then(() => sources.reload()).catch((x) => setErr(errText(x)))}>
 																	↺
 																</button>
 															</>
@@ -173,7 +171,7 @@ export function Avoti({ filter }: { filter?: string }) {
 														{s.roleFrom === "unconfirmed" && (
 															<>
 																{" "}
-																<Badge tone="warn">jāapstiprina</Badge>
+																<Badge tone="warn">{tr("jāapstiprina")}</Badge>
 															</>
 														)}
 													</td>
@@ -192,18 +190,20 @@ export function Avoti({ filter }: { filter?: string }) {
 															{v?.textReason && <div className="dim">{v.textReason}</div>}
 															{s.signers.map((x) => (
 																<div key={x.file + x.name}>
-																	parakstīja: <b>{x.name}</b> {x.at ? new Date(x.at).toLocaleString("lv-LV") : "laiks nav nolasāms"}
+																	{tr("parakstīja:")} <b>{x.name}</b> {x.at ? new Date(x.at).toLocaleString(locale()) : tr("laiks nav nolasāms")}
 																</div>
 															))}
 															{s.versions.map((ver, i) => (
 																<div key={ver.sha256 + i} className="dim">
-																	v{i + 1}: {new Date(ver.mtime).toLocaleDateString("lv-LV")} · {(ver.size / 1024).toFixed(0)} KB · {ver.sha256.slice(0, 10)}
-																</div>
+																	{tr("v")}{i + 1}{tr(": {v} · {v2} KB · {v3}", { v: new Date(ver.mtime).toLocaleDateString(locale()), v2: (ver.size / 1024).toFixed(0), v3: ver.sha256.slice(0, 10) })}</div>
 															))}
 															{s.kind === "document" && (
 																<button className="small" onClick={() => call("sources.openOriginal", projectId, s.id).catch((e) => setErr(errText(e)))}>
-																	Atvērt oriģinālu
-																</button>
+																	{tr("Atvērt oriģinālu")}</button>
+															)}
+															{s.kind === "document" && (
+																<button className="small" title={tr("Salīdzināt ar citu failu (A | B)")} onClick={() => comparePicker.open(`src:${s.id}`)}>
+																	⇄ {tr("Salīdzināt ar…")}</button>
 															)}
 														</td>
 													</tr>

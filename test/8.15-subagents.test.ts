@@ -165,7 +165,7 @@ function lanes(script: (o: PiRunOptions, n: number) => Promise<void>, opts: { ma
 			}
 		},
 		base: { runtime: null as never },
-		mcpFor: (allowed) => ({ "projektesana-tools": { command: "x", args: [], env: {}, allow: allowed } }),
+		mcpFor: (allowed, agentId) => ({ "projektesana-tools": { command: "x", args: [], env: agentId ? { AS: agentId } : {}, allow: allowed } }),
 		levelOf,
 		listed,
 		revitTools: new Set(revitNames),
@@ -216,6 +216,18 @@ test("8.15 run_subagent: a helper is given read tools only, none of Revit's, nev
 	const ctx = (name: string) => ({ toolCall: { id: `c-${name}`, name, arguments: {}, type: "toolCall" }, args: {}, assistantMessage: { content: [] }, context: {} }) as unknown as BeforeToolCallContext;
 	assert.equal(await before!(ctx("read_source")), undefined);
 	for (const n of ["set_fact", "write_document", "delegate", "run_subagent", "revit_create_sheet"]) assert.equal((await before!(ctx(n)))?.block, true, `${n} is blocked even if the model names it`);
+});
+
+test("8.15 delegate: each lane's tools run as its specialist (its id, not its name); run_subagent's run as the parent", async () => {
+	const ids: (string | undefined)[] = [];
+	const l = lanes(async (o) => {
+		ids.push(Object.values(o.mcp)[0]?.env?.AS);
+		finish(o, "gatavs");
+	}, { max: 1 });
+	await l.delegate.execute("t1", { jobs: [{ agent: "dokumenti", task: "a" }, { agent: "Pārbaudītājs", task: "b" }] }, new AbortController().signal);
+	assert.deepEqual(ids, ["dokumenti", "parbaude"]);
+	await l.sub.execute("t2", { tasks: [{ task: "c" }] }, new AbortController().signal);
+	assert.equal(ids.at(-1), undefined, "a plain lane keeps the parent's identity");
 });
 
 test("8.15 delegate: a specialist gets reading plus the tools its settings name, within run; an unknown one is refused with the list", async () => {

@@ -2,13 +2,18 @@
 // side by side / one above the other, each pane with its own tabs. A split can show two angles of one model (the same tab in
 // both panes), a model beside its sheet, or two files; a linked camera / page keeps the two views together. Pure and
 // node-free: the viewer component, the Versijas page (9.9) and the tests use the same functions.
+import type { CompareMode } from "./compare2d.js";
 
 export type ViewTarget =
 	/** `quote`: text to highlight on the page (a fact's citation, task 9.7); it is not part of the file's identity */
 	| { kind: "source"; sourceId: string; page?: number; quote?: string }
 	| { kind: "ifc"; path: string; label: string }
+	/** a PDF that is not a registered source (the Faili tab): `path` is a sheets.bytes ref, "file:<root>:<rel>" */
+	| { kind: "pdf"; path: string; label: string }
+	/** a DWG drawn from CadCraft's reader: `path` is a compare ref ("src:<id>", "file:<root>:<rel>") */
+	| { kind: "dwg"; path: string; label: string }
 	/** `only` (sheets): list only the sheets that differ (9.9) */
-	| { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: "sheet" | "ifc"; only?: boolean }
+	| { kind: "compare"; a: string; b: string; aLabel: string; bLabel: string; mode: CompareMode; only?: boolean }
 	| { kind: "law"; sourceId: string; quote?: string };
 
 export interface Tab {
@@ -39,11 +44,13 @@ export const emptyViewer = (): ViewerState => ({ tabs: [], panes: [{ tabs: [], a
 export function targetKey(t: ViewTarget): string {
 	if (t.kind === "source") return `source:${t.sourceId}`;
 	if (t.kind === "ifc") return `ifc:${t.path}`;
+	if (t.kind === "pdf") return `pdf:${t.path}`;
+	if (t.kind === "dwg") return `dwg:${t.path}`;
 	if (t.kind === "compare") return `compare:${t.mode}:${t.a}|${t.b}`;
 	return `law:${t.sourceId}`;
 }
 export function targetLabel(t: ViewTarget, titleOf: (sourceId: string) => string | undefined = () => undefined): string {
-	if (t.kind === "ifc") return t.label;
+	if (t.kind === "ifc" || t.kind === "pdf" || t.kind === "dwg") return t.label;
 	if (t.kind === "compare") return `${t.aLabel} ↔ ${t.bLabel}`;
 	if (t.kind === "law") return titleOf(t.sourceId) ?? "likums";
 	return titleOf(t.sourceId) ?? t.sourceId;

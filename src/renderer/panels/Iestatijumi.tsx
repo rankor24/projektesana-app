@@ -1,14 +1,12 @@
 // Settings: which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort, theme,
 // Revit MCP path. Keys are stored encrypted by main; nothing here shows a stored key.
 import { useEffect, useState } from "react";
-import type { Limits } from "../../shared/thread-types";
 import type { LoginNotice } from "../../shared/types";
 import type { ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
 import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
-import { windows } from "../windows";
-import { Agenti } from "./Agenti";
+import { locale, getLang, LANGS, setLang, tr, trDyn } from "../i18n";
 
 export function Iestatijumi() {
 	const settings = useLoad(() => call("settings.get"), []);
@@ -40,45 +38,45 @@ export function Iestatijumi() {
 			{err && <div className="err">{err}</div>}
 			{settings.error ? <Err error={settings.error} /> : null}
 			{providers.error ? <Err error={providers.error} /> : null}
-			<div className="section-title">Lietotājs</div>
+			<div className="section-title">{tr("Lietotājs")}</div>
 			{s && (
 				<label className="row">
-					<span style={{ width: 150 }}>Vārds, uzvārds</span>
-					<input className="grow" defaultValue={s.userName} placeholder="nav norādīts — lēmumi tiek parakstīti kā “lietotājs”" onBlur={(e) => act(() => call("settings.set", { userName: e.target.value.trim() }))} />
+					<span style={{ width: 150 }}>{tr("Vārds, uzvārds")}</span>
+					<input className="grow" defaultValue={s.userName} placeholder={tr("nav norādīts — lēmumi tiek parakstīti kā “lietotājs”")} onBlur={(e) => act(() => call("settings.set", { userName: e.target.value.trim() }))} />
 				</label>
 			)}
-			<div className="dim small">Vārds tiek ierakstīts pie taviem lēmumiem (pieņemti atradumi, paša ierakstītas vērtības), BCF komentāros un tiek pateikts aģentam. Jau pieņemtie lēmumi savu vārdu saglabā.</div>
-			<div className="section-title">Aģents</div>
+			<div className="dim small">{tr("Vārds tiek ierakstīts pie taviem lēmumiem (pieņemti atradumi, paša ierakstītas vērtības), BCF komentāros un tiek pateikts aģentam. Jau pieņemtie lēmumi savu vārdu saglabā.")}</div>
+			<div className="section-title">{tr("Aģents")}</div>
 			{s && (
 				<div className="row">
 					<label>
-						Pakalpojums{" "}
+						{tr("Pakalpojums")}{" "}
 						<select value={s.provider} onChange={(e) => act(() => call("settings.set", { provider: e.target.value, model: "", effort: "" }))}>
 							{(providers.data ?? []).map((p) => (
 								<option key={p.id} value={p.id}>
 									{p.label}
-									{p.configured ? "" : " (nav pieslēgts)"}
+									{p.configured ? "" : tr(" (nav pieslēgts)")}
 								</option>
 							))}
 						</select>
 					</label>
 					<label>
-						Modelis{" "}
+						{tr("Modelis")}{" "}
 						<select value={s.model} onChange={(e) => act(() => call("settings.set", { model: e.target.value, effort: "" }))}>
-							<option value="">noklusējums</option>
+							<option value="">{tr("noklusējums")}</option>
 							{(current?.models ?? []).map((m) => (
 								<option key={m.id} value={m.id}>
 									{m.name}
-									{m.legacy ? " (vecāks)" : ""}
+									{m.legacy ? tr(" (vecāks)") : ""}
 								</option>
 							))}
 						</select>
 					</label>
 					{model && model.efforts.length > 0 && (
 						<label>
-							Piepūle{" "}
+							{tr("Piepūle")}{" "}
 							<select value={s.effort} onChange={(e) => act(() => call("settings.set", { effort: e.target.value as never }))}>
-								<option value="">noklusējums ({model.defaultEffort})</option>
+								<option value="">{tr("noklusējums ({effort})", { effort: model.defaultEffort })}</option>
 								{model.efforts.map((x) => (
 									<option key={x}>{x}</option>
 								))}
@@ -90,38 +88,36 @@ export function Iestatijumi() {
 			<table>
 				<thead>
 					<tr>
-						<th>Pakalpojums</th>
-						<th>Stāvoklis</th>
-						<th>Pieslēgšana</th>
+						<th>{tr("Pakalpojums")}</th>
+						<th>{tr("Stāvoklis")}</th>
+						<th>{tr("Pieslēgšana")}</th>
 					</tr>
 				</thead>
 				<tbody>
 					{(providers.data ?? []).map((p) => (
 						<tr key={p.id}>
 							<td>{p.label}</td>
-							<td>{p.configured ? <Badge tone="ok">pieslēgts ({p.method})</Badge> : <Badge tone="dim">nav pieslēgts</Badge>}</td>
+							<td>{p.configured ? <Badge tone="ok">{tr("pieslēgts ({method})", { method: p.method })}</Badge> : <Badge tone="dim">{tr("nav pieslēgts")}</Badge>}</td>
 							<td>
 								<div className="row">
 									{p.auth.includes("oauth") &&
 										(p.configured && p.method === "oauth" ? (
-											<button onClick={() => act(() => call("agent.logout", p.id))}>Atslēgties</button>
+											<button onClick={() => act(() => call("agent.logout", p.id))}>{tr("Atslēgties")}</button>
 										) : (
 											<button className="primary" onClick={() => act(() => call("agent.login", p.id))}>
-												Pieslēgties ar abonementu
-											</button>
+												{tr("Pieslēgties ar abonementu")}</button>
 										))}
 									{p.auth.includes("api_key") && (
 										<>
-											<input type="password" placeholder="API atslēga" value={keyDraft[p.id] ?? ""} onChange={(e) => setKeyDraft({ ...keyDraft, [p.id]: e.target.value })} />
+											<input type="password" placeholder={p.keyHelp ? "setup-token" : tr("API atslēga")} title={p.keyHelp ? trDyn(p.keyHelp) : undefined} value={keyDraft[p.id] ?? ""} onChange={(e) => setKeyDraft({ ...keyDraft, [p.id]: e.target.value })} />
 											<button disabled={!keyDraft[p.id]} onClick={() => act(async () => (await call("agent.setKey", p.id, keyDraft[p.id]), setKeyDraft({ ...keyDraft, [p.id]: "" })))}>
-												Saglabāt
-											</button>
-											{p.configured && p.method === "api_key" && <button onClick={() => act(() => call("agent.clearKey", p.id))}>Dzēst atslēgu</button>}
+												{tr("Saglabāt")}</button>
+											{p.configured && p.method === "api_key" && <button onClick={() => act(() => call("agent.clearKey", p.id))}>{tr("Dzēst atslēgu")}</button>}
 											{p.keyUrl && (
 												<a href={p.keyUrl} target="_blank" rel="noreferrer">
-													kur dabūt
-												</a>
+													{tr("kur dabūt")}</a>
 											)}
+											{p.keyHelp && !p.configured && <span className="dim small">{trDyn(p.keyHelp)}</span>}
 										</>
 									)}
 								</div>
@@ -132,15 +128,15 @@ export function Iestatijumi() {
 			</table>
 			{notice && (
 				<div className="confirm">
-					<b>Pieslēgšanās — {notice.provider}</b>
+					<b>{tr("Pieslēgšanās — {provider}", { provider: notice.provider })}</b>
 					{notice.type === "url" && (
 						<div>
-							Pārlūkā atvērta lapa. Ja tā neatvērās: <a href={notice.url}>{notice.url}</a>
+							{tr("Pārlūkā atvērta lapa. Ja tā neatvērās:")} <a href={notice.url}>{notice.url}</a>
 						</div>
 					)}
 					{notice.type === "code" && (
 						<div>
-							Kods: <b className="mono">{notice.userCode}</b> — <a href={notice.url}>{notice.url}</a>
+							{tr("Kods:")} <b className="mono">{notice.userCode}</b> — <a href={notice.url}>{notice.url}</a>
 						</div>
 					)}
 					{notice.type === "info" && <div>{notice.message}</div>}
@@ -148,61 +144,61 @@ export function Iestatijumi() {
 						<div className="row">
 							<span>{notice.message}</span>
 							<input className="grow" value={answer} onChange={(e) => setAnswer(e.target.value)} />
-							<button onClick={() => act(async () => (await call("agent.loginAnswer", answer), setAnswer("")))}>Nosūtīt</button>
+							<button onClick={() => act(async () => (await call("agent.loginAnswer", answer), setAnswer("")))}>{tr("Nosūtīt")}</button>
 						</div>
 					)}
-					{notice.type === "done" && <Badge tone="ok">pieslēgts</Badge>}
+					{notice.type === "done" && <Badge tone="ok">{tr("pieslēgts")}</Badge>}
 					{notice.type === "error" && <div className="err">{notice.message}</div>}
 				</div>
 			)}
-			<div className="section-title">Revit MCP</div>
+			<div className="section-title">{tr("Revit MCP")}</div>
 			<RevitServer version={rv} />
 			{s && (
 				<>
 					<label className="row">
-						<span style={{ width: 150 }}>Cits index.js</span>
-						<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder="tukšs = standarta instalācija (%LOCALAPPDATA%\Revit-MCP-Node)" onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
+						<span style={{ width: 150 }}>{tr("Cits index.js")}</span>
+						<input className="grow mono" defaultValue={s.revitServerJs ?? ""} placeholder={tr("tukšs = standarta instalācija (%LOCALAPPDATA%\\Revit-MCP-Node)")} onBlur={(e) => act(() => call("settings.set", { revitServerJs: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
 					</label>
 					<label className="row">
-						<span style={{ width: 150 }}>Cits node.exe</span>
-						<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder="tukšs = servera node-runtime vai Electron node" onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
+						<span style={{ width: 150 }}>{tr("Cits node.exe")}</span>
+						<input className="grow mono" defaultValue={s.revitNode ?? ""} placeholder={tr("tukšs = servera node-runtime vai Electron node")} onBlur={(e) => act(() => call("settings.set", { revitNode: e.target.value.trim() || null }).then(() => setRv((v) => v + 1)))} />
 					</label>
 				</>
 			)}
-			<div className="section-title">Aģenti</div>
-			<Agenti />
-			<div className="row">
-				<button className="ghost" onClick={() => windows.open("prasmes")}>
-					Prasmes…
-				</button>
-				<span className="dim small">Biroja prasmju bibliotēka un tas, kuras prasmes kuram aģentam.</span>
-			</div>
-			<div className="section-title">Aģentu ierobežojumi</div>
-			{s && <LimitInputs limits={s.limits} save={(limits) => act(() => call("settings.set", { limits }))} />}
-			<div className="dim small">Cik tālu aģenti drīkst sarunāties savā starpā. Vilnis ir viss, ko izraisa viena tava darbība; tam sasniedzot robežu, rindā gaidošie darbi apstājas un “Gaida tevi” piedāvā turpināt.</div>
-			<div className="section-title">Izmantojums</div>
+			<div className="section-title">{tr("Izmantojums")}</div>
 			<UsageTable />
-			<div className="section-title">3D skats (BimCraft)</div>
+			<div className="section-title">{tr("3D skats (BimCraft)")}</div>
 			<BimcraftCopy />
-			<div className="section-title">Biroja standarts</div>
+			<div className="section-title">{tr("Biroja standarts")}</div>
 			{s && (
 				<label className="row">
-					<span style={{ width: 150 }}>Projekta mapju koks (PDF)</span>
+					<span style={{ width: 150 }}>{tr("Projekta mapju koks (PDF)")}</span>
 					<input
 						className="grow mono"
 						defaultValue={s.officeStandardPdf ?? ""}
-						placeholder="nav norādīts — biroja prasības (nosaukumi, datumi) nav citējamas"
+						placeholder={tr("nav norādīts — biroja prasības (nosaukumi, datumi) nav citējamas")}
 						onBlur={(e) => act(() => call("settings.set", { officeStandardPdf: e.target.value.trim() || null }))}
 					/>
 				</label>
 			)}
-			<div className="dim small">Biroja standarta teksts tiek lasīts no šī faila, kad lietotne strādā; tas netiek glabāts lietotnes kodā.</div>
-			<div className="section-title">Izskats</div>
+			<div className="dim small">{tr("Biroja standarta teksts tiek lasīts no šī faila, kad lietotne strādā; tas netiek glabāts lietotnes kodā.")}</div>
+			<div className="section-title">{tr("Valoda")}</div>
+			{s && (
+				<div className="row">
+					{LANGS.map((l) => (
+						<button key={l.id} className={getLang() === l.id ? "primary" : ""} onClick={() => act(() => call("settings.set", { language: l.id })).then(() => (setLang(l.id), location.reload()))}>
+							{l.name}
+						</button>
+					))}
+					<span className="dim small">{tr("Lietotnes saskarne. Aģenta teksti un dokumenti paliek latviski.")}</span>
+				</div>
+			)}
+			<div className="section-title">{tr("Izskats")}</div>
 			{s && (
 				<div className="row">
 					{(["auto", "dark", "light"] as const).map((t) => (
 						<button key={t} className={s.theme === t ? "primary" : ""} onClick={() => act(() => call("settings.set", { theme: t }))}>
-							{t === "auto" ? "kā sistēmā" : t === "dark" ? "tumšs" : "gaišs"}
+							{t === "auto" ? tr("kā sistēmā") : t === "dark" ? tr("tumšs") : tr("gaišs")}
 						</button>
 					))}
 				</div>
@@ -211,70 +207,36 @@ export function Iestatijumi() {
 	);
 }
 
-const LIMIT_ROWS: { key: keyof Limits; label: string; min: number; max: number; step?: number }[] = [
-	{ key: "exchangesPerTopic", label: "Ziņas par vienu tematu (no katras puses)", min: 1, max: 10 },
-	{ key: "chainDepth", label: "Ziņu ķēdes dziļums", min: 1, max: 20 },
-	{ key: "runsPerWave", label: "Skrējieni vienā vilnī", min: 1, max: 200 },
-	{ key: "waveCost", label: "Viļņa izmaksu robeža ($)", min: 0, max: 100000, step: 0.1 },
-	{ key: "taskIterations", label: "Uzdevuma iterācijas", min: 1, max: 10 },
-];
-
-/** The five limits. Saved on leaving a field; main puts each into its range, and the field shows what was kept. An empty cost field = no cost limit. */
-function LimitInputs({ limits, save }: { limits: Limits; save: (next: Limits) => void }) {
-	return (
-		<>
-			{LIMIT_ROWS.map((r) => (
-				<label key={`${r.key}${limits[r.key]}`} className="row">
-					<span style={{ width: 260 }}>{r.label}</span>
-					<input
-						type="number"
-						min={r.min}
-						max={r.max}
-						step={r.step ?? 1}
-						defaultValue={limits[r.key] ?? ""}
-						placeholder={r.key === "waveCost" ? "nav robežas" : undefined}
-						style={{ width: 110 }}
-						onBlur={(e) => {
-							const raw = e.target.value.trim();
-							const v = raw === "" ? null : Number(raw);
-							if (v !== limits[r.key] && !(v === null && r.key !== "waveCost")) save({ ...limits, [r.key]: v });
-						}}
-					/>
-				</label>
-			))}
-		</>
-	);
-}
 
 /** What the agent's model turns used, per project: tokens, and the price where the provider gave one. */
 function UsageTable() {
 	const u = useLoad(() => call("usage.summary"), []);
 	if (u.error) return <Err error={u.error} />;
-	if (!u.data) return <div className="dim small">ielādē…</div>;
-	if (u.data.length === 0) return <div className="dim small">no data: aģents vēl nav izmantots.</div>;
+	if (!u.data) return <div className="dim small">{tr("ielādē…")}</div>;
+	if (u.data.length === 0) return <div className="dim small">{tr("no data: aģents vēl nav izmantots.")}</div>;
 	const sum = u.data.reduce((a, r) => ({ ...a, input: a.input + r.input, output: a.output + r.output, cacheRead: a.cacheRead + r.cacheRead, turns: a.turns + r.turns, priced: a.priced + r.priced, cost: r.cost === null ? a.cost : (a.cost ?? 0) + r.cost }), { input: 0, output: 0, cacheRead: 0, turns: 0, priced: 0, cost: null as number | null });
 	return (
 		<table className="small">
 			<thead>
 				<tr>
-					<th>Projekts</th>
-					<th>Palaišanas</th>
-					<th>Izmantojums</th>
-					<th>Pēdējo reizi</th>
+					<th>{tr("Projekts")}</th>
+					<th>{tr("Palaišanas")}</th>
+					<th>{tr("Izmantojums")}</th>
+					<th>{tr("Pēdējo reizi")}</th>
 				</tr>
 			</thead>
 			<tbody>
 				{u.data.map((r) => (
 					<tr key={r.project ?? "_"}>
-						<td>{r.project ?? <span className="dim">bez projekta</span>}</td>
+						<td>{r.project ?? <span className="dim">{tr("bez projekta")}</span>}</td>
 						<td>{r.runs}</td>
 						<td>{usageText(r)}</td>
-						<td className="dim">{new Date(r.lastAt).toLocaleDateString("lv-LV")}</td>
+						<td className="dim">{new Date(r.lastAt).toLocaleDateString(locale())}</td>
 					</tr>
 				))}
 				<tr>
 					<td>
-						<b>Kopā</b>
+						<b>{tr("Kopā")}</b>
 					</td>
 					<td>{u.data.reduce((n, r) => n + r.runs, 0)}</td>
 					<td>
@@ -292,17 +254,17 @@ function BimcraftCopy() {
 	const st = useLoad(() => call("bimcraft.status"), []);
 	const b = st.data;
 	if (st.error) return <Err error={st.error} />;
-	if (!b) return <div className="dim small">pārbauda…</div>;
+	if (!b) return <div className="dim small">{tr("pārbauda…")}</div>;
 	return (
 		<div className="small">
 			<div className="row">
-				<Badge tone={b.state === "gatavs" ? "ok" : b.state === "nav tilta" ? "warn" : "bad"}>{b.state}</Badge>
-				{b.state !== "nav konfigurēts" && <span>{b.vendor} bibliotēkas · tilta papildinājums {b.addon ? "ieslēgts" : "nav ieslēgts"}</span>}
-				<button className="small ghost" onClick={st.reload}>pārbaudīt</button>
+				<Badge tone={b.state === "gatavs" ? "ok" : b.state === "nav tilta" ? "warn" : "bad"}>{tr(b.state)}</Badge>
+				{b.state !== "nav konfigurēts" && <span>{b.vendor} {tr("bibliotēkas · tilta papildinājums")} {b.addon ? tr("ieslēgts") : tr("nav ieslēgts")}</span>}
+				<button className="small ghost" onClick={st.reload}>{tr("pārbaudīt")}</button>
 			</div>
 			{b.source && (
 				<div className="dim mono">
-					no {b.source}
+					{tr("no")} {b.source}
 					{b.copiedAt ? ` · ${b.copiedAt.slice(0, 16).replace("T", " ")}` : ""}
 				</div>
 			)}
@@ -316,22 +278,62 @@ function RevitServer({ version }: { version: number }) {
 	const st = useLoad(() => call("revit.status"), [version]);
 	const r = st.data;
 	if (st.error) return <Err error={st.error} />;
-	if (!r) return <div className="dim small">pārbauda…</div>;
+	if (!r) return <div className="dim small">{tr("pārbauda…")}</div>;
 	return (
 		<div className="small">
 			<div className="row">
-				<Badge tone={r.state === "savienots" ? "ok" : r.state === "nav konfigurēts" ? "bad" : "warn"}>{r.state}</Badge>
-				{r.document && <span>{r.document}{r.version ? ` · Revit ${r.version}` : ""}</span>}
-				<button className="small ghost" onClick={st.reload}>pārbaudīt</button>
+				<Badge tone={r.state === "savienots" ? "ok" : r.state === "nav konfigurēts" ? "bad" : "warn"}>{tr(r.state)}</Badge>
+				{r.document && <span>{r.document}{r.version ? tr(" · Revit {version}", { version: r.version }) : ""}</span>}
+				<button className="small ghost" onClick={st.reload}>{tr("pārbaudīt")}</button>
 			</div>
 			{r.server && (
 				<div className="dim mono">
-					{r.server.source === "automātiski" ? "atrasts automātiski: " : "no Iestatījumiem: "}
+					{r.server.source === "iekļauts" ? tr("iekļauts lietotnē: ") : r.server.source === "automātiski" ? tr("atrasts automātiski: ") : tr("no Iestatījumiem: ")}
 					{r.server.serverJs}
-					{r.server.node ? ` · ${r.server.node}` : " · Electron node"}
+					{r.server.node ? ` · ${r.server.node}` : tr(" · Electron node")}
 				</div>
 			)}
 			{r.message && <div className="dim">{r.message}</div>}
+			<RevitAddins onDone={st.reload} />
+		</div>
+	);
+}
+
+/** The Revit add-in that ships with the app: which Revit years it is installed for, and a button to put it there. */
+function RevitAddins({ onDone }: { onDone: () => void }) {
+	const years = useLoad(() => call("revit.addins"), []);
+	const [busy, setBusy] = useState(false);
+	const [msg, setMsg] = useState<string | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+	const rows = years.data ?? [];
+	if (!rows.some((y) => y.available)) return <div className="dim small">{tr("Revit spraudnis šajā lietotnes versijā nav iekļauts.")}</div>;
+	const install = async (ys: string[]) => {
+		setBusy(true);
+		setErr(null);
+		try {
+			setMsg((await call("revit.installAddins", ys)).join("\n"));
+			years.reload();
+			onDone();
+		} catch (e) {
+			setErr(errText(e));
+		} finally {
+			setBusy(false);
+		}
+	};
+	return (
+		<div className="small">
+			<div className="row">
+				<span>{tr("Revit spraudnis:")}</span>
+				{rows.map((y) => (
+					<span key={y.year} className="row">
+						<Badge tone={y.installed ? "ok" : "warn"}>{y.year} {y.installed ? tr("ielikts") : tr("nav ielikts")}</Badge>
+						{y.available && <button className="small ghost" disabled={busy} onClick={() => install([y.year])}>{y.installed ? tr("atjaunot") : tr("ielikt")}</button>}
+					</span>
+				))}
+			</div>
+			<div className="dim">{tr("Neobligāts: serveris darbojas arī bez tā, bet Revit atbild tikai ar ielikto spraudni. Aizver Revit pirms ielikšanas, pēc tam restartē to.")}</div>
+			{msg && <div className="dim" style={{ whiteSpace: "pre-line" }}>{msg}</div>}
+			{err && <Err error={err} />}
 		</div>
 	);
 }

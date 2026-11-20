@@ -9,25 +9,26 @@ import { ui, useUi } from "../state";
 import { commentSubject } from "../comment-subject";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { Ekspertize } from "./Ekspertize";
+import { locale, tr } from "../i18n";
 
-const ORIGIN: Record<string, string> = { law: "likums", pu: "PU", bip: "BIP", tn: "TN", permit: "atļauja", office: "birojs" };
+const ORIGIN: Record<string, string> = { law: tr("likums"), pu: tr("PU"), bip: tr("BIP"), tn: tr("TN"), permit: tr("atļauja"), office: tr("birojs") };
 const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "dim" | "info" }> = {
-	open: { label: "nav pārbaudīts", tone: "dim" },
-	met: { label: "izpildīts", tone: "ok" },
-	failed: { label: "neizpildīts", tone: "bad" },
-	justified: { label: "pamatots", tone: "info" },
+	open: { label: tr("nav pārbaudīts"), tone: "dim" },
+	met: { label: tr("izpildīts"), tone: "ok" },
+	failed: { label: tr("neizpildīts"), tone: "bad" },
+	justified: { label: tr("pamatots"), tone: "info" },
 };
 
 export function Prasibas({ filter }: { filter?: string }) {
 	const { projectId } = useUi();
 	const [tab, setTab] = useState<"req" | "findings" | "expert">(filter === "findings" ? "findings" : filter === "expert" ? "expert" : "req");
-	if (!projectId) return <Empty title="nav projekta" />;
+	if (!projectId) return <Empty title={tr("nav projekta")} />;
 	return (
 		<div className="fill-col">
 			<div className="tabs">
-				<button className={tab === "req" ? "on" : ""} onClick={() => setTab("req")}>Prasības</button>
-				<button className={tab === "findings" ? "on" : ""} onClick={() => setTab("findings")}>Atradumi</button>
-				<button className={tab === "expert" ? "on" : ""} onClick={() => setTab("expert")} title="Ekspertīzes atzinuma piezīmes pa daļām un atbildīgajiem">Ekspertīze</button>
+				<button className={tab === "req" ? "on" : ""} onClick={() => setTab("req")}>{tr("Prasības")}</button>
+				<button className={tab === "findings" ? "on" : ""} onClick={() => setTab("findings")}>{tr("Atradumi")}</button>
+				<button className={tab === "expert" ? "on" : ""} onClick={() => setTab("expert")} title={tr("Ekspertīzes atzinuma piezīmes pa daļām un atbildīgajiem")}>{tr("Ekspertīze")}</button>
 			</div>
 			{tab === "req" ? <Requirements projectId={projectId} /> : tab === "findings" ? <Findings projectId={projectId} /> : <Ekspertize projectId={projectId} />}
 		</div>
@@ -43,8 +44,7 @@ function Citation({ r, title }: { r: Requirement; title: (id: string) => string 
 					{c.act} {c.point}
 				</a>{" "}
 				<span className="dim">
-					· nolasīts {c.readOn}
-					{c.actVersionDate ? ` · redakcija no ${c.actVersionDate}` : " · redakcijas datums nav nolasīts"}
+					{tr("· nolasīts {readOn}", { readOn: c.readOn })}{c.actVersionDate ? tr(" · redakcija no {actVersionDate}", { actVersionDate: c.actVersionDate }) : tr(" · redakcijas datums nav nolasīts")}
 				</span>
 				<div className="quote">{c.quote}</div>
 			</div>
@@ -52,15 +52,14 @@ function Citation({ r, title }: { r: Requirement; title: (id: string) => string 
 	if (c.kind === "office")
 		return (
 			<div className="small">
-				biroja standarts, lpp. {c.page} <span className="dim mono">{c.file}</span>
+				{tr("biroja standarts, lpp. {page}", { page: c.page })} <span className="dim mono">{c.file}</span>
 				<div className="quote">{c.quote}</div>
 			</div>
 		);
 	return (
 		<div className="small">
 			<button className="ghost small" onClick={() => ui.show({ kind: "source", sourceId: c.sourceId, page: c.page })}>
-				{title(c.sourceId)}, lpp. {c.page}
-			</button>
+				{tr("{sourceId}, lpp. {page}", { sourceId: title(c.sourceId), page: c.page })}</button>
 			<div className="quote">{c.quote}</div>
 		</div>
 	);
@@ -97,40 +96,40 @@ function Requirements({ projectId }: { projectId: string }) {
 						act(call("requirements.refresh", projectId)).finally(() => (setBusy(false), notes.reload()));
 					}}
 				>
-					{busy ? "atjauno…" : "Atjaunot no profila un dokumentiem"}
+					{busy ? tr("atjauno…") : tr("Atjaunot no profila un dokumentiem")}
 				</button>
 				<select value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })}>
-					<option value="">visi avoti</option>
+					<option value="">{tr("visi avoti")}</option>
 					{Object.entries(ORIGIN).map(([k, v]) => (
 						<option key={k} value={k}>{v}</option>
 					))}
 				</select>
 				<select value={f.stage} onChange={(e) => setF({ ...f, stage: e.target.value })}>
-					<option value="">visas stadijas</option>
+					<option value="">{tr("visas stadijas")}</option>
 					{BIM_STAGES.map((s) => (
 						<option key={s}>{s}</option>
 					))}
 				</select>
 				<select value={f.section} onChange={(e) => setF({ ...f, section: e.target.value })}>
-					<option value="">visas sadaļas</option>
+					<option value="">{tr("visas sadaļas")}</option>
 					{sections.map((s) => (
 						<option key={s}>{s}</option>
 					))}
 				</select>
 				<select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
-					<option value="">jebkāds statuss</option>
+					<option value="">{tr("jebkāds statuss")}</option>
 					{Object.entries(STATUS).map(([k, v]) => (
 						<option key={k} value={k}>{v.label}</option>
 					))}
 				</select>
 				<select value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })}>
-					<option value="active">bez noraidītajām</option>
-					<option value="proposed">tikai priekšlikumi</option>
-					<option value="confirmed">tikai apstiprinātās</option>
-					<option value="rejected">noraidītās</option>
-					<option value="all">visas</option>
+					<option value="active">{tr("bez noraidītajām")}</option>
+					<option value="proposed">{tr("tikai priekšlikumi")}</option>
+					<option value="confirmed">{tr("tikai apstiprinātās")}</option>
+					<option value="rejected">{tr("noraidītās")}</option>
+					<option value="all">{tr("visas")}</option>
 				</select>
-				<input className="grow" placeholder="meklēt…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
+				<input className="grow" placeholder={tr("meklēt…")} value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
 				<span className="dim small">{rows.length} / {reqs.data?.length ?? 0}</span>
 			</div>
 			{err && <div className="err">{err}</div>}
@@ -138,15 +137,15 @@ function Requirements({ projectId }: { projectId: string }) {
 			{notes.data?.map((n) => (
 				<div key={n} className="dim small">⚠ {n}</div>
 			))}
-			{reqs.data?.length === 0 && <Empty title="no data">Prasību vēl nav. Apstiprini profilu panelī Projekts un spied “Atjaunot”.</Empty>}
+			{reqs.data?.length === 0 && <Empty title={tr("no data")}>{tr("Prasību vēl nav. Apstiprini profilu panelī Projekts un spied “Atjaunot”.")}</Empty>}
 			{rows.length > 0 && (
 				<table>
 					<thead>
 						<tr>
-							<th>Avots</th>
-							<th>Prasība</th>
-							<th>Attiecas</th>
-							<th>Statuss</th>
+							<th>{tr("Avots")}</th>
+							<th>{tr("Prasība")}</th>
+							<th>{tr("Attiecas")}</th>
+							<th>{tr("Statuss")}</th>
 							<th />
 						</tr>
 					</thead>
@@ -168,21 +167,21 @@ function Requirements({ projectId }: { projectId: string }) {
 									)}
 								</td>
 								<td className="small dim">
-									{[...(r.appliesTo.deliveries ?? []), ...(r.appliesTo.sections ?? [])].join(" · ") || (r.appliesTo.stages ?? []).join(", ") || "viss projekts"}
+									{[...(r.appliesTo.deliveries ?? []), ...(r.appliesTo.sections ?? [])].join(" · ") || (r.appliesTo.stages ?? []).join(", ") || tr("viss projekts")}
 								</td>
 								<td>
 									<Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>
-									{r.state === "proposed" && <Badge tone="warn">priekšlikums</Badge>}
-									{r.state === "rejected" && <Badge tone="dim">noraidīts</Badge>}
+									{r.state === "proposed" && <Badge tone="warn">{tr("priekšlikums")}</Badge>}
+									{r.state === "rejected" && <Badge tone="dim">{tr("noraidīts")}</Badge>}
 								</td>
 								<td onClick={(e) => e.stopPropagation()}>
 									{r.state === "proposed" && r.origin !== "law" && (
 										<div className="row">
-											<button className="small" onClick={() => act(call("requirements.decide", projectId, r.id, "confirmed"))}>Apstiprināt</button>
-											<button className="small ghost" onClick={() => act(call("requirements.decide", projectId, r.id, "rejected"))}>Noraidīt</button>
+											<button className="small" onClick={() => act(call("requirements.decide", projectId, r.id, "confirmed"))}>{tr("Apstiprināt")}</button>
+											<button className="small ghost" onClick={() => act(call("requirements.decide", projectId, r.id, "rejected"))}>{tr("Noraidīt")}</button>
 										</div>
 									)}
-									{r.state === "rejected" && <button className="small ghost" onClick={() => act(call("requirements.decide", projectId, r.id, "confirmed"))}>Atjaunot</button>}
+									{r.state === "rejected" && <button className="small ghost" onClick={() => act(call("requirements.decide", projectId, r.id, "confirmed"))}>{tr("Atjaunot")}</button>}
 								</td>
 							</tr>
 						))}
@@ -205,26 +204,25 @@ function Findings({ projectId }: { projectId: string }) {
 	return (
 		<div className="pane fill">
 			<div className="row">
-				<button className="primary" onClick={() => act(call("findings.runAll", projectId))}>Palaist visas pārbaudes</button>
-				<button title="Atvērtie un pieņemtie atradumi kā BCF 2.1 (Solibri, Navisworks, BimCraft)" onClick={() => act(call("bcf.export", projectId, null))}>BCF eksports</button>
+				<button className="primary" onClick={() => act(call("findings.runAll", projectId))}>{tr("Palaist visas pārbaudes")}</button>
+				<button title={tr("Atvērtie un pieņemtie atradumi kā BCF 2.1 (Solibri, Navisworks, BimCraft)")} onClick={() => act(call("bcf.export", projectId, null))}>{tr("BCF eksports")}</button>
 				<button
-					title="BCF tēmas no Solibri / Navisworks kā atradumi, sakārtoti pa disciplīnām"
+					title={tr("BCF tēmas no Solibri / Navisworks kā atradumi, sakārtoti pa disciplīnām")}
 					onClick={async () => {
 						const f = await call("dialog.pickFile", "BCF fails", ["bcf", "bcfzip"]);
-						if (f) act(call("bcf.import", projectId, f).then((r) => alert(`Importētas ${r.topics} tēmas: ${Object.entries(r.byDiscipline).map(([k, n]) => `${k} ${n}`).join(", ")}`)));
+						if (f) act(call("bcf.import", projectId, f).then((r) => alert(tr("Importētas {topics} tēmas: {byDiscipline}", { topics: r.topics, byDiscipline: Object.entries(r.byDiscipline).map(([k, n]) => `${k} ${n}`).join(", ") }))));
 					}}
 				>
-					BCF imports
-				</button>
+					{tr("BCF imports")}</button>
 				{(["open", "overridden", "closed", "all"] as const).map((s) => (
 					<button key={s} className={show === s ? "primary" : ""} onClick={() => setShow(s)}>
-						{s === "open" ? "atvērtie" : s === "overridden" ? "pieņemtie" : s === "closed" ? "novērstie" : "visi"} ({(findings.data ?? []).filter((f) => s === "all" || f.state === s).length})
+						{s === "open" ? tr("atvērtie") : s === "overridden" ? tr("pieņemtie") : s === "closed" ? tr("novērstie") : tr("visi")} ({(findings.data ?? []).filter((f) => s === "all" || f.state === s).length})
 					</button>
 				))}
 			</div>
 			{err && <div className="err">{err}</div>}
 			{findings.error ? <Err error={findings.error} /> : null}
-			{rows.length === 0 && <Empty title={show === "open" ? "atvērto atradumu nav" : "no data"} />}
+			{rows.length === 0 && <Empty title={show === "open" ? tr("atvērto atradumu nav") : tr("no data")} />}
 			{rows.map((f) => (
 				<div key={f.id} className="confirm" onClick={() => commentSubject.pick({ thing: "finding", id: f.id }, `atradums: ${f.message.slice(0, 40)}`)} style={{ borderColor: f.state === "open" ? (f.severity === "error" ? "var(--bad)" : "var(--warn)") : "var(--border)" }}>
 					<div className="row">
@@ -232,43 +230,41 @@ function Findings({ projectId }: { projectId: string }) {
 						<span className="mono small dim">{f.checkId}</span>
 						<span className="grow">{f.message}</span>
 						{f.where.sourceId && (
-							<button className="small ghost" onClick={() => ui.show({ kind: "source", sourceId: f.where.sourceId!, page: f.where.page })}>atvērt</button>
+							<button className="small ghost" onClick={() => ui.show({ kind: "source", sourceId: f.where.sourceId!, page: f.where.page })}>{tr("atvērt")}</button>
 						)}
-						<button className="small" title="Pievieno Fokusam; aģents redz šo atradumu" onClick={() => ui.focusAdd({ kind: "finding", id: f.id, label: f.message.slice(0, 60), data: { checkId: f.checkId, requirementId: f.requirementId, where: f.where, message: f.message } })}>
-							→ aģentam
-						</button>
+						<button className="small" title={tr("Pievieno Fokusam; aģents redz šo atradumu")} onClick={() => ui.focusAdd({ kind: "finding", id: f.id, label: f.message.slice(0, 60), data: { checkId: f.checkId, requirementId: f.requirementId, where: f.where, message: f.message } })}>
+							{tr("→ aģentam")}</button>
 					</div>
-					{f.requirementId && <div className="small dim">prasība: {f.requirementId}</div>}
+					{f.requirementId && <div className="small dim">{tr("prasība: {requirementId}", { requirementId: f.requirementId })}</div>}
 					{f.decision && (
 						<div className="small">
-							{f.decision.name || USER_LABEL} {new Date(f.decision.at).toLocaleDateString("lv-LV")}: <i>{f.decision.reason}</i>
+							{f.decision.name || USER_LABEL} {new Date(f.decision.at).toLocaleDateString(locale())}: <i>{f.decision.reason}</i>
 						</div>
 					)}
 					{f.proposal && f.state === "open" && (
 						<div className="small">
-							Aģenta pamatojums: <i>{f.proposal.reason}</i>{" "}
-							<button className="small" onClick={() => act(call("findings.override", projectId, f.id, f.proposal!.reason))}>Pieņemt šo pamatojumu</button>
+							{tr("Aģenta pamatojums:")} <i>{f.proposal.reason}</i>{" "}
+							<button className="small" onClick={() => act(call("findings.override", projectId, f.id, f.proposal!.reason))}>{tr("Pieņemt šo pamatojumu")}</button>
 						</div>
 					)}
 					{(f.severity === "info" || f.checkId === "bcf" || f.state === "closed") && (
 						<div className="row">
-							<span className="grow small dim">{f.severity === "info" && f.state === "open" ? "Informācija: neaptur nodevumu." : ""}</span>
+							<span className="grow small dim">{f.severity === "info" && f.state === "open" ? tr("Informācija: neaptur nodevumu.") : ""}</span>
 							<button
 								className="small ghost"
-								title={f.severity === "info" && f.state === "open" ? "Noņem šo piezīmi. Tā pati neparādīsies atkal; ja vērtības mainās, parādīsies jauna." : "Noņem no saraksta (žurnālā paliek)."}
-								onClick={() => confirm(`Noņemt atradumu?\n\n${f.message.slice(0, 200)}`) && act(call("findings.remove", projectId, f.id))}
+								title={f.severity === "info" && f.state === "open" ? tr("Noņem šo piezīmi. Tā pati neparādīsies atkal; ja vērtības mainās, parādīsies jauna.") : tr("Noņem no saraksta (žurnālā paliek).")}
+								onClick={() => confirm(tr("Noņemt atradumu?") + "\n\n" + f.message.slice(0, 200)) && act(call("findings.remove", projectId, f.id))}
 							>
-								Noņemt
-							</button>
+								{tr("Noņemt")}</button>
 						</div>
 					)}
 					{f.state === "open" && f.severity === "info" ? null : f.state === "open" ? (
 						<div className="row">
-							<input className="grow" placeholder="Pamatojums, kāpēc šī situācija ir pieļaujama (obligāts)" value={reason[f.id] ?? ""} onChange={(e) => setReason({ ...reason, [f.id]: e.target.value })} />
-							<button disabled={(reason[f.id] ?? "").trim().length < 5} onClick={() => act(call("findings.override", projectId, f.id, reason[f.id]))}>Pieņemt ar pamatojumu</button>
+							<input className="grow" placeholder={tr("Pamatojums, kāpēc šī situācija ir pieļaujama (obligāts)")} value={reason[f.id] ?? ""} onChange={(e) => setReason({ ...reason, [f.id]: e.target.value })} />
+							<button disabled={(reason[f.id] ?? "").trim().length < 5} onClick={() => act(call("findings.override", projectId, f.id, reason[f.id]))}>{tr("Pieņemt ar pamatojumu")}</button>
 						</div>
 					) : f.state === "overridden" ? (
-						<button className="small ghost" onClick={() => act(call("findings.reopen", projectId, f.id))}>Atvērt atkal</button>
+						<button className="small ghost" onClick={() => act(call("findings.reopen", projectId, f.id))}>{tr("Atvērt atkal")}</button>
 					) : null}
 				</div>
 			))}

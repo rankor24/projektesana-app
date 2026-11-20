@@ -107,6 +107,10 @@ export interface FolderCount {
 	key: string;
 	name: string;
 	files: number;
+	/** IFC and RVT files among them */
+	models?: number;
+	/** files with a version in the last 30 days */
+	changed?: number;
 }
 
 /** Open findings after one check run: the history that makes "Atradumi over time" possible. */

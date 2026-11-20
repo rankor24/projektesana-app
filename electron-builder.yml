@@ -16,14 +16,20 @@ extraResources:
     to: tessdata
   - from: resources/bimcraft
     to: bimcraft
+  - from: resources/cadcraft
+    to: cadcraft
   - from: resources/skills
     to: skills
+  - from: resources/revit-mcp
+    to: revit-mcp
   - from: resources/office-text.ps1
     to: office-text.ps1
   - from: resources/office-word.ps1
     to: office-word.ps1
 asarUnpack:
   - dist/agent/tools/**
+  # claude.exe of the Claude Agent SDK (Claude subscription engine): an exe inside the asar cannot be started
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/**
 win:
   target:
     - nsis

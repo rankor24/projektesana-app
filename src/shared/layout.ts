@@ -10,7 +10,7 @@ export const SIDES = ["left", "right", "top", "bottom"] as const;
 export type Side = (typeof SIDES)[number];
 
 /** Everything that can be a window. Panels first; the viewer's side panels (9.3); the chat. */
-export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa", "iestatijumi", "prasmes"] as const;
+export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa", "iestatijumi", "prasmes", "agenti"] as const;
 export const VIEWER_PANEL_IDS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"] as const;
 export const COORD_PANEL_IDS = ["coord.matrix", "coord.reference", "coord.lines"] as const;
 export const VERS_PANEL_IDS = ["vers.list", "vers.models", "vers.sheets", "vers.revit"] as const;
@@ -245,6 +245,22 @@ export function close(l: Layout, id: string): Layout {
 	return { ...layout, filters, focused: layout.focused === id ? (dockGroup(layout, "left")?.active ?? null) : layout.focused };
 }
 export const canClose = (id: string) => id !== CHAT;
+
+/**
+ * Opens a window that was closed where the page's default layout keeps it: as a tab beside a window of its default group that
+ * is open, else docked on the default side, else floating. An open window is only brought to the front. Nothing a user moved
+ * elsewhere is moved back: only the reopened window is placed.
+ */
+export function reopen(l: Layout, id: string, def: Layout, vp: Vp): Layout {
+	if (groupOf(l, id)) return open(l, id, vp);
+	const home = groupOf(def, id);
+	const opened = open(l, id, vp);
+	if (!home) return opened;
+	const mate = home.tabs.find((t) => t !== id && groupOf(l, t));
+	if (mate) return mergeInto(opened, id, mate);
+	const p = home.place.kind === "min" || home.place.kind === "pop" ? home.place.from : home.place;
+	return p.kind === "dock" ? dock(opened, id, p.side, vp, { size: p.size }) : opened;
+}
 
 /** Collapses a docked group to a strip, or minimises a floating one. Works for the chat. */
 export function collapse(l: Layout, id: string, on = true): Layout {

@@ -6,12 +6,13 @@ import { LEAD_ID, type QueueView, type Thread, type ThreadState, type WaitingIte
 import type { RunEvent } from "../../shared/types";
 import { call, on } from "../bridge";
 import { ui, useUi } from "../state";
+import { tr } from "../i18n";
 
 const NO_QUEUE: QueueView = { running: [], queued: [], paused: false, waves: [] };
 
 /** "Vadošais" for the lead, the specialist's name, or the bare id of one that was removed in Iestatījumi. */
 export function agentName(id: string, specs: readonly AgentSpec[]): string {
-	return id === LEAD_ID ? "Vadošais aģents" : (specs.find((s) => s.id === id)?.name ?? id);
+	return id === LEAD_ID ? tr("Vadošais aģents") : (specs.find((s) => s.id === id)?.name ?? id);
 }
 
 /** The specialists "@" at the start of the message offers: those whose id or name starts with what is typed so far. Empty once a space follows the word. */
@@ -43,9 +44,9 @@ function stepOf(e: RunEvent): string | null | undefined {
 			return e.name;
 		case "thinking":
 		case "turn":
-			return "domā…";
+			return tr("domā…");
 		case "confirm":
-			return "gaida apstiprinājumu";
+			return tr("gaida apstiprinājumu");
 		case "done":
 		case "error":
 			return null;

@@ -140,7 +140,7 @@ test("the recent changes: the last 30 days of versions, newest first, at most 12
 
 test("the folders of the last scan, with their counts", () => {
 	const d = projectDashboard(project({ folders: true }), TODAY);
-	assert.deepEqual(d.folders, [{ key: "1.1.1", name: "Izejas dati", files: 12 }, { key: "1.2", name: "Projekta daļas", files: 3 }]);
+	assert.deepEqual(d.folders, [{ key: "1.1.1", name: "Izejas dati", files: 12, models: 0, changed: 0 }, { key: "1.2", name: "Projekta daļas", files: 3, models: 0, changed: 0 }]);
 });
 
 test("the findings history: each check run appends its open counts; a damaged line is skipped; no data before two runs", async () => {

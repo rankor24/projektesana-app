@@ -1,6 +1,7 @@
 // Command palette (task 8.6): Ctrl+K from anywhere. Panels, projects, the open project's sources, the agent's task templates and
 // the files opened lately, in one list; type words, arrows and Enter. Ranking is shared/palette.ts. A template does not run:
 // it lands in the agent's message box, as when its button is pressed, so the user reads it before it goes.
+import { comparePicker } from "./ComparePicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Source } from "../../core/model";
 import { fold, rank, type PaletteItem } from "../../shared/palette";
@@ -9,8 +10,9 @@ import { call } from "../bridge";
 import { ui, useUi } from "../state";
 import { pageItems } from "../../shared/pages";
 import { windows } from "../windows";
+import { tr } from "../i18n";
 
-const GROUP_LABEL = { recent: "nesen", panel: "lapa", project: "projekts", template: "aģenta uzdevums", source: "avots" } as const;
+const GROUP_LABEL = { recent: tr("nesen"), panel: tr("lapa"), project: tr("projekts"), template: tr("aģenta uzdevums"), source: tr("avots") } as const;
 
 interface Entry extends PaletteItem {
 	run: () => void;
@@ -54,8 +56,9 @@ export function CommandPalette() {
 				if (s) list.push({ id: `recent:${s.id}`, group: "recent", label: s.title, hint: s.role, run: () => (ui.show({ kind: "source", sourceId: s.id }), close()) });
 			} else list.push({ id: `recent:${t.path}`, group: "recent", label: t.label, hint: "modelis", run: () => (ui.show({ kind: "ifc", path: t.path, label: t.label }), close()) });
 		}
-		for (const p of pageItems()) list.push({ id: `panel:${p.id}`, group: "panel", label: p.label, hint: p.hint, keywords: p.keywords, run: () => (windows.go(p.id), close()) });
-		for (const p of data.projects) list.push({ id: `project:${p.id}`, group: "project", label: `${p.id} ${p.name}`, hint: "atvērt projektu", run: () => (ui.setProject(p.id), close()) });
+		list.push({ id: "action:compare", group: "panel", label: tr("Salīdzināt divus failus…"), hint: tr("PDF, DWG, IFC, DOCX, XLSX: A | B"), keywords: "compare diff salīdzināt versijas dwg pdf", run: () => (comparePicker.open(), close()) });
+		for (const p of pageItems()) list.push({ id: `panel:${p.id}`, group: "panel", label: tr(p.label), hint: p.hint ? tr(p.hint) : p.hint, keywords: p.keywords, run: () => (windows.go(p.id), close()) });
+		for (const p of data.projects) list.push({ id: `project:${p.id}`, group: "project", label: `${p.id} ${p.name}`, hint: tr("atvērt projektu"), run: () => (ui.setProject(p.id), close()) });
 		for (const t of data.templates) list.push({ id: `template:${t.id}`, group: "template", label: t.label, hint: t.text.slice(0, 80), run: () => (ui.draft(t.text), close()) });
 		for (const s of data.sources) {
 			if (s.kind === "photoSurvey") continue;
@@ -84,7 +87,7 @@ export function CommandPalette() {
 			<div className="palette" onMouseDown={(e) => e.stopPropagation()}>
 				<input
 					ref={input}
-					placeholder="Lapa, projekts, avots, aģenta uzdevums… (Esc aizver)"
+					placeholder={tr("Lapa, projekts, avots, aģenta uzdevums… (Esc aizver)")}
 					value={q}
 					onChange={(e) => (setQ(e.target.value), setPos(0))}
 					onKeyDown={(e) => {
@@ -94,7 +97,7 @@ export function CommandPalette() {
 					}}
 				/>
 				<div className="palette-list">
-					{shown.length === 0 && <div className="dim small" style={{ padding: 12 }}>Nekas neatbilst «{q}».{projectId ? "" : " Avoti parādās, kad ir atvērts projekts."}</div>}
+					{shown.length === 0 && <div className="dim small" style={{ padding: 12 }}>{tr("Nekas neatbilst «{q}».", { q: q })}{projectId ? "" : tr(" Avoti parādās, kad ir atvērts projekts.")}</div>}
 					{shown.map((e, i) => (
 						<div key={e.id} className={`palette-row ${i === pos ? "on" : ""}`} onMouseEnter={() => setPos(i)} onClick={() => run(e)}>
 							<span className="palette-group">{GROUP_LABEL[e.group]}</span>

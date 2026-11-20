@@ -2,12 +2,15 @@
 // Carried from v1 src/main/main.ts: crash log, link handling, reload / devtools keys, renderer recovery.
 import { app, BrowserWindow, dialog, net, protocol, safeStorage, shell } from "electron";
 import { pathToFileURL } from "node:url";
-import { BIMCRAFT_SCHEME, bimcraftResponse, bimcraftSite } from "./bimcraft-protocol.js";
+import { BIMCRAFT_SCHEME, bimcraftResponse, bimcraftSite, CADCRAFT_SCHEME, craftSite } from "./bimcraft-protocol.js";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { userInfo } from "node:os";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { join, sep } from "node:path";
 import { EVENT_NAMES, type EventName, type EventSpec } from "../shared/api.js";
 import type { PiRuntime } from "../agent/pi/index.js";
+import { CLAUDE_SUB } from "../agent/claude/provider.js";
+import type { ClaudeRunOptions } from "../agent/claude/run.js";
 import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
@@ -20,7 +23,7 @@ import { PopoutManager } from "./windows.js";
 import { popTitle } from "../shared/popout.js";
 import { Registry } from "../core/registry.js";
 import { ProjectEngine } from "./engine.js";
-import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch } from "../revit/client.js";
+import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
 import { revitRead } from "../revit/commands.js";
 import { revitExport } from "../revit/exports.js";
 import { captureRevision, isWorkCopy } from "../revit/revision.js";
@@ -123,15 +126,40 @@ const pi = () =>
 		}),
 	));
 
+// The Claude subscription engine (Agent SDK) loads on first use, like pi. Its claude.exe ships in the SDK's platform package; in the
+// installed app that package is unpacked from the asar (electron-builder asarUnpack), since an exe inside an asar cannot be started.
+// Claude Code keeps its sessions in the app's own folder, never the user's ~/.claude: none of their settings, hooks or memory reach a run.
+const claudeDir = join(appDir, "claude-code");
+let claudeEngine: Promise<(o: ClaudeRunOptions) => Promise<void>> | null = null;
+const claudeExecutable = (): string | undefined => {
+	if (!app.isPackaged) return undefined;
+	const exe = createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude${process.platform === "win32" ? ".exe" : ""}`);
+	return exe.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+};
+const claudeRun = async (o: ClaudeRunOptions) =>
+	(await (claudeEngine ??= import("../agent/claude/run.js").then((m) => {
+		mkdirSync(join(claudeDir, "work"), { recursive: true });
+		return m.createClaudeRun({
+			token: () => settings.apiKey(CLAUDE_SUB),
+			executable: claudeExecutable(),
+			configDir: claudeDir,
+			cwd: join(claudeDir, "work"),
+			clientApp: `projektesana/${app.getVersion()}`,
+			log: (line) => log(`claude: ${line.trimEnd()}`),
+		});
+	})))(o);
+
 // The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
 const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
 const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills");
 const session = new AgentSession({
 	runtime: pi,
+	claudeRun,
+	claudeConnected: () => !!settings.apiKey(CLAUDE_SUB),
 	settings: () => settings.get(),
 	toolsServer: (env) => {
 		const r = settings.get();
-		return { command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1", PROJEKTESANA_REVIT_JS: r.revitServerJs ?? "", PROJEKTESANA_REVIT_NODE: r.revitNode ?? "" } };
+		return { command: process.execPath, args: [toolsServerJs], env: { ...env, ELECTRON_RUN_AS_NODE: "1", PROJEKTESANA_REVIT_JS: r.revitServerJs ?? "", PROJEKTESANA_REVIT_NODE: r.revitNode ?? "", PROJEKTESANA_REVIT_BUNDLED: bundledRevitDir() ?? "" } };
 	},
 	revit: () => {
 		const l = resolveRevitLaunch(settings.get());
@@ -171,6 +199,7 @@ const resourcesDir = app.isPackaged ? process.resourcesPath : join(here, "..", "
 const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
 const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
+setBundledRevitDir(join(resourcesDir, "revit-mcp"));
 const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.execPath);
 {
 	// one line per start: what this process sees when it looks for the Revit MCP server
@@ -259,13 +288,26 @@ function createWindow(): void {
 }
 
 // the BimCraft preview runs from bimcraft:// (its page uses absolute paths; file:// cannot serve it)
-protocol.registerSchemesAsPrivileged([{ scheme: BIMCRAFT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+// CadCraft (the DWG view and compare) the same way from cadcraft://
+const CRAFT_PRIVILEGES = { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true };
+protocol.registerSchemesAsPrivileged([
+	{ scheme: BIMCRAFT_SCHEME, privileges: CRAFT_PRIVILEGES },
+	{ scheme: CADCRAFT_SCHEME, privileges: CRAFT_PRIVILEGES },
+]);
 
 app.whenReady().then(() => {
 	const site = bimcraftSite(join(resourcesDir, "bimcraft"));
 	protocol.handle(BIMCRAFT_SCHEME, async (req) => {
 		if (!site) return new Response("nav konfigurēts: BimCraft nav resources/bimcraft (npm run build)", { status: 404 });
 		const r = bimcraftResponse(site, req.url);
+		if (!r.file) return new Response("not found", { status: r.status, headers: r.headers });
+		const res = await net.fetch(pathToFileURL(r.file).href);
+		return new Response(res.body, { status: 200, headers: r.headers });
+	});
+	const cad = craftSite(join(resourcesDir, "cadcraft"), "cadcraft");
+	protocol.handle(CADCRAFT_SCHEME, async (req) => {
+		if (!cad) return new Response("nav konfigurēts: CadCraft nav resources/cadcraft (npm run build)", { status: 404 });
+		const r = bimcraftResponse(cad, req.url);
 		if (!r.file) return new Response("not found", { status: r.status, headers: r.headers });
 		const res = await net.fetch(pathToFileURL(r.file).href);
 		return new Response(res.body, { status: 200, headers: r.headers });

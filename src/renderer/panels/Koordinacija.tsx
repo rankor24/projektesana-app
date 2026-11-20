@@ -9,6 +9,7 @@ import type { Delivery } from "../../core/model";
 import { commentSubject } from "../comment-subject";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { tr } from "../i18n";
 
 const GROUP_TONE = { Novietne: "bad", Hierarhija: "warn", "Stāvi": "warn" } as const;
 
@@ -57,29 +58,29 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 	const declared = () => ({ basePoint: { x: bip.x || undefined, y: bip.y || undefined, z: bip.z || undefined }, schema: bip.schema || undefined });
 
 	if (view.error) return <Err error={view.error} />;
-	if (!view.data) return <div className="pane dim small">Nolasa modeļus… (pirmo reizi tas var aizņemt laiku)</div>;
+	if (!view.data) return <div className="pane dim small">{tr("Nolasa modeļus… (pirmo reizi tas var aizņemt laiku)")}</div>;
 	const v = view.data;
 
 	if (!v.reference || !draft)
 		return (
 			<div className="pane fill">
 				{msg && <div className="err">{msg}</div>}
-				<Empty title="nav atsauces">
-					Koordinācijas pārbaude mēra katru projekta daļas IFC modeli pret kopīgu atsauci: kubs uz pamatpunkta, projekta / zemes / ēkas nosaukumi, IFC shēma, stāvu nosaukumi un augstumi. {v.models ? `Atrasti ${v.models} modeļi mapēs 1.2_Projekta dalas.` : "Mapēs 1.2_Projekta dalas IFC modeļu nav."}
+				<Empty title={tr("nav atsauces")}>
+					{tr("Koordinācijas pārbaude mēra katru projekta daļas IFC modeli pret kopīgu atsauci: kubs uz pamatpunkta, projekta / zemes / ēkas nosaukumi, IFC shēma, stāvu nosaukumi un augstumi.")} {v.models ? tr("Atrasti {models} modeļi mapēs 1.2_Projekta dalas.", { models: v.models }) : tr("Mapēs 1.2_Projekta dalas IFC modeļu nav.")}
 				</Empty>
 				<div className="confirm">
-					<b>BIP vērtības (nav obligāti)</b>
-					<div className="dim small">BIP tabulas lietotne vēl nelasa. Ja zini, ko BIP prasa, ieraksti: tā vērtība ir svarīgāka par modeļu vienošanos, ja vien visi modeļi ar kubu nepiekrīt citai.</div>
+					<b>{tr("BIP vērtības (nav obligāti)")}</b>
+					<div className="dim small">{tr("BIP tabulas lietotne vēl nelasa. Ja zini, ko BIP prasa, ieraksti: tā vērtība ir svarīgāka par modeļu vienošanos, ja vien visi modeļi ar kubu nepiekrīt citai.")}</div>
 					<div className="row">
 						{(["x", "y", "z"] as const).map((a) => (
-							<input key={a} placeholder={`pamatpunkts ${a.toUpperCase()}, mm`} value={bip[a]} onChange={(e) => setBip({ ...bip, [a]: e.target.value })} />
+							<input key={a} placeholder={tr("pamatpunkts {v}, mm", { v: a.toUpperCase() })} value={bip[a]} onChange={(e) => setBip({ ...bip, [a]: e.target.value })} />
 						))}
-						<input placeholder="IFC shēma (IFC4)" value={bip.schema} onChange={(e) => setBip({ ...bip, schema: e.target.value })} />
+						<input placeholder={tr("IFC shēma (IFC4)")} value={bip.schema} onChange={(e) => setBip({ ...bip, schema: e.target.value })} />
 					</div>
 					<div className="row">
 						<span className="grow" />
 						<button className="primary" disabled={!v.models || busy !== null} onClick={() => run("seed", () => call("coordination.seed", projectId, declared()))}>
-							{busy === "seed" ? "Nolasa modeļus…" : "Izveidot atsauci no modeļiem"}
+							{busy === "seed" ? tr("Nolasa modeļus…") : tr("Izveidot atsauci no modeļiem")}
 						</button>
 					</div>
 				</div>
@@ -101,10 +102,10 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 					{e.file}: {e.message}
 				</div>
 			))}
-			{v.revit && withRevit && <div className="dim small">Revit: {v.revit}</div>}
+			{v.revit && withRevit && <div className="dim small">{tr("Revit: {revit}", { revit: v.revit })}</div>}
 			{v.warnings.length > 0 && (
 				<div className="confirm">
-					<b>Vēl jāizlemj</b>
+					<b>{tr("Vēl jāizlemj")}</b>
 					{v.warnings.map((w) => (
 						<div key={w} className="small">• {w}</div>
 					))}
@@ -113,75 +114,70 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 
 			<details>
 				<summary>
-					<b>Atsauce</b> <span className="dim small">{v.reference.seededFrom ? `no: ${v.reference.seededFrom}` : "ievadīta pašu rokām"}{v.reference.updatedAt ? ` · ${v.reference.updatedAt.slice(0, 10)}` : ""}</span>
+					<b>{tr("Atsauce")}</b> <span className="dim small">{v.reference.seededFrom ? tr("no: {seededFrom}", { seededFrom: v.reference.seededFrom }) : tr("ievadīta pašu rokām")}{v.reference.updatedAt ? ` · ${v.reference.updatedAt.slice(0, 10)}` : ""}</span>
 				</summary>
 				<div className="confirm">
 					<div className="row">
-						<span style={{ width: 130 }}>Pamatpunkts, mm</span>
+						<span style={{ width: 130 }}>{tr("Pamatpunkts, mm")}</span>
 						{(["x", "y", "z"] as const).map((a) => (
 							<input key={a} className="grow" placeholder={a.toUpperCase()} value={draft.basePoint[a]} onChange={(e) => set({ basePoint: { ...draft.basePoint, [a]: e.target.value } })} />
 						))}
-						<input style={{ width: 70 }} title="Pielaide, mm" value={draft.tolerance} onChange={(e) => set({ tolerance: Number(e.target.value.replace(",", ".")) })} />
+						<input style={{ width: 70 }} title={tr("Pielaide, mm")} value={draft.tolerance} onChange={(e) => set({ tolerance: Number(e.target.value.replace(",", ".")) })} />
 					</div>
 					<div className="row">
-						<span style={{ width: 130 }}>Kuba nosaukumi</span>
+						<span style={{ width: 130 }}>{tr("Kuba nosaukumi")}</span>
 						<input className="grow" value={draft.cubeNames.join(", ")} onChange={(e) => set({ cubeNames: list(e.target.value) })} />
 					</div>
 					<div className="row">
-						<span style={{ width: 130 }}>IFC hierarhija</span>
+						<span style={{ width: 130 }}>{tr("IFC hierarhija")}</span>
 						{(["project", "site", "building", "schema"] as const).map((k) => (
 							<input key={k} className="grow" placeholder={{ project: "IfcProject", site: "IfcSite", building: "IfcBuilding", schema: "shēma" }[k]} value={draft.hierarchy[k]} onChange={(e) => set({ hierarchy: { ...draft.hierarchy, [k]: e.target.value } })} />
 						))}
 					</div>
 					<div className="row">
-						<span style={{ width: 130 }}>Faila prefikss</span>
-						<input className="grow" placeholder="piem. BD427 (tukšs = netiek pārbaudīts)" value={draft.filePrefix} onChange={(e) => set({ filePrefix: e.target.value })} />
+						<span style={{ width: 130 }}>{tr("Faila prefikss")}</span>
+						<input className="grow" placeholder={tr("piem. BD427 (tukšs = netiek pārbaudīts)")} value={draft.filePrefix} onChange={(e) => set({ filePrefix: e.target.value })} />
 					</div>
 					{draft.storeySchemes.map((s, i) => (
 						<div key={s.id} className="confirm">
 							<div className="row">
-								<b>{i === 0 ? "Stāvu shēma (pamata)" : "Stāvu shēma"}</b>
+								<b>{i === 0 ? tr("Stāvu shēma (pamata)") : tr("Stāvu shēma")}</b>
 								<input className="grow" value={s.label} onChange={(e) => set({ storeySchemes: draft.storeySchemes.map((x, k) => (k === i ? { ...x, label: e.target.value } : x)) })} />
-								{i > 0 && <input className="grow" placeholder="daļas, kas to lieto (UR, BK)" value={s.disciplines.join(", ")} onChange={(e) => set({ storeySchemes: draft.storeySchemes.map((x, k) => (k === i ? { ...x, disciplines: list(e.target.value) } : x)) })} />}
+								{i > 0 && <input className="grow" placeholder={tr("daļas, kas to lieto (UR, BK)")} value={s.disciplines.join(", ")} onChange={(e) => set({ storeySchemes: draft.storeySchemes.map((x, k) => (k === i ? { ...x, disciplines: list(e.target.value) } : x)) })} />}
 							</div>
-							<textarea rows={Math.min(10, Math.max(3, (schemeText[i] ?? "").split("\n").length))} placeholder={"viens stāvs rindā: nosaukums vai nosaukums | augstums mm"} value={schemeText[i] ?? ""} onChange={(e) => setSchemeText(schemeText.map((t, k) => (k === i ? e.target.value : t)))} />
+							<textarea rows={Math.min(10, Math.max(3, (schemeText[i] ?? "").split("\n").length))} placeholder={tr("viens stāvs rindā: nosaukums vai nosaukums | augstums mm")} value={schemeText[i] ?? ""} onChange={(e) => setSchemeText(schemeText.map((t, k) => (k === i ? e.target.value : t)))} />
 						</div>
 					))}
 					<div className="row">
-						<button className="ghost" disabled={busy !== null} onClick={() => confirm("Pārrakstīt atsauci ar to, par ko vienojušies modeļi? Tavi labojumi atsaucē pazudīs.") && run("seed", () => call("coordination.seed", projectId))}>
-							Pārbūvēt no modeļiem
-						</button>
+						<button className="ghost" disabled={busy !== null} onClick={() => confirm(tr("Pārrakstīt atsauci ar to, par ko vienojušies modeļi? Tavi labojumi atsaucē pazudīs.")) && run("seed", () => call("coordination.seed", projectId))}>
+							{tr("Pārbūvēt no modeļiem")}</button>
 						<span className="grow" />
 						<button className="primary" disabled={busy !== null} onClick={save}>
-							{busy === "save" ? "Saglabā…" : "Saglabāt atsauci"}
+							{busy === "save" ? tr("Saglabā…") : tr("Saglabāt atsauci")}
 						</button>
 					</div>
 				</div>
 			</details>
 
 			<div className="row">
-				<b>{v.audit ? `${v.audit.totalLines} ${v.audit.totalLines === 1 ? "labojums" : "labojumi"} ${v.audit.models.length} modeļos` : "—"}</b>
+				<b>{v.audit ? tr("{totalLines} {v} {length} modeļos", { totalLines: v.audit.totalLines, v: v.audit.totalLines === 1 ? "labojums" : "labojumi", length: v.audit.models.length }) : "—"}</b>
 				<label className="small">
-					<input type="checkbox" checked={withRevit} onChange={(e) => setWithRevit(e.target.checked)} /> ar atvērtā Revit dokumenta līmeņiem
-				</label>
+					<input type="checkbox" checked={withRevit} onChange={(e) => setWithRevit(e.target.checked)} /> {tr("ar atvērtā Revit dokumenta līmeņiem")}</label>
 				<span className="grow" />
-				<button disabled={busy !== null} onClick={() => run("guide", () => call("coordination.guide", projectId).then((t) => (setGuide(t), setMsg("Instrukcija saglabāta Atmiņā."))))} title="Soļi koplietotajām koordinātēm Revit, ar šī projekta vērtībām">
-					Instrukcija Revit
-				</button>
+				<button disabled={busy !== null} onClick={() => run("guide", () => call("coordination.guide", projectId).then((t) => (setGuide(t), setMsg(tr("Instrukcija saglabāta Atmiņā.")))))} title={tr("Soļi koplietotajām koordinātēm Revit, ar šī projekta vērtībām")}>
+					{tr("Instrukcija Revit")}</button>
 				<button disabled={busy !== null} onClick={() => run("report", () => call("coordination.report", projectId, null).then((f) => setMsg(`Atskaite: ${f}`)))}>
-					HTML atskaite
-				</button>
+					{tr("HTML atskaite")}</button>
 				{drafts.length > 0 && (
 					<>
 						<select value={stage} onChange={(e) => setStage(e.target.value)}>
-							<option value="">uz nodevumu…</option>
+							<option value="">{tr("uz nodevumu…")}</option>
 							{drafts.map((d) => (
 								<option key={d.id} value={d.id}>{d.label}</option>
 							))}
 						</select>
-						<button disabled={!stage || busy !== null} title="Atskaite tiek ielikta nodevuma staging mapē; šī nodevuma IFC tiek mērīts arī" onClick={() => run("stage", () => call("coordination.report", projectId, stage).then((f) => setMsg(`Ielikta nodevumā: ${f}`)))}>
-							Ielikt
-						</button>
+						<button disabled={!stage || busy !== null} title={tr("Atskaite tiek ielikta nodevuma staging mapē; šī nodevuma IFC tiek mērīts arī")} onClick={() => run("stage", () => call("coordination.report", projectId, stage).then((f) => setMsg(`Ielikta nodevumā: ${f}`)))}>
+							{tr("Ielikt")}</button>
 					</>
 				)}
 			</div>
@@ -189,10 +185,10 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 			{guide && (
 				<details open className="text-page">
 					<summary>
-						<b>Koplietotās koordinātes: instrukcija</b>
+						<b>{tr("Koplietotās koordinātes: instrukcija")}</b>
 					</summary>
 					<pre className="act-pre" style={{ whiteSpace: "pre-wrap" }}>{guide}</pre>
-					<button className="small" onClick={() => void navigator.clipboard.writeText(guide)}>Kopēt</button>
+					<button className="small" onClick={() => void navigator.clipboard.writeText(guide)}>{tr("Kopēt")}</button>
 				</details>
 			)}
 
@@ -200,8 +196,8 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 				<div key={`${m.code}|${m.file}`} className="text-page">
 					<div className="row">
 						<b>{m.code}</b>
-						<span className="dim small grow">{m.source === "revit" ? `atvērtais Revit dokuments: ${m.file}` : `${m.file}${m.app ? ` · ${m.app}` : ""}${m.ts ? ` · ${m.ts}` : ""}`}</span>
-						{m.groups.length === 0 && <Badge tone="ok">sakrīt ar atsauci</Badge>}
+						<span className="dim small grow">{m.source === "revit" ? tr("atvērtais Revit dokuments: {file}", { file: m.file }) : `${m.file}${m.app ? ` · ${m.app}` : ""}${m.ts ? ` · ${m.ts}` : ""}`}</span>
+						{m.groups.length === 0 && <Badge tone="ok">{tr("sakrīt ar atsauci")}</Badge>}
 					</div>
 					{m.groups.map((g) => (
 						<div key={g.g}>
@@ -227,7 +223,7 @@ export function Koordinacija({ projectId }: { projectId: string }) {
 					))}
 				</div>
 			))}
-			{v.audit && v.audit.models.length === 0 && <Empty title="no data">Mapēs 1.2_Projekta dalas nav IFC modeļu, ko mērīt.</Empty>}
+			{v.audit && v.audit.models.length === 0 && <Empty title={tr("no data")}>{tr("Mapēs 1.2_Projekta dalas nav IFC modeļu, ko mērīt.")}</Empty>}
 		</div>
 	);
 }

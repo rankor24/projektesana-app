@@ -108,8 +108,8 @@ export interface LaneDeps {
 	run: (o: PiRunOptions) => Promise<void>;
 	/** the run's model choice: runtime, provider, model, effort */
 	base: Pick<PiRunOptions, "runtime" | "provider" | "modelId" | "model" | "effort">;
-	/** the tool servers a lane needs for exactly these tool names (none for a server with no allowed tool) */
-	mcpFor(allowed: readonly string[]): Record<string, McpLaunchSpec & { allow: readonly string[] }>;
+	/** the tool servers a lane needs for exactly these tool names (none for a server with no allowed tool); `agentId` = the specialist the tools run as, absent = the parent run's agent */
+	mcpFor(allowed: readonly string[], agentId?: string): Record<string, McpLaunchSpec & { allow: readonly string[] }>;
 	levelOf: LevelOf;
 	/** a call the project's state refuses right now (S5 in process mode, 14.6): the reason, or null; read at each call, so a lane that began before S5 is stopped when it comes */
 	refuse?: (tool: string) => string | null;
@@ -132,6 +132,8 @@ interface Job {
 	id: string;
 	label: string;
 	agent?: string;
+	/** the specialist's id (`delegate`): its tools run as that agent, so what it writes is logged as its own and its own read rules apply (eks); absent = the parent's identity */
+	agentId?: string;
 	task: string;
 	system: string;
 	allowed: string[];
@@ -187,7 +189,7 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 			...base,
 			prompt: job.task,
 			systemPrompt: job.system,
-			mcp: deps.mcpFor(job.allowed),
+			mcp: deps.mcpFor(job.allowed, job.agentId),
 			signal,
 			maxTurns: deps.maxTurns ?? 40,
 			history: [],
@@ -276,7 +278,7 @@ export function subagentTools(deps: LaneDeps): AgentTool<any>[] {
 				const spec = findSpec(specs, j.agent)!;
 				const model = spec.model?.trim(); // as the run's modelFor does: a stray space in the settings is not part of the id
 				return {
-					id: newJobId(), label: j.label?.trim() || spec.name, agent: spec.name, task: j.task,
+					id: newJobId(), label: j.label?.trim() || spec.name, agent: spec.name, agentId: spec.id, task: j.task,
 					system: (deps.standing ? deps.standing(spec) : spec.prompt) + RULES,
 					// no Revit in a lane: the one Revit takes one MCP connection, and the parent run holds it (a lane's Revit work is the parent's)
 					allowed: specialistTools(deps.listed, deps.levelOf, deps.revitTools, spec).filter((n) => !deps.revitTools.has(n)),

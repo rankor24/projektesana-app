@@ -16,7 +16,7 @@ export interface RevitLaunch {
 	/** node.exe for the server; null = Electron's own node (ELECTRON_RUN_AS_NODE) */
 	node: string | null;
 	/** where it was found: the user's path in Iestatījumi, or the standard install in %LOCALAPPDATA%\Revit-MCP-Node */
-	source?: "iestatījumi" | "automātiski";
+	source?: "iestatījumi" | "automātiski" | "iekļauts";
 }
 
 /** %LOCALAPPDATA%; when a launcher dropped it from the environment, the same folder under the user's home. */
@@ -27,6 +27,22 @@ export function localAppDataDir(): string {
 /** Where the installer puts the server's entry file (the path the "not found" message names). */
 export function defaultServerJs(localAppData = localAppDataDir()): string {
 	return join(localAppData, "Revit-MCP-Node", "node-server", "build", "index.js");
+}
+
+/** The Revit MCP server shipped inside the app (resources/revit-mcp: node-server, node-runtime, addins). Set once by main; the tools server gets it by environment. */
+let bundledDir: string | null = null;
+export function setBundledRevitDir(dir: string | null): void {
+	bundledDir = dir;
+}
+export function bundledRevitDir(): string | null {
+	return bundledDir;
+}
+export function bundledRevitLaunch(dir = bundledDir): RevitLaunch | null {
+	if (!dir) return null;
+	const serverJs = join(dir, "node-server", "build", "index.js");
+	if (!existsSync(serverJs)) return null;
+	const node = join(dir, "node-runtime", "node.exe");
+	return { serverJs, node: existsSync(node) ? node : null, source: "iekļauts" };
 }
 
 /** The installer's standard location (Revit-MCP-Node in the user's local app data). */
@@ -40,7 +56,7 @@ export function defaultRevitLaunch(localAppData = localAppDataDir()): RevitLaunc
 
 export function resolveRevitLaunch(settings: { revitServerJs: string | null; revitNode: string | null }): RevitLaunch | null {
 	if (settings.revitServerJs) return existsSync(settings.revitServerJs) ? { serverJs: settings.revitServerJs, node: settings.revitNode && existsSync(settings.revitNode) ? settings.revitNode : null, source: "iestatījumi" } : null;
-	return defaultRevitLaunch();
+	return defaultRevitLaunch() ?? bundledRevitLaunch();
 }
 
 /** The MCP launch spec (for the agent run and for the app's own client). */

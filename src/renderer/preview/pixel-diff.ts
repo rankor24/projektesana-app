@@ -2,6 +2,7 @@
 // (branch feat/agent-harness-v2): content in both = grey, only in A = red (removed), only in B = blue (added); changed
 // pixels counted on a 40 px grid and clustered into zones. Changed: the colour constants are named; B is drawn onto A's
 // frame before the compare (see SheetCompare), so a re-plotted sheet does not light up everywhere.
+import { tr } from "../i18n";
 
 export interface DiffZone {
 	id: number;
@@ -18,7 +19,7 @@ const REMOVED = [239, 68, 68];
 const ADDED = [59, 130, 246];
 
 export function computeDiff(a: ImageData, b: ImageData, threshold = 240): { diff: ImageData; zones: DiffZone[] } {
-	if (a.width !== b.width || a.height !== b.height) throw new Error(`Izmēri nesakrīt: ${a.width}×${a.height} pret ${b.width}×${b.height}`);
+	if (a.width !== b.width || a.height !== b.height) throw new Error(tr("Izmēri nesakrīt: {aw}×{ah} pret {bw}×{bh}", { aw: a.width, ah: a.height, bw: b.width, bh: b.height }));
 	const { width, height } = a;
 	const out = new ImageData(width, height);
 	const gw = Math.ceil(width / GRID);

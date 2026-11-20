@@ -4,7 +4,7 @@
 // tabs docked on the right. Every panel is reachable from exactly one page, or is a global window (the project list, the
 // settings). Pure and node-free: the rail, the palette, the top bar's status pill and the tests use the same table.
 // BIM Crew reference: shell/NavRail.tsx and shell/items.tsx (grouped rail items, icon + name, collapse).
-import { DEFAULT_DOCK, dock, emptyLayout, mergeInto, open, resizeDock, setActive, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
+import { allWindows, DEFAULT_DOCK, dock, emptyLayout, mergeInto, open, resizeDock, setActive, type Layout, type PANEL_IDS, type Vp } from "./layout.js";
 
 export type PanelName = (typeof PANEL_IDS)[number];
 export type PageGroup = "projekts" | "dati" | "nodosana";
@@ -48,11 +48,12 @@ export const PAGES: PageDef[] = [
 ];
 
 /** Windows that belong to no page: the project list (the switcher in the top bar) and the settings. */
-export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi", "prasmes"];
+export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi", "prasmes", "agenti"];
 export const GLOBAL_TITLE: Record<string, { title: string; hint: string }> = {
 	projekts: { title: "Projekti", hint: "projektu saraksts, nolasīšana" },
 	iestatijumi: { title: "Iestatījumi", hint: "ceļi, modelis, Revit" },
 	prasmes: { title: "Prasmes", hint: "biroja prasmju bibliotēka, aģentiem" },
+	agenti: { title: "Aģenti", hint: "aģentu saraksts, lomas, ierobežojumi" },
 };
 export const START_PAGE: PanelName = "parskats";
 
@@ -113,6 +114,25 @@ export function defaultLayout(page: string): Layout {
 	return { ...l, focused: "chat" };
 }
 export const CHAT_DEFAULT_SIZE = DEFAULT_DOCK;
+
+/** The viewer's own side windows: on every page whose canvas is the viewer (sidebar pages and Versijas). */
+const VIEWER_WINDOWS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"];
+
+/**
+ * The windows the Windows menu lists for a page: what its default layout holds, the windows its canvas opens later (a cell's
+ * lines, the viewer's side windows) and the side pages of a full page. Every window a page can show is in this list, so a
+ * closed one is always one click away.
+ */
+export function pageWindows(page: string): string[] {
+	const def = pageById(page);
+	if (!def) return [];
+	const out = new Set(allWindows(defaultLayout(page)));
+	out.add("chat");
+	if (def.canvas === "scene") out.add("coord.lines");
+	if (def.kind === "sidebar" || def.canvas === "viewer") for (const v of VIEWER_WINDOWS) out.add(v);
+	if (def.kind === "page" && !def.canvas) for (const v of FULL_PAGE_TABS) out.add(v);
+	return [...out];
+}
 
 // ---- opening by name: the agent's open_panel, Ctrl+K, links between panels ----
 

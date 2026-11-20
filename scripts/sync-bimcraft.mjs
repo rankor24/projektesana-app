@@ -51,6 +51,8 @@ if (existsSync(icons)) {
 
 // our bridge add-on, switched on, listed first
 cpSync(join(root, "src", "bimcraft-addon", "projektesana"), join(out, "app", "addons", "projektesana"), { recursive: true });
+// the app's one look for its frames (shared with CadCraft's bridge)
+cpSync(join(root, "src", "craft-style", "compact.css"), join(out, "app", "addons", "projektesana", "compact.css"));
 const idx = join(out, "app", "addons", "index.json");
 const list = JSON.parse(readFileSync(idx, "utf8"));
 list.addons = ["projektesana", ...(list.addons ?? []).filter((a) => a !== "projektesana")];

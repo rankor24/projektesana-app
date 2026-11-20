@@ -91,9 +91,13 @@ test("R48: H4 approved into S5 writes nothing to mail and wakes nobody; Gaida te
 	assert.deepEqual(r.mail().messages(), []);
 	nobody(r);
 	assert.deepEqual(r.s.waiting().filter((w) => w.kind === "start-eks"), [{ kind: "start-eks", projectId: "BD999" }]);
-	// the user opens eks's thread: the line goes
+	// the user opens eks's thread: an empty conversation is not the expert at work, the line stays (R48: until a run of eks begins)
 	await tick(10);
-	r.s.openThread("BD999", "eks");
+	const t = r.s.openThread("BD999", "eks");
+	assert.deepEqual(r.s.waiting().filter((w) => w.kind === "start-eks"), [{ kind: "start-eks", projectId: "BD999" }]);
+	// the user writes to eks: its run begins and the line goes
+	await r.s.sendToThread(t.id, "BD999", "Sāc ekspertīzi.", []);
+	await r.settle();
 	assert.deepEqual(r.s.waiting().filter((w) => w.kind === "start-eks"), []);
 });
 

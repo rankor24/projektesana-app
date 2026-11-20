@@ -5,12 +5,13 @@ import type { ReactNode } from "react";
 import { CHAT, canClose, tabIndexAt, type Group, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
+import { tr } from "../i18n";
 
 const SIDE_BTN: { side: Side; glyph: string; title: string }[] = [
 	{ side: "left", glyph: "◧", title: "Piespraust pa kreisi" },
 	{ side: "right", glyph: "◨", title: "Piespraust pa labi" },
-	{ side: "top", glyph: "⬒", title: "Piespraust augšā" },
-	{ side: "bottom", glyph: "⬓", title: "Piespraust apakšā" },
+	{ side: "top", glyph: "⬒", title: tr("Piespraust augšā") },
+	{ side: "bottom", glyph: "⬓", title: tr("Piespraust apakšā") },
 ];
 
 export function TabGroup({
@@ -71,7 +72,7 @@ export function TabGroup({
 					<div key={id} data-tab={id} className={`tg-tab ${id === own ? "on" : ""}`} onMouseDown={(e) => startTab(e, id)}>
 						<span>{WINDOW_TITLE[id] ?? id}</span>
 						{canClose(id) && (
-							<button className="tg-x" title="Aizvērt" onClick={() => windows.close(id)}>
+							<button className="tg-x" title={tr("Aizvērt")} onClick={() => windows.close(id)}>
 								×
 							</button>
 						)}
@@ -85,14 +86,14 @@ export function TabGroup({
 						</button>
 					))}
 					{mode === "dock" && (
-						<button title="Atspraust (peldošs logs)" onClick={() => windows.undock(own)}>
+						<button title={tr("Atspraust (peldošs logs)")} onClick={() => windows.undock(own)}>
 							⇱
 						</button>
 					)}
-					<button title="Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas" onClick={() => windows.popOut(own)}>
+					<button title={tr("Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas")} onClick={() => windows.popOut(own)}>
 						⧉
 					</button>
-					<button title={mode === "dock" ? "Sakļaut joslu" : "Minimizēt"} onClick={() => windows.collapse(own, true)}>
+					<button title={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} onClick={() => windows.collapse(own, true)}>
 						–
 					</button>
 				</div>

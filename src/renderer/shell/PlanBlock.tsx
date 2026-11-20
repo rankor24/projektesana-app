@@ -1,190 +1,162 @@
-// The block above the chat input (task 9.2): Plāns (the order of work: the agent writes it with update_plan, the user ticks,
-// edits, adds, drags and removes steps and his version wins), Uzdevumi (the 8.5 tasks, proposed ones first, Pieņemt / Noraidīt
-// in place) and Piezīmes (a quick note that becomes an Atmiņa note). It folds to one line ("Plāns · 2/4").
-// BIM Crew reference: Chat.tsx (the plan block above the input).
-import { useState } from "react";
+// The checklist on top of the chat input (task 9.2, redrawn): "Uzdevumi 2/4". The agent writes the steps with update_plan, the user
+// ticks, edits (double click), drags, adds and removes them and his version wins. It folds to one line with the step in work.
+// Proposed tasks (8.5) show in the same list with Pieņemt / Noraidīt. The quick note (it becomes an Atmiņa note) moved to
+// the Telpa tab: NoteBox below. BIM Crew reference: Chat.tsx (the plan block above the input).
+import { useRef, useState } from "react";
 import type { NoteType, Task } from "../../core/model";
 import { addStep, editText, moveStep, planProgress, removeStep, setState, STATE_LABEL, tick, type PlanStep } from "../../shared/plan";
 import { call, errText } from "../bridge";
+import { Icon, type IconName } from "../icons";
 import { useLoad } from "../ui";
+import { tr } from "../i18n";
 
-type Tab = "plan" | "tasks" | "notes";
-const NOTE_TYPE: Record<NoteType, string> = { decision: "lēmums", answer: "atbilde", learning: "mācība", question: "jautājums", gate: "gate", risk: "risks", change: "izmaiņa" };
+const NOTE_TYPE: Record<NoteType, string> = { decision: tr("lēmums"), answer: tr("atbilde"), learning: tr("mācība"), question: tr("jautājums"), gate: tr("gate"), risk: tr("risks"), change: tr("izmaiņa") };
+const MARK: Record<PlanStep["state"], IconName> = { todo: "circle", doing: "circleProgress", done: "circleCheck", blocked: "alert" };
 const newStepId = () => `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export function PlanBlock({ projectId }: { projectId: string | null }) {
-	const [tab, setTab] = useState<Tab>("plan");
-	const [folded, setFolded] = useState(false);
+	/** null = follows the content: folded while there is nothing in the list, open as soon as there is */
+	const [fold, setFold] = useState<boolean | null>(null);
 	const [err, setErr] = useState<string | null>(null);
+	const [draft, setDraft] = useState("");
+	const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+	const [dragId, setDragId] = useState<string | null>(null);
+	const addRef = useRef<HTMLInputElement>(null);
 	const plan = useLoad(() => (projectId ? call("plan.get", projectId) : Promise.resolve(null)), [projectId]);
-	const tasks = useLoad(() => (projectId ? call("todos.list", projectId) : Promise.resolve([] as Task[])), [projectId]);
+	const todos = useLoad(() => (projectId ? call("todos.list", projectId) : Promise.resolve([] as Task[])), [projectId]);
 	const steps = plan.data?.steps ?? [];
 	const prog = planProgress(steps);
-	const proposed = (tasks.data ?? []).filter((t) => t.state === "proposed");
+	const proposed = (todos.data ?? []).filter((t) => t.state === "proposed");
 	if (!projectId) return null;
 
+	const folded = fold ?? (steps.length === 0 && proposed.length === 0);
 	const fail = (e: unknown) => setErr(errText(e));
 	const save = (next: PlanStep[]) => {
 		setErr(null);
 		return call("plan.set", projectId, next).then(() => plan.reload()).catch(fail);
 	};
+	const decide = (p: Promise<unknown>) => p.then(() => todos.reload()).catch(fail);
+	const openAdd = () => {
+		setFold(false);
+		setTimeout(() => addRef.current?.focus(), 0);
+	};
+	const add = () => {
+		if (draft.trim().length < 2) return;
+		void save(addStep(steps, draft, newStepId()));
+		setDraft("");
+	};
 
 	return (
-		<div className="plan-block">
-			<div className="plan-head">
-				<button className="ghost small" onClick={() => setFolded(!folded)} title={folded ? "Atvērt" : "Sakļaut līdz vienai rindai"}>
-					{folded ? "▸" : "▾"} {prog.line}
+		<div className={`tasks ${folded ? "folded" : ""}`}>
+			<div className="tasks-head">
+				<button className="tasks-toggle" aria-expanded={!folded} onClick={() => setFold(!folded)} title={folded ? tr("Atvērt") : tr("Sakļaut līdz vienai rindai")}>
+					<Icon name="chevronDown" size={14} />
+					<b>{tr("Uzdevumi")}</b>
+					{steps.length > 0 && (
+						<span className="tasks-count">
+							{prog.done}/{prog.total}
+						</span>
+					)}
+					{folded && prog.doing && <span className="tasks-doing">· {prog.doing.text}</span>}
+					{proposed.length > 0 && <span className="chip">{tr("{length} gaida", { length: proposed.length })}</span>}
 				</button>
-				{folded && prog.doing && <span className="dim small plan-doing">→ {prog.doing.text}</span>}
-				{!folded && (
-					<div className="tabs plan-tabs">
-						<button className={tab === "plan" ? "on" : ""} onClick={() => setTab("plan")}>Plāns</button>
-						<button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>
-							Uzdevumi{proposed.length ? ` (${proposed.length} gaida)` : ""}
-						</button>
-						<button className={tab === "notes" ? "on" : ""} onClick={() => setTab("notes")}>Piezīmes</button>
-					</div>
-				)}
+				<button className="icon-btn" title={tr("Pievienot uzdevumu")} aria-label={tr("Pievienot uzdevumu")} onClick={openAdd}>
+					<Icon name="plus" />
+				</button>
 			</div>
 			{!folded && (
-				<div className="plan-body">
+				<div className="tasks-body">
 					{err && <div className="err">{err}</div>}
-					{tab === "plan" && <StepsTab steps={steps} pending={!!plan.data?.pending} by={plan.data?.by} onSave={save} />}
-					{tab === "tasks" && <TasksTab projectId={projectId} tasks={tasks.data ?? []} reload={tasks.reload} onErr={fail} />}
-					{tab === "notes" && <NotesTab projectId={projectId} onErr={fail} />}
+					{proposed.map((t) => (
+						<div key={t.id} className="task">
+							<span className="chip">{tr("piedāvājums")}</span>
+							<span className="task-text" title={t.note}>
+								{t.title}
+								{t.due ? tr(" · līdz {due}", { due: t.due }) : ""}
+							</span>
+							<button className="small primary" onClick={() => decide(call("todos.update", projectId, t.id, { state: "open" }))}>{tr("Pieņemt")}</button>
+							<button className="small ghost" onClick={() => decide(call("todos.remove", projectId, t.id))}>{tr("Noraidīt")}</button>
+						</div>
+					))}
+					{steps.length === 0 && proposed.length === 0 && <div className="dim small">{tr("Plāna vēl nav. Aģents to uzrakstīs daudzsoļu darbam; vari rakstīt arī pats.")}</div>}
+					{steps.map((s, i) => (
+						<div
+							key={s.id}
+							className={`task ${s.state}`}
+							draggable
+							onDragStart={() => setDragId(s.id)}
+							onDragOver={(e) => dragId && e.preventDefault()}
+							onDrop={() => dragId && dragId !== s.id && (void save(moveStep(steps, dragId, i)), setDragId(null))}
+							onDragEnd={() => setDragId(null)}
+						>
+							<button className="task-mark" title={tr(STATE_LABEL[s.state])} aria-label={tr(STATE_LABEL[s.state])} onClick={() => save(tick(steps, s.id))}>
+								<Icon name={MARK[s.state]} size={16} />
+							</button>
+							{editing?.id === s.id ? (
+								<input
+									autoFocus
+									className="grow"
+									value={editing.text}
+									onChange={(e) => setEditing({ id: s.id, text: e.target.value })}
+									onBlur={() => (void save(editText(steps, s.id, editing.text)), setEditing(null))}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+										if (e.key === "Escape") setEditing(null);
+									}}
+								/>
+							) : (
+								<span className="task-text" onDoubleClick={() => setEditing({ id: s.id, text: s.text })} title={`${s.text}\n${tr("Dubultklikšķis — labot")}`}>
+									{s.text}
+								</span>
+							)}
+							<span className="task-acts">
+								<button title={s.state === "doing" ? tr("Atcelt «darbā»") : tr("Atzīmēt kā darbā")} onClick={() => save(setState(steps, s.id, s.state === "doing" ? "todo" : "doing"))}>
+									<Icon name="play" size={13} />
+								</button>
+								<button title={s.state === "blocked" ? tr("Atcelt «iestrēdzis»") : tr("Atzīmēt kā iestrēgušu")} onClick={() => save(setState(steps, s.id, s.state === "blocked" ? "todo" : "blocked"))}>
+									<Icon name="alert" size={14} />
+								</button>
+								<button className="danger" title={tr("Noņemt soli")} onClick={() => save(removeStep(steps, s.id))}>
+									<Icon name="x" size={14} />
+								</button>
+							</span>
+						</div>
+					))}
+					<label className="task-add">
+						<Icon name="plus" size={16} />
+						<input ref={addRef} placeholder={tr("jauns solis…")} aria-label={tr("Pievienot uzdevumu")} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+						{steps.length > 0 && (
+							<button type="button" className="ghost small" onClick={() => save([])}>
+								{tr("notīrīt")}
+							</button>
+						)}
+					</label>
+					{plan.data?.pending && <div className="dim small">{tr("Tavs saraksts ir spēkā; aģents to redzēs nākamajā ziņā.")}</div>}
+					{!plan.data?.pending && plan.data?.by === "agent" && steps.length > 0 && <div className="dim small">{tr("Plānu uzrakstīja aģents.")}</div>}
 				</div>
 			)}
 		</div>
 	);
 }
 
-function StepsTab({ steps, pending, by, onSave }: { steps: PlanStep[]; pending: boolean; by?: string; onSave: (s: PlanStep[]) => void }) {
-	const [draft, setDraft] = useState("");
-	const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
-	const [dragId, setDragId] = useState<string | null>(null);
-	return (
-		<div className="plan-steps">
-			{steps.length === 0 && <div className="dim small">Plāna vēl nav. Aģents to uzrakstīs daudzsoļu darbam; vari rakstīt arī pats.</div>}
-			{steps.map((s, i) => (
-				<div
-					key={s.id}
-					className={`plan-step ${s.state}`}
-					draggable
-					onDragStart={() => setDragId(s.id)}
-					onDragOver={(e) => dragId && e.preventDefault()}
-					onDrop={() => dragId && dragId !== s.id && (onSave(moveStep(steps, dragId, i)), setDragId(null))}
-					onDragEnd={() => setDragId(null)}
-				>
-					<input type="checkbox" checked={s.state === "done"} onChange={() => onSave(tick(steps, s.id))} title={STATE_LABEL[s.state]} />
-					{editing?.id === s.id ? (
-						<input
-							autoFocus
-							className="grow"
-							value={editing.text}
-							onChange={(e) => setEditing({ id: s.id, text: e.target.value })}
-							onBlur={() => (onSave(editText(steps, s.id, editing.text)), setEditing(null))}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-								if (e.key === "Escape") setEditing(null);
-							}}
-						/>
-					) : (
-						<span className="grow plan-text" onDoubleClick={() => setEditing({ id: s.id, text: s.text })} title="Dubultklikšķis — labot">
-							{s.state === "doing" && "→ "}
-							{s.state === "blocked" && "! "}
-							{s.text}
-						</span>
-					)}
-					<button className="ghost small" title={s.state === "doing" ? "Atcelt «darbā»" : "Atzīmēt kā darbā"} onClick={() => onSave(setState(steps, s.id, s.state === "doing" ? "todo" : "doing"))}>
-						→
-					</button>
-					<button className="ghost small" title={s.state === "blocked" ? "Atcelt «iestrēdzis»" : "Atzīmēt kā iestrēgušu"} onClick={() => onSave(setState(steps, s.id, s.state === "blocked" ? "todo" : "blocked"))}>
-						!
-					</button>
-					<button className="ghost small" title="Uz augšu" disabled={i === 0} onClick={() => onSave(moveStep(steps, s.id, i - 1))}>
-						↑
-					</button>
-					<button className="ghost small" title="Uz leju" disabled={i === steps.length - 1} onClick={() => onSave(moveStep(steps, s.id, i + 1))}>
-						↓
-					</button>
-					<button className="ghost small danger" title="Noņemt soli" onClick={() => onSave(removeStep(steps, s.id))}>
-						×
-					</button>
-				</div>
-			))}
-			<div className="row">
-				<input
-					className="grow"
-					placeholder="jauns solis…"
-					value={draft}
-					onChange={(e) => setDraft(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" && draft.trim().length >= 2) (onSave(addStep(steps, draft, newStepId())), setDraft(""));
-					}}
-				/>
-				{steps.length > 0 && (
-					<button className="ghost small" onClick={() => onSave([])}>
-						notīrīt
-					</button>
-				)}
-			</div>
-			{pending && <div className="dim small">Tavs saraksts ir spēkā; aģents to redzēs nākamajā ziņā.</div>}
-			{!pending && by === "agent" && steps.length > 0 && <div className="dim small">Plānu uzrakstīja aģents.</div>}
-		</div>
-	);
-}
-
-function TasksTab({ projectId, tasks, reload, onErr }: { projectId: string; tasks: Task[]; reload: () => void; onErr: (e: unknown) => void }) {
-	const [draft, setDraft] = useState("");
-	const act = (p: Promise<unknown>) => p.then(reload).catch(onErr);
-	const open = tasks.filter((t) => t.state === "open");
-	const proposed = tasks.filter((t) => t.state === "proposed");
-	return (
-		<div className="plan-steps">
-			{proposed.map((t) => (
-				<div key={t.id} className="plan-step proposed">
-					<span className="chip">piedāvājums</span>
-					<span className="grow plan-text" title={t.note}>
-						{t.title}
-						{t.due ? ` · līdz ${t.due}` : ""}
-					</span>
-					<button className="small primary" onClick={() => act(call("todos.update", projectId, t.id, { state: "open" }))}>Pieņemt</button>
-					<button className="small ghost" onClick={() => act(call("todos.remove", projectId, t.id))}>Noraidīt</button>
-				</div>
-			))}
-			{open.map((t) => (
-				<div key={t.id} className="plan-step">
-					<input type="checkbox" checked={false} onChange={() => act(call("todos.update", projectId, t.id, { state: "done" }))} title="Pabeigts" />
-					<span className="grow plan-text" title={t.note}>
-						{t.title}
-						{t.due ? ` · līdz ${t.due}` : ""}
-					</span>
-					<button className="ghost small danger" title="Noņemt" onClick={() => act(call("todos.remove", projectId, t.id))}>×</button>
-				</div>
-			))}
-			{proposed.length + open.length === 0 && <div className="dim small">Uzdevumu nav.</div>}
-			<div className="row">
-				<input className="grow" placeholder="jauns uzdevums…" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && draft.trim().length >= 2 && act(call("todos.add", projectId, { title: draft.trim() })).then(() => setDraft(""))} />
-			</div>
-		</div>
-	);
-}
-
-function NotesTab({ projectId, onErr }: { projectId: string; onErr: (e: unknown) => void }) {
+/** The quick note in the Telpa tab: the text becomes an Atmiņa note. */
+export function NoteBox({ projectId }: { projectId: string }) {
 	const [text, setText] = useState("");
 	const [type, setType] = useState<NoteType>("answer");
 	const [saved, setSaved] = useState(false);
+	const [err, setErr] = useState<string | null>(null);
 	const save = () => {
 		const body = text.trim();
 		if (body.length < 2) return;
 		const title = body.split(/\n/)[0].slice(0, 60);
 		call("notes.write", projectId, type, title, body)
 			.then(() => (setText(""), setSaved(true)))
-			.catch(onErr);
+			.catch((e) => setErr(errText(e)));
 	};
 	return (
-		<div className="plan-steps">
-			<textarea rows={2} placeholder="ātra piezīme — kļūs par Atmiņas ierakstu" value={text} onChange={(e) => (setText(e.target.value), setSaved(false))} />
+		<div className="note-box">
+			{err && <div className="err">{err}</div>}
+			<textarea rows={2} placeholder={tr("ātra piezīme — kļūs par Atmiņas ierakstu")} value={text} onChange={(e) => (setText(e.target.value), setSaved(false))} />
 			<div className="row">
 				<select value={type} onChange={(e) => setType(e.target.value as NoteType)}>
 					{(["decision", "answer", "learning", "question"] as NoteType[]).map((t) => (
@@ -193,8 +165,8 @@ function NotesTab({ projectId, onErr }: { projectId: string; onErr: (e: unknown)
 						</option>
 					))}
 				</select>
-				<button className="small primary" disabled={text.trim().length < 2} onClick={save}>Saglabāt Atmiņā</button>
-				{saved && <span className="dim small">saglabāts</span>}
+				<button className="small primary" disabled={text.trim().length < 2} onClick={save}>{tr("Saglabāt Atmiņā")}</button>
+				{saved && <span className="dim small">{tr("saglabāts")}</span>}
 			</div>
 		</div>
 	);

@@ -9,11 +9,12 @@ import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../.
 import type { ProviderRow } from "../../shared/api";
 import { call, errText } from "../bridge";
 import { Badge, Err, useLoad } from "../ui";
+import { locale, tr } from "../i18n";
 
 /** A spec as the page edits it: `role` is the text of its file (undefined = not read yet), `roleDirty` = changed here and not written yet. */
 type Draft = AgentSpec & { fixedTokens?: number; role?: string; roleDirty?: boolean };
 const EMPTY: Draft = { id: "", name: "", description: "", prompt: "", tools: [] };
-const nf = (n: number) => n.toLocaleString("lv-LV").replace(/ /g, " ");
+const nf = (n: number) => n.toLocaleString(locale()).replace(/ /g, " ");
 // what goes to agents.save: the spec without the page's own fields
 const plain = (d: Draft): AgentSpec => {
 	const { fixedTokens: _t, role: _r, roleDirty: _d, ...spec } = d;
@@ -37,7 +38,7 @@ function Counter({ n, max }: { n: number; max: number }) {
 
 /** Who an agent may message / take messages from. Three states, always spelled out: not set = visi, [] = neviens, or the ticked ids. */
 function AclEditor({ label, value, options, onChange }: { label: string; value: string[] | undefined; options: { id: string; name: string }[]; onChange: (v: string[] | undefined) => void }) {
-	const state = value === undefined ? "visi" : value.length === 0 ? "neviens" : "izvēlēti";
+	const state = value === undefined ? tr("visi") : value.length === 0 ? tr("neviens") : tr("izvēlēti");
 	// with nothing set everybody is allowed, so every box shows ticked; unticking one starts an explicit list
 	const on = (id: string) => value === undefined || value.includes(id);
 	const toggle = (id: string, yes: boolean) => {
@@ -50,11 +51,9 @@ function AclEditor({ label, value, options, onChange }: { label: string; value: 
 				<span className="small dim">{label}:</span>
 				<b className="small">{state}</b>
 				<button className="small ghost" disabled={value === undefined} onClick={() => onChange(undefined)}>
-					Visi
-				</button>
+					{tr("Visi")}</button>
 				<button className="small ghost" disabled={value !== undefined && value.length === 0} onClick={() => onChange([])}>
-					Neviens
-				</button>
+					{tr("Neviens")}</button>
 			</div>
 			<div className="row" style={{ flexWrap: "wrap" }}>
 				{options.map((o) => (
@@ -84,10 +83,10 @@ function SharedRules({ onSaved }: { onSaved: () => void }) {
 	return (
 		<div className="confirm">
 			<div className="row">
-				<b className="grow">Kopējie noteikumi</b>
+				<b className="grow">{tr("Kopējie noteikumi")}</b>
 				<Counter n={text.length} max={SHARED_MAX} />
 			</div>
-			<div className="small dim">Šo tekstu saņem katrs speciālists pirms savas lomas (agents\_kopejie.md). Iepriekšējais teksts paliek mapē agents\versions.</div>
+			<div className="small dim">{tr("Šo tekstu saņem katrs speciālists pirms savas lomas (agents\\_kopejie.md). Iepriekšējais teksts paliek mapē agents\\versions.")}</div>
 			{err && <div className="err">{err}</div>}
 			<textarea style={{ width: "100%", minHeight: 90 }} value={text} disabled={saved === null} onChange={(e) => setText(e.target.value)} />
 			<div className="row">
@@ -105,9 +104,8 @@ function SharedRules({ onSaved }: { onSaved: () => void }) {
 						}
 					}}
 				>
-					Saglabāt noteikumus
-				</button>
-				{dirty && <span className="small">nesaglabāts</span>}
+					{tr("Saglabāt noteikumus")}</button>
+				{dirty && <span className="small">{tr("nesaglabāts")}</span>}
 			</div>
 		</div>
 	);
@@ -165,7 +163,7 @@ export function Agenti() {
 			const saved = await call("agents.save", specs);
 			setList(saved);
 			setDirty(false);
-			setMsg("Saglabāts. Aģents jaunos speciālistus un lomas redz nākamajā uzdevumā.");
+			setMsg(tr("Saglabāts. Aģents jaunos speciālistus un lomas redz nākamajā uzdevumā."));
 			view.reload();
 		} catch (e) {
 			setErr(errText(e));
@@ -174,7 +172,7 @@ export function Agenti() {
 	const importRole = async (i: number) => {
 		const a = list[i];
 		setErr(null);
-		if (a.roleDirty && !window.confirm("Rediģētais lomas teksts netiks saglabāts. Importēt tāpat?")) return;
+		if (a.roleDirty && !window.confirm(tr("Rediģētais lomas teksts netiks saglabāts. Importēt tāpat?"))) return;
 		try {
 			const f = await call("dialog.pickFile", "Lomas apraksts (.md)", ["md"]);
 			if (!f) return;
@@ -182,7 +180,7 @@ export function Agenti() {
 			const { chars } = await call("agents.role.import", a.id, f);
 			const text = (await call("agents.role.get", a.id)) ?? "";
 			patch(i, { role: text, roleDirty: false, roleFile: true });
-			setMsg(`Importēts: ${nf(chars)} zīmes. Nospied «Saglabāt», lai aģents lietotu šo lomu.`);
+			setMsg(tr("Importēts: {chars} zīmes. Nospied «Saglabāt», lai aģents lietotu šo lomu.", { chars: nf(chars) }));
 		} catch (e) {
 			setErr(errText(e));
 		}
@@ -205,84 +203,80 @@ export function Agenti() {
 			{v && (
 				<div className="row">
 					<label>
-						Cik palīgi drīkst strādāt reizē{" "}
+						{tr("Cik palīgi drīkst strādāt reizē")}{" "}
 						<select value={v.maxParallel} onChange={(e) => call("settings.set", { maxParallelAgents: Number(e.target.value) }).then(() => view.reload())}>
 							{[1, 2, 3, 4, 5, 6].map((n) => (
 								<option key={n}>{n}</option>
 							))}
 						</select>
 					</label>
-					<span className="dim small">Katrs palīgs ir atsevišķs modeļa izsaukums ar savu kontekstu, un maksā savus tokenus (skat. Izmantojums).</span>
+					<span className="dim small">{tr("Katrs palīgs ir atsevišķs modeļa izsaukums ar savu kontekstu, un maksā savus tokenus (skat. Izmantojums).")}</span>
 				</div>
 			)}
 			<div className="dim small">
-				Speciālistiem aģents var uzdot darbu (delegate). Viņi nevar redzēt sarunu un nevar palaist citus aģentus. Rīkus, kuriem vajag tavu apstiprinājumu, var dot tikai speciālistam ar līmeni «apstiprina lietotājs». Izmaiņas nodevuma mapē un projekta datos viņi veic pa vienam, lai nesadurtos.
-				{v?.shipped ? " Šobrīd ir piegādātais saraksts; tas saglabājas, kad nospied «Saglabāt»." : ""}
+				{tr("Speciālistiem aģents var uzdot darbu (delegate). Viņi nevar redzēt sarunu un nevar palaist citus aģentus. Rīkus, kuriem vajag tavu apstiprinājumu, var dot tikai speciālistam ar līmeni «apstiprina lietotājs». Izmaiņas nodevuma mapē un projekta datos viņi veic pa vienam, lai nesadurtos.")}{v?.shipped ? tr(" Šobrīd ir piegādātais saraksts; tas saglabājas, kad nospied «Saglabāt».") : ""}
 			</div>
 			<SharedRules onSaved={() => view.reload()} />
 			{list.map((a, i) => {
 				const others = list.filter((x, k) => k !== i && x.id).map((x) => ({ id: x.id, name: x.name || x.id }));
-				const aclOptions = [...others, { id: "lead", name: "galvenais aģents" }];
+				const aclOptions = [...others, { id: "lead", name: tr("galvenais aģents") }];
 				const model = models.find((m) => m.id === (a.model || settings.data?.model));
 				const level = a.maxLevel === "confirm" ? "confirm" : "run";
 				const roleLen = a.role?.length ?? 0;
 				return (
 					<div key={i} className="confirm">
 						<div className="row">
-							<b className="grow">{a.name || "(bez nosaukuma)"}</b>
+							<b className="grow">{a.name || tr("(bez nosaukuma)")}</b>
 							<span className="mono small dim">{a.id}</span>
 							<button className="small ghost" onClick={() => setOpen(open === `${i}` ? null : `${i}`)}>
-								{open === `${i}` ? "Aizvērt" : "Labot"}
+								{open === `${i}` ? tr("Aizvērt") : tr("Labot")}
 							</button>
 							<button className="small ghost" onClick={() => remove(i)}>
-								Izņemt
-							</button>
+								{tr("Izņemt")}</button>
 						</div>
 						<div className="small dim">{a.description}</div>
 						{open === `${i}` && (
 							<div className="pane">
 								<label className="row">
-									<span style={{ width: 110 }}>Nosaukums</span>
+									<span style={{ width: 110 }}>{tr("Nosaukums")}</span>
 									<input className="grow" value={a.name} onChange={(e) => patch(i, { name: e.target.value, ...(a.id === "" || a.id === slug(a.name) ? withId(a, slug(e.target.value)) : {}) })} />
 								</label>
 								<label className="row">
-									<span style={{ width: 110 }}>Identifikators</span>
+									<span style={{ width: 110 }}>{tr("Identifikators")}</span>
 									<input className="grow mono" value={a.id} onChange={(e) => patch(i, withId(a, e.target.value))} />
 								</label>
 								<label className="row">
-									<span style={{ width: 110 }}>Kam paredzēts</span>
-									<input className="grow" value={a.description} placeholder="viena rinda: pēc tās aģents izvēlas speciālistu" onChange={(e) => patch(i, { description: e.target.value })} />
+									<span style={{ width: 110 }}>{tr("Kam paredzēts")}</span>
+									<input className="grow" value={a.description} placeholder={tr("viena rinda: pēc tās aģents izvēlas speciālistu")} onChange={(e) => patch(i, { description: e.target.value })} />
 								</label>
 
 								<div className="row">
-									<span className="small dim grow">Loma (agents\{a.id || "<id>"}.md): kā šis aģents strādā un kādā balsī runā</span>
+									<span className="small dim grow">{tr("Loma (agents\\")}{a.id || tr("<id>")}{tr(".md): kā šis aģents strādā un kādā balsī runā")}</span>
 									<Counter n={roleLen} max={ROLE_MAX} />
-									<button className="small ghost" disabled={!a.id} title={a.id ? "Nolasa .md failu un ieraksta to kā lomas tekstu" : "Vispirms ieraksti identifikatoru"} onClick={() => importRole(i)}>
-										Importēt .md
-									</button>
+									<button className="small ghost" disabled={!a.id} title={a.id ? tr("Nolasa .md failu un ieraksta to kā lomas tekstu") : tr("Vispirms ieraksti identifikatoru")} onClick={() => importRole(i)}>
+										{tr("Importēt .md")}</button>
 								</div>
 								<textarea
 									style={{ width: "100%", minHeight: 160 }}
 									value={a.role ?? ""}
-									placeholder={a.id ? "Lomas teksts (var palikt tukšs, ja aģentam pietiek ar zemāko norādījumu)" : "Vispirms ieraksti identifikatoru"}
+									placeholder={a.id ? tr("Lomas teksts (var palikt tukšs, ja aģentam pietiek ar zemāko norādījumu)") : tr("Vispirms ieraksti identifikatoru")}
 									onChange={(e) => patch(i, { role: e.target.value, roleDirty: true })}
 								/>
 								<label>
-									<div className="small dim">Papildu norādījums (īss; ja lomas teksta nav, tas ir viss norādījums)</div>
+									<div className="small dim">{tr("Papildu norādījums (īss; ja lomas teksta nav, tas ir viss norādījums)")}</div>
 									<textarea style={{ width: "100%", minHeight: 60 }} value={a.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} />
 								</label>
 								<div className="small">
-									Pastāvīgais konteksts: {a.fixedTokens === undefined ? <span className="dim">tiks izmērīts pēc saglabāšanas</span> : <b style={a.fixedTokens > SPECIALIST_FIXED_MAX ? { color: "var(--bad)" } : undefined}>{nf(a.fixedTokens)} tokeni</b>} (bez Revit rīku aprakstiem)
-									{a.fixedTokens !== undefined && a.fixedTokens > SPECIALIST_FIXED_MAX && <span style={{ color: "var(--bad)" }}> — pāri {nf(SPECIALIST_FIXED_MAX)}, saglabāt nevarēs</span>}
-									{dirty && a.fixedTokens !== undefined && <span className="dim"> (pēc pēdējās saglabāšanas)</span>}
+									{tr("Pastāvīgais konteksts:")} {a.fixedTokens === undefined ? <span className="dim">{tr("tiks izmērīts pēc saglabāšanas")}</span> : <b style={a.fixedTokens > SPECIALIST_FIXED_MAX ? { color: "var(--bad)" } : undefined}>{tr("{fixedTokens} tokeni", { fixedTokens: nf(a.fixedTokens) })}</b>} {tr("(bez Revit rīku aprakstiem)")}{a.fixedTokens !== undefined && a.fixedTokens > SPECIALIST_FIXED_MAX && <span style={{ color: "var(--bad)" }}> {tr("— pāri {v}, saglabāt nevarēs", { v: nf(SPECIALIST_FIXED_MAX) })}</span>}
+									{dirty && a.fixedTokens !== undefined && <span className="dim"> {tr("(pēc pēdējās saglabāšanas)")}</span>}
 								</div>
 
 								<div className="row">
-									<span style={{ width: 110 }}>Līmenis</span>
+									<span style={{ width: 110 }}>{tr("Līmenis")}</span>
 									{(
 										[
-											["run", "palaiž"],
-											["confirm", "apstiprina lietotājs"],
+											["run", tr("palaiž")],
+											["confirm", tr("apstiprina lietotājs")],
 										] as const
 									).map(([k, text]) => (
 										<label key={k} className="small">
@@ -302,9 +296,9 @@ export function Agenti() {
 								</div>
 								<div className="row">
 									<label className="row">
-										<span style={{ width: 110 }}>Modelis</span>
+										<span style={{ width: 110 }}>{tr("Modelis")}</span>
 										<select value={a.model ?? ""} onChange={(e) => patch(i, { model: e.target.value || undefined, effort: "" })}>
-											<option value="">kā iestatījumos</option>
+											<option value="">{tr("kā iestatījumos")}</option>
 											{a.model && !models.some((m) => m.id === a.model) && <option value={a.model}>{a.model}</option>}
 											{models.map((m) => (
 												<option key={m.id} value={m.id}>
@@ -314,9 +308,9 @@ export function Agenti() {
 										</select>
 									</label>
 									<label className="row">
-										<span>Domāšana</span>
+										<span>{tr("Domāšana")}</span>
 										<select value={a.effort ?? ""} onChange={(e) => patch(i, { effort: e.target.value as AgentSpec["effort"] })}>
-											<option value="">kā iestatījumos</option>
+											<option value="">{tr("kā iestatījumos")}</option>
 											{a.effort && !model?.efforts.includes(a.effort) && <option value={a.effort}>{a.effort}</option>}
 											{(model?.efforts ?? []).map((x) => (
 												<option key={x}>{x}</option>
@@ -325,10 +319,10 @@ export function Agenti() {
 									</label>
 								</div>
 
-								<AclEditor label="Drīkst rakstīt" value={a.mayMessage} options={aclOptions} onChange={(x) => patch(i, { mayMessage: x })} />
-								<AclEditor label="Pieņem no" value={a.acceptsFrom} options={aclOptions} onChange={(x) => patch(i, { acceptsFrom: x })} />
+								<AclEditor label={tr("Drīkst rakstīt")} value={a.mayMessage} options={aclOptions} onChange={(x) => patch(i, { mayMessage: x })} />
+								<AclEditor label={tr("Pieņem no")} value={a.acceptsFrom} options={aclOptions} onChange={(x) => patch(i, { acceptsFrom: x })} />
 
-								<div className="small dim">Rīki bez lasīšanas (lasīšana vienmēr ir atļauta){level === "confirm" ? "; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:" : ":"}</div>
+								<div className="small dim">{tr("Rīki bez lasīšanas (lasīšana vienmēr ir atļauta)")}{level === "confirm" ? tr("; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:") : ":"}</div>
 								<div className="row" style={{ flexWrap: "wrap" }}>
 									{(v?.tools ?? [])
 										.filter((t) => t.level !== "confirm" || level === "confirm")
@@ -351,24 +345,21 @@ export function Agenti() {
 						setDirty(true);
 					}}
 				>
-					+ speciālists
-				</button>
+					{tr("+ speciālists")}</button>
 				<button className="primary" disabled={!dirty} onClick={save}>
-					Saglabāt
-				</button>
+					{tr("Saglabāt")}</button>
 				{v && (
 					<button
 						className="ghost"
-						title="Atgriež piegādātos trīs speciālistus (jau saglabātais tiek pārrakstīts, kad nospied «Saglabāt»)"
+						title={tr("Atgriež piegādātos trīs speciālistus (jau saglabātais tiek pārrakstīts, kad nospied «Saglabāt»)")}
 						onClick={() => {
 							setList(v.defaults);
 							setDirty(true);
 						}}
 					>
-						Piegādātie
-					</button>
+						{tr("Piegādātie")}</button>
 				)}
-				{dirty && <span className="small">nesaglabāts</span>}
+				{dirty && <span className="small">{tr("nesaglabāts")}</span>}
 				{msg && <span className="small">{msg}</span>}
 			</div>
 		</div>

@@ -1,5 +1,6 @@
 // One view: top bar, the rail, the work area (the viewer, or a full page, in the middle; a dock group on each of four sides)
 // and the floating windows on top. Every window is in a tab group that floats or docks (task 9.0).
+import { ComparePicker } from "./shell/ComparePicker";
 import { useEffect, useState } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
@@ -7,6 +8,7 @@ import { AgentDock } from "./shell/AgentDock";
 import { Rail } from "./shell/Rail";
 import { CommentTools } from "./shell/CommentTools";
 import { commentSubject } from "./comment-subject";
+import { useFactReview } from "./fact-review";
 import { toolsFor } from "../shared/comment-tools";
 import { DockArea } from "./shell/DockArea";
 import { StatusStrip } from "./shell/StatusStrip";
@@ -20,6 +22,7 @@ import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
 import { Empty } from "./ui";
 import { Iestatijumi } from "./panels/Iestatijumi";
+import { AgentiPage } from "./panels/AgentiPage";
 import { Prasmes } from "./panels/Prasmes";
 import { Projekts } from "./panels/Projekts";
 import { Avoti } from "./panels/Avoti";
@@ -39,6 +42,7 @@ import { pageById } from "../shared/pages";
 import { checkRelay, type RelayMsg } from "../shared/popout";
 import { bimcraft } from "./preview/IfcView";
 import { CHAT } from "../shared/layout";
+import { getLang, setLang, tr } from "./i18n";
 
 /** The body of any window: the chat, a panel, or one of the viewer's side panels (9.3). */
 function Body({ id, filter }: { id: string; filter?: string }) {
@@ -55,12 +59,12 @@ function Body({ id, filter }: { id: string; filter?: string }) {
 	if (id === "vers.models") return <VersModels />;
 	if (id === "vers.sheets") return <VersSheets />;
 	if (id === "vers.revit") return <VersRevit />;
-	return <Empty title="nav skata">{WINDOW_TITLE[id] ?? id}</Empty>;
+	return <Empty title={tr("nav skata")}>{WINDOW_TITLE[id] ?? id}</Empty>;
 }
 
 function KoordinacijaPage() {
 	const { projectId } = useUi();
-	return projectId ? <Koordinacija projectId={projectId} /> : <Empty title="nav projekta" />;
+	return projectId ? <Koordinacija projectId={projectId} /> : <Empty title={tr("nav projekta")} />;
 }
 function NormativiPage() {
 	const { projectId } = useUi();
@@ -72,9 +76,9 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 	const inner = <PanelBody id={id} filter={filter} />;
 	if (toolsFor(id).length === 0) return inner;
 	return (
-		<div className="fill-col">
-			<div className="page-scroll">{inner}</div>
+		<div className="ctool-row">
 			<CommentTools page={id} />
+			<div className="page-scroll">{inner}</div>
 		</div>
 	);
 }
@@ -82,19 +86,20 @@ function Panel({ id, filter }: { id: PanelId; filter?: string }) {
 function PanelBody({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
 	if (id === "prasmes") return <Prasmes />;
+	if (id === "agenti") return <AgentiPage />;
 	if (id === "projekts") return <Projekts />;
 	if (id === "faili") return <Faili />;
 	if (id === "grafiks") return <Grafiks />;
 	if (id === "avoti") return <Avoti filter={filter} />;
 	if (id === "telpas") return <Telpas />;
 	if (id === "prasibas") return <Prasibas filter={filter} />;
-	if (id === "atmina") return <Atmina />;
+	if (id === "atmina") return <Atmina filter={filter} />;
 	if (id === "nodevumi") return <Nodevumi filter={filter} />;
 	if (id === "versijas") return <Versijas />;
 	if (id === "parskats") return <Parskats />;
 	if (id === "koordinacija") return <KoordinacijaPage />;
 	if (id === "normativi") return <NormativiPage />;
-	return <Empty title="nav projekta">{PANEL_TITLE[id]}</Empty>;
+	return <Empty title={tr("nav projekta")}>{PANEL_TITLE[id]}</Empty>;
 }
 
 /** A layout window in its own OS window (task 9.11): the same renderer, showing that one window over its whole area. */
@@ -122,6 +127,11 @@ export function PopOut({ id }: { id: string }) {
 		call("settings.get").then((s) => {
 			const dark = s.theme === "dark" || (s.theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
 			document.documentElement.dataset.theme = dark ? "dark" : "light";
+			// the language in settings.json wins over this window's remembered one (a new window, a cleared storage): reload once into it
+			if (s.language && s.language !== getLang()) {
+				setLang(s.language);
+				location.reload();
+			}
 		});
 	}, [tick]);
 	const body = <Body id={id} filter={windows.get().layout.filters[id]} />;
@@ -130,9 +140,8 @@ export function PopOut({ id }: { id: string }) {
 			<div className="popout-head">
 				<b>{WINDOW_TITLE[id] ?? id}</b>
 				<span className="grow" />
-				<button className="ghost small" title="Aizvērt šo logu: tas atgriežas galvenajā logā" onClick={() => window.close()}>
-					Atgriezt galvenajā logā
-				</button>
+				<button className="ghost small" title={tr("Aizvērt šo logu: tas atgriežas galvenajā logā")} onClick={() => window.close()}>
+					{tr("Atgriezt galvenajā logā")}</button>
 			</div>
 			<div className="popout-body">{body}</div>
 		</div>
@@ -158,13 +167,17 @@ export function App() {
 		return () => window.removeEventListener("resize", refit);
 	}, []);
 	const { page, canvasFilter } = useWindows();
-	useEffect(() => commentSubject.clear(), [page]);
+	useEffect(() => {
+		commentSubject.clear();
+	}, [page]);
 	const def = pageById(page);
 	const fullPage = def?.kind === "page" && !def.canvas ? page : null;
 	const sceneCanvas = def?.canvas === "scene";
 	const planCanvas = def?.canvas === "plan";
 	const body = (id: string, filter?: string) => <Body id={id} filter={filter} />;
 	const { tick, projectId, preview } = useUi();
+	// a fact review needs the viewer: its card lives there and opens the cited source (task 9.7), also from a full page with nothing open
+	const reviewing = useFactReview().current !== null;
 	const [row, setRow] = useState<ProjectRow | null>(null);
 	useEffect(() => {
 		call("settings.get").then((s) => {
@@ -173,7 +186,10 @@ export function App() {
 		});
 	}, [tick]);
 	useEffect(() => {
-		if (!projectId) return setRow(null);
+		if (!projectId) {
+			setRow(null);
+			return;
+		}
 		call("projects.list")
 			.then((l) => {
 				const r = l.find((p) => p.id === projectId) ?? null;
@@ -200,21 +216,21 @@ export function App() {
 							)}
 							{sceneCanvas && (
 								<div className="scene-body">
+									<CommentTools page={page} />
 									<div className="scene-view">
 										<CoordScene />
 									</div>
-									<CommentTools page={page} />
 								</div>
 							)}
 							{planCanvas && (
 								<div className="scene-body">
+									<CommentTools page={page} />
 									<div className="scene-view">
 										<TelpasPlan />
 									</div>
-									<CommentTools page={page} />
 								</div>
 							)}
-							{!sceneCanvas && !planCanvas && (!fullPage || preview) && (def?.canvas === "viewer" ? <div className="scene-body"><div className="scene-view"><Viewer /></div><CommentTools page={page} /></div> : <Viewer />)}
+							{!sceneCanvas && !planCanvas && (!fullPage || preview || reviewing) && (fullPage ? <Viewer /> : <div className="scene-body"><CommentTools page={page} /><div className="scene-view"><Viewer /></div></div>)}
 						</main>
 						<DockArea side="right" render={body} />
 					</div>
@@ -224,6 +240,7 @@ export function App() {
 			<StatusStrip />
 			<WindowLayer render={body} />
 			<CommandPalette />
+			<ComparePicker />
 		</div>
 	);
 }

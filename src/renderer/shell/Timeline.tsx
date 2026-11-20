@@ -4,13 +4,14 @@
 // Nodevumi; a click on the title opens Grafiks.
 import type { StageTimeline } from "../../core/summary-types";
 import { windows } from "../windows";
+import { tr } from "../i18n";
 
 export function Timeline({ t }: { t: StageTimeline }) {
 	return (
 		<div className="stl">
 			<div className="stl-head">
-				<button className="ghost small" onClick={() => windows.go("grafiks")} title="Atvērt Grafiku">
-					<b>Stadijas</b>
+				<button className="ghost small" onClick={() => windows.go("grafiks")} title={tr("Atvērt Grafiku")}>
+					<b>{tr("Stadijas")}</b>
 				</button>
 				<span className="dim small">
 					{t.from} → {t.to}
@@ -18,12 +19,12 @@ export function Timeline({ t }: { t: StageTimeline }) {
 			</div>
 			{t.stages.map((s) => (
 				<div key={s.stage} className={`stl-row ${s.current ? "current" : ""}`} style={s.inContract ? undefined : { opacity: 0.6 }}>
-					<div className="stl-name" title={s.inContract ? "stadija ir līgumā" : ""}>
+					<div className="stl-name" title={s.inContract ? tr("stadija ir līgumā") : ""}>
 						{s.stage}
-						{s.current && <span className="chip"> tagad</span>}
+						{s.current && <span className="chip"> {tr("tagad")}</span>}
 					</div>
 					<div className="stl-track">
-						<div className="stl-today" style={{ left: `${t.todayPos}%` }} title={`šodien ${t.today}`} />
+						<div className="stl-today" style={{ left: `${t.todayPos}%` }} title={tr("šodien {today}", { today: t.today })} />
 						{s.bars.map((b) => (
 							<button key={b.id} className={`stl-bar ${b.late ? "late" : ""} ${b.done ? "done" : ""}`} style={{ left: `${Math.min(b.fromPos, b.toPos)}%`, width: `${Math.max(1.5, Math.abs(b.toPos - b.fromPos))}%` }} title={`${b.label}: ${b.from} → ${b.to}${b.late ? " (kavē)" : ""}`} onClick={() => windows.go("nodevumi")}>
 								<span>{b.label}</span>
