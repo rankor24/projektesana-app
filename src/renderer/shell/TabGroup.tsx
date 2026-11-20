@@ -1,17 +1,18 @@
 // A tab group: one strip with a tab per window, the active window's body under it. Used by the dock areas and by the
 // floating windows. Tabs drag out (float), onto a screen edge (dock) or onto another strip (join); the empty part of the
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { Icon, type IconName } from "../icons";
 import { CHAT, canClose, isMaximized, tabIndexAt, type Group, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
 import { tr } from "../i18n";
 
-const SIDE_BTN: { side: Side; glyph: string; title: string }[] = [
-	{ side: "left", glyph: "◧", title: "Piespraust pa kreisi" },
-	{ side: "right", glyph: "◨", title: "Piespraust pa labi" },
-	{ side: "top", glyph: "⬒", title: tr("Piespraust augšā") },
-	{ side: "bottom", glyph: "⬓", title: tr("Piespraust apakšā") },
+const SIDE_BTN: { side: Side; icon: IconName; title: string }[] = [
+	{ side: "left", icon: "dockLeft", title: tr("Piespraust pa kreisi") },
+	{ side: "right", icon: "dockRight", title: tr("Piespraust pa labi") },
+	{ side: "top", icon: "dockTop", title: tr("Piespraust augšā") },
+	{ side: "bottom", icon: "dockBottom", title: tr("Piespraust apakšā") },
 ];
 
 export function TabGroup({
@@ -65,41 +66,55 @@ export function TabGroup({
 	};
 
 	const keepChat = group.tabs.includes(CHAT);
+	// many tabs scroll inside their own region (the wheel scrolls them sideways) and the active one is kept in view; the window
+	// buttons are outside that region, so a crowded strip can never push them off the screen
+	const tabsRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		tabsRef.current?.querySelector<HTMLElement>(".tg-tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+	}, [own, group.tabs.length]);
 	return (
 		<div className="tg">
 			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "dock" ? windows.undock(own) : windows.maximize(own))}>
-				{group.tabs.map((id) => (
-					<div key={id} data-tab={id} className={`tg-tab ${id === own ? "on" : ""}`} onMouseDown={(e) => startTab(e, id)}>
-						<span>{WINDOW_TITLE[id] ?? id}</span>
-						{canClose(id) && (
-							<button className="tg-x" title={tr("Aizvērt")} onClick={() => windows.close(id)}>
-								×
-							</button>
-						)}
-					</div>
-				))}
-				<span className="tg-grow" />
+				<div
+					ref={tabsRef}
+					className="tg-tabs"
+					onWheel={(e) => {
+						if (e.deltaY && !e.shiftKey) e.currentTarget.scrollLeft += e.deltaY;
+					}}
+				>
+					{group.tabs.map((id) => (
+						<div key={id} data-tab={id} className={`tg-tab ${id === own ? "on" : ""}`} title={WINDOW_TITLE[id] ?? id} onMouseDown={(e) => startTab(e, id)}>
+							<span className="tg-name">{WINDOW_TITLE[id] ?? id}</span>
+							{canClose(id) && (
+								<button className="tg-x" title={tr("Aizvērt")} aria-label={tr("Aizvērt")} onClick={() => windows.close(id)}>
+									×
+								</button>
+							)}
+						</div>
+					))}
+					<span className="tg-grow" />
+				</div>
 				<div className="tg-buttons">
 					{mode === "float" && (
-						<button title={tr("Palielināt / atjaunot (arī dubultklikšķis uz virsraksta)")} onClick={() => windows.maximize(own)}>
-							{isMaximized(layout, own) ? "❐" : "□"}
+						<button title={isMaximized(layout, own) ? tr("Atjaunot izmēru") : tr("Palielināt (arī dubultklikšķis uz virsraksta)")} onClick={() => windows.maximize(own)}>
+							<Icon name={isMaximized(layout, own) ? "winRestore" : "winMax"} size={14} />
 						</button>
 					)}
 					{mode === "float" && SIDE_BTN.map((b) => (
-						<button key={b.side} title={b.title} onClick={() => windows.dock(own, b.side, { whole: true })}>
-							{b.glyph}
+						<button key={b.side} title={b.title} aria-label={b.title} onClick={() => windows.dock(own, b.side, { whole: true })}>
+							<Icon name={b.icon} size={14} />
 						</button>
 					))}
 					{mode === "dock" && (
-						<button title={tr("Atspraust (peldošs logs)")} onClick={() => windows.undock(own)}>
-							⇱
+						<button title={tr("Atspraust: peldošs logs")} aria-label={tr("Atspraust: peldošs logs")} onClick={() => windows.undock(own)}>
+							<Icon name="winFloat" size={14} />
 						</button>
 					)}
-					<button title={tr("Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas")} onClick={() => windows.popOut(own)}>
-						⧉
+					<button title={tr("Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas")} aria-label={tr("Iznest atsevišķā logā")} onClick={() => windows.popOut(own)}>
+						<Icon name="winPop" size={14} />
 					</button>
-					<button title={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} onClick={() => windows.collapse(own, true)}>
-						–
+					<button title={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} aria-label={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} onClick={() => windows.collapse(own, true)}>
+						<Icon name="winMin" size={14} />
 					</button>
 				</div>
 			</div>

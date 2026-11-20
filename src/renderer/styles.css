@@ -114,15 +114,22 @@ tr.click:hover td { background: var(--elev); }
 .dock-resize-bottom { top: -6px; left: 0; right: 0; height: 12px; cursor: ns-resize; }
 .dock-resize:hover { background: color-mix(in srgb, var(--focus) 55%, transparent); }
 .tg { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
-.tg-strip { display: flex; align-items: stretch; gap: 1px; min-height: 30px; padding: 0 4px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; overflow: hidden; }
-.tg-tab { display: flex; align-items: center; gap: 4px; padding: 0 10px; cursor: grab; color: var(--dim); font-weight: 600; border-bottom: 2px solid transparent; white-space: nowrap; }
-.tg-tab.on { color: var(--text); border-bottom-color: var(--accent); }
-.tg-x { padding: 0 4px; line-height: 16px; background: transparent; border-color: transparent; }
-.tg-x:hover { color: var(--bad); border-color: var(--border); }
-.tg-grow { flex: 1; cursor: grab; }
-.tg-buttons { display: flex; align-items: center; gap: 1px; }
-.tg-buttons button { padding: 0 6px; line-height: 20px; background: transparent; border-color: transparent; }
-.tg-buttons button:hover { border-color: var(--border); }
+.tg-strip { display: flex; align-items: stretch; min-height: 36px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; overflow: hidden; }
+/* the tabs scroll in their own region; the buttons beside them never do */
+.tg-tabs { display: flex; flex: 1 1 auto; align-items: stretch; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tg-tabs::-webkit-scrollbar { display: none; }
+.tg-tab { display: flex; flex: 0 1 auto; align-items: center; gap: 6px; min-width: 64px; max-width: 190px; padding: 0 8px 0 12px; cursor: grab; color: var(--dim); font-weight: 600; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tg-tab:hover { color: var(--text); background: color-mix(in srgb, var(--elev2) 60%, transparent); }
+.tg-tab.on { color: var(--text); border-bottom-color: var(--accent); background: var(--panel); }
+.tg-name { overflow: hidden; text-overflow: ellipsis; }
+/* a tab's close button shows on the tab in front and on hover, so a row of tabs is not a row of crosses */
+.tg-x { flex: none; width: 20px; height: 20px; padding: 0; line-height: 18px; background: transparent; border-color: transparent; border-radius: 5px; opacity: 0; }
+.tg-tab.on .tg-x, .tg-tab:hover .tg-x { opacity: 0.8; }
+.tg-x:hover { opacity: 1; color: var(--bad); background: var(--elev2); }
+.tg-grow { flex: 1 0 12px; cursor: grab; }
+.tg-buttons { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; border-left: 1px solid var(--border); background: var(--elev); }
+.tg-buttons button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--dim); background: transparent; border-color: transparent; border-radius: 6px; }
+.tg-buttons button:hover { color: var(--text); background: var(--elev2); border-color: var(--border); }
 .tg-body { flex: 1; display: flex; min-height: 0; min-width: 0; }
 .tg-pane { flex: 1; min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .drop-side { position: absolute; background: color-mix(in srgb, var(--focus) 28%, transparent); border: 2px solid var(--focus); pointer-events: none; }

@@ -55,6 +55,54 @@ const SHAPES = {
 			<path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65M22 12.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
 		</>
 	),
+	winFloat: (
+		<>
+			<path d="M15 3h6v6M10 14 21 3" />
+			<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+		</>
+	),
+	winPop: (
+		<>
+			<rect width="14" height="14" x="8" y="8" rx="2" />
+			<path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2" />
+		</>
+	),
+	winMin: <path d="M5 12h14" />,
+	winMax: <rect width="16" height="16" x="4" y="4" rx="2" />,
+	winRestore: (
+		<>
+			<rect width="12" height="12" x="3" y="9" rx="2" />
+			<path d="M9 9V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4" />
+		</>
+	),
+	dockLeft: (
+		<>
+			<rect width="18" height="18" x="3" y="3" rx="2" />
+			<path d="M9 3v18" />
+			<path d="M3 5h6v14H3z" fill="currentColor" stroke="none" opacity="0.45" />
+		</>
+	),
+	dockRight: (
+		<>
+			<rect width="18" height="18" x="3" y="3" rx="2" />
+			<path d="M15 3v18" />
+			<path d="M15 5h6v14h-6z" fill="currentColor" stroke="none" opacity="0.45" />
+		</>
+	),
+	dockTop: (
+		<>
+			<rect width="18" height="18" x="3" y="3" rx="2" />
+			<path d="M3 9h18" />
+			<path d="M5 3h14v6H5z" fill="currentColor" stroke="none" opacity="0.45" />
+		</>
+	),
+	dockBottom: (
+		<>
+			<rect width="18" height="18" x="3" y="3" rx="2" />
+			<path d="M3 15h18" />
+			<path d="M5 15h14v6H5z" fill="currentColor" stroke="none" opacity="0.45" />
+		</>
+	),
 	messages: (
 		<>
 			<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

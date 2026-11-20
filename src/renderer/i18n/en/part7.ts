@@ -84,4 +84,10 @@ export const part7: Record<string, string> = {
 	"Visas sarunas: katram aģentam savas, jauna saruna, slēgšana": "All conversations: each agent has its own, start a new one, close one",
 	"Atver projektu, lai redzētu sarunas.": "Open a project to see the conversations.",
 	"Sarunas — visas sarunas ar aģentiem": "Conversations — all conversations with the agents",
+	"Atjaunot izmēru": "Restore size",
+	"Palielināt (arī dubultklikšķis uz virsraksta)": "Maximize (also a double-click on the title)",
+	"Atspraust: peldošs logs": "Undock: a floating window",
+	"Iznest atsevišķā logā": "Pop out to its own window",
+	"Piespraust pa kreisi": "Pin to the left",
+	"Piespraust pa labi": "Pin to the right",
 };
