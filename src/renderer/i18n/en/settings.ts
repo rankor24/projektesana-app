@@ -47,4 +47,10 @@ export const settings: Record<string, string> = {
 	"PDF ar šo nosaukumu projekta mapē nav.": "No PDF with this name in the project folder.",
 	"klikšķis: notīrīt": "click: clear",
 	"Vilkt, lai pārvietotu": "Drag to move",
+	"nolasīts no skenēta dokumenta": "read from a scanned document",
+	"Rindas var būt kļūdainas vai trūkt; pārbaudi pret lapām.": "Rows may be wrong or missing; check them against the pages.",
+	"Lūgt aģentam pārbaudīt un salabot": "Ask the agent to check and fix",
+	"labojis aģents": "corrected by the agent",
+	"labots": "corrected",
+	"Šīs rindas aizstāj no dokumenta nolasītās visur: salīdzinājumā ar modeli un pārbaudēs.": "These rows replace the ones read from the document everywhere: in the comparison with the model and in the checks.",
 };

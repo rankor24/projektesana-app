@@ -5,7 +5,7 @@ import { checkWrite } from "../../core/guard.js";
 import type { Registry } from "../../core/registry.js";
 import type { Handlers } from "../../shared/api.js";
 import { totalsCheck } from "../../sources/extract/kl.js";
-import { inventoryTables, roomTableOf } from "../../sources/room-table.js";
+import { inventoryTables } from "../../sources/room-table.js";
 import { writeXlsx } from "../../sources/export/xlsx.js";
 import { geometryCsv, pdfGeometry } from "../../sources/extract/kl-geometry.js";
 import { sourceBytes } from "../../sources/bytes.js";
@@ -36,11 +36,12 @@ export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 		},
 		"rooms.table": async (id) => {
 			const tables = await inventoryTables(d.registry.store(id));
-			return tables.map(({ sourceId, title, table: t }) => ({ sourceId, title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread }));
+			return tables.map(({ sourceId, title, table: t, state, correctedBy }) => ({ sourceId, title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread, state, ...(correctedBy ? { correctedBy } : {}) }));
 		},
 		"rooms.exportXlsx": async (id, sourceId) => {
 			const store = d.registry.store(id);
-			const t = await roomTableOf(store, sourceId);
+			// the inventory as it stands: corrected rows when the document has them
+			const t = (await inventoryTables(store)).find((x) => x.sourceId === sourceId)?.table;
 			if (!t) throw new Error("Šajā avotā telpu tabula nav atrasta.");
 			const s = store.read("sources").find((x) => x.id === sourceId)!;
 			const rows = [["Stāvs", "Telpas Nr.", "Nosaukums", "Platība, m²", "Augstums, m", "Lapa"], ...t.rows.map((r) => [r.floor, r.no, r.name, r.area, r.height, r.page])];

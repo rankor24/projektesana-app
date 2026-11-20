@@ -9,6 +9,7 @@ import { addClock, addPlannedDelivery, DELIVERY_KINDS, setPlannedDate, setSource
 import { editRemark } from "../../core/expertise.js";
 import { clockOf, type ClockItem } from "../../rules/clocks.js";
 import { DOC_ROLES } from "../../sources/roles.js";
+import { setCorrectedRooms } from "../../sources/room-table.js";
 import { storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -22,9 +23,28 @@ export const PLANNING_TOOL_DATA: Record<string, string[]> = {
 	set_clock: ["clocks"],
 	set_source_role: ["sources", "roles"],
 	expert_edit: ["expertise", "findings"],
+	set_inventory_rooms: ["rooms", "findings"],
 };
 
 export const planningTools: ToolDef[] = [
+	tool({
+		name: "set_inventory_rooms",
+		level: "run",
+		description:
+			"Write a property document's room table as it really is, when the one code read is wrong or incomplete (list_rooms state 'skenēts'): every room of the document, read from its pages (read_source; a scan's text is OCR, so read the columns carefully: number, name without the room type, floor, area m², height m). The rows replace the parsed ones everywhere (Telpas panel, comparison with the model, checks). Leave out group totals. clear: true goes back to what code reads.",
+		input: {
+			sourceId: z.string(),
+			rows: z
+				.array(z.object({ floor: z.string().describe("stāvs as the document writes it, e.g. 1, 2, pagrabs"), no: z.string(), name: z.string(), area: z.number().positive(), height: z.number().positive().nullable().optional(), page: z.number().int().min(1) }))
+				.optional(),
+			clear: z.boolean().optional(),
+		},
+		run: (ctx, a) => {
+			if (!a.clear && !a.rows?.length) throw new Error("Vajag rows (visas dokumenta telpas) vai clear: true.");
+			const n = setCorrectedRooms(storeOf(ctx), a.sourceId, a.clear ? null : a.rows!.map((r) => ({ ...r, height: r.height ?? null })), "agent");
+			return { ok: true, sourceId: a.sourceId, rooms: a.clear ? "atpakaļ pie koda nolasītā" : n };
+		},
+	}),
 	tool({
 		name: "get_schedule",
 		level: "read",

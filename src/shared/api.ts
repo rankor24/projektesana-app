@@ -174,6 +174,9 @@ export interface InventoryTable {
 	rows: { floor: string; no: string; name: string; area: number; height: number | null; page: number }[];
 	totals: { floor: string; stated: number; sum: number; ok: boolean }[];
 	unread: { page: number; line: string }[];
+	/** "teksts" / "skenēts": read by code from a text layer / from a scan (OCR, often wrong); "labots": corrected rows */
+	state: "teksts" | "skenēts" | "labots";
+	correctedBy?: "user" | "agent" | "app";
 }
 
 export interface RevitStatusRow {

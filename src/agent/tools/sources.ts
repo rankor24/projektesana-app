@@ -225,7 +225,7 @@ export const projectTools: ToolDef[] = [
 	tool({
 		name: "list_rooms",
 		level: "read",
-		description: "The inventory room table(s) read from the property documents: floor, room number, name, area (m²), page. For the model's rooms use the Revit tool export_room_data (areas there are in square feet).",
+		description: "The inventory room table(s) of the property documents: floor, room number, name, area (m²), height, page, and how each was read: state 'teksts' (code, text layer), 'skenēts' (code from a scan: often wrong, check it against the pages and correct it with set_inventory_rooms) or 'labots' (corrected rows). For the model's rooms use the Revit tool export_room_data (areas there are in square feet).",
 		input: {},
 		run: async (ctx) => {
 			const { inventoryTables } = await import("../../sources/room-table.js");
@@ -233,7 +233,7 @@ export const projectTools: ToolDef[] = [
 			// the inventory is read, never typed in: an empty one means no source document with a room table was recognised, and the
 			// agent should say that and what the user can do, not that a tool is missing
 			return t.length
-				? t.map((x) => ({ sourceId: x.sourceId, title: x.title, rows: x.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, page: r.page })) }))
+				? t.map((x) => ({ sourceId: x.sourceId, title: x.title, state: x.state, ...(x.correctedBy ? { correctedBy: x.correctedBy } : {}), rows: x.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })) }))
 				: "no data: telpu tabula nav atrasta. Inventarizācija netiek ievadīta ar rīku: lietotne to nolasa pati no avota dokumenta ar telpu tabulu (kadastrālās uzmērīšanas lieta, eksplikācija ar kolonnām «Telpas nosaukums» / platība), ja avota loma ir Īpašuma dokumenti, Iepirkums, PU, Info no pasūtītāja vai Cits un tam ir teksta slānis (skenētam vajag OCR). Pasaki lietotājam: pievienot šo dokumentu avotiem vai nomainīt tā lomu; tad tabula parādīsies Telpas → Inventarizācija.";
 		},
 	}),

@@ -257,6 +257,23 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 				<span className="grow" />
 				<button onClick={() => call("rooms.exportXlsx", projectId, t.sourceId).catch((e) => onErr(errText(e)))}>{tr("Eksportēt Excel")}</button>
 			</div>
+			{/* a table code read from a scan is often wrong (OCR): say so, and one click gives the agent the job of reading it right */}
+			{t.state === "skenēts" && (
+				<div className="row small">
+					<Badge tone="warn">{tr("nolasīts no skenēta dokumenta")}</Badge>
+					<span className="dim">{tr("Rindas var būt kļūdainas vai trūkt; pārbaudi pret lapām.")}</span>
+					<span className="grow" />
+					<button className="small" onClick={() => call("agent.send", projectId, `Telpu inventarizācija dokumentā «${t.title}» nolasīta no skenēta dokumenta, un rindas ir kļūdainas. Izlasi visas tā lapas ar telpu tabulām (read_source), sastādi pilnu telpu sarakstu (stāvs, numurs, nosaukums bez telpas veida, platība m², augstums m, lapa; bez grupu kopsummām) un ieraksti to ar set_inventory_rooms (sourceId ${t.sourceId}). Beigās salīdzini ar dokumenta kopsummām.`, []).catch((e) => onErr(errText(e)))}>
+						{tr("Lūgt aģentam pārbaudīt un salabot")}
+					</button>
+				</div>
+			)}
+			{t.state === "labots" && (
+				<div className="row small">
+					<Badge tone="ok">{t.correctedBy === "agent" ? tr("labojis aģents") : tr("labots")}</Badge>
+					<span className="dim">{tr("Šīs rindas aizstāj no dokumenta nolasītās visur: salīdzinājumā ar modeli un pārbaudēs.")}</span>
+				</div>
+			)}
 			<table>
 				<thead>
 					<tr>
