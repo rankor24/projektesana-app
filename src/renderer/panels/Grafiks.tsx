@@ -8,6 +8,8 @@ import { addDays, monthGrid, mondayOf, taskOrder, weekDays, type GrafikItem } fr
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
+import { Gantt } from "./Gantt";
+import { TaskPopup, type PopupTarget } from "./TaskPopup";
 import { windows } from "../windows";
 import { tr } from "../i18n";
 
@@ -18,13 +20,14 @@ const DAYNAME = [tr("pirmdiena"), tr("otrdiena"), tr("trešdiena"), tr("ceturtdi
 
 export function Grafiks() {
 	const { projectId } = useUi();
-	const [tab, setTab] = useState<"month" | "week" | "tasks">("month");
+	const [tab, setTab] = useState<"gantt" | "month" | "week" | "tasks">(projectId ? "gantt" : "month");
 	const [scope, setScope] = useState<"project" | "all">("project");
 	const [cursor, setCursor] = useState(todayLocal());
 	if (!projectId && scope === "project") return <Empty title={tr("nav projekta")}>{tr("Atver projektu panelī Projekts vai skaties visus projektus.")}<div><button onClick={() => setScope("all")}>{tr("Visi projekti")}</button></div></Empty>;
 	return (
 		<div className="fill-col">
 			<div className="tabs">
+				<button className={tab === "gantt" ? "on" : ""} disabled={!projectId} onClick={() => setTab("gantt")}>{tr("Grafiks")}</button>
 				<button className={tab === "month" ? "on" : ""} onClick={() => setTab("month")}>{tr("Mēnesis")}</button>
 				<button className={tab === "week" ? "on" : ""} onClick={() => setTab("week")}>{tr("Nedēļa")}</button>
 				<button className={tab === "tasks" ? "on" : ""} disabled={!projectId} onClick={() => setTab("tasks")}>{tr("Uzdevumi")}</button>
@@ -32,7 +35,7 @@ export function Grafiks() {
 				<button className={scope === "project" ? "on" : ""} disabled={!projectId} onClick={() => setScope("project")}>{projectId ?? tr("projekts")}</button>
 				<button className={scope === "all" ? "on" : ""} onClick={() => setScope("all")}>{tr("Visi projekti")}</button>
 			</div>
-			{tab === "tasks" ? projectId ? <Tasks projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Uzdevumi pieder projektam: atver projektu.")}</Empty> : <Days projectId={projectId} scope={scope} tab={tab} cursor={cursor} setCursor={setCursor} />}
+			{tab === "gantt" ? projectId ? <Gantt projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Grafiks pieder projektam: atver projektu.")}</Empty> : tab === "tasks" ? projectId ? <Tasks projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Uzdevumi pieder projektam: atver projektu.")}</Empty> : <Days projectId={projectId} scope={scope} tab={tab as "month" | "week"} cursor={cursor} setCursor={setCursor} />}
 		</div>
 	);
 }
@@ -48,18 +51,35 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 	const from = tab === "month" ? grid[0][0].date : mondayOf(cursor);
 	const to = tab === "month" ? grid.at(-1)![6].date : addDays(mondayOf(cursor), 6);
 	const items = useLoad<GrafikItem[]>(() => call("grafiks.items", scope, projectId, from, to), [scope, projectId, from, to]);
+	const todos = useLoad<Task[]>(() => (projectId ? call("todos.list", projectId) : Promise.resolve([] as Task[])), [projectId]);
+	const [popup, setPopup] = useState<PopupTarget | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const by = new Map<string, GrafikItem[]>();
 	for (const i of items.data ?? []) by.set(i.date, [...(by.get(i.date) ?? []), i]);
 	const today = todayLocal();
 	const step = (n: number) => setCursor(tab === "month" ? new Date(Date.UTC(year, month - 1 + n, 1)).toISOString().slice(0, 10) : addDays(cursor, 7 * n));
 
+	const reload = () => {
+		items.reload();
+		todos.reload();
+	};
+	// a click on a task opens its popup (BIM Crew); a delivery or a clock goes to its own page
+	const openItem = (i: GrafikItem, e: React.MouseEvent) => {
+		const t = i.taskId && i.projectId === projectId ? todos.data?.find((x) => x.id === i.taskId) : undefined;
+		if (t && projectId) setPopup({ mode: "edit", projectId, task: t, x: e.clientX, y: e.clientY });
+		else go(i);
+	};
+	// a click on a day (not on something in it) selects it and opens the new-task popup there
+	const addOn = (date: string, e: React.MouseEvent) => {
+		setCursor(date);
+		if (projectId && !(e.target as HTMLElement).closest(".gchip")) setPopup({ mode: "create", projectId, date, x: e.clientX, y: e.clientY });
+	};
 	const go = (i: GrafikItem) => {
 		ui.setProject(i.projectId);
 		if (i.open) windows.open(i.open.panel, i.open.filter);
 	};
 	const Chip = ({ i }: { i: GrafikItem }) => (
-		<div className={chipClass(i)} title={`${i.projectId}: ${i.title}`} onClick={(e) => (e.stopPropagation(), go(i))}>
+		<div className={chipClass(i)} title={`${i.projectId}: ${i.title}`} onClick={(e) => (e.stopPropagation(), openItem(i, e))}>
 			{scope === "all" && <b>{i.projectId} </b>}
 			{i.title}
 		</div>
@@ -86,7 +106,7 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 						{grid.flat().map((c) => {
 							const list = by.get(c.date) ?? [];
 							return (
-								<div key={c.date} className={`gcell ${c.inMonth ? "" : "out"} ${c.date === today ? "today" : ""} ${c.date === cursor ? "cur" : ""}`} onClick={() => setCursor(c.date)}>
+								<div key={c.date} className={`gcell ${c.inMonth ? "" : "out"} ${c.date === today ? "today" : ""} ${c.date === cursor ? "cur" : ""}`} onClick={(e) => addOn(c.date, e)}>
 									<div className="gnum">{Number(c.date.slice(8))}</div>
 									{list.slice(0, 3).map((i) => (
 										<Chip key={i.id} i={i} />
@@ -99,7 +119,7 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 				) : (
 					<div className="gweek">
 						{weekDays(cursor).map((d, k) => (
-							<div key={d} className={`gday ${d === today ? "today" : ""} ${d === cursor ? "cur" : ""}`} onClick={() => setCursor(d)}>
+							<div key={d} className={`gday ${d === today ? "today" : ""} ${d === cursor ? "cur" : ""}`} onClick={(e) => addOn(d, e)}>
 								<div className="gdayhead">
 									<b>{Number(d.slice(8))}.{d.slice(5, 7)}.</b> <span className="dim small">{DAYNAME[k]}</span>
 								</div>
@@ -111,7 +131,8 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 						))}
 					</div>
 				)}
-				<DayPanel projectId={projectId} day={cursor} items={by.get(cursor) ?? []} showProject={scope === "all"} onChanged={items.reload} onError={setErr} onGo={go} />
+				<DayPanel projectId={projectId} day={cursor} items={by.get(cursor) ?? []} showProject={scope === "all"} onChanged={reload} onError={setErr} onGo={go} />
+				{popup && <TaskPopup key={popup.mode === "edit" ? popup.task.id : `new:${popup.date}:${popup.x}:${popup.y}`} target={popup} onClose={() => setPopup(null)} onChanged={reload} />}
 			</div>
 		</div>
 	);

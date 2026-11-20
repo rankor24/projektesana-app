@@ -1,7 +1,8 @@
 // The IPC contract: every method the renderer may call and every event main may send, with their types.
 // main/api.ts must implement exactly API_NAMES (checked by test/0.4-ipc.test.ts); the preload exposes one invoke and one on.
 // Types only from ../core/model (pure) and ./types, so the renderer can import this file.
-import type { BimStage, Delivery, Fact, Finding, Markup, Note, NoteType, Pin, PinIntent, PinTarget, Project, Requirement, Revision, Source, Task } from "../core/model.js";
+import type { BimStage, Delivery, Fact, Finding, Markup, Note, NoteType, Pin, PinIntent, PinTarget, Project, Requirement, Revision, Source, Task, TaskPriority } from "../core/model.js";
+import type { StageDates } from "./gantt.js";
 import type { GrafikItem } from "./calendar.js";
 import type { ProjectDashboard, ProjectSummary } from "../core/summary-types.js";
 import type { AuditReport, CoordReference, Declared } from "../core/coordination-types.js";
@@ -611,8 +612,12 @@ export interface ApiSpec {
 	"undo.apply": (id: string, key: string) => string;
 	/** the project's tasks (not the agent's task templates, which are tasks.list) */
 	"todos.list": (id: string) => Task[];
-	"todos.add": (id: string, input: { title: string; due?: string | null; refs?: Task["refs"]; note?: string }) => Task;
-	"todos.update": (id: string, taskId: string, patch: { title?: string; due?: string | null; note?: string; state?: Task["state"] }) => Task;
+	"todos.add": (id: string, input: { title: string; due?: string | null; start?: string | null; priority?: TaskPriority; assignee?: string | null; checklist?: { id?: string; text: string; done?: boolean }[]; refs?: Task["refs"]; note?: string }) => Task;
+	"todos.update": (id: string, taskId: string, patch: { title?: string; due?: string | null; start?: string | null; priority?: TaskPriority; assignee?: string | null; checklist?: { id?: string; text: string; done?: boolean }[]; note?: string; state?: Task["state"] }) => Task;
+	/** where each BIM stage starts and ends (the Gantt) */
+	"stages.dates": (id: string) => StageDates;
+	/** sets one stage's dates, or clears them (null) */
+	"stages.setDates": (id: string, stage: BimStage, range: { start: string; end: string } | null) => StageDates;
 	"todos.remove": (id: string, taskId: string) => void;
 	/** what falls on each day from `from` to `to`: planned and sent deliveries, clock ends, tasks; of one project or of all */
 	"grafiks.items": (scope: "project" | "all", projectId: string | null, from: string, to: string) => GrafikItem[];
@@ -814,6 +819,8 @@ export const API_NAMES = [
 	"todos.add",
 	"todos.update",
 	"todos.remove",
+	"stages.dates",
+	"stages.setDates",
 	"grafiks.items",
 	"files.roots",
 	"files.list",

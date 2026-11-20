@@ -116,3 +116,19 @@ Whiteboard "Projektesana UI layout plan", not an idea of mine ("see fucking arti
 
 **Open after this round:** the readability pass beyond tabs and strips (BimCraft's website chrome, E2); the full comparison of every page against the board's
 frames; BIM Crew's half / quarter / full-screen snap sizes (the zones dock to a side, they do not size a window).
+
+## 6. Schedule page (2026-11-20, version 2.6.5)
+
+His words: "Schedule page not complete. We Planned more of a grannt style calendar for whole project posmi seen and nodevuma
+milestones. Calendar should be more usable like bim-crew, clicking adding tasks. Tasks creation small popup window same as bim-crew."
+
+| Requirement | Done in 2.6.5 |
+|---|---|
+| Gantt-style calendar for the whole project | Grafiks opens on a Gantt (first tab): one date axis (months, Mondays), zoom Year / Quarter / Month / Week, a red line for today, "Šodien" scrolls back to it. |
+| Stages (posmi) seen | Six stage rows. The bar is the stage's dates (set by clicking the row: the app had no stage dates before, they are kept per project); with none set, the span of the stage's own deliveries and clocks, drawn hatched; with nothing, no bar. The current stage is blue, a stage outside the contract is dim. |
+| Deliveries (nodevumi) as milestones | ◆ on the stage row: hollow planned, green sent, red late; a click opens Nodevumi at that delivery. TN and approval clocks are thin bars (red when late). |
+| Clicking adds tasks | Click an empty place on the task rows, or a day in the month / week calendar: BIM Crew's small popup opens where you clicked. |
+| Small task popup, same as BIM Crew | Title, date, until, priority, assignee, status, notes, checklist; edit saves each field as you leave it, create saves once; Esc or a click outside closes. Left out on purpose: reminder, repeat, time of day (nothing in the app uses them). |
+| Usable like BIM Crew | A task is a bar: drag it to move, drag its ends to change its first / last day; click it to edit. Month and week task chips open the same popup. |
+
+**Not checked live:** the look and feel in the running app (I do not drive his app); the maths, data and checks are covered by tests 9.19 and 8.5.

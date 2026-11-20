@@ -780,3 +780,73 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .coord-model { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 10px 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--elev); cursor: pointer; font-size: 12px; }
 .coord-model span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coord-model.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--elev)); }
+
+/* Grafiks as a Gantt (panels/Gantt.tsx): the whole project on one date axis. One scroll area; the label column sticks to the left,
+   the header to the top. A track is as wide as the axis; the week stripes and the today line are drawn in the track itself. */
+.gantt { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.gantt-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-wrap: wrap; }
+.gantt-key { display: inline-flex; align-items: center; gap: 6px; }
+.gk-mark { color: var(--info); }
+.gk-mark.sent { color: var(--ok); }
+.gk-line { display: inline-block; width: 2px; height: 12px; background: var(--bad); }
+.gantt-scroll { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--border); position: relative; }
+.gantt-inner { position: relative; min-height: 100%; }
+.gantt-axis { position: sticky; top: 0; z-index: 4; display: flex; background: var(--panel); border-bottom: 1px solid var(--border-strong); height: 40px; }
+.gantt-group { position: sticky; left: 0; width: 210px; box-sizing: border-box; padding: 8px 10px 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; z-index: 2; }
+.gantt-row { display: flex; height: 32px; border-bottom: 1px solid var(--border); }
+.gantt-row.cur { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.gantt-label { position: sticky; left: 0; z-index: 3; flex: none; width: 210px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 4px; background: var(--panel); border-right: 1px solid var(--border-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.gantt-label.corner { height: 100%; }
+.gantt-label.click { cursor: pointer; }
+.gantt-label.click:hover { background: var(--elev); }
+.gantt-label .done { text-decoration: line-through; opacity: 0.6; }
+.gantt-track { position: relative; flex: none; height: 100%; background-image: linear-gradient(to right, var(--border) 1px, transparent 1px); background-position: 0 0; cursor: cell; }
+.gantt-track.axis { cursor: default; background-image: none; }
+.gantt-month { position: absolute; top: 0; height: 20px; box-sizing: border-box; padding: 2px 6px; font-size: 11px; font-weight: 600; border-left: 1px solid var(--border-strong); overflow: hidden; white-space: nowrap; color: var(--dim); }
+.gantt-week { position: absolute; top: 20px; height: 20px; box-sizing: border-box; padding: 3px 4px; font-size: 10px; border-left: 1px solid var(--border); color: var(--muted); }
+.gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--bad); opacity: 0.8; z-index: 1; pointer-events: none; }
+.gantt-hint { position: absolute; left: 10px; top: 8px; font-size: 11px; color: var(--muted); pointer-events: none; }
+/* a stage: a bar, blue for the current one, dim when the contract does not include it, hatched when its dates come from deliveries */
+.gstage { position: absolute; top: 6px; height: 20px; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--elev2); color: var(--text); font-size: 11px; padding: 0 6px; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; }
+.gstage.cur { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.gstage.derived { background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(127, 127, 127, 0.18) 5px 10px); border-style: dashed; }
+.gstage.off { opacity: 0.5; }
+/* a delivery: a diamond on its stage's row; hollow while planned, green once sent, red when late */
+.gmark { position: absolute; top: 3px; height: 26px; transform: translateX(-8px); display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: var(--info); font-size: 11px; cursor: pointer; z-index: 2; white-space: nowrap; }
+.gmark i { font-style: normal; font-size: 16px; line-height: 1; text-shadow: 0 0 0 var(--bg), 0 0 3px var(--bg); }
+.gmark.sent { color: var(--ok); }
+.gmark.late { color: var(--bad); }
+.gmark span { color: var(--text); background: color-mix(in srgb, var(--panel) 80%, transparent); border-radius: 3px; padding: 0 3px; }
+/* a TN or approval clock: a thin bar */
+.gclock { position: absolute; top: 12px; height: 8px; border: 0; border-radius: 4px; background: var(--warn); opacity: 0.85; cursor: pointer; z-index: 1; padding: 0; }
+.gclock.late { background: var(--bad); }
+.gclock.done { background: var(--ok); opacity: 0.55; }
+/* a task: a bar you can click, drag, and stretch by its ends */
+.gtask-bar { position: absolute; top: 5px; height: 22px; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-size: 11px; cursor: grab; user-select: none; overflow: hidden; white-space: nowrap; z-index: 2; border-left: 3px solid transparent; min-width: 8px; }
+.gtask-bar.p-high { border-left-color: var(--bad); }
+.gtask-bar.p-low { background: color-mix(in srgb, var(--accent) 55%, var(--panel)); }
+.gtask-bar.late { background: var(--bad); color: #fff; }
+.gtask-bar.done { opacity: 0.45; text-decoration: line-through; }
+.gtask-bar.proposed { background: transparent; color: var(--text); border: 1px dashed var(--info); cursor: pointer; }
+.gtask-bar.one { padding: 0 4px; }
+.gtask-name { overflow: hidden; text-overflow: ellipsis; }
+.gtask-check { font-style: normal; opacity: 0.8; margin-left: auto; }
+.gh { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+.gh-l { left: 0; }
+.gh-r { right: 0; }
+.gh:hover { background: rgba(255, 255, 255, 0.35); }
+
+/* the small task window (panels/TaskPopup.tsx): opens where you clicked, like BIM Crew's task editor */
+.task-popup { position: fixed; z-index: 2000; box-sizing: border-box; max-height: calc(100vh - 16px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); }
+.tp-head { display: flex; align-items: center; gap: 8px; }
+.tp-title { font-size: 15px; font-weight: 600; width: 100%; box-sizing: border-box; }
+.tp-title.bad { border-color: var(--bad); }
+.tp-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tp-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tp-field input:not([type="checkbox"]), .tp-field textarea { width: 100%; box-sizing: border-box; }
+.tp-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.tp-notes textarea { resize: vertical; min-height: 54px; }
+.tp-check { display: flex; align-items: center; gap: 6px; }
+.tp-check .done { text-decoration: line-through; opacity: 0.6; }
+.tp-check span.grow, .tp-check > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tp-foot { display: flex; align-items: center; gap: 8px; }

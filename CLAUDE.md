@@ -26,3 +26,9 @@
 
 - The approved design is the Whiteboard "Projektesana UI layout plan" and BIM Crew's behaviour (`D:\Code\BIM\BIM Crew`). Read them
   before inventing a layout. His complaints and rulings so far: `docs/ui-complaints.md`.
+
+## Tests: focused only
+
+- Never run the full suite (`npm test`, `test/**/*.test.ts`): it takes too long. Run only the tests that cover what changed
+  (`node --import tsx --test --test-concurrency=1 test/<file>.test.ts ...`) plus `npm run typecheck`, and `test/15.2-i18n.test.ts`
+  when UI text changed. Say which ones ran.

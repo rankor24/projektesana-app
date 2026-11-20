@@ -344,11 +344,23 @@ export interface Event {
 /** The JSON collections of a project's data folder. */
 /** A thing the user or the agent wants done in a project (task 8.5). The agent only proposes one; the user accepts it (open),
  *  finishes it (done) or drops it. It may point at the finding, pin or delivery it came from. */
+export interface ChecklistItem {
+	id: string;
+	text: string;
+	done: boolean;
+}
+export type TaskPriority = "low" | "normal" | "high";
+
 export interface Task {
 	id: string;
 	title: string;
 	/** ISO date or null */
 	due: string | null;
+	/** the first day of a task that lasts (the Gantt bar runs start → due); without it the task is the day of `due` */
+	start?: string;
+	priority?: TaskPriority;
+	assignee?: string;
+	checklist?: ChecklistItem[];
 	state: "proposed" | "open" | "done";
 	refs: { findingId?: string; pinId?: string; deliveryId?: string };
 	note?: string;
