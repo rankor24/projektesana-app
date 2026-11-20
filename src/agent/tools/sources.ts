@@ -221,7 +221,11 @@ export const projectTools: ToolDef[] = [
 		run: async (ctx) => {
 			const { inventoryTables } = await import("../../sources/room-table.js");
 			const t = await inventoryTables(storeOf(ctx));
-			return t.length ? t.map((x) => ({ sourceId: x.sourceId, title: x.title, rows: x.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, page: r.page })) })) : "no data: telpu tabula nav atrasta.";
+			// the inventory is read, never typed in: an empty one means no source document with a room table was recognised, and the
+			// agent should say that and what the user can do, not that a tool is missing
+			return t.length
+				? t.map((x) => ({ sourceId: x.sourceId, title: x.title, rows: x.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, page: r.page })) }))
+				: "no data: telpu tabula nav atrasta. Inventarizācija netiek ievadīta ar rīku: lietotne to nolasa pati no avota dokumenta ar telpu tabulu (kadastrālās uzmērīšanas lieta, eksplikācija ar kolonnām «Telpas nosaukums» / platība), ja avota loma ir Īpašuma dokumenti, Iepirkums, PU, Info no pasūtītāja vai Cits un tam ir teksta slānis (skenētam vajag OCR). Pasaki lietotājam: pievienot šo dokumentu avotiem vai nomainīt tā lomu; tad tabula parādīsies Telpas → Inventarizācija.";
 		},
 	}),
 ];

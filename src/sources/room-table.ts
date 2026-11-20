@@ -28,7 +28,7 @@ export async function inventoryTables(store: ProjectStore): Promise<{ sourceId: 
 	for (const s of store.read("sources")) {
 		if (s.kind !== "document" || !ROOM_ROLES.has(s.role)) continue;
 		const txt = store.readText(s.versions[s.versions.length - 1]?.sha256 ?? "");
-		if (!txt || !/eksplikācij|telpass+nosaukums|telpus+grup/i.test(txt.pages.join(" "))) continue;
+		if (!txt || !/eksplikācij|telpas\s+nosaukums|telpu\s+grup/i.test(txt.pages.join(" "))) continue;
 		const t = await roomTableOf(store, s.id);
 		if (t) out.push({ sourceId: s.id, title: s.title, table: t });
 	}

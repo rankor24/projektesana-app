@@ -173,7 +173,7 @@ tr.click:hover td { background: var(--elev); }
 
 .empty { margin: auto; padding: 24px; text-align: center; color: var(--muted); }
 .empty-title { font-weight: 700; font-size: 14px; color: var(--dim); margin-bottom: 4px; }
-.err { margin: 8px; padding: 8px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); white-space: pre-wrap; }
+.err { margin: 8px; padding: 8px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); white-space: pre-wrap; overflow-wrap: anywhere; }
 .retry { margin: 4px 8px; padding: 4px 10px; border-left: 2px solid var(--warn); color: var(--muted); font-size: 0.9em; }
 .crash { padding: 24px; }
 .crash pre { white-space: pre-wrap; color: var(--bad); }
@@ -199,7 +199,10 @@ tr.click:hover td { background: var(--elev); }
 .focus-head { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chip .x { border: none; background: transparent; padding: 0 2px; color: var(--muted); }
 .chip.bad { color: var(--bad); }
-.chat { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+/* nothing in the chat may be wider than it: long words, ids and error JSON wrap instead of making a sideways scrollbar */
+.chat > * { min-width: 0; max-width: 100%; }
+.chat .err, .run-card .err, .run-card pre, .run-card code { overflow-wrap: anywhere; white-space: pre-wrap; }
 .chat-empty { margin: 0; text-align: center; }
 .msg { white-space: pre-wrap; padding: 6px 10px; border-radius: 8px; max-width: 95%; overflow-wrap: anywhere; }
 .msg.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 18%, var(--elev)); }
@@ -350,7 +353,7 @@ button.small { font-size: 11.5px; padding: 2px 6px; }
 .bad-mark { color: var(--bad); }
 button.link { background: none; border: none; padding: 0; color: var(--info); text-decoration: underline; cursor: pointer; }
 
-.run-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); max-width: 100%; }
+.run-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); max-width: 100%; min-width: 0; overflow: hidden; }
 .run-card.running { border-color: color-mix(in srgb, var(--info) 55%, var(--border)); }
 .run-card.failed { border-color: color-mix(in srgb, var(--bad) 55%, var(--border)); }
 .run-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; list-style: none; }
@@ -841,3 +844,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .tp-check .done { text-decoration: line-through; opacity: 0.6; }
 .tp-check span.grow, .tp-check > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tp-foot { display: flex; align-items: center; gap: 8px; }
+
+/* Scrollbars: thin and quiet everywhere (the default ones were thick and grey); a little brighter while hovered */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--border-strong) 80%, transparent) transparent; }
+*:hover { scrollbar-color: var(--muted) transparent; }

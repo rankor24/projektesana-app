@@ -11,6 +11,10 @@ import { AgentSession } from "../src/agent/session.ts";
 import { ctxEnv } from "../src/agent/tools/context.ts";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "../src/agent/tools/levels.ts";
 import { DEFAULT_SETTINGS } from "../src/shared/types.ts";
+import { z } from "zod";
+import { allTools } from "../src/agent/tools/defs.ts";
+import { mailDeclarations } from "../src/agent/mail.ts";
+import { subagentDeclarations } from "../src/agent/subagents.ts";
 import { tmp } from "./helpers.ts";
 
 const levelOf = makeLevelOf({ get_focus: "read", set_fact: "propose", create_level: "confirm", create_grid: "confirm", delete_element: "confirm" });
@@ -105,4 +109,20 @@ test("gate: operate_element with Delete is blocked even inside a confirmed batch
 	const sel = { assistantMessage: m, toolCall: { type: "toolCall", id: "a", name: "operate_element", arguments: { data: { action: "Select", elementIds: [1] } } }, args: { data: { action: "Select", elementIds: [1] } }, context: {} } as never;
 	assert.equal((await g.before(del))?.block, true);
 	assert.equal(await g.before(sel), undefined);
+});
+
+test("every tool the agent is sent has parameter names the providers accept (Claude: ^[a-zA-Z0-9_.-]{1,64}$; \"daļa\" failed every run)", () => {
+	const ok = /^[a-zA-Z0-9_.-]{1,64}$/;
+	const bad: string[] = [];
+	const walk = (s: unknown, at: string): void => {
+		if (!s || typeof s !== "object") return;
+		if (Array.isArray(s)) return s.forEach((x, i) => walk(x, `${at}[${i}]`));
+		const o = s as Record<string, unknown>;
+		if (o.properties && typeof o.properties === "object") for (const k of Object.keys(o.properties)) if (!ok.test(k)) bad.push(`${at}: ${k}`);
+		for (const [k, v] of Object.entries(o)) walk(v, `${at}.${k}`);
+	};
+	for (const t of allTools()) walk(z.toJSONSchema(z.object(t.input)), t.name);
+	for (const d of [...mailDeclarations(), ...subagentDeclarations()]) walk(d.parameters, d.name);
+	assert.deepEqual(bad, []);
+	for (const t of allTools()) assert.ok(ok.test(t.name), `tool name ${t.name}`);
 });

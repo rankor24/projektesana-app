@@ -56,7 +56,9 @@ export function AgentDock() {
 	const runRef = useRef<string | null>(null);
 	/** the current run is still waiting in the queue (no event has come yet) */
 	const queuedRef = useRef(false);
-	const endRef = useRef<HTMLDivElement>(null);
+	const [chatEl, setChatEl] = useState<HTMLDivElement | null>(null);
+	/** the chat follows the newest text while the user is at the bottom; scrolled up to read, it stays where they are */
+	const stick = useRef(true);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	// files waiting to go with the next message: pasted screenshots, dropped or picked files
@@ -186,9 +188,33 @@ export function AgentDock() {
 		[],
 	);
 
+	// Stick to the bottom: any growth (a new line, a run card filling with steps, streamed text) and any resize of the panel (the text
+	// reflows) scrolls to the end while the user is there. One scroll up past ~60 px lets go; scrolling back down holds again.
 	useEffect(() => {
-		endRef.current?.scrollIntoView({ block: "end" });
-	}, [lines]);
+		if (!chatEl) return;
+		const toEnd = () => {
+			if (stick.current) chatEl.scrollTop = chatEl.scrollHeight;
+		};
+		const onScroll = () => {
+			stick.current = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 60;
+		};
+		const resized = new ResizeObserver(toEnd);
+		resized.observe(chatEl);
+		const changed = new MutationObserver(toEnd);
+		changed.observe(chatEl, { childList: true, subtree: true, characterData: true });
+		chatEl.addEventListener("scroll", onScroll, { passive: true });
+		toEnd();
+		return () => {
+			resized.disconnect();
+			changed.disconnect();
+			chatEl.removeEventListener("scroll", onScroll);
+		};
+	}, [chatEl]);
+	// another conversation opens at its newest line
+	useEffect(() => {
+		stick.current = true;
+		if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+	}, [viewKey, chatEl]);
 
 	// a picture from elsewhere in the window (the comment tools' screen grab) joins the attachments like a pasted screenshot
 	const addRef = useRef(addFiles);
@@ -203,6 +229,8 @@ export function AgentDock() {
 		const t = text;
 		const files = pending;
 		sending.current = true;
+		// what the user just sent, and the answer to it, are followed again
+		stick.current = true;
 		try {
 			// Auto in 3D: ask the viewer for the camera as it is now, so the message carries what the user is looking at
 			if (mode === "auto" && view.kind === "ifc") {
@@ -392,7 +420,7 @@ export function AgentDock() {
 			</div>
 			<ProcessStrip projectId={projectId} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
-			<div className="chat">
+			<div className="chat" ref={setChatEl}>
 				{lines.length === 0 && loadedFor === viewKey && (
 					<div className="chat-empty-wrap">
 						<div className="dim small chat-empty">{viewThread && viewThread.agent !== "lead" ? tr("Saruna vēl nav sākta.") : projectId ? tr("Saruna par šo projektu vēl nav sākta.") : tr("nav projekta — saruna bez projekta datiem.")}</div>
@@ -430,7 +458,6 @@ export function AgentDock() {
 						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
 					),
 				)}
-				<div ref={endRef} />
 			</div>
 			{err && <div className="err">{err}</div>}
 			{notice && (
