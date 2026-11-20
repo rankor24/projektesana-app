@@ -175,4 +175,6 @@ export const part7: Record<string, string> = {
 	"Saglabāts": "Saved",
 	"Izmaiņas saglabājas pašas": "Changes save themselves",
 	"Grafiks pieder projektam: atver projektu.": "The schedule belongs to a project: open a project.",
+	"Viss projekts": "Whole project",
+	"Rādīt visu projektu logā": "Fit the whole project in the window",
 };

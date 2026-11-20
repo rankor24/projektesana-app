@@ -17,14 +17,17 @@ import { tr } from "../i18n";
 const LABEL_W = 210;
 const ZOOM_KEY = "projektesana:gantt-zoom";
 const MONTH_NAMES = [tr("janvāris"), tr("februāris"), tr("marts"), tr("aprīlis"), tr("maijs"), tr("jūnijs"), tr("jūlijs"), tr("augusts"), tr("septembris"), tr("oktobris"), tr("novembris"), tr("decembris")];
-const ZOOM_LABEL: Record<Zoom, string> = { year: tr("Gads"), quarter: tr("Ceturksnis"), month: tr("Mēnesis"), week: tr("Nedēļa") };
+type View = Zoom | "fit";
+const VIEWS: View[] = ["fit", "year", "quarter", "month", "week"];
+const VIEW_LABEL: Record<View, string> = { fit: tr("Viss projekts"), year: tr("Gads"), quarter: tr("Ceturksnis"), month: tr("Mēnesis"), week: tr("Nedēļa") };
 
-function readZoom(): Zoom {
+/** the whole project fits the window until the user picks a zoom (then that one is remembered) */
+function readZoom(): View {
 	try {
 		const z = localStorage.getItem(ZOOM_KEY);
-		return z && z in ZOOMS ? (z as Zoom) : "quarter";
+		return z && (z === "fit" || z in ZOOMS) ? (z as View) : "fit";
 	} catch {
-		return "quarter";
+		return "fit";
 	}
 }
 
@@ -32,15 +35,15 @@ export function Gantt({ projectId }: { projectId: string }) {
 	const dash = useLoad(() => call("projects.dashboard", projectId), [projectId]);
 	const todos = useLoad<Task[]>(() => call("todos.list", projectId), [projectId]);
 	const dates = useLoad(() => call("stages.dates", projectId), [projectId]);
-	const [zoom, setZoomState] = useState<Zoom>(readZoom);
+	const [zoom, setZoomState] = useState<View>(readZoom);
+	const [width, setWidth] = useState(0);
 	const [showDone, setShowDone] = useState(false);
 	const [popup, setPopup] = useState<PopupTarget | null>(null);
 	const [stagePop, setStagePop] = useState<{ stage: BimStage; x: number; y: number } | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrolledFor = useRef<string>("");
-	const dw = ZOOMS[zoom];
-	const setZoom = (z: Zoom) => {
+	const setZoom = (z: View) => {
 		setZoomState(z);
 		try {
 			localStorage.setItem(ZOOM_KEY, z);
@@ -50,6 +53,16 @@ export function Gantt({ projectId }: { projectId: string }) {
 	};
 
 	const timeline = dash.data?.timeline;
+	// the width of the window, for "whole project"
+	const ready = !!timeline;
+	useEffect(() => {
+		const el = scroller.current;
+		if (!el) return;
+		setWidth(el.clientWidth);
+		const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [ready]);
 	const model = useMemo(() => {
 		if (!timeline) return null;
 		const stageDates = dates.data ?? {};
@@ -74,6 +87,8 @@ export function Gantt({ projectId }: { projectId: string }) {
 	if (!timeline || !model) return <div className="dim small" style={{ padding: 12 }}>{tr("lasa grafiku…")}</div>;
 	const { axis } = model;
 	const today = timeline.today;
+	// "whole project": the axis (the first to the last date, a margin each side) is squeezed to the window; the least is 1.5 px a day
+	const dw = zoom === "fit" ? Math.max(1.5, (width - LABEL_W - 4) / axis.days) : ZOOMS[zoom];
 	const trackW = axis.days * dw;
 	const x = (iso: string) => dayIndex(axis, iso) * dw;
 	const span = (s: Span) => ({ left: x(s.start), width: (dayIndex(axis, s.end) - dayIndex(axis, s.start) + 1) * dw });
@@ -89,7 +104,7 @@ export function Gantt({ projectId }: { projectId: string }) {
 		scrolledFor.current = key;
 		requestAnimationFrame(() => {
 			const el = scroller.current;
-			if (el) el.scrollLeft = Math.max(0, LABEL_W + dayIndex(axis, today) * dw - el.clientWidth / 2);
+			if (el) el.scrollLeft = zoom === "fit" ? 0 : Math.max(0, LABEL_W + dayIndex(axis, today) * dw - el.clientWidth / 2);
 		});
 	}
 
@@ -118,9 +133,9 @@ export function Gantt({ projectId }: { projectId: string }) {
 		<div className="gantt">
 			<div className="gantt-bar">
 				<span className="seg" role="group" aria-label={tr("Mērogs")}>
-					{(Object.keys(ZOOMS) as Zoom[]).map((z) => (
-						<button key={z} className={zoom === z ? "on" : ""} onClick={() => setZoom(z)}>
-							{ZOOM_LABEL[z]}
+					{VIEWS.map((z) => (
+						<button key={z} className={zoom === z ? "on" : ""} onClick={() => setZoom(z)} title={z === "fit" ? tr("Rādīt visu projektu logā") : undefined}>
+							{VIEW_LABEL[z]}
 						</button>
 					))}
 				</span>
@@ -152,7 +167,7 @@ export function Gantt({ projectId }: { projectId: string }) {
 					</span>
 				)}
 				<span className="gantt-key small dim">
-					<span className="gk-mark">◆</span> {tr("nodevums")} <span className="gk-mark sent">◆</span> {tr("nosūtīts")} <span className="gk-line" /> {tr("šodien")}
+					<span className="gk-mark">◇</span> {tr("nodevums")} <span className="gk-mark">◆</span> {tr("nosūtīts")} <span className="gk-mark late">◇</span> {tr("kavējas")} <span className="gk-line" /> {tr("šodien")}
 				</span>
 			</div>
 			{err && <div className="err" style={{ margin: "0 10px" }}>{err}</div>}
@@ -160,9 +175,10 @@ export function Gantt({ projectId }: { projectId: string }) {
 				<div className="gantt-inner" style={{ width: LABEL_W + trackW }}>
 					<Axis axis={axis} dw={dw} />
 					<div className="gantt-group">{tr("Stadijas un nodevumi")}</div>
-					{model.stages.map((s) => (
-						<div key={s.stage} className={`gantt-row ${s.current ? "cur" : ""}`}>
-							<div className="gantt-label" title={s.inContract ? undefined : tr("stadija nav līgumā")} style={s.inContract ? undefined : { opacity: 0.6 }}>
+					{model.stages.map((s, n) => (
+						<div key={s.stage} className={`gantt-row stage ${s.current ? "cur" : ""}`} style={{ "--sc": `var(--st${n})` } as React.CSSProperties}>
+							<div className="gantt-label stage" title={s.inContract ? undefined : tr("stadija nav līgumā")} style={s.inContract ? undefined : { opacity: 0.6 }}>
+								<i className="gdot" />
 								{s.stage}
 								{s.current && <span className="chip"> {tr("tagad")}</span>}
 							</div>
@@ -176,13 +192,14 @@ export function Gantt({ projectId }: { projectId: string }) {
 										onClick={(e) => (e.stopPropagation(), openStage(s.stage, e))}
 									>
 										<span>{s.stage}</span>
+										<em>{s.span.start.slice(5)} → {s.span.end.slice(5)}</em>
 									</button>
 								)}
 								{!s.span && <span className="gantt-hint">{tr("nav datumu · klikšķis, lai ievadītu")}</span>}
 								{s.marks.map((m) => (
 									<button key={m.id} className={`gmark ${m.late ? "late" : ""} ${m.sent ? "sent" : ""}`} style={{ left: x(m.date) + dw / 2 }} title={`${m.label} · ${m.date}${m.sent ? ` · ${tr("nosūtīts")}` : m.late ? ` · ${tr("kavējas")}` : ` · ${tr("plānots")}`}`} onClick={(e) => (e.stopPropagation(), windows.go("nodevumi", m.id))}>
-										<i>◆</i>
-										{dw >= 7 && <span>{m.kind}</span>}
+										<i>{m.sent ? "◆" : "◇"}</i>
+										<span>{m.kind}</span>
 									</button>
 								))}
 							</div>

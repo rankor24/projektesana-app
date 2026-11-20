@@ -1,4 +1,5 @@
 :root {
+	--st0: #a78bfa; --st1: #38bdf8; --st2: #34d399; --st3: #fbbf24; --st4: #fb923c; --st5: #f472b6;
 	/* cool neutrals + one blue accent, the same family as BIM Crew's dark theme */
 	--bg: #101318;
 	--panel: #161a21;
@@ -22,6 +23,7 @@
 	color-scheme: dark;
 }
 :root[data-theme="light"] {
+	--st0: #8b6bf0; --st1: #1b9ad6; --st2: #14a672; --st3: #e0a000; --st4: #ea7a1c; --st5: #e04a9a;
 	--bg: #eceef2;
 	--panel: #ffffff;
 	--elev: #f5f6f9;
@@ -781,7 +783,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .gantt-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-wrap: wrap; }
 .gantt-key { display: inline-flex; align-items: center; gap: 6px; }
 .gk-mark { color: var(--info); }
-.gk-mark.sent { color: var(--ok); }
+.gk-mark.late { color: var(--bad); }
 .gk-line { display: inline-block; width: 2px; height: 12px; background: var(--bad); }
 .gantt-scroll { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--border); position: relative; }
 .gantt-inner { position: relative; min-height: 100%; }
@@ -800,17 +802,23 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .gantt-week { position: absolute; top: 20px; height: 20px; box-sizing: border-box; padding: 3px 4px; font-size: 10px; border-left: 1px solid var(--border); color: var(--muted); }
 .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--bad); opacity: 0.8; z-index: 1; pointer-events: none; }
 .gantt-hint { position: absolute; left: 10px; top: 8px; font-size: 11px; color: var(--muted); pointer-events: none; }
-/* a stage: a bar, blue for the current one, dim when the contract does not include it, hatched when its dates come from deliveries */
-.gstage { position: absolute; top: 6px; height: 20px; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--elev2); color: var(--text); font-size: 11px; padding: 0 6px; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; }
-.gstage.cur { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.gstage.derived { background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(127, 127, 127, 0.18) 5px 10px); border-style: dashed; }
-.gstage.off { opacity: 0.5; }
-/* a delivery: a diamond on its stage's row; hollow while planned, green once sent, red when late */
-.gmark { position: absolute; top: 3px; height: 26px; transform: translateX(-8px); display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: var(--info); font-size: 11px; cursor: pointer; z-index: 2; white-space: nowrap; }
-.gmark i { font-style: normal; font-size: 16px; line-height: 1; text-shadow: 0 0 0 var(--bg), 0 0 3px var(--bg); }
-.gmark.sent { color: var(--ok); }
+/* a stage: one colour per stage (the row's dot, tint and bar); the current one is outlined and bold; hatched when its dates come from
+   deliveries; dim when the contract does not include it */
+.gantt-row.stage { background: color-mix(in srgb, var(--sc) 7%, transparent); }
+.gantt-row.stage.cur { background: color-mix(in srgb, var(--sc) 16%, transparent); }
+.gantt-label.stage { border-left: 4px solid var(--sc); font-weight: 500; }
+.gantt-row.stage.cur .gantt-label.stage { font-weight: 700; }
+.gdot { width: 9px; height: 9px; border-radius: 50%; background: var(--sc); flex: none; }
+.gstage { position: absolute; top: 5px; height: 22px; box-sizing: border-box; border: 1px solid var(--sc); border-radius: 4px; background: var(--sc); color: #0b1220; font-size: 11px; font-weight: 600; padding: 0 7px; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; display: flex; align-items: center; gap: 6px; }
+.gstage em { font-style: normal; font-weight: 400; opacity: 0.75; }
+.gstage.cur { outline: 2px solid var(--text); outline-offset: 1px; }
+.gstage.derived { background: color-mix(in srgb, var(--sc) 35%, var(--panel)); background-image: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--sc) 55%, transparent) 5px 10px); border-style: dashed; color: var(--text); }
+.gstage.off { opacity: 0.45; }
+/* a delivery: a diamond in its stage's colour; hollow while planned, filled once sent, red when late */
+.gmark { position: absolute; top: 3px; height: 26px; transform: translateX(-9px); display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: var(--sc, var(--info)); font-size: 11px; cursor: pointer; z-index: 3; white-space: nowrap; }
+.gmark i { font-style: normal; font-size: 22px; line-height: 1; text-shadow: 0 0 2px var(--bg), 0 0 4px var(--bg); -webkit-text-stroke: 0.6px var(--bg); }
 .gmark.late { color: var(--bad); }
-.gmark span { color: var(--text); background: color-mix(in srgb, var(--panel) 80%, transparent); border-radius: 3px; padding: 0 3px; }
+.gmark span { color: var(--text); font-weight: 600; background: color-mix(in srgb, var(--panel) 85%, transparent); border-radius: 3px; padding: 0 3px; }
 /* a TN or approval clock: a thin bar */
 .gclock { position: absolute; top: 12px; height: 8px; border: 0; border-radius: 4px; background: var(--warn); opacity: 0.85; cursor: pointer; z-index: 1; padding: 0; }
 .gclock.late { background: var(--bad); }
