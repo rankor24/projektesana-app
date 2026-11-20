@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
 import { projectDashboard, projectSummary, stageOf } from "../../core/summary.js";
 import type { Registry } from "../../core/registry.js";
+import { setSourceRole } from "../../core/planning.js";
 import type { ProjectStore } from "../../core/store.js";
 import type { EventName, EventSpec, Handlers, ProjectRow, ScanSummaryRow } from "../../shared/api.js";
 import { scanProject, type PipelineHooks } from "../../sources/pipeline.js";
-import { DOC_ROLES, FREE_ROLES } from "../../sources/roles.js";
+import { FREE_ROLES } from "../../sources/roles.js";
 import { sourceBytes } from "../../sources/bytes.js";
 export { sourceBytes };
 
@@ -78,21 +79,8 @@ export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 			d.emit("data.changed", { projectId: id, what: ["sources"] });
 		},
 		"sources.setRole": async (id, sourceId, role) => {
-			if (role !== null && !DOC_ROLES.includes(role)) throw new Error(`Nezināma loma: ${role}`);
 			const store = d.registry.store(id);
-			const src = store.read("sources").find((s) => s.id === sourceId);
-			if (!src) throw new Error(`Avots ${sourceId} nav atrasts.`);
-			const byDoc = { ...store.readMeta<Record<string, string>>("source-roles", {}) };
-			if (role) byDoc[sourceId] = role;
-			else delete byDoc[sourceId];
-			store.writeMeta("source-roles", byDoc, { kind: "source.role", by: "user", data: { sourceId, role } });
-			// back to the folder's role: the one the last scan gave the folder
-			const folder = store.readMeta<ScanSummaryRow | null>("scan", null)?.folders.find((f) => f.folderKey === src.folderKey);
-			store.update(
-				"sources",
-				(all) => all.map((s) => (s.id !== sourceId ? s : role ? { ...s, role, roleFrom: "document" as const } : { ...s, role: folder?.role ?? "Cits", roleFrom: folder?.roleFrom ?? ("unconfirmed" as const) })),
-				{ kind: "sources.role", by: "user", data: { sourceId, role } },
-			);
+			setSourceRole(store, sourceId, role, "user");
 			await d.afterChange?.(store, "roles");
 			d.emit("data.changed", { projectId: id, what: ["sources", "findings", "requirements"] });
 		},

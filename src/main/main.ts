@@ -191,7 +191,15 @@ const session = new AgentSession({
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 	onQueue: (v) => emit("queue.changed", v),
 	onWaiting: (items) => emit("waiting.changed", items),
-	onData: (projectId, what) => emit("data.changed", { projectId, what }),
+	onData: (projectId, what) => {
+		// a document role the agent set re-reads the requirements and re-runs the checks, as the user's change does (sources.setRole)
+		if (projectId && what.includes("roles"))
+			void engine
+				.afterChange(registry.store(projectId), "roles")
+				.catch(() => undefined)
+				.finally(() => emit("data.changed", { projectId, what: [...what, "findings", "requirements"] }));
+		else emit("data.changed", { projectId, what });
+	},
 });
 // threads a dead process left in flight are marked interrupted and the saved queue waits paused; nothing starts until the user answers
 session.restore();

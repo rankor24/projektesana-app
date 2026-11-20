@@ -29,6 +29,7 @@ import type { ThreadStore } from "../core/threads.js";
 import type { Pin } from "../core/model.js";
 import { ctxEnv } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
+import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
@@ -358,6 +359,9 @@ export class ThreadRunner {
 							i.notesChanged?.();
 							i.dataChanged?.(["process"]);
 						}
+						// the planning tools write in the tools server's process too: the window reloads what they changed
+						const wrote = e.type === "tool_result" && e.ok ? PLANNING_TOOL_DATA[e.name] : undefined;
+						if (wrote) i.dataChanged?.(wrote);
 						if (e.type === "usage") {
 							// the Claude session's size, for the context meter (the SDK holds the messages)
 							if (claude && !e.model) {

@@ -132,7 +132,7 @@ export function mergeDeliveries(prev: Delivery[], read: Omit<Delivery, "stage">[
 		const p = byId.get(id);
 		plannedRows.push({ id, kind: pl.kind, label: `${pl.kind} (plānots)`, plannedDate: p?.plannedDate ?? pl.date, plannedFrom: p?.plannedFrom ?? "bip", submittedDate: null, folder: null, items: [], checksRun: p?.checksRun ?? [] });
 	}
-	// planned rows the user typed themself stay
-	for (const p of prev) if (p.id.startsWith("plan_") && p.plannedFrom === "user" && !plannedRows.some((x) => x.id === p.id) && !openDrafts.some((x) => x.kind === p.kind)) plannedRows.push(p);
+	// planned rows the user or the agent added by hand stay
+	for (const p of prev) if (p.id.startsWith("plan_") && (p.plannedFrom === "user" || p.plannedFrom === "agent") && !plannedRows.some((x) => x.id === p.id) && !openDrafts.some((x) => x.kind === p.kind)) plannedRows.push(p);
 	return withStages([...real, ...openDrafts, ...plannedRows]);
 }

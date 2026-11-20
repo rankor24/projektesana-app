@@ -207,7 +207,7 @@ export interface Delivery {
 	kind: DeliveryKind;
 	label: string;
 	plannedDate: string | null;
-	plannedFrom?: "bip" | "user";
+	plannedFrom?: "bip" | "user" | "agent";
 	submittedDate: string | null;
 	folder: string | null;
 	items: DeliveryItem[];
