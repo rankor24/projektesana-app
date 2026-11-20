@@ -10,6 +10,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { applyCadcraftPatches } from "./cadcraft-patches.mjs";
 
 const root = join(import.meta.dirname, "..");
 const out = join(root, "resources", "cadcraft");
@@ -42,6 +43,12 @@ cpSync(join(src, "devshell", "site"), join(out, "site"), { recursive: true });
 for (const [lib, ver] of pins) cpSync(join(src, "devshell", "vendor", lib, ver), join(out, "vendor", lib, ver), { recursive: true });
 for (const f of ["index.html", "app.json"]) cpSync(join(src, "devshell", f), join(out, f));
 for (const f of ["LICENSE", "NOTICE", "THIRD_PARTY.md"]) if (existsSync(join(src, f))) cpSync(join(src, f), join(out, f));
+// our fixes to the copy (scripts/cadcraft-patches.mjs); a CadCraft change that moved the patched code stops the sync
+try {
+	console.log(`cadcraft: ${applyCadcraftPatches(out)} patch(es) applied`);
+} catch (e) {
+	stop(e.message);
+}
 
 // the shell's icon font, as for BimCraft (Bootstrap Icons, MIT, from the npm package)
 const icons = join(root, "node_modules", "bootstrap-icons", "font");
