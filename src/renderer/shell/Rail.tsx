@@ -17,7 +17,9 @@ const readCollapsed = (): boolean => {
 };
 
 export function Rail() {
-	const { page, layout } = useWindows();
+	const { page, layout, sidebar } = useWindows();
+	// "on": the page in the main area; "side": the list open in the sidebar beside a full page
+	const mark = (id: string) => (page === id ? "on" : sidebar.open && sidebar.id === id ? "side" : "");
 	const [collapsed, setCollapsed] = useState(readCollapsed);
 	const toggle = () => {
 		setCollapsed(!collapsed);
@@ -33,7 +35,7 @@ export function Rail() {
 				<div key={g.id} className="rail-group">
 					{!collapsed && <div className="rail-group-title">{tr(g.title)}</div>}
 					{g.pages.map((p) => (
-						<button key={p.id} className={`rail-item ${page === p.id ? "on" : ""}`} title={`${tr(p.title)} — ${tr(p.hint)}`} onClick={() => windows.go(p.id)}>
+						<button key={p.id} className={`rail-item ${mark(p.id)}`} title={`${tr(p.title)} — ${tr(p.hint)}`} onClick={() => windows.railClick(p.id)}>
 							<span className="rail-icon">{PAGE_ICON[p.id] ? <Icon name={PAGE_ICON[p.id]} /> : p.icon}</span>
 							{!collapsed && <span>{tr(p.title)}</span>}
 						</button>

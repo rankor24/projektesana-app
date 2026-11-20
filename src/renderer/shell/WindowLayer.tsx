@@ -2,9 +2,10 @@
 // dragged. Docked groups are drawn by the dock areas, not here. Adapted from BIM Crew WindowLayer.tsx.
 import type { ReactNode } from "react";
 import { floatGroups } from "../../shared/layout";
-import { WINDOW_TITLE, useWindows, windows } from "../windows";
+import { WINDOW_TITLE, windows } from "../windows";
 import { useDragHint } from "./drag";
 import { FloatingWindow } from "./FloatingWindow";
+import { useShownLayout } from "./visible";
 import { tr } from "../i18n";
 
 const SIDE_BOX: Record<string, React.CSSProperties> = {
@@ -27,7 +28,8 @@ function DragHintLayer() {
 }
 
 export function WindowLayer({ render }: { render: (id: string, filter?: string) => ReactNode }) {
-	const { layout } = useWindows();
+	// the page's own windows and the shared ones (B5); the others wait, where they were, for their page
+	const layout = useShownLayout();
 	const minimized = layout.groups.filter((g) => g.place.kind === "min");
 	return (
 		<div className="window-layer">

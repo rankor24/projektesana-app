@@ -33,7 +33,7 @@ test("the rail has the three groups in order, every page once, Koordinācija a p
 	assert.equal(P.pageById("normativi")?.group, "dati");
 });
 
-test("every page's default layout is valid; the chat is docked left on every page; sidebar pages dock right, full pages open with Faili and a smaller chat", () => {
+test("every page's default layout is valid; the chat is docked left on every page; list pages add no window (they open in the sidebar), full pages open with a smaller chat and nothing docked right", () => {
 	for (const p of P.PAGES) {
 		const l = P.defaultLayout(p.id);
 		assert.deepEqual(L.problems(l), [], `layout of ${p.id}`);
@@ -62,15 +62,15 @@ test("every page's default layout is valid; the chat is docked left on every pag
 			assert.equal(L.dockGroup(l, "bottom")!.active, "vers.models");
 			continue;
 		}
-		if (p.kind === "sidebar") {
-			const right = L.dockGroup(l, "right")!;
-			assert.deepEqual(right.tabs, [p.id], `${p.id}: its panel alone on the right`);
-			assert.equal((right.place as L.DockPlace).size, P.SIDEBAR_SIZE);
-			assert.equal((chat.place as L.DockPlace).size, L.DEFAULT_DOCK);
-		} else {
-			const right = L.dockGroup(l, "right")!;
-			assert.equal(right.active, "faili");
-			assert.ok(right.tabs.includes("faili") && !right.tabs.includes(p.id), `${p.id}: the page itself is the canvas, not a tab`);
+		// B3: nothing opens as right-side tabs any more; the lists live in the sidebar between the rail and the chat
+		assert.equal(L.dockGroup(l, "right"), undefined, `${p.id}: nothing docked right`);
+		assert.ok(!L.groupOf(l, p.id), `${p.id}: the page's own panel is not a window (sidebar or main area)`);
+		for (const list of P.PAGES.filter((x) => x.kind === "sidebar")) assert.ok(!L.groupOf(l, list.id), `${p.id}: ${list.id} is not a window`);
+		// B1: the comment tools in the column beside the chat
+		assert.equal(L.groupOf(l, L.TOOLS)!.place.kind, "edge", `${p.id}: tools in the edge column`);
+		assert.deepEqual(L.allWindows(l).sort(), ["chat", L.TOOLS].sort(), `${p.id}: the chat and the tools only`);
+		if (p.kind === "sidebar") assert.equal((chat.place as L.DockPlace).size, L.DEFAULT_DOCK);
+		else {
 			assert.equal((chat.place as L.DockPlace).size, P.FULL_PAGE_CHAT);
 			assert.ok(P.FULL_PAGE_CHAT < L.DEFAULT_DOCK, "smaller chat");
 		}

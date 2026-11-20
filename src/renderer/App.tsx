@@ -10,7 +10,9 @@ import { CommentTools } from "./shell/CommentTools";
 import { commentSubject } from "./comment-subject";
 import { useFactReview } from "./fact-review";
 import { toolsFor } from "../shared/comment-tools";
-import { DockArea } from "./shell/DockArea";
+import { DockArea, EdgeArea } from "./shell/DockArea";
+import { Sidebar } from "./shell/Sidebar";
+import { SplitHandle, useSplit } from "./shell/SplitHandle";
 import { StatusStrip } from "./shell/StatusStrip";
 import { Viewer } from "./shell/Preview";
 import { ViewerPanel } from "./preview/ViewerPanels";
@@ -38,7 +40,7 @@ import { Parskats } from "./panels/Parskats";
 import { Koordinacija } from "./panels/Koordinacija";
 import { Normativi } from "./panels/Normativi";
 import { PANEL_TITLE, WINDOW_TITLE, useWindows, windows, type PanelId } from "./windows";
-import { pageById } from "../shared/pages";
+import { pageById, viewerShownOn } from "../shared/pages";
 import { checkRelay, type RelayMsg } from "../shared/popout";
 import { bimcraft } from "./preview/IfcView";
 import { CHAT, THREADS, TOOLS } from "../shared/layout";
@@ -194,7 +196,9 @@ export function App() {
 	// a fact review needs the viewer: its card lives there and opens the cited source (task 9.7), also from a full page with nothing open
 	const reviewing = useFactReview().current !== null;
 	// the viewer is shown on pages that have it, and on a full page only while a file is open or a fact is reviewed
-	const showViewer = !sceneCanvas && !planCanvas && (!fullPage || !!preview || reviewing);
+	const showViewer = viewerShownOn(page, !!preview || reviewing);
+	// a full page and the file opened beside it share the main area at a split the user drags (B4), remembered
+	const pageSplit = useSplit("projektesana:split:page", 50);
 	const [row, setRow] = useState<ProjectRow | null>(null);
 	useEffect(() => {
 		call("settings.get").then((s) => {
@@ -221,16 +225,19 @@ export function App() {
 			<TopBar projectLabel={row ? row.name : null} openFindings={row ? row.openFindings : null} openInfo={row?.openInfo ?? 0} stage={row?.stage ?? null} />
 			<div className="body">
 				<Rail />
+				<Sidebar render={body} />
 				<div className="workspace">
 					<DockArea side="top" render={body} />
 					<div className="ws-mid">
 						<DockArea side="left" render={body} />
+						<EdgeArea render={body} />
 						<main className={`canvas ${fullPage ? "canvas-page" : ""}`}>
 							{fullPage && (
-								<div className="page-body">
+								<div ref={pageSplit.ref} className="page-body" style={showViewer ? { flex: `0 0 ${pageSplit.pct}%` } : undefined}>
 									<Panel id={fullPage as PanelId} filter={canvasFilter} />
 								</div>
 							)}
+							{fullPage && showViewer && <SplitHandle split={pageSplit} dir="row" />}
 							{/* The model viewer and the 3D scene stay mounted once opened and are only hidden: a page change must not load a
 						    120 MB model into BimCraft again. The tree here has the same shape on every page, so React never swaps them. */}
 							<KeepAlive show={sceneCanvas}>

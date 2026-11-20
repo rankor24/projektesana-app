@@ -51,7 +51,9 @@ test("every page lists the windows it can show, so none is lost when closed", ()
 	}
 	assert.ok(pageWindows("koordinacija").includes("coord.lines"));
 	assert.ok(pageWindows("versijas").includes("viewer.props"));
-	assert.ok(pageWindows("parskats").includes("faili"));
+	// plan C: Faili is a list in the sidebar, not a window of a full page; a file opened beside the page brings the viewer's windows
+	assert.ok(!pageWindows("parskats").includes("faili"));
+	assert.ok(pageWindows("parskats").includes("viewer.props"));
 });
 
 test("2D compare: the view follows the kind of both files", () => {

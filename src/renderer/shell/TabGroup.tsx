@@ -3,7 +3,7 @@
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
 import { useEffect, useRef, type ReactNode } from "react";
 import { Icon, type IconName } from "../icons";
-import { CHAT, canClose, isMaximized, tabIndexAt, type Group, type Side } from "../../shared/layout";
+import { CHAT, canClose, isMaximized, tabIndexAt, TOOLS, type Group, type Side } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
 import { tr } from "../i18n";
@@ -23,7 +23,8 @@ export function TabGroup({
 }: {
 	group: Group;
 	render: (id: string, filter?: string) => ReactNode;
-	mode: "dock" | "float";
+	/** `edge`: the slim column beside the chat (B1): drags like a docked group, two buttons only (float, pop out) */
+	mode: "dock" | "float" | "edge";
 	/** a floating window moves by its strip: the parent starts the move */
 	onStripDown?: (e: React.MouseEvent) => void;
 }) {
@@ -73,8 +74,8 @@ export function TabGroup({
 		tabsRef.current?.querySelector<HTMLElement>(".tg-tab.on")?.scrollIntoView({ inline: "nearest", block: "nearest" });
 	}, [own, group.tabs.length]);
 	return (
-		<div className="tg">
-			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "dock" ? windows.undock(own) : windows.maximize(own))}>
+		<div className={`tg ${mode === "edge" ? "tg-edge" : ""}`}>
+			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "float" ? windows.maximize(own) : windows.undock(own))}>
 				<div
 					ref={tabsRef}
 					className="tg-tabs"
@@ -105,7 +106,13 @@ export function TabGroup({
 							<Icon name={b.icon} size={14} />
 						</button>
 					))}
-					{mode === "dock" && (
+					{/* the comment tools' home is the column beside the chat: one click takes them back from wherever they were moved */}
+					{mode !== "edge" && group.tabs.includes(TOOLS) && (
+						<button title={tr("Uz kolonnu blakus čatam")} aria-label={tr("Uz kolonnu blakus čatam")} onClick={() => windows.toEdge(own, { whole: true })}>
+							<Icon name="dockEdge" size={14} />
+						</button>
+					)}
+					{mode !== "float" && (
 						<button title={tr("Atspraust: peldošs logs")} aria-label={tr("Atspraust: peldošs logs")} onClick={() => windows.undock(own)}>
 							<Icon name="winFloat" size={14} />
 						</button>
@@ -113,9 +120,11 @@ export function TabGroup({
 					<button title={tr("Iznest atsevišķā logā (otrs monitors); aizverot logu, tas atgriežas")} aria-label={tr("Iznest atsevišķā logā")} onClick={() => windows.popOut(own)}>
 						<Icon name="winPop" size={14} />
 					</button>
-					<button title={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} aria-label={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} onClick={() => windows.collapse(own, true)}>
-						<Icon name="winMin" size={14} />
-					</button>
+					{mode !== "edge" && (
+						<button title={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} aria-label={mode === "dock" ? tr("Sakļaut joslu") : tr("Minimizēt")} onClick={() => windows.collapse(own, true)}>
+							<Icon name="winMin" size={14} />
+						</button>
+					)}
 				</div>
 			</div>
 			<div className="tg-body">

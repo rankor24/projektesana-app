@@ -13,7 +13,12 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 	);
 }
 
+/**
+ * An error line; nothing when there is no error. E7: callers pass their error state straight in (`<Err error={err} />` with
+ * `err = null`), and `errText(null)` is the text "null" — the red "null" box at the top of the Aģenti window.
+ */
 export function Err({ error }: { error: unknown }) {
+	if (error === null || error === undefined || error === "") return null;
 	return <div className="err">{errText(error)}</div>;
 }
 

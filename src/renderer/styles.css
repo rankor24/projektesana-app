@@ -674,8 +674,10 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .ctool-win { container: ctool / inline-size; flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
 .ctool-empty { padding: 10px 12px; }
 .ctool-col { position: relative; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 8px; }
-.ctool-subject { display: flex; align-items: center; gap: 4px; min-width: 150px; max-width: 280px; padding: 3px 8px; font-size: 11.5px; line-height: 1.25; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--dim); }
-.ctool-subject.on { border-style: solid; border-color: #8e6bbf; color: var(--text); }
+/* E4: the "pick on the page" chip was dashed and dim; now a solid, readable field that turns purple once something is picked */
+.ctool-subject { display: flex; align-items: center; gap: 4px; min-width: 150px; max-width: 280px; padding: 3px 8px; font-size: 11.5px; line-height: 1.25; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); background: var(--panel); }
+.ctool-subject .dim { color: var(--dim); }
+.ctool-subject.on { border-color: #8e6bbf; background: rgba(142, 107, 191, 0.14); }
 .ctool-subject-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctool-subject .x { padding: 0 3px; border: none; background: none; line-height: 1; }
 .ctool-ab { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 2px; }
@@ -686,7 +688,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .ctool.on { border-color: #8e6bbf; background: rgba(142, 107, 191, 0.18); }
 .ctool:disabled { opacity: 0.4; cursor: default; }
 .ctool-icon { font-size: 15px; line-height: 1.1; }
-.ctool-label { font-size: 12px; line-height: 1.15; color: var(--dim); white-space: nowrap; }
+.ctool-label { font-size: 12px; line-height: 1.15; color: var(--text); white-space: nowrap; }
 .ctool-sep { width: 1px; align-self: stretch; min-height: 22px; margin: 0 2px; background: var(--border); }
 .ctool-head { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .ctool-colours { display: inline-flex; gap: 5px; padding: 0 4px; }
@@ -722,3 +724,35 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 /* a view that stays mounted while another page is shown (the model viewer, the 3D scene) */
 .keep { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .keep-hidden { display: none; }
+
+/* B3: the list sidebar between the rail and the chat (BIM Crew's Explorer column), collapsible */
+.sidebar { position: relative; display: flex; flex-direction: column; flex: none; min-width: 0; min-height: 0; background: var(--panel); border-right: 1px solid var(--border); }
+.sidebar-head { display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px 0 12px; border-bottom: 1px solid var(--border); background: var(--elev); user-select: none; }
+.sidebar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--dim); background: transparent; border-color: transparent; border-radius: 6px; }
+.sidebar-btn:hover { color: var(--text); background: var(--elev2); border-color: var(--border); }
+.sidebar-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+.sidebar-resize { position: absolute; z-index: 30; right: -6px; top: 0; bottom: 0; width: 12px; cursor: col-resize; }
+.sidebar-resize:hover { background: color-mix(in srgb, var(--focus) 55%, transparent); }
+/* the rail marks the list open in the sidebar beside a full page more softly than the page in the main area */
+.rail-item.side { color: var(--text); background: var(--elev2); }
+
+/* B1: the comment tools' column beside the chat: a narrow strip with two buttons, no tab names */
+.dock-edge { border-right: 1px solid var(--border); }
+.tg-edge .tg-strip { min-height: 30px; }
+.tg-edge .tg-tabs { display: none; }
+.tg-edge .tg-buttons { flex: 1; justify-content: center; border-left: none; padding: 0 2px; }
+.tg-edge .tg-buttons button { width: 26px; height: 26px; }
+
+/* B4: a split the user drags (full page beside a file, the viewer's two panes) */
+.split-handle { flex: none; position: relative; z-index: 5; background: var(--border); }
+.split-handle-row { width: 5px; cursor: col-resize; }
+.split-handle-col { height: 5px; cursor: row-resize; }
+.split-handle:hover { background: color-mix(in srgb, var(--focus) 70%, transparent); }
+.canvas-page > .page-body { border-right: none; }
+
+/* E3: the model list reads left to right: the name first, where it comes from under it, then size and date, then 3D */
+.models-table { width: auto; max-width: 100%; border-collapse: collapse; }
+.models-table td { padding: 3px 8px 3px 0; vertical-align: top; }
+.models-table .models-name { min-width: 220px; }
+.models-table .models-meta { white-space: nowrap; }

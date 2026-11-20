@@ -125,27 +125,30 @@ export function VersModels() {
 			<div className="section-title">{tr("Modeļi (visi projekta IFC: izejas dati, daļas, nodevumi, uzmetumi, revīzijas)")}</div>
 			{models.error ? <Err error={models.error} /> : null}
 			{models.data?.length === 0 && <div className="dim small">{tr("no data: projekta mapē, uzmetumos un revīzijās IFC failu nav.")}</div>}
-			<table>
+			{/* E3: the name is what is read first; where the file comes from sits under it, not in a column at the far left */}
+			<table className="models-table">
 				<tbody>
 					{(models.data ?? []).map((m) => (
 						<tr key={m.rel}>
 							<td>
 								<input type="checkbox" checked={pick.includes(m.rel)} onChange={(e) => setPick(e.target.checked ? [...pick, m.rel].slice(-2) : pick.filter((x) => x !== m.rel))} />
 							</td>
-							<td className="small">
-								{m.origin}
-								{m.section ? <span className="dim"> · {m.section}</span> : null}
+							<td className="models-name">
+								<div className={m.archived ? "dim" : ""}>
+									{m.name}
+									{m.archived && (
+										<>
+											{" "}
+											<Badge tone="dim" title={tr("arhīvs: vecāks par failu sadaļas mapē")}>{tr("arhīvs")}</Badge>
+										</>
+									)}
+								</div>
+								<div className="small dim">
+									{m.origin}
+									{m.section ? <> · {m.section}</> : null}
+								</div>
 							</td>
-							<td className={m.archived ? "dim" : ""}>
-								{m.name}
-								{m.archived && (
-									<>
-										{" "}
-										<Badge tone="dim" title={tr("arhīvs: vecāks par failu sadaļas mapē")}>{tr("arhīvs")}</Badge>
-									</>
-								)}
-							</td>
-							<td className="small dim">
+							<td className="small dim models-meta">
 								{tr("{v} MB · {v2}", { v: (m.size / 1048576).toFixed(1), v2: m.mtime.slice(0, 10) })}</td>
 							<td>
 								<button className="small" onClick={() => ui.show({ kind: "ifc", path: m.rel, label: m.name })}>{tr("3D")}</button>

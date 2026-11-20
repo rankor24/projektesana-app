@@ -8,13 +8,17 @@ import { defaultLayout, pageWindows } from "../src/shared/pages.ts";
 
 const VP = { w: 1920, h: 1080 };
 
-test("the comment tool bar is a window: it docks on top by default, on any side, floats, joins a group", () => {
+test("the comment tool bar is a window: it sits in the column beside the chat by default, docks on any side, floats, joins a group, comes back to the column", () => {
 	const def = L.normalize(defaultLayout("parskats"), VP);
 	assert.deepEqual(L.problems(def), []);
 	const g = L.groupOf(def, L.TOOLS)!;
-	assert.equal(g.place.kind === "dock" && g.place.side, "top");
+	assert.equal(g.place.kind, "edge", "B1: the board's slim column beside the chat, not the top");
 	assert.ok(L.isWindowId(L.TOOLS));
-	for (const side of ["left", "right", "bottom"] as const) assert.equal(L.groupOf(L.dock(def, L.TOOLS, side, VP), L.TOOLS)!.place.kind, "dock");
+	for (const side of ["left", "right", "top", "bottom"] as const) {
+		const docked = L.dock(def, L.TOOLS, side, VP);
+		assert.equal(L.groupOf(docked, L.TOOLS)!.place.kind, "dock");
+		assert.equal(L.groupOf(L.toEdge(docked, L.TOOLS), L.TOOLS)!.place.kind, "edge", `back to the column from ${side}`);
+	}
 	assert.equal(L.groupOf(L.undock(def, L.TOOLS, VP), L.TOOLS)!.place.kind, "float");
 	const joined = L.mergeInto(def, L.TOOLS, "chat");
 	assert.deepEqual(L.groupOf(joined, "chat")!.tabs, ["chat", L.TOOLS]);
@@ -43,7 +47,7 @@ test("a new window opens big: about half the screen wide, two thirds high, never
 test("opening a page adds its windows once; a floating window, the dock sizes and the focus stay as the user left them", () => {
 	// the user: floated Faili, moved the chat to the right, made it wide
 	let l = L.normalize(defaultLayout("parskats"), VP);
-	l = L.undock(l, "faili", VP);
+	l = L.open(l, "faili", VP);
 	l = L.move(l, "faili", 700, 200, VP);
 	l = L.dock(l, "chat", "right", VP, { size: 700 });
 	l = L.focus(l, "faili");

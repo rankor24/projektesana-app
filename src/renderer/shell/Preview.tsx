@@ -2,7 +2,8 @@
 // tabs; a file bar with the name only; the viewer's side panels (Īpašības, Elementu koks, IFC metadati, Faila metadati,
 // Komentāri / BCF) are layout windows that float over it or dock to its sides (shell/ViewerPanels.tsx). A pane shows a source
 // (PDF or text view), a model (IFC), a comparison or a law act; which view is chosen from the file's type.
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
+import { SplitHandle, useSplit } from "./SplitHandle";
 import type { Source } from "../../core/model";
 import { activeTab, targetLabel, type ViewTarget } from "../../shared/viewer";
 import { call } from "../bridge";
@@ -62,6 +63,10 @@ export function Viewer({ active = true }: { active?: boolean }) {
 	}, [preview, srcTitle, active]);
 
 	const two = v.panes.length === 2;
+	// the line between the two panes moves (B4), remembered for side by side and for one above the other
+	const splitH = useSplit("projektesana:split:viewer-h", 50);
+	const splitV = useSplit("projektesana:split:viewer-v", 50);
+	const paneSplit = v.split === "v" ? splitV : splitH;
 	return (
 		<section className="preview viewer">
 			<div className="viewer-top">
@@ -84,7 +89,14 @@ export function Viewer({ active = true }: { active?: boolean }) {
 			</div>
 			<div className={`viewer-panes ${two ? (v.split === "v" ? "col" : "row") : ""}`}>
 				{v.panes.map((p, i) => (
-					<div key={i} className={`viewer-pane ${v.focused === i && two ? "focused" : ""}`} onMouseDown={() => viewer.focusPane(i)}>
+					<Fragment key={i}>
+					{two && i === 1 && <SplitHandle split={paneSplit} dir={v.split === "v" ? "col" : "row"} />}
+					<div
+						ref={two && i === 0 ? paneSplit.ref : undefined}
+						className={`viewer-pane ${v.focused === i && two ? "focused" : ""}`}
+						style={two && i === 0 ? { flex: `0 0 ${paneSplit.pct}%` } : undefined}
+						onMouseDown={() => viewer.focusPane(i)}
+					>
 						<div className="viewer-tabs">
 							{p.tabs.map((id) => {
 								const t = v.tabs.find((x) => x.id === id)!;
@@ -105,6 +117,7 @@ export function Viewer({ active = true }: { active?: boolean }) {
 							<ViewPane target={v.tabs.find((t) => t.id === p.active)?.target ?? null} paneIndex={i} focused={v.focused === i && active} sources={sources.data} loading={sources.loading} />
 						</div>
 					</div>
+					</Fragment>
 				))}
 			</div>
 			<FactCard />

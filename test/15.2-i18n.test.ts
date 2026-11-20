@@ -14,9 +14,13 @@ import { part3 } from "../src/renderer/i18n/en/part3.ts";
 import { part4 } from "../src/renderer/i18n/en/part4.ts";
 import { part5 } from "../src/renderer/i18n/en/part5.ts";
 import { part6 } from "../src/renderer/i18n/en/part6.ts";
+import { part7 } from "../src/renderer/i18n/en/part7.ts";
+import { settings } from "../src/renderer/i18n/en/settings.ts";
 
-const dict: Record<string, string> = { ...core, ...part1, ...part2, ...part3, ...part4, ...part5, ...part6 };
-for (const d of [core, part1, part2, part3, part4, part5, part6]) registerEn(d);
+// the same parts src/renderer/i18n/index.ts registers: part7 (windows menu, compare, comment column) and settings were
+// registered by the app but never read here, so their strings were reported missing although the app has them
+const dict: Record<string, string> = { ...core, ...settings, ...part1, ...part2, ...part3, ...part4, ...part5, ...part6, ...part7 };
+for (const d of [core, settings, part1, part2, part3, part4, part5, part6, part7]) registerEn(d);
 
 const walk = (d: string): string[] =>
 	readdirSync(d).flatMap((n) => {

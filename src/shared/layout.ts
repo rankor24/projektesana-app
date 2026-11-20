@@ -37,7 +37,12 @@ export interface Vp {
 /** `restore`: the geometry to go back to after a maximize (BIM Crew WindowState.restore) */
 export type FloatPlace = { kind: "float"; z: number; restore?: Geo } & Geo;
 export type DockPlace = { kind: "dock"; side: Side; size: number; collapsed: boolean };
-export type Restorable = FloatPlace | DockPlace;
+/**
+ * The slim column between the chat and the canvas (the board's purple "Comment Tools" column, 95 px, beside the chat on every
+ * page). One group at most, like a dock side; it is the comment tool bar's default place, and any window can be put there.
+ */
+export type EdgePlace = { kind: "edge" };
+export type Restorable = FloatPlace | DockPlace | EdgePlace;
 export type Place = Restorable | { kind: "min"; from: Restorable } | { kind: "pop"; from: Restorable };
 
 export interface Group {
@@ -72,6 +77,9 @@ export function emptyLayout(): Layout {
 export const groupOf = (l: Layout, id: string): Group | undefined => l.groups.find((g) => g.tabs.includes(id));
 export const allWindows = (l: Layout): string[] => l.groups.flatMap((g) => g.tabs);
 export const dockGroup = (l: Layout, side: Side): Group | undefined => l.groups.find((g) => g.place.kind === "dock" && g.place.side === side);
+export const edgeGroup = (l: Layout): Group | undefined => l.groups.find((g) => g.place.kind === "edge");
+/** The edge column's width: the board's 95 px column, so a tool's icon and its label fit under each other. */
+export const EDGE_SIZE = 96;
 export const floatGroups = (l: Layout): Group[] => l.groups.filter((g) => g.place.kind === "float").sort((a, b) => (a.place as FloatPlace).z - (b.place as FloatPlace).z);
 const topZ = (l: Layout) => l.groups.reduce((m, g) => (g.place.kind === "float" ? Math.max(m, g.place.z) : m), 0);
 
@@ -94,13 +102,13 @@ export function defaultFloat(vp: Vp): { w: number; h: number } {
 	return { w: Math.max(720, Math.min(Math.round(vp.w * 0.55), 1200)), h: Math.max(520, Math.min(Math.round(vp.h * 0.72), 860)) };
 }
 /** A list wants a tall, narrow window, not half the screen. */
-const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 } };
+const FLOAT_SIZE: Record<string, { w: number; h: number }> = { [THREADS]: { w: 480, h: 640 }, [TOOLS]: { w: 560, h: 260 } };
 function cascade(l: Layout, vp: Vp, id?: string): Geo {
 	const n = l.groups.filter((g) => g.place.kind === "float").length;
 	const off = (n % 6) * 28;
 	return clampGeo({ x: 120 + off, y: 110 + off, ...((id && FLOAT_SIZE[id]) || defaultFloat(vp)) }, vp);
 }
-const clampPlace = <P extends Restorable>(p: P, vp: Vp): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp) } : { ...p, size: clampDock(p.side, p.size, vp) });
+const clampPlace = <P extends Restorable>(p: P, vp: Vp): P => (p.kind === "float" ? { ...p, ...clampGeo(p, vp) } : p.kind === "dock" ? { ...p, size: clampDock(p.side, p.size, vp) } : p);
 
 // ---- helpers that keep the invariants ----
 
@@ -125,9 +133,9 @@ function addGroup(l: Layout, id: string, place: Place): Layout {
 	return { ...l, groups: [...l.groups, { tabs: [id], active: id, place }], focused: id };
 }
 
-function floatPlace(l: Layout, vp: Vp, near?: Place): FloatPlace {
+function floatPlace(l: Layout, vp: Vp, near?: Place, id?: string): FloatPlace {
 	const r = near ? restorable(near) : undefined;
-	const base = r && r.kind === "float" ? { x: r.x + 28, y: r.y + 28, w: r.w, h: r.h } : r && r.kind === "dock" ? dockedGeo(r, vp) : cascade(l, vp);
+	const base = r && r.kind === "float" ? { x: r.x + 28, y: r.y + 28, w: r.w, h: r.h } : r && r.kind === "dock" ? dockedGeo(r, vp) : cascade(l, vp, id);
 	return { kind: "float", z: topZ(l) + 1, ...clampGeo(base, vp) };
 }
 /** Where a docked group would float: over the middle of its side, so it does not jump across the screen. */
@@ -218,11 +226,30 @@ export function dock(l: Layout, id: string, side: Side, vp: Vp, opts: { whole?: 
 	return { ...next, focused: id };
 }
 
-/** The group a window is in leaves its side and floats (the whole group, as one window). */
+/**
+ * Puts a window in the edge column beside the chat: it joins the column's group as a tab, or starts it. `whole` moves its
+ * whole group (the same rule as `dock`).
+ */
+export function toEdge(l: Layout, id: string, opts: { whole?: boolean } = {}): Layout {
+	const g = groupOf(l, id);
+	if (!g) return l;
+	const ids = opts.whole ? [...g.tabs] : [id];
+	if (g.place.kind === "edge" && ids.length === g.tabs.length) return focus(l, id);
+	let next = l;
+	for (const t of ids) next = detach(next, t).layout;
+	const target = edgeGroup(next);
+	const active = opts.whole && ids.includes(g.active) ? g.active : id;
+	next = target
+		? { ...next, groups: next.groups.map((x) => (x === target ? { tabs: [...x.tabs.filter((t) => !ids.includes(t)), ...ids], active, place: x.place } : x)) }
+		: { ...next, groups: [...next.groups, { tabs: ids, active, place: { kind: "edge" } }] };
+	return { ...next, focused: id };
+}
+
+/** The group a window is in leaves its side (or the edge column) and floats (the whole group, as one window). */
 export function undock(l: Layout, id: string, vp: Vp): Layout {
 	const g = groupOf(l, id);
-	if (!g || g.place.kind !== "dock") return l;
-	const place = floatPlace(l, vp, g.place);
+	if (!g || (g.place.kind !== "dock" && g.place.kind !== "edge")) return l;
+	const place = floatPlace(l, vp, g.place, id);
 	return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place } : x)), focused: id };
 }
 
@@ -230,7 +257,7 @@ export function undock(l: Layout, id: string, vp: Vp): Layout {
 export function pullOut(l: Layout, id: string, vp: Vp, at?: { x: number; y: number }): Layout {
 	const g = groupOf(l, id);
 	if (!g) return l;
-	if (g.tabs.length === 1) return g.place.kind === "dock" ? undock(l, id, vp) : l;
+	if (g.tabs.length === 1) return g.place.kind === "dock" || g.place.kind === "edge" ? undock(l, id, vp) : l;
 	const { layout } = detach(l, id);
 	const place = floatPlace(layout, vp, g.place);
 	const moved = at ? { ...place, ...clampGeo({ ...place, x: at.x, y: at.y }, vp) } : place;
@@ -286,7 +313,7 @@ export function reopen(l: Layout, id: string, def: Layout, vp: Vp): Layout {
 	const mate = home.tabs.find((t) => t !== id && groupOf(l, t));
 	if (mate) return mergeInto(opened, id, mate);
 	const p = home.place.kind === "min" || home.place.kind === "pop" ? home.place.from : home.place;
-	return p.kind === "dock" ? dock(opened, id, p.side, vp, { size: p.size }) : opened;
+	return p.kind === "dock" ? dock(opened, id, p.side, vp, { size: p.size }) : p.kind === "edge" ? toEdge(opened, id) : opened;
 }
 
 /** Collapses a docked group to a strip, or minimises a floating one. Works for the chat. */
@@ -295,7 +322,7 @@ export function collapse(l: Layout, id: string, on = true): Layout {
 	if (!g) return l;
 	const p = g.place;
 	if (p.kind === "dock") return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place: { ...p, collapsed: on } } : x)) };
-	if (p.kind === "float" && on) return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place: { kind: "min", from: p } } : x)) };
+	if ((p.kind === "float" || p.kind === "edge") && on) return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place: { kind: "min", from: p } } : x)) };
 	if (p.kind === "min" && !on) return { ...l, groups: l.groups.map((x) => (x === g ? { ...x, place: p.from } : x)) };
 	return l;
 }
@@ -325,6 +352,7 @@ export function popIn(l: Layout, id: string, vp: Vp): Layout {
 	const from = clampPlace(g.place.from, vp);
 	const { layout } = detach(l, id);
 	if (from.kind === "dock") return dock(addGroup(layout, id, { kind: "float", z: topZ(layout) + 1, ...cascade(layout, vp) }), id, from.side, vp, { size: from.size });
+	if (from.kind === "edge") return toEdge(addGroup(layout, id, { kind: "float", z: topZ(layout) + 1, ...cascade(layout, vp) }), id);
 	return { ...layout, groups: [...layout.groups, { tabs: [id], active: id, place: { ...from, z: topZ(layout) + 1 } }], focused: id };
 }
 export const poppedOut = (l: Layout): string[] => l.groups.filter((g) => g.place.kind === "pop").flatMap((g) => g.tabs);
@@ -340,6 +368,26 @@ export function setFilter(l: Layout, id: string, filter: string | undefined): La
 	if (filter === undefined) delete filters[id];
 	else filters[id] = filter;
 	return { ...l, filters };
+}
+
+/**
+ * The layout as it is drawn on one page (B5): only the windows `shown` keeps. A group keeps its place and order with the
+ * hidden tabs left out; a group with nothing left is not drawn; a hidden active tab gives the front to the first one shown.
+ * Nothing is removed from the real layout: a page's windows come back, where they were, when that page is opened again.
+ */
+export function filterLayout(l: Layout, shown: (id: string) => boolean): Layout {
+	let changed = false;
+	const groups: Group[] = [];
+	for (const g of l.groups) {
+		const tabs = g.tabs.filter(shown);
+		if (tabs.length === g.tabs.length) {
+			groups.push(g);
+			continue;
+		}
+		changed = true;
+		if (tabs.length) groups.push({ ...g, tabs, active: tabs.includes(g.active) ? g.active : tabs[0] });
+	}
+	return changed ? { ...l, groups, focused: l.focused && shown(l.focused) ? l.focused : null } : l;
 }
 
 // ---- drag targets ----
@@ -385,6 +433,7 @@ export function tabIndexAt(tabs: { x: number; w: number }[], x: number): number 
 export function normalize(raw: Layout, vp: Vp): Layout {
 	const seen = new Set<string>();
 	const sideTaken = new Map<Side, Group>();
+	let edge: Group | undefined;
 	const groups: Group[] = [];
 	for (const g of Array.isArray(raw?.groups) ? raw.groups : []) {
 		const tabs = (Array.isArray(g?.tabs) ? g.tabs : []).filter((t) => {
@@ -405,6 +454,16 @@ export function normalize(raw: Layout, vp: Vp): Layout {
 			const ng = { tabs, active, place };
 			sideTaken.set(place.side, ng);
 			groups.push(ng);
+			continue;
+		}
+		if (place.kind === "edge") {
+			// one edge column: a second one joins the first as tabs
+			if (edge) {
+				edge.tabs.push(...tabs);
+				continue;
+			}
+			edge = { tabs, active, place };
+			groups.push(edge);
 			continue;
 		}
 		groups.push({ tabs, active, place });
@@ -435,6 +494,7 @@ function fixRestorable(p: unknown, vp: Vp): Restorable | null {
 			return { kind: "float", z: num(o.z, 1), ...clampGeo({ x: num(o.x, 0), y: num(o.y, 0), w: num(o.w, 720), h: num(o.h, 520) }, vp), ...(restore ? { restore } : {}) };
 		}
 	if (o.kind === "dock" && (SIDES as readonly unknown[]).includes(o.side)) return { kind: "dock", side: o.side as Side, size: clampDock(o.side as Side, num(o.size, defaultSize(o.side as Side)), vp), collapsed: o.collapsed === true };
+	if (o.kind === "edge") return { kind: "edge" };
 	return null;
 }
 function fixPlace(p: unknown, vp: Vp): Place | null {
@@ -460,8 +520,37 @@ export interface LayoutStore {
 	legacy?: Layout;
 	/** the page that was open when the app closed */
 	current?: string;
+	/** the list sidebar between the rail and the chat (BIM Crew's Explorer / Sessions column) */
+	sidebar?: SidebarState;
+	/** one-time repairs already applied to `shared` (a later start never applies one twice) */
+	migrated?: string[];
 }
 export const emptyStore = (): LayoutStore => ({ version: 1, pages: {} });
+
+/**
+ * The list sidebar (B3), as BIM Crew's secondary column (App.tsx: ProjectSidebar / SessionSidebar + ResizeHandle): which list
+ * page it shows, whether it is open, its width. A rail click on the list that is showing closes it; dragging its edge
+ * `SIDEBAR_COLLAPSE` px past the minimum closes it too.
+ */
+export interface SidebarState {
+	id: string | null;
+	open: boolean;
+	width: number;
+	/** the filter the list was opened with (a link from another panel, the agent's open_panel) */
+	filter?: string;
+}
+export const SIDEBAR_MIN = 240;
+export const SIDEBAR_MAX = 600;
+export const SIDEBAR_DEFAULT = 340;
+export const SIDEBAR_COLLAPSE = 56;
+export const clampSidebar = (w: number): number => Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(w)));
+export const emptySidebar = (): SidebarState => ({ id: null, open: false, width: SIDEBAR_DEFAULT });
+export function cleanSidebar(raw: unknown): SidebarState {
+	const o = raw as Record<string, unknown> | null;
+	if (!o || typeof o !== "object") return emptySidebar();
+	const id = typeof o.id === "string" ? o.id : null;
+	return { id, open: id !== null && o.open === true, width: clampSidebar(num(o.width, SIDEBAR_DEFAULT)), ...(typeof o.filter === "string" ? { filter: o.filter } : {}) };
+}
 
 /** The layout of a page: its own, else the migrated old layout, else the page's default. */
 export function layoutFor(s: LayoutStore, page: string, defaultFor: (page: string) => Layout, vp: Vp): Layout {
@@ -514,6 +603,8 @@ export function parseStore(text: string | null | undefined, vp: Vp): LayoutStore
 			if (Array.isArray(j.visited)) out.visited = j.visited.filter((x): x is string => typeof x === "string");
 		if (j.legacy) out.legacy = normalize(j.legacy, vp);
 		if (typeof j.current === "string") out.current = j.current;
+		if (j.sidebar) out.sidebar = cleanSidebar(j.sidebar);
+		if (Array.isArray(j.migrated)) out.migrated = j.migrated.filter((x): x is string => typeof x === "string");
 		return out;
 	} catch {
 		return emptyStore();
@@ -556,6 +647,10 @@ export function problems(l: Layout): string[] {
 		if (g.place.kind === "dock") {
 			if (docks.has(g.place.side)) out.push(`two groups on ${g.place.side}`);
 			docks.add(g.place.side);
+		}
+		if (g.place.kind === "edge") {
+			if (docks.has("edge")) out.push("two edge columns");
+			docks.add("edge");
 		}
 	}
 	if (!seen.has(CHAT)) out.push("no chat");

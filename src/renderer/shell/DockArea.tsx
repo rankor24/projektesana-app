@@ -3,13 +3,31 @@
 // BIM Crew's App ResizeHandle for the single right-hand dock, here for four sides and a group each.
 import { useRef, type ReactNode } from "react";
 import { followMouse } from "./drag";
-import { clampDock, dockGroup, type DockPlace, type Side } from "../../shared/layout";
-import { WINDOW_TITLE, useWindows, windows } from "../windows";
+import { clampDock, dockGroup, EDGE_SIZE, edgeGroup, type DockPlace, type Side } from "../../shared/layout";
+import { WINDOW_TITLE, windows } from "../windows";
 import { TabGroup } from "./TabGroup";
+import { useShownLayout } from "./visible";
 import { tr } from "../i18n";
 
+/**
+ * The slim column between the chat and the canvas (the board's purple Comment Tools column, B1): one group, a fixed width,
+ * no resize. Its strip drags it away like any docked group; its buttons float it or pop it out.
+ */
+export function EdgeArea({ render }: { render: (id: string, filter?: string) => ReactNode }) {
+	const g = edgeGroup(useShownLayout());
+	if (!g) return null;
+	return (
+		<div className="dock dock-edge" style={{ width: EDGE_SIZE }}>
+			<div className="dock-main">
+				<TabGroup group={g} render={render} mode="edge" />
+			</div>
+		</div>
+	);
+}
+
 export function DockArea({ side, render }: { side: Side; render: (id: string, filter?: string) => ReactNode }) {
-	const { layout } = useWindows();
+	// the page's own windows and the shared ones (B5)
+	const layout = useShownLayout();
 	const box = useRef<HTMLDivElement>(null);
 	const g = dockGroup(layout, side);
 	if (!g) return null;

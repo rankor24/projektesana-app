@@ -6,7 +6,7 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
-import { defaultLayout, pageById, resolveOpen, SIDEBAR_SIZE, START_PAGE } from "../shared/pages";
+import { defaultLayout, migratePlanC, pageById, PLAN_C, resolveOpen, START_PAGE } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
 import { tr } from "./i18n";
@@ -59,6 +59,8 @@ export interface WindowsState {
 	/** the filter the open full page's panel was opened with (a sidebar page's filter lives in the layout) */
 	canvasFilter?: string;
 	layout: L.Layout;
+	/** the list sidebar between the rail and the chat (B3, BIM Crew's Explorer column) */
+	sidebar: L.SidebarState;
 	store: L.LayoutStore;
 	loaded: boolean;
 }
@@ -70,7 +72,9 @@ export const POP_ID = typeof location === "undefined" ? null : popIdOf(location.
 const ORIGIN = Math.random().toString(36).slice(2, 10);
 const vp = (): L.Vp => ({ w: window.innerWidth, h: window.innerHeight });
 let defaultFor: (page: string) => L.Layout = defaultLayout;
-let state: WindowsState = { page: START_PAGE, layout: L.emptyLayout(), store: L.emptyStore(), loaded: false };
+let state: WindowsState = { page: START_PAGE, layout: L.emptyLayout(), sidebar: L.emptySidebar(), store: L.emptyStore(), loaded: false };
+/** a stored sidebar that names something other than a list page shows nothing */
+const validSidebar = (s: L.SidebarState): L.SidebarState => (s.id && pageById(s.id)?.kind === "sidebar" ? s : { ...s, id: null, open: false });
 const listeners = new Set<() => void>();
 let listening = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,6 +106,13 @@ function commit(next: L.Layout) {
 	scheduleSave();
 }
 const op = (f: (l: L.Layout, v: L.Vp) => L.Layout) => commit(f(state.layout, vp()));
+function setSidebar(next: L.SidebarState) {
+	const sidebar = validSidebar(next);
+	if (JSON.stringify(sidebar) === JSON.stringify(state.sidebar)) return;
+	state = { ...state, sidebar, store: { ...state.store, sidebar } };
+	notify();
+	scheduleSave();
+}
 
 export const windows = {
 	/** Reads layout.json (and migrates the old localStorage value once), then shows the current page's layout. */
@@ -127,9 +138,14 @@ export const windows = {
 		const base = L.sharedLayout(store, page, defaultFor, vp());
 		// a store from the per-page builds starts the shared layout: the open page's windows are added once (the tool bar too)
 		const seeded = migrating ? L.addMissing(base, defaultFor(page), vp()) : base;
+		// a layout from before plan C: the lists leave the docks for the sidebar, the tool bar leaves the top for the column
+		const planC = store.migrated?.includes(PLAN_C) ? seeded : migratePlanC(seeded);
 		// the OS windows of a last session are gone: whatever was popped out is docked back (a pop-out window shows its one window)
-		const layout = POP_ID ? seeded : L.popInAll(seeded, vp());
-		state = { ...state, page, store, loaded: true, layout, ...(POP_ID ? {} : { store: L.withShared(store, layout, store.visited ?? [page]) }) };
+		const layout = POP_ID ? planC : L.popInAll(planC, vp());
+		// the list that was open (a list page as the current page, before plan C) is the sidebar's
+		const sidebar = validSidebar(store.sidebar ?? (pageById(page)?.kind === "sidebar" ? { ...L.emptySidebar(), id: page, open: true } : L.emptySidebar()));
+		const migrated = [...new Set([...(store.migrated ?? []), PLAN_C])];
+		state = { ...state, page, store, sidebar, loaded: true, layout, ...(POP_ID ? {} : { store: { ...L.withShared(store, layout, store.visited ?? [page]), sidebar, migrated } }) };
 		notify();
 		scheduleSave();
 		windows.listen();
@@ -141,7 +157,7 @@ export const windows = {
 		on("layout.changed", ({ store, origin }) => {
 			if (origin === ORIGIN) return;
 			const page = POP_ID && store.current && pageById(store.current) ? store.current : state.page;
-			state = { ...state, store, page, layout: L.sharedLayout(store, page, defaultFor, vp()) };
+			state = { ...state, store, page, layout: L.sharedLayout(store, page, defaultFor, vp()), sidebar: validSidebar(store.sidebar ?? state.sidebar) };
 			notify();
 		});
 		// the OS window of a popped window was closed: it docks back where it was
@@ -175,10 +191,30 @@ export const windows = {
 		const def = pageById(t.page)!;
 		windows.setPage(t.page, def.kind === "page" ? t.filter : undefined);
 		if (def.kind === "sidebar") {
-			// the sidebar's panel is part of the page's layout; reopen it where it belongs if the user closed it
-			if (!L.groupOf(state.layout, def.id)) op((l, v) => L.dock(L.open(l, def.id, v), def.id, "right", v, { size: SIDEBAR_SIZE }));
-			op((l, v) => L.open(l, def.id, v, t.filter));
+			// a list the user made a window (floating, docked) opens there; otherwise it opens in the sidebar
+			if (L.groupOf(state.layout, def.id)) return op((l, v) => L.open(l, def.id, v, t.filter));
+			const { filter: _f, ...rest } = state.sidebar;
+			setSidebar({ ...rest, id: def.id, open: true, ...(t.filter !== undefined ? { filter: t.filter } : {}) });
 		}
+	},
+	/**
+	 * A click on a rail item. As BIM Crew's rail (NavRail: `secondary === "explorer" ? "none" : "explorer"`): the list that is
+	 * showing in the sidebar closes on a second click, and the main area stays as it is. Anything else opens.
+	 */
+	railClick(id: string) {
+		const s = state.sidebar;
+		if (pageById(id)?.kind === "sidebar" && s.open && s.id === id && state.page === id && !L.groupOf(state.layout, id)) return setSidebar({ ...s, open: false });
+		windows.go(id);
+	},
+	/** The sidebar's edge was dragged (a width) or it was closed / reopened from its own header. */
+	setSidebarWidth: (width: number) => setSidebar({ ...state.sidebar, width: L.clampSidebar(width) }),
+	closeSidebar: () => setSidebar({ ...state.sidebar, open: false }),
+	/** The list leaves the sidebar and becomes a floating window (every panel is detachable, P2); the rail then opens it there. */
+	sidebarToWindow() {
+		const s = state.sidebar;
+		if (!s.id) return;
+		setSidebar({ ...s, open: false });
+		op((l, v) => L.open(l, s.id!, v, s.filter));
 	},
 	/** The window changed size: every size is clamped again. */
 	refit() {
@@ -199,6 +235,8 @@ export const windows = {
 	resizeDock: (side: L.Side, size: number) => op((l, v) => L.resizeDock(l, side, size, v)),
 	dock: (id: string, side: L.Side, opts?: { whole?: boolean }) => op((l, v) => L.dock(l, id, side, v, opts)),
 	undock: (id: string) => op((l, v) => L.undock(l, id, v)),
+	/** into the slim column beside the chat (the comment tools' home) */
+	toEdge: (id: string, opts?: { whole?: boolean }) => op((l) => L.toEdge(l, id, opts)),
 	pullOut: (id: string, at?: { x: number; y: number }) => op((l, v) => L.pullOut(l, id, v, at)),
 	mergeInto: (id: string, targetId: string, index?: number) => op((l) => L.mergeInto(l, id, targetId, index)),
 	/** a whole group dropped on a tab strip: every tab joins it */

@@ -233,7 +233,9 @@ function ViewerTools({ va, asking, ask }: { va: ViewerActions; asking: Asking | 
 
 function AskBox({ at, title, hint, value, setValue, colour, err, onSubmit, onCancel }: { at?: { left: number; top: number }; title: string; hint: string; value: string; setValue: (v: string) => void; colour: CommentColour | null; err: string | null; onSubmit: () => void; onCancel: () => void }) {
 	const ref = useRef<HTMLTextAreaElement>(null);
-	useEffect(() => ref.current?.focus(), []);
+	useEffect(() => {
+		ref.current?.focus();
+	}, []);
 	const hex = COMMENT_COLOURS.find((c) => c.id === colour)?.hex;
 	return (
 		<div className="ctool-ask" style={at} onKeyDown={(e) => e.key === "Escape" && onCancel()}>

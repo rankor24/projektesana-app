@@ -82,6 +82,14 @@ const SHAPES = {
 			<path d="M3 5h6v14H3z" fill="currentColor" stroke="none" opacity="0.45" />
 		</>
 	),
+	/** the slim column beside the chat: the chat's strip on the left, the column filled next to it */
+	dockEdge: (
+		<>
+			<rect width="18" height="18" x="3" y="3" rx="2" />
+			<path d="M8 3v18M12 3v18" />
+			<path d="M8 5h4v14H8z" fill="currentColor" stroke="none" opacity="0.45" />
+		</>
+	),
 	dockRight: (
 		<>
 			<rect width="18" height="18" x="3" y="3" rx="2" />
