@@ -2,9 +2,10 @@
 //
 // Borrowed from BIM Crew apps/server/src/runtime/models.ts (lookupModel, synthesizeLiveModel), model-catalog.ts
 // (effortsOf, defaultEffort, LEGACY) and model-cache.ts (fetchLiveModels): pi's catalog is fixed per pi version, so
-// a model released after it would be "Unknown model". Each provider's own /models list is fetched and cached; an id
+// a model released after it would be "Unknown model". Each provider's own /models list is fetched and cached (with the
+// stored key, or the subscription's OAuth token: ChatGPT/Codex and SuperGrok too), refreshed when older than a day; an id
 // pi does not know is built by cloning the newest catalog model of the same provider (same API, URL and auth).
-// Nobody types model names: the pickers show catalog + live list.
+// Nobody types model names: where a provider gave its live list, the picker is that list (retired models drop out).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
@@ -29,6 +30,8 @@ export interface LiveModel {
 	contextWindow?: number;
 	/** Unix seconds */
 	created?: number;
+	/** the provider's own order (Codex: lower first) where it gives no dates */
+	priority?: number;
 }
 
 interface CacheFile {
@@ -128,9 +131,13 @@ function synthesize(rt: PiRuntime, provider: string, id: string): Model<Api> | u
 	return { ...template, id, name: live.name ?? id, contextWindow: live.contextWindow ?? template.contextWindow } as Model<Api>;
 }
 
-/** Catalog + live-only models for one provider; newest live models first. */
+/**
+ * The models of one provider. With a live list: exactly the provider's list (catalog details where pi knows the model), newest or
+ * the provider's own order first. Without one: pi's catalog.
+ */
 export function listPiModels(rt: PiRuntime, provider: PiProviderId): PiModelInfo[] {
 	const liveList = rt.live.providers[provider] ?? [];
+	const hasLive = liveList.length > 0;
 	const liveById = new Map(liveList.map((m) => [m.id, m]));
 	const fromCatalog = rt.models.getModels(provider).map((m): PiModelInfo => {
 		const efforts = effortsOf(m as never);
@@ -145,9 +152,11 @@ export function listPiModels(rt: PiRuntime, provider: PiProviderId): PiModelInfo
 			const efforts = effortsOf(s as never);
 			return { id: m.id, name: m.name || m.id, reasoning: s.reasoning, contextWindow: s.contextWindow, efforts, defaultEffort: defaultEffort(efforts), legacy: isLegacy(m.id), live: true, created: m.created };
 		})
-		.filter((m): m is PiModelInfo => m !== null)
-		.sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
-	return [...extra, ...fromCatalog.reverse()];
+		.filter((m): m is PiModelInfo => m !== null);
+	if (!hasLive) return fromCatalog.reverse();
+	const order = new Map(liveList.map((m, i) => [m.id, m.priority ?? i]));
+	const rank = (m: PiModelInfo) => order.get(m.id) ?? Number.MAX_SAFE_INTEGER;
+	return [...extra, ...fromCatalog.filter((m) => liveById.has(m.id))].sort((a, b) => (b.created ?? 0) - (a.created ?? 0) || rank(a) - rank(b));
 }
 
 /** The model a provider uses when none is chosen: the provider's default if listed, else the newest non-legacy one. */
@@ -181,7 +190,33 @@ async function getJson(url: string, headers: Record<string, string>): Promise<{ 
 	return (await res.json()) as { data?: unknown[]; models?: unknown[] };
 }
 
-/** The provider's own model list. null = this provider has no list endpoint reachable with what the app holds. */
+/** The ChatGPT account id inside a Codex OAuth token (pi's extractAccountId, api/openai-codex-responses.ts). */
+function codexAccountId(token: string): string | undefined {
+	try {
+		const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as Record<string, Record<string, unknown> | undefined>;
+		const id = payload["https://api.openai.com/auth"]?.chatgpt_account_id;
+		return typeof id === "string" ? id : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Codex's model list answers per client version; the newest Codex CLI release is asked for, this when GitHub cannot be reached. */
+const CODEX_CLIENT_FALLBACK = "0.171.0";
+async function codexClientVersion(): Promise<string> {
+	try {
+		const res = await fetch("https://api.github.com/repos/openai/codex/releases/latest", { headers: { accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(5_000) });
+		const tag = res.ok ? String(((await res.json()) as { tag_name?: string }).tag_name ?? "") : "";
+		return /(\d+\.\d+\.\d+)/.exec(tag)?.[1] ?? CODEX_CLIENT_FALLBACK;
+	} catch {
+		return CODEX_CLIENT_FALLBACK;
+	}
+}
+
+/**
+ * The provider's own model list, with its API key or (ChatGPT/Codex, SuperGrok) the subscription's OAuth access token.
+ * null = no list endpoint reachable with what the app holds.
+ */
 export async function fetchLiveModels(provider: PiProviderId, apiKey: string | undefined): Promise<LiveModel[] | null> {
 	if (!apiKey) return null;
 	type R = Record<string, unknown>;
@@ -208,22 +243,36 @@ export async function fetchLiveModels(provider: PiProviderId, apiKey: string | u
 			const j = await getJson("https://openrouter.ai/api/v1/models", { Authorization: `Bearer ${apiKey}` });
 			return (j.data as R[]).map((m) => ({ id: String(m.id), name: m.name as string, contextWindow: m.context_length as number, created: m.created as number }));
 		}
+		case "openai-codex": {
+			// what the Codex CLI does (openai/codex codex-rs/codex-api/src/endpoint/models.rs): GET <base>/models?client_version=…,
+			// the models it shows in its picker are the ones with visibility "list"
+			const account = codexAccountId(apiKey);
+			const url = `https://chatgpt.com/backend-api/codex/models?client_version=${await codexClientVersion()}`;
+			const j = await getJson(url, { Authorization: `Bearer ${apiKey}`, originator: "pi", ...(account ? { "chatgpt-account-id": account } : {}) });
+			return (j.models as R[])
+				.filter((m) => m.visibility === "list" && typeof m.slug === "string")
+				.map((m) => ({ id: String(m.slug), name: m.display_name as string | undefined, contextWindow: typeof m.context_window === "number" ? m.context_window : undefined, priority: typeof m.priority === "number" ? m.priority : undefined }));
+		}
 		default:
-			// openai-codex: the ChatGPT subscription has no public model list; pi's catalog is what it supports
 			return null;
 	}
 }
 
-/** Refreshes the live list of every provider that has an API key; providers without one keep pi's catalog. */
+/** Refreshes the live list of every provider the app is signed in to (key or subscription); the others keep pi's catalog. */
 export async function refreshLiveModels(rt: PiRuntime, providers: readonly PiProviderId[]): Promise<Record<string, string>> {
 	const report: Record<string, string> = {};
 	for (const p of providers) {
 		try {
-			const cred = await rt.credentials.read(p);
-			const key = cred?.type === "api_key" ? (cred as { key: string }).key : undefined;
+			// pi resolves the key, or the OAuth access token (refreshed when it has expired)
+			const key = (await rt.models.getAuth(p))?.auth.apiKey;
 			const list = await fetchLiveModels(p, key);
 			if (list === null) {
-				report[p] = key ? "nav saraksta" : "pi katalogs (nav API atslēgas saraksta lejupielādei)";
+				report[p] = key ? "nav saraksta" : "pi katalogs (nav pieslēgts)";
+				continue;
+			}
+			// an empty answer is not a list to show: the catalog stays
+			if (!list.length) {
+				report[p] = "tukšs saraksts";
 				continue;
 			}
 			rt.live.providers[p] = list;
@@ -238,6 +287,32 @@ export async function refreshLiveModels(rt: PiRuntime, providers: readonly PiPro
 		writeFileSync(rt.cachePath, JSON.stringify(rt.live), "utf8");
 	}
 	return report;
+}
+
+/** A live list older than this is fetched again the next time the providers are listed. */
+export const LIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** a fetch that failed (offline, a provider down) is tried again after this, not on every listing */
+const RETRY_MS = 10 * 60 * 1000;
+const tried = new Map<string, number>();
+let refreshing: Promise<unknown> | null = null;
+/**
+ * Refreshes, one run at a time, the providers whose list is missing or older than a day (and the `force`d ones). Resolves to the
+ * providers it refreshed (empty when none was due). A provider that failed keeps its old list and is tried again next time.
+ */
+export function refreshStaleModels(rt: PiRuntime, providers: readonly PiProviderId[], force: readonly PiProviderId[] = []): Promise<PiProviderId[]> {
+	const now = Date.now();
+	const due = providers.filter((p) => force.includes(p) || (now - (rt.live.fetchedAt[p] ?? 0) > LIVE_MAX_AGE_MS && now - (tried.get(p) ?? 0) > RETRY_MS));
+	if (!due.length) return Promise.resolve([]);
+	for (const p of due) tried.set(p, now);
+	const run = (refreshing ?? Promise.resolve()).then(() => refreshLiveModels(rt, due));
+	const done = run.then(
+		() => due,
+		() => due,
+	);
+	refreshing = done.finally(() => {
+		if (refreshing === done) refreshing = null;
+	});
+	return done;
 }
 
 // ---- auth state ---------------------------------------------------------------------

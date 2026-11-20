@@ -30,6 +30,13 @@ type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialo
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
 	let login: { abort: AbortController; answer: ((s: string) => void) | null } | null = null;
+	/** a provider just signed in or got a key: its own model list now, not tomorrow */
+	const refreshNow = async (provider: string) => {
+		const m = await import("../../agent/pi/index.js");
+		if (!m.isPiProvider(provider)) return;
+		const done = await m.refreshStaleModels(await d.pi(), [provider], [provider]);
+		if (done.length) d.emit("data.changed", { projectId: null, what: ["agent"] });
+	};
 
 	return {
 		"app.info": () => ({ version: d.version, dataDir: d.settings.dir, platform: process.platform }),
@@ -49,8 +56,10 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			const m = await import("../../agent/pi/index.js");
 			const rt = await d.pi();
 			const rows: ProviderRow[] = [];
+			const signedIn: (typeof m.PI_PROVIDERS)[number]["id"][] = [];
 			for (const p of m.PI_PROVIDERS) {
 				const auth = await m.piAuthState(rt, p.id);
+				if (auth.configured) signedIn.push(p.id);
 				const models = m.listPiModels(rt, p.id).map((x) => ({ id: x.id, name: x.name, legacy: x.legacy, efforts: x.efforts, defaultEffort: x.defaultEffort }));
 				rows.push({ id: p.id, label: p.label, auth: p.auth, configured: auth.configured, method: auth.method, keyUrl: p.keyUrl, models });
 				// right after Claude by API key: the same models through the user's own Claude subscription (the Agent SDK engine)
@@ -64,11 +73,14 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 					rows.push({ id: c.CLAUDE_SUB, label: c.CLAUDE_SUB_LABEL, auth: ["api_key"], configured: on, method: on ? "api_key" : undefined, keyHelp: c.CLAUDE_SUB_TOKEN_HELP, models: subModels });
 				}
 			}
+			// the providers' own model lists, fetched in the background when missing or a day old; the pickers reload when they arrive
+			void m.refreshStaleModels(rt, signedIn).then((done) => done.length && d.emit("data.changed", { projectId: null, what: ["agent"] }));
 			return rows;
 		},
 		"agent.setKey": (provider, key) => {
 			d.settings.setApiKey(provider, key);
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
+			void refreshNow(provider);
 		},
 		"agent.clearKey": (provider) => {
 			d.settings.clearApiKey(provider);
@@ -98,7 +110,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 					},
 					abort.signal,
 				)
-				.then(() => d.emit("agent.login", { provider, type: "done" }))
+				.then(() => (d.emit("agent.login", { provider, type: "done" }), refreshNow(provider)))
 				.catch((e: Error) => d.emit("agent.login", { provider, type: "error", message: e.message }))
 				.finally(() => {
 					if (login === current) login = null;

@@ -46,4 +46,5 @@ export const settings: Record<string, string> = {
 	"DWG ar šo nosaukumu projekta mapē nav.": "No DWG with this name in the project folder.",
 	"PDF ar šo nosaukumu projekta mapē nav.": "No PDF with this name in the project folder.",
 	"klikšķis: notīrīt": "click: clear",
+	"Vilkt, lai pārvietotu": "Drag to move",
 };

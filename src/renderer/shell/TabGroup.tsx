@@ -70,7 +70,13 @@ export function TabGroup({
 	const slim = group.tabs.length === 1 && group.tabs[0] === TOOLS;
 	return (
 		<div className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
-			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (mode === "float" ? windows.maximize(own) : windows.undock(own))}>
+			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? undefined : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
+				{/* the slim strip is all buttons: this grip is the part that moves the window (or drags the column off its edge) */}
+				{slim && (
+					<div className="tg-grip" title={tr("Vilkt, lai pārvietotu")} aria-hidden>
+						⋮⋮
+					</div>
+				)}
 				<div
 					ref={tabsRef}
 					className="tg-tabs"
