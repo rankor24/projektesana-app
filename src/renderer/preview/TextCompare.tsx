@@ -1,5 +1,5 @@
 // Two documents compared word by word (DOCX, XLSX, TXT, or a PDF's text): A | B side by side, removed words struck in red on
-// the left, added words in green on the right, or one column with both (Kopā). Next / previous jump between the changes.
+// the left, added words in green on the right, or one column with both (Vienā kolonnā). Next / previous jump between the changes.
 // The text is the scanner's own (sources keep it), so it is what the agent quotes; main sends it, the diff is shared/compare2d.
 import { useMemo, useRef, useState } from "react";
 import { textDiff, type DiffPart } from "../../shared/compare2d";
@@ -45,7 +45,7 @@ export function TextCompare({ projectId, a, b, aLabel, bLabel }: { projectId: st
 						{tr("A | B")}
 					</button>
 					<button className={mode === "inline" ? "on" : ""} onClick={() => setMode("inline")}>
-						{tr("Kopā")}
+						{tr("Vienā kolonnā")}
 					</button>
 				</div>
 				<Badge tone="ok">{tr("+{n} vārdi", { n: diff.added })}</Badge>

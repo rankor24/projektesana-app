@@ -72,9 +72,9 @@ function NormativiPage() {
 }
 
 /** A page with comment tools: the panel above, the comment strip under it. */
-function Panel({ id, filter }: { id: PanelId; filter?: string }) {
+function Panel({ id, filter, tools = false }: { id: PanelId; filter?: string; /** the page itself: the comment column goes beside it (a docked panel has the canvas's column) */ tools?: boolean }) {
 	const inner = <PanelBody id={id} filter={filter} />;
-	if (toolsFor(id).length === 0) return inner;
+	if (!tools || toolsFor(id).length === 0) return inner;
 	return (
 		<div className="ctool-row">
 			<CommentTools page={id} />
@@ -211,7 +211,7 @@ export function App() {
 						<main className={`canvas ${fullPage ? "canvas-page" : ""}`}>
 							{fullPage && (
 								<div className="page-body">
-									<Panel id={fullPage as PanelId} filter={canvasFilter} />
+									<Panel id={fullPage as PanelId} filter={canvasFilter} tools />
 								</div>
 							)}
 							{sceneCanvas && (
