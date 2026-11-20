@@ -873,3 +873,12 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .md-table th { background: var(--elev2); position: static; }
 .md-src { display: inline; padding: 0; border: none; background: none; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 2px; }
 .md-src:hover { text-decoration-color: var(--accent); }
+
+/* the notes beside a PDF (preview/Annotate.tsx PinSide): only when the file has notes; resizable by the left edge; folds to a tab */
+.pin-side { position: relative; flex: none; display: flex; min-width: 160px; max-width: 600px; min-height: 0; }
+.pin-side .pin-panel { width: auto; flex: 1; min-width: 0; }
+.pin-side-edge { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; }
+.pin-side-edge:hover { background: color-mix(in srgb, var(--focus) 45%, transparent); }
+.pin-side-fold { position: absolute; top: 6px; right: 6px; z-index: 4; padding: 0 6px; }
+.pin-fold { flex: none; writing-mode: vertical-rl; padding: 10px 4px; border: none; border-left: 1px solid var(--border); border-radius: 0; background: var(--panel); color: var(--dim); font-size: 12px; cursor: pointer; }
+.pin-fold:hover { color: var(--text); background: var(--elev2); }

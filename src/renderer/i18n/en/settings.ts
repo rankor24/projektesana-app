@@ -53,4 +53,7 @@ export const settings: Record<string, string> = {
 	"labojis aģents": "corrected by the agent",
 	"labots": "corrected",
 	"Šīs rindas aizstāj no dokumenta nolasītās visur: salīdzinājumā ar modeli un pārbaudēs.": "These rows replace the ones read from the document everywhere: in the comparison with the model and in the checks.",
+	"Rādīt piezīmes": "Show notes",
+	"Vilkt, lai mainītu platumu": "Drag to change the width",
+	"Sakļaut piezīmes": "Fold the notes",
 };

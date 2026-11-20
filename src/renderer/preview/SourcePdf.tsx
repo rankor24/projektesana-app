@@ -10,7 +10,7 @@ import { viewer } from "../viewer-store";
 import { factReview } from "../fact-review";
 import { pinFocus } from "../../shared/pins-view";
 import { PdfView } from "./PdfView";
-import { PinPanel, useFilePins } from "./Annotate";
+import { PinSide, useFilePins } from "./Annotate";
 import { tr } from "../i18n";
 
 type Geo = Awaited<ReturnType<typeof call<"rooms.geometry">>>;
@@ -123,7 +123,7 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 						}}
 					/>
 				</div>
-				<PinPanel projectId={projectId} items={pins.items} activeId={active} onSelect={select} onChanged={pins.reload} onError={setErr} />
+				<PinSide projectId={projectId} items={pins.items} activeId={active} onSelect={select} onChanged={pins.reload} onError={setErr} />
 			</div>
 		</>
 	);

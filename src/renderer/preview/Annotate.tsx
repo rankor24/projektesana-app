@@ -1,7 +1,8 @@
 // The annotation view's shared pieces (task 8.2): the pins of the open file, numbered in the order they were made (so a
 // dot's number never changes when another pin closes), listed beside the view with the open ones first. One list for the
 // PDF view and the 3D view; a click on a row is the view's business (jump to the page, fly to the element).
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
+import { followMouse } from "../shell/drag";
 import type { Pin } from "../../core/model";
 import { call, errText } from "../bridge";
 import { listOrder, numbered, type NumberedPin } from "../../shared/pins-view";
@@ -15,6 +16,63 @@ export function useFilePins(projectId: string, belongs: (p: Pin) => boolean): { 
 	const pins = useLoad<Pin[]>(() => call("pins.list", projectId), [projectId]);
 	const items = useMemo(() => numbered((pins.data ?? []).filter(belongs)), [pins.data, belongs]);
 	return { items, all: pins.data ?? [], reload: pins.reload, error: pins.error };
+}
+
+const PIN_W = "projektesana:pin-side";
+const readW = () => {
+	try {
+		return Math.min(600, Math.max(160, Number(localStorage.getItem(PIN_W)) || 260));
+	} catch {
+		return 260;
+	}
+};
+
+/**
+ * The file's notes beside a document view: nothing at all while the file has none (the page gets the width), otherwise a column
+ * the user widens or narrows by its left edge (160–600 px, remembered) or folds to a slim tab.
+ */
+export function PinSide(props: Parameters<typeof PinPanel>[0]) {
+	const [w, setW] = useState(readW);
+	const [folded, setFolded] = useState(false);
+	const box = useRef<HTMLDivElement>(null);
+	if (!props.items.length) return null;
+	const open = props.items.filter((x) => x.pin.state !== "closed").length;
+	if (folded)
+		return (
+			<button className="pin-fold" title={tr("Rādīt piezīmes")} onClick={() => setFolded(false)}>
+				{tr("Piezīmes")} {open}/{props.items.length}
+			</button>
+		);
+	const drag = (e: React.MouseEvent) => {
+		e.preventDefault();
+		const x0 = e.clientX;
+		const w0 = w;
+		let next = w0;
+		followMouse(
+			(ev) => {
+				next = Math.min(600, Math.max(160, w0 + (x0 - ev.clientX)));
+				if (box.current) box.current.style.width = `${next}px`;
+			},
+			() => {
+				setW(next);
+				try {
+					localStorage.setItem(PIN_W, String(next));
+				} catch {
+					// not remembered: the default width next time
+				}
+			},
+			{ cursor: "col-resize" },
+		);
+	};
+	return (
+		<div className="pin-side" ref={box} style={{ width: w }}>
+			<div className="pin-side-edge" onMouseDown={drag} title={tr("Vilkt, lai mainītu platumu")} />
+			<button className="pin-side-fold ghost small" title={tr("Sakļaut piezīmes")} onClick={() => setFolded(true)}>
+				»
+			</button>
+			<PinPanel {...props} />
+		</div>
+	);
 }
 
 export function PinPanel({ projectId, items, activeId, onSelect, onChanged, onError, footer }: { projectId: string; items: NumberedPin[]; activeId: string | null; onSelect: (p: Pin) => void; onChanged: () => void; onError: (m: string) => void; footer?: React.ReactNode }) {
