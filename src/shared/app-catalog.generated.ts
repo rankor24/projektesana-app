@@ -1244,6 +1244,106 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "what falls on each day from `from` to `to`: planned and sent deliveries, clock ends, tasks; of one project or of all"
 	},
+	"routines.list": {
+		"sig": "(projectId: string | null) => RoutineRow[]",
+		"params": [
+			"projectId"
+		],
+		"doc": "Routines (Grafiks → Rutīnas): an agent + an instruction + a schedule, of one project or (projectId null) of the whole app"
+	},
+	"routines.preview": {
+		"sig": "(when: string, tz?: string) => RoutinePreview",
+		"params": [
+			"when",
+			"tz"
+		],
+		"doc": "timing in words or a cron expression → the checked expression, its sentence and the next three runs; nothing is saved"
+	},
+	"routines.save": {
+		"sig": "(projectId: string | null, input: RoutineInput) => RoutineRow",
+		"params": [
+			"projectId",
+			"input"
+		]
+	},
+	"routines.setPaused": {
+		"sig": "(projectId: string | null, routineId: string, paused: boolean) => RoutineRow",
+		"params": [
+			"projectId",
+			"routineId",
+			"paused"
+		]
+	},
+	"routines.remove": {
+		"sig": "(projectId: string | null, routineId: string) => void",
+		"params": [
+			"projectId",
+			"routineId"
+		]
+	},
+	"routines.runNow": {
+		"sig": "(projectId: string | null, routineId: string) => { thread: string }",
+		"params": [
+			"projectId",
+			"routineId"
+		],
+		"doc": "starts the routine's agent now, as a run of its own; the answer is the thread it opened"
+	},
+	"routines.occurrences": {
+		"sig": "(projectId: string | null, from: string, to: string) => RoutineOccurrence[]",
+		"params": [
+			"projectId",
+			"from",
+			"to"
+		],
+		"doc": "the days a project's routines (and the whole app's) run, from \"from\" to \"to\", for the calendar"
+	},
+	"memoryMd.list": {
+		"sig": "() => MemoryFileInfo[]",
+		"params": [],
+		"doc": "the agents' Markdown memory (Atmiņa → Aģentu atmiņa): every file with who keeps it and how much of it a run starts with"
+	},
+	"memoryMd.read": {
+		"sig": "(kind: MemoryKind, id: string) => MemoryFileText",
+		"params": [
+			"kind",
+			"id"
+		]
+	},
+	"memoryMd.write": {
+		"sig": "(kind: MemoryKind, id: string, text: string, expectedHash: string) => MemoryFileText",
+		"params": [
+			"kind",
+			"id",
+			"text",
+			"expectedHash"
+		],
+		"doc": "the user's edit of a memory file; expectedHash is the hash that was read, so a write by an agent meanwhile is not covered"
+	},
+	"selfChanges.list": {
+		"sig": "() => SelfChange[]",
+		"params": [],
+		"doc": "what agents changed in themselves (memory, role text, skill drafts), newest first, with the text before and after"
+	},
+	"selfChanges.undo": {
+		"sig": "(changeId: string) => string",
+		"params": [
+			"changeId"
+		],
+		"doc": "puts the text from before a change back; → what it did"
+	},
+	"appIssues.list": {
+		"sig": "() => AppIssue[]",
+		"params": [],
+		"doc": "problems with the app itself that agents reported (report_app_issue), newest first"
+	},
+	"appIssues.setStatus": {
+		"sig": "(issueId: string, status: AppIssueStatus) => AppIssue",
+		"params": [
+			"issueId",
+			"status"
+		]
+	},
 	"files.roots": {
 		"sig": "(id: string) => FileRoot[]",
 		"params": [

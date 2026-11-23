@@ -30,12 +30,14 @@ export interface GrafikItem {
 	/** unique inside one answer */
 	id: string;
 	date: string;
-	kind: "planned" | "sent" | "clock" | "task";
+	kind: "planned" | "sent" | "clock" | "task" | "routine";
 	title: string;
 	projectId: string;
 	/** where a click goes */
 	open?: { panel: "nodevumi" | "grafiks"; filter?: string };
 	taskId?: string;
+	/** a routine's run on this day (projectId "" = a routine of the whole app) */
+	routineId?: string;
 	level?: "bad" | "warn";
 	done?: boolean;
 	proposed?: boolean;

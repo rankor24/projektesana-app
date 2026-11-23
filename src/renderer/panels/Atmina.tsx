@@ -10,6 +10,7 @@ import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { locale, tr } from "../i18n";
+import { AgentMemory } from "./AtminaMd";
 
 const TYPE: Record<NoteType, string> = { decision: tr("lēmums"), answer: tr("atbilde"), learning: tr("mācība"), question: tr("jautājums"), gate: tr("gate"), risk: tr("risks"), change: tr("izmaiņa") };
 /** what the notes form offers: the process notes are written by the process, not typed */
@@ -18,7 +19,7 @@ const TYPED: NoteType[] = ["decision", "answer", "learning", "question"];
 /** `filter` = a project note's id (the room feed's Atmiņa button, task 12.5): that note is shown and scrolled to. */
 export function Atmina({ filter }: { filter?: string }) {
 	const { projectId } = useUi();
-	const [scope, setScope] = useState<"project" | "office">(projectId ? "project" : "office");
+	const [scope, setScope] = useState<"project" | "office" | "agents">(projectId ? "project" : "office");
 	const [type, setType] = useState<NoteType | "">("");
 	const [agent, setAgent] = useState("");
 	// the note asked for: project scope, no type/agent filter hiding it
@@ -124,8 +125,9 @@ export function Atmina({ filter }: { filter?: string }) {
 			<div className="row">
 				<button className={scope === "project" ? "primary" : ""} disabled={!projectId} onClick={() => setScope("project")}>{tr("Projekts")}{projectId ? ` ${projectId}` : ""}</button>
 				<button className={scope === "office" ? "primary" : ""} onClick={() => setScope("office")} title={tr("Mācības, kas der visiem projektiem; aģents tās lasa katrā projektā")}>{tr("Birojs")}</button>
+				<button className={scope === "agents" ? "primary" : ""} onClick={() => setScope("agents")} title={tr("Aģentu Markdown atmiņa, viņu izmaiņas sevī un lietotnes problēmas")}>{tr("Aģentu atmiņa")}</button>
 				<span className="grow" />
-				{(["", "decision", "answer", "learning", "question", "gate"] as const).map((t) => (
+				{scope !== "agents" && (["", "decision", "answer", "learning", "question", "gate"] as const).map((t) => (
 					<button key={t} className={type === t ? "primary" : ""} onClick={() => setType(t)}>
 						{t ? TYPE[t] : tr("visi")}
 					</button>
@@ -141,7 +143,9 @@ export function Atmina({ filter }: { filter?: string }) {
 					))}
 				</div>
 			)}
-			{!office && !projectId ? (
+			{scope === "agents" ? (
+				<AgentMemory />
+			) : !office && !projectId ? (
 				<Empty title={tr("nav projekta")}>{tr("Atver projektu vai skaties biroja atmiņu.")}</Empty>
 			) : (
 				<>

@@ -1,8 +1,10 @@
 // What the grafiks puts on each day of a project (task 8.5), from the data the app already keeps: planned deliveries (the
-// BIP grafiks dates or the user's), deliveries marked sent, TN and approval clocks that are due, and the user's tasks. A
+// BIP grafiks dates or the user's), deliveries marked sent, TN and approval clocks that are due, the user's tasks, and the routines that run that day. A
 // view, never a second copy: nothing here is stored.
 import { clockOf, type ClockItem } from "../rules/clocks.js";
 import type { GrafikItem } from "../shared/calendar.js";
+import { join } from "node:path";
+import { routineGrafikItems } from "./routines.js";
 import type { ProjectStore } from "./store.js";
 
 const inRange = (d: string | null | undefined, from: string, to: string): d is string => !!d && d >= from && d <= to;
@@ -29,5 +31,7 @@ export function grafikItems(store: ProjectStore, from: string, to: string, today
 		if (!inRange(t.due, from, to)) continue;
 		out.push({ id: `t:${t.id}`, date: t.due, kind: "task", title: t.title, projectId: pid, taskId: t.id, open: { panel: "grafiks" }, done: t.state === "done", proposed: t.state === "proposed", ...(t.state === "open" && t.due < today ? { level: "bad" as const } : {}) });
 	}
+	// the project's routines, one chip on each day they run (core/routines.ts)
+	out.push(...routineGrafikItems(join(store.dir, "routines.json"), pid, from, to));
 	return out.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title, "lv"));
 }

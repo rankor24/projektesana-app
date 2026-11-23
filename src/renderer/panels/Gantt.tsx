@@ -297,6 +297,7 @@ export function Gantt({ projectId }: { projectId: string }) {
 							</div>
 						</div>
 					))}
+					<RoutineRows projectId={projectId} axis={axis} dw={dw} trackStyle={trackStyle} todayLine={todayLine} />
 					<div className="gantt-group">{tr("Uzdevumi")} <span className="dim small">· {tr("klikšķis uz tukšas vietas pievieno uzdevumu")}</span></div>
 					{model.tasks.map(({ t, span: sp }) => (
 						<div key={t.id} className="gantt-row">
@@ -328,6 +329,34 @@ export function Gantt({ projectId }: { projectId: string }) {
 			{popup && <TaskPopup key={popup.mode === "edit" ? popup.task.id : `new:${popup.date}:${popup.x}`} target={popup} onClose={() => setPopup(null)} onChanged={reload} />}
 			{stagePop && <StagePopup key={stagePop.stage} projectId={projectId} stage={stagePop.stage} current={dates.data?.[stagePop.stage]} x={stagePop.x} y={stagePop.y} onClose={() => setStagePop(null)} onChanged={reload} />}
 		</div>
+	);
+}
+
+/** The routines of the project (and of the whole app) as recurring ticks on their own rows: one mark on each day a routine runs (routines.occurrences). Nothing shows without a routine. */
+function RoutineRows({ projectId, axis, dw, trackStyle, todayLine }: { projectId: string; axis: Axis; dw: number; trackStyle: React.CSSProperties; todayLine: React.ReactNode }) {
+	const occ = useLoad(() => call("routines.occurrences", projectId, axis.from, axis.to), [projectId, axis.from, axis.to]);
+	const rows = new Map<string, { name: string; days: { date: string; time: string }[]; idle: boolean; whole: boolean }>();
+	for (const o of occ.data ?? []) {
+		const r = rows.get(o.routineId) ?? { name: o.name, days: [], idle: o.paused || o.proposed, whole: o.projectId === null };
+		r.days.push({ date: o.date, time: o.time });
+		rows.set(o.routineId, r);
+	}
+	if (rows.size === 0) return null;
+	return (
+		<>
+			<div className="gantt-group">{tr("Rutīnas")} <span className="dim small">· {tr("atkārtojas; pārvaldība: Rutīnas cilnē")}</span></div>
+			{[...rows].map(([id, r]) => (
+				<div key={id} className="gantt-row">
+					<div className="gantt-label" title={r.name}>⟳ {r.name}{r.whole ? <span className="dim small"> ({tr("visa lietotne")})</span> : null}</div>
+					<div className="gantt-track" style={trackStyle}>
+						{todayLine}
+						{r.days.map((d) => (
+							<i key={d.date + d.time} className={`groutine ${r.idle ? "idle" : ""}`} style={{ left: dayIndex(axis, d.date) * dw, width: Math.max(2, dw - 1) }} title={`${r.name} · ${d.date} ${d.time}`} />
+						))}
+					</div>
+				</div>
+			))}
+		</>
 	);
 }
 

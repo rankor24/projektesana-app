@@ -960,3 +960,26 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .st-toasts { position: fixed; right: 14px; bottom: 36px; z-index: 900; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 28px)); }
 .st-toast { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4); overflow-wrap: anywhere; }
 .st-toast.ask { border-color: var(--warn); }
+/* --- Memory, routines, self-improvement (Atmiņa → Aģentu atmiņa, Grafiks → Rutīnas) --- */
+.amd-section { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.amd-section h3 { margin: 6px 0 0; font-size: 13px; }
+.amd-group { display: flex; flex-direction: column; gap: 2px; }
+.amd-head { margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.amd-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.amd-row:hover, .amd-row.on { background: var(--elev); }
+.amd-name { font-weight: 600; min-width: 130px; }
+.amd-cut { color: var(--warn); }
+.amd-editor { display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 10px; }
+.amd-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.amd-change.undone { opacity: 0.6; }
+.amd-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.amd-diff pre { margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; background: var(--elev); border-radius: 4px; padding: 6px 8px; }
+.routine.idle { opacity: 0.75; }
+.routine-when { margin: 2px 0; }
+.routine-form textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.routine-preview { border-left: 3px solid var(--ok); padding: 2px 8px; }
+.routine-log { margin-top: 6px; }
+.routine-run { padding: 2px 0; }
+.gchip.routine { border-left-color: var(--info); font-style: italic; }
+.groutine { position: absolute; top: 12px; height: 8px; border-radius: 2px; background: var(--info); opacity: 0.85; pointer-events: auto; }
+.groutine.idle { background: transparent; border: 1px dashed var(--info); }
