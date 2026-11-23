@@ -1,12 +1,14 @@
 // One run of one thread: the body of what AgentSession.run was, keyed by the thread instead of the project.
 // The conversation in memory, the compaction counter and the transcript belong to the thread; the plan stays per project.
 // No Electron imports: everything is injected through SessionDeps (+ the thread stores and the lock registry).
+// Phase C: the tool ceiling a message brings (`RunInput.levelCap`, the Chief's level flowing down) lowers the agent's own; BPV and department leads get the task tools; an agent
+// with `check` set has its final answer read by a checker and fixed, up to 3 checks and 2 fixes (core/check-work.ts, from OpenMausBot server/host/check-work.ts).
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { isContextOverflow, normalizeContext, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
-import type { AgentSpec } from "../shared/agent-types.js";
+import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -34,10 +36,13 @@ import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
-import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
+import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
 import { agentMcpRun } from "./agent-mcp.js";
 import { EKS, LEADER, PROCESS_OWN_TOOLS, stageCard } from "../core/process-def.js";
-import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
+import { MAIL_TOOL_LEVELS, mailTools, type MailDeps } from "./mail.js";
+import { chiefOf, taskTools } from "./task-tools.js";
+import { minLevel, type Level as CapLevel } from "../core/chief.js";
+import { CHECKER_SYSTEM, CHECK_MAX_MS, afterCheck, checkBrief, fixBrief, readVerdict, roundsOf, worthChecking } from "../core/check-work.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
@@ -73,6 +78,8 @@ export interface RunInput {
 	depth?: number;
 	/** this run answers another agent's mail (a task or an ask): a usage limit or a lost sign-in before any tool ran is resent once on the backup, whatever automatic recovery says */
 	peer?: boolean;
+	/** the tool ceiling the work came with (the Chief's level flows down, core/chief.ts): this run never goes above it, whatever its agent is allowed */
+	levelCap?: CapLevel;
 	/** a message was added to the mailbox: the coordinator delivers it */
 	wake?: () => void;
 	/** a question for the user was written into Atmiņa: "Gaida tevi" changed */
@@ -99,7 +106,7 @@ export class ThreadRunner {
 	/** where each thread's last run really went (its backup while its provider was held, the checker's provider for eks): the context meter and the attachment limits describe that model */
 	private lastOn = new Map<string, Target>();
 
-	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox; failover?: Failover }) {}
+	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox; failover?: Failover; /** the words a handoff to a paused agent is refused with (null = it may work) */ held?: (agent: string) => string | null }) {}
 
 	private store(thread: Thread): ThreadStore {
 		return this.d.threads(thread.projectId);
@@ -228,6 +235,9 @@ export class ThreadRunner {
 		let answer = "";
 		let confirmedBatches = 0;
 		let failed = false;
+		let heldDone = false;
+		// the lane dependencies of the latest attempt (its model, its tools, its locks): what a check turn runs with
+		let lastLaneDeps: LaneDeps | null = null;
 		let batchOpen = false;
 		// the run's end frees whatever its tool calls or its Revit batch still hold, whatever way it ends
 		try {
@@ -249,7 +259,7 @@ export class ThreadRunner {
 					const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, app, rv?.levels ?? {});
 					const revitTools = new Set(rv?.tools ?? []);
 					const listed = [...offered(appTools, levelOf), ...(rv ? offered(rv.tools, levelOf) : [])];
-					const own = spec ? new Set(ownTools(listed, levelOf, revitTools, spec, capOf(spec))) : null;
+					const own = spec ? new Set(ownTools(listed, levelOf, revitTools, spec, minLevel(capOf(spec) as CapLevel, i.levelCap) ?? capOf(spec))) : null;
 					return { revit: rv, levelOf, revitTools, listed, own };
 				};
 				let plan = planFor(this.d.revit());
@@ -343,7 +353,8 @@ export class ThreadRunner {
 					return undefined;
 				};
 
-				const conv = this.conversations.get(thread.id);
+				// `let`: a fix turn after a check carries on from the conversation as the first turn left it
+				let conv = this.conversations.get(thread.id);
 				const rt = await this.d.runtime();
 				// Where this run goes (Phase A). The agent's own provider and model (13.3) and its backup; eks, with no provider of its own, on a provider other than its authors';
 				// and the backup in place of a provider that is on hold (a usage limit, a lost sign-in) so the run starts there and not on a refusal. An unknown model fails
@@ -375,8 +386,10 @@ export class ThreadRunner {
 				// this project's mailbox: the thread's open topics go into every prompt, and the mail tools write into it
 				const mailbox = this.d.mail?.(projectId);
 				const topics = mailbox ? topicsLine(openTopicsOf(thread, mailbox.topics(), mailbox.messages())) : "";
-				const prompt = [buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics), seatLine].filter(Boolean).join("\n\n");
-				const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
+				let prompt = [buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics), seatLine].filter(Boolean).join("\n\n");
+				let promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
+				// the images go with the first turn only (a fix turn after a check has none)
+				let turnImages = files.images;
 
 				// 1. the cheap ways first: old screenshots out, old tool results cut (already-shrunk messages stay shrunk)
 				// 2. at the line (80% of the window, at most 200K) the older conversation becomes a summary, before the request is made
@@ -394,6 +407,41 @@ export class ThreadRunner {
 					const seed = sh.resume ? { summary: null, earlier: [] } : this.transcriptSeed(thread);
 					return { seed, seeded: seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing };
 				};
+				// send_message, close_topic and the task tools: the lead's threads and a specialist's alike, never a lane
+				const md: MailDeps | null = mailbox ? ({
+							mailbox,
+							threads: this.store(thread),
+							agents: () => this.d.agents?.() ?? DEFAULT_AGENTS,
+							limits: () => limitsOf(this.d.settings()),
+							self: { agent: spec ? spec.id : LEAD_ID, threadId: thread.id, projectId, wave: i.wave, depth: i.depth ?? 0 },
+							enqueue: () => i.wake?.(),
+							note: (line) => emit({ type: "text", text: line }),
+							// the project's Atmiņa, from the main process; a thread with no project (or one without data yet) has none
+							notes: () => {
+								if (!projectId) return null;
+								try {
+									return ProjectStore.load(this.d.ctx.projectsDir, projectId);
+								} catch {
+									return null;
+								}
+							},
+							// read at each call: the user may switch the mode while a run goes on
+							process: () => {
+								if (!projectId) return null;
+								try {
+									return readProcess(ProjectStore.load(this.d.ctx.projectsDir, projectId));
+								} catch {
+									return null;
+								}
+							},
+							notesChanged: () => i.notesChanged?.(),
+							leadThread: () => this.store(thread).lead(projectId, join(this.d.chatDir, `${projectId ?? "_"}.jsonl`)),
+							departments: () => this.d.departments?.() ?? [],
+							held: (agent) => this.d.held?.(agent) ?? null,
+							// the ceiling this run works under goes with the work it hands on (never raised on the way)
+							level: () => (spec ? minLevel(capOf(spec) as CapLevel, i.levelCap) : i.levelCap),
+							threadChanged: (t) => this.d.onThread?.(t),
+							}) : null;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
 				const st = { toolsRan: false, overflowed: null as string | null, retried: false, held: null as (RunEvent & { type: "error" }) | null };
 				const attempt = async (h: AgentMessage[], sh: typeof shape) => {
@@ -423,7 +471,14 @@ export class ThreadRunner {
 								// the log is a convenience: a full disk must not stop the run
 							}
 						}
-						if (e.type === "done") answer = e.text;
+						if (e.type === "done") {
+							answer = e.text;
+							// an agent whose answer is checked announces it done only when the checks are over (a check and a fix turn may follow)
+							if (spec?.check) {
+								heldDone = true;
+								return;
+							}
+						}
 						if (e.type === "error" && isContextOverflow({ stopReason: "error", errorMessage: e.message } as AssistantMessage)) {
 							st.overflowed = e.message;
 							// before any tool ran nothing has happened yet: held back, the run is compacted and repeated once
@@ -445,7 +500,7 @@ export class ThreadRunner {
 						emit(e);
 					};
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
-					const lanes = spec ? [] : subagentTools({
+					const laneDeps: LaneDeps = {
 						// each lane on the engine of its own provider (a specialist may be on another one than this run)
 						run: (o) => {
 							const e = this.engineOf(o.provider ?? provider);
@@ -474,39 +529,14 @@ export class ThreadRunner {
 						emit: handle,
 						maxParallel: () => this.d.settings().maxParallelAgents,
 						specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
-					});
-					// send_message and close_topic: the lead's threads and a specialist's alike, never a lane
-					const mail = mailbox
-						? mailTools({
-								mailbox,
-								threads: this.store(thread),
-								agents: () => this.d.agents?.() ?? DEFAULT_AGENTS,
-								limits: () => limitsOf(this.d.settings()),
-								self: { agent: spec ? spec.id : LEAD_ID, threadId: thread.id, projectId, wave: i.wave, depth: i.depth ?? 0 },
-								enqueue: () => i.wake?.(),
-								note: (line) => emit({ type: "text", text: line }),
-								// the project's Atmiņa, from the main process; a thread with no project (or one without data yet) has none
-								notes: () => {
-									if (!projectId) return null;
-									try {
-										return ProjectStore.load(this.d.ctx.projectsDir, projectId);
-									} catch {
-										return null;
-									}
-								},
-								// read at each call: the user may switch the mode while a run goes on
-								process: () => {
-									if (!projectId) return null;
-									try {
-										return readProcess(ProjectStore.load(this.d.ctx.projectsDir, projectId));
-									} catch {
-										return null;
-									}
-								},
-								notesChanged: () => i.notesChanged?.(),
-								leadThread: () => this.store(thread).lead(projectId, join(this.d.chatDir, `${projectId ?? "_"}.jsonl`)),
-							})
-						: [];
+						// a paused specialist is not handed work (holds.ts): the lead is told not to route around the pause
+						held: (agentId) => this.d.held?.(agentId) ?? null,
+					};
+					// the check turns of a run with `check` use the same lane machinery, with their own event sink
+					lastLaneDeps = laneDeps;
+					const lanes = spec ? [] : subagentTools(laneDeps);
+					// send_message and close_topic, and for every agent report_answer; BPV and a department's lead also assign_task and escalate
+					const mail = md ? [...mailTools(md), ...taskTools(md, { chief: chiefOf(md) })] : [];
 					const extraTools = [...lanes, ...mail];
 					await engine({
 						runtime: rt,
@@ -514,7 +544,7 @@ export class ThreadRunner {
 						modelId,
 						effort,
 						prompt,
-						images: files.images,
+						images: turnImages,
 						systemPrompt: h.length ? standing : withEarlier(seeded, seed.earlier),
 						mcp,
 						signal,
@@ -580,6 +610,95 @@ export class ThreadRunner {
 					}
 				}
 				if (fo && !failed && !signal.aborted) fo.worked(agentId, shape.target, shape.model.id);
+				// Check before done (the agent's `check` setting; OpenMausBot server/host/check-work.ts): the answer is read against the request by a checker, and the agent fixes what it
+				// found, up to `maxChecks` checks (3) and one fix fewer; each is a full turn, shown on the run card. The loop's bounds are core/check-work.ts's, so they hold whatever the
+				// models say. Any failure of the checking leaves the answer as it is.
+				if (spec?.check && !failed && !signal.aborted && worthChecking(answer, st.toolsRan)) {
+					const cw = spec.check;
+					const max = roundsOf(cw);
+					const began = Date.now();
+					const request = [text.trim(), files.text].filter(Boolean).join("\n\n");
+					const specs = this.d.agents?.() ?? DEFAULT_AGENTS;
+					const checkerSpec = cw.agent ? findSpec(specs, cw.agent) : undefined;
+					// who checks: the named agent; else the named provider and model; else another provider than the worker's; else the worker's own
+					const on: Target | null = checkerSpec ? null : cw.provider?.trim() ? { provider: cw.provider.trim(), model: cw.model?.trim() ?? "", effort: "" } : fo ? await fo.otherProvider(shape.target) : null;
+					const label = checkerSpec ? checkerSpec.name : fo && on ? fo.label(on.provider) : "pārbaudītājs";
+					const usageSink = (e: RunEvent): void => {
+						// the check turns' tokens are counted in the run and logged like any turn's; their lane lines are not shown (the check line says it)
+						if (e.type !== "usage") return;
+						try {
+							appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? keyOf(shape.target), input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
+						} catch {
+							// the log is a convenience
+						}
+						emit(e);
+					};
+					const end = (n: number, v: { verdict: "pass" | "issues" | "cannot" | "unclear"; count?: number; report: string }) => emit({ type: "check", n, of: max, by: label, phase: "end", ...v });
+					let report = "";
+					for (let round = 1; !signal.aborted; round++) {
+						if (Date.now() - began > CHECK_MAX_MS) {
+							end(round, { verdict: "cannot", report: `Pārbaude aizņēma vairāk par ${Math.round(CHECK_MAX_MS / 60_000)} min; atbilde nodota tāda, kāda ir.` });
+							break;
+						}
+						emit({ type: "check", n: round, of: max, by: label, phase: "start" });
+						const job: Job = {
+							id: `c${Date.now().toString(36)}${round}`,
+							label: `Pārbaude ${round}/${max}`,
+							agent: checkerSpec?.name,
+							...(checkerSpec ? { agentId: checkerSpec.id, spec: checkerSpec } : {}),
+							task: checkBrief({ worker: spec.name, round, max, request, answer, earlier: report }),
+							system: checkerSpec ? this.standing(s, checkerSpec, new Set(), true) + RULES : CHECKER_SYSTEM,
+							// read tools only: it opens the files and pages the answer names, and changes nothing
+							allowed: laneTools(listed, levelOf, "read").filter((n) => !revitTools.has(n)),
+							...(checkerSpec
+								? { ...(checkerSpec.provider?.trim() ? { provider: checkerSpec.provider.trim() } : {}), ...(checkerSpec.model?.trim() ? { model: checkerSpec.model.trim() } : {}), ...(checkerSpec.effort ? { effort: checkerSpec.effort } : {}) }
+								: on
+									? { provider: on.provider, ...(on.model ? { model: on.model } : {}) }
+									: {}),
+						};
+						const [r] = await runLanes({ ...lastLaneDeps!, emit: usageSink }, [job], signal);
+						if (signal.aborted) break;
+						if (!r.ok) {
+							end(round, { verdict: "cannot", report: `Pārbaudītājs nevarēja strādāt: ${r.report}` });
+							break;
+						}
+						const v = readVerdict(r.report);
+						report = r.report;
+						end(round, { verdict: v.kind, ...(v.kind === "issues" ? { count: v.count } : {}), report: v.kind === "cannot" ? v.reason || r.report : r.report });
+						if (afterCheck(v, round, max).do === "end") break;
+						// the fix: a full turn of the agent itself, in its own conversation, on what the checker found
+						emit({ type: "check", n: round, of: max, by: label, phase: "fix" });
+						const before = answer;
+						const fixText = fixBrief(label, r.report, round, max);
+						this.remember(thread, "assistant", before);
+						this.remember(thread, "user", fixText);
+						conv = this.conversations.get(thread.id);
+						prompt = fixText;
+						promptTokens = estimateTextTokens(prompt);
+						turnImages = [];
+						st.held = null;
+						st.overflowed = null;
+						answer = "";
+						shape = shapeFor(shape.target);
+						await attempt(await historyFor(shape), shape);
+						if (st.held) {
+							failed = true;
+							emit(st.held);
+							st.held = null;
+						}
+						if (st.overflowed && !failed) {
+							failed = true;
+							emit({ type: "error", engine: "pi", message: `${st.overflowed}\n\nKonteksts ir pilns pārbaudes laikā.` });
+						}
+						if (failed || signal.aborted || !answer.trim()) {
+							// the fix gave nothing: the answer stays as it was, and the checks end
+							answer = before;
+							break;
+						}
+					}
+				}
+				// the answer is final now: the "done" an agent with checks held back goes out with the last answer
+				if (heldDone && !failed && !signal.aborted) emit({ type: "done", text: answer });
 			} catch (e) {
 				failed = true;
 				emit({ type: "error", engine: "pi", message: (e as Error).message });

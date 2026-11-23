@@ -1,12 +1,22 @@
 // Who is running, the queue behind the cap, the batch confirmations, Stop and pause. Runs are a table by run id; the cap is settings().maxParallelAgents.
 // Every event of a run leaves with its envelope (thread, agent, project, wave) and the thread's state follows the run.
+// Phase C adds three things, each ported from OpenMausBot (Apache-2.0) and fitted to this queue:
+//   - pause: an agent, a department or everything (a full stop) takes no new work until resumed (core/holds.ts, docs/pausing-bots.md). Pausing stops the runs of the
+//     agents it holds and the work they handed out; a held agent's queued items and its mail wait (they start on Resume); a message to it is refused with the reason.
+//   - incidents: a run that failed, stalled (no event for 20 minutes) or could not start is recorded with its request and listed in "Gaida tevi" with Retry and Dismiss
+//     (core/incidents.ts, docs/team-incidents.md); a run the user stopped, or the app closing, is not one.
+//   - the Chief's ceiling: the tool level a message carries (`Message.level`) caps the run it starts (core/chief.ts `minLevel`; docs/approval-levels.md).
 // No Electron imports: the runner, the stores and the sink are injected.
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
+import { LEAD_ID, type PauseTarget, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { answered, inboxOf, limitsOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
 import { EKS } from "../core/process-def.js";
+import { Holds, handoffText, refusalText, type HeldBy } from "../core/holds.js";
+import { IncidentStore, STALL_MS, isStalled } from "../core/incidents.js";
+import { levelOfMessages, type Level } from "../core/chief.js";
+import { departmentOf, DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, waveCheck, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -45,6 +55,12 @@ export interface CoordinatorDeps {
 	mail?: (projectId: string | null) => Mailbox;
 	/** an answer was written for eks without eks being able to hear a real one (a run that ended, a recipient that could not run): its open question note on the topic closes (14.6) */
 	eksAnswered?: (projectId: string | null, topic: string) => void;
+	/** what the user paused; without it a memory-only state (the coordinator's own tests) */
+	holds?: Holds;
+	/** the incidents list; without it none is kept */
+	incidents?: IncidentStore;
+	/** the departments, for the name in a pause refusal; the shipped ones when absent */
+	departments?: () => readonly Department[];
 	now?: () => string;
 }
 
@@ -58,8 +74,16 @@ interface Live {
 	wave: string;
 	abort: AbortController;
 	done: Promise<unknown>;
-	/** stopped by Stop (all or a wave): the sender of the message that started this run gets no "bloķēts" reply that would wake it */
+	/** stopped by Stop (all or a wave) or by a pause: the sender of the message that started this run gets no "bloķēts" reply that would wake it */
 	silent?: boolean;
+	/** when the run last did anything (an event, epoch ms): 20 minutes without one is a stall */
+	lastActive: number;
+	/** the watchdog stopped it for being silent: its end is an incident, not a Stop */
+	stalled?: boolean;
+	/** the agents whose messages started it: pausing one of them stops the work it handed out */
+	askedBy: string[];
+	/** what it was asked, for the incident's "request" line */
+	request: string;
 }
 
 /** A message the app itself sends between two agents (`Coordinator.postSystem`). */
@@ -107,8 +131,13 @@ export class Coordinator {
 	/** projects whose mail is to be looked at again; `waking` keeps a wake that comes from inside a wake from nesting */
 	private rewake = new Set<string | null>();
 	private waking = false;
+	/** what the user paused; saved by the holds object itself */
+	private readonly holds: Holds;
+	private watchTimer: ReturnType<typeof setInterval> | null = null;
 
-	constructor(private d: CoordinatorDeps) {}
+	constructor(private d: CoordinatorDeps) {
+		this.holds = d.holds ?? new Holds();
+	}
 
 	private now(): string {
 		return (this.d.now ?? (() => new Date().toISOString()))();
@@ -205,7 +234,7 @@ export class Coordinator {
 	}
 
 	view(): QueueView {
-		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: this.liveWaves() };
+		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: this.liveWaves(), held: this.holds.view() };
 	}
 
 	/** Everything that waits for the user, of every project: open confirmations first, then the gates of process mode, then the questions in Atmiņa, then the unanswered restart. */
@@ -235,7 +264,8 @@ export class Coordinator {
 			// unreadable process files or threads: the list shows the rest
 		}
 		const paused = [...this.waves.values()].filter((w) => w.paused).map((w) => ({ kind: "wave-paused" as const, wave: w.id, projectId: w.projectId, reason: w.paused! }));
-		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates, escalated, eksStarts });
+		const incidents = (this.d.incidents?.list() ?? []).map((i) => ({ kind: "incident" as const, ...i }));
+		return waitingItems({ confirms: [...this.confirms.values()].map((c) => c.item), restore: this.restoreNotice, paused, questions, gates, escalated, eksStarts, incidents });
 	}
 
 	/** A question for the user was written, closed or answered (by an agent's tool or the user's button): the window gets the list again. */
@@ -280,7 +310,8 @@ export class Coordinator {
 		// nothing starts while the app closes or a compaction holds the coordinator
 		while (!this.closing && !this.held) {
 			const cap = this.d.settings().maxParallelAgents;
-			const item = pickNext(this.queue, this.running(), Number.isFinite(cap) ? cap : 1, this.paused, (q) => this.waveBlocked(q));
+			// a paused agent's item waits where it is (it starts on Resume); asked first, so a held item does not trip its wave's limit
+				const item = pickNext(this.queue, this.running(), Number.isFinite(cap) ? cap : 1, this.paused, (q) => this.heldNow(q.agent) !== null || this.waveBlocked(q));
 			if (!item) break;
 			this.queue = this.queue.filter((q) => q !== item);
 			const files = this.prepared.get(item.id);
@@ -292,7 +323,11 @@ export class Coordinator {
 				const err = e instanceof Error ? e : new Error(String(e));
 				this.queue.push({ ...item, state: "stopped" });
 				if (item.id === own) failed.set(item.id, err);
-				else this.surface(item, files?.runId, err);
+				else {
+					// nobody was looking at this start (a woken thread, a restored item): it goes into the incidents list
+					this.noteIncident(item.projectId, item.threadId, item.agent, "not-started", err.message, item.input.text);
+					this.surface(item, files?.runId, err);
+				}
 				// a run that a message should have started: its senders hear that it cannot happen
 				if (item.input.cause.by === "message") this.blockMessages(item.projectId, item.input.cause.ids, `Aģents «${item.agent}» nevar sākt darbu: ${err.message}`, "queued");
 			}
@@ -328,6 +363,11 @@ export class Coordinator {
 		if (!found) throw new Error(`Saruna ${i.threadId} nav atrasta.`);
 		// the user's own messages never pile up unseen; a message from another agent may wait behind the run
 		if (i.cause.by === "user" && this.threadBusy(i.threadId)) throw new Error(BUSY);
+		// a paused agent takes no new work from the user either: the refusal says who is paused and how to resume
+		if (i.cause.by === "user") {
+			const by = this.heldNow(found.agent);
+			if (by) throw new Error(this.refusal(found.agent, by));
+		}
 		const id = `q${Date.now().toString(36)}${++this.n}`;
 		const wave = i.wave ?? this.newWave();
 		this.waveOf(wave, i.projectId);
@@ -367,6 +407,18 @@ export class Coordinator {
 		// 0 for a run the user started; else the hops of the messages that started it
 		const mail = this.d.mail?.(item.projectId);
 		const depth = mail && ids.length ? runDepth(ids, mail.messages()) : 0;
+		// the ceiling the work came with (the Chief's level flows down) and who handed it out (pausing them stops it)
+		let levelCap: Level | undefined;
+		let askedBy: string[] = [];
+		if (mail && ids.length) {
+			try {
+				const ms = mail.messages();
+				levelCap = levelOfMessages(ids, ms);
+				askedBy = [...new Set(ms.filter((m) => ids.includes(m.id)).map((m) => m.from))];
+			} catch {
+				// an unreadable mailbox: the run goes on at its agent's own ceiling
+			}
+		}
 		let thread: Thread;
 		try {
 			thread = this.setState(found, { state: "running", lastAt: this.now(), runs: found.runs + 1, wave });
@@ -389,6 +441,8 @@ export class Coordinator {
 		let answer = "";
 		let lastError: string | null = null;
 		const emit = (e: RunEvent) => {
+			// any event is a sign of life: the stall watchdog counts from the last one
+			live.lastActive = Date.now();
 			if (e.type === "error") lastError = e.message;
 			// what the provider charged adds to the wave; none given adds nothing
 			if (e.type === "usage" && e.cost !== null) {
@@ -401,7 +455,7 @@ export class Coordinator {
 			}
 			this.d.emit(runId, e, meta);
 		};
-		const live: Live = { runId, thread, wave, abort, done: Promise.resolve() };
+		const live: Live = { runId, thread, wave, abort, done: Promise.resolve(), lastActive: Date.now(), askedBy, request: item.input.text };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
 				// the gate numbers its confirmations per run (c1, c2…), so two runs both ask "c1": the id the window sees names the run too
@@ -423,7 +477,7 @@ export class Coordinator {
 			});
 		this.live.set(runId, live);
 		live.done = this.d.runner
-			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, peer: ids.length > 0, wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what) })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, peer: ids.length > 0, ...(levelCap ? { levelCap } : {}), wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what) })
 			.then(
 				(r) => {
 					ok = r.ok;
@@ -440,7 +494,7 @@ export class Coordinator {
 				this.live.delete(runId);
 				// a run a message started that did not finish its work: the senders are told, so none waits for ever (a closing app keeps it all for the next start)
 				if (!this.closing && ids.length && (abort.signal.aborted || !ok)) {
-					const why = abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
+					const why = live.stalled ? "darbs 20 minūtes nerādīja nekādu aktivitāti un tika apturēts." : abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
 					this.blockMessages(thread.projectId, ids, `Aģents «${thread.agent}» nevarēja izpildīt: ${why}`, live.silent ? "stopped" : "queued");
 				}
 				// a run a message started that ended well but sent nothing back: its final answer goes to the sender, so the sender does not wait for ever
@@ -448,6 +502,12 @@ export class Coordinator {
 				// a run cut by the app closing is not finished: its thread stays `interrupted`, so the next start asks the user and tells the senders (I1)
 				if (this.closing && abort.signal.aborted && !ok && !live.silent) this.mark(thread, { state: "interrupted" });
 				else this.settle(thread.projectId, thread.id);
+				// what the user must be able to see and retry: a run that failed or stalled; a run the user stopped (or a pause did) is not one, and a run that worked clears the thread's
+				if (!this.closing) {
+					// a stall was recorded by the watchdog the moment it stopped the run (an engine that ignores its signal never gets here)
+					if (!live.stalled && !ok && !abort.signal.aborted) this.noteIncident(thread.projectId, thread.id, thread.agent, "failed", lastError ?? "gājiens beidzās bez rezultāta", item.input.text);
+					else if (ok && this.d.incidents?.settled(thread.id)) this.waitingChanged();
+				}
 				if (!this.closing) this.wake(thread.projectId);
 				this.pump();
 			});
@@ -478,6 +538,136 @@ export class Coordinator {
 			this.held = null;
 			this.pump();
 		}
+	}
+
+	// ---- pause ----------------------------------------------------------------------------------------------------------------------
+
+	/** Why this agent takes no new work now, or null. */
+	private heldNow(agentId: string) {
+		return this.holds.reason(agentId, this.d.specs?.() ?? []);
+	}
+
+	private nameOf(agentId: string): string {
+		return agentId === LEAD_ID ? "galvenais aģents" : (this.d.specs?.().find((s) => s.id === agentId)?.name ?? agentId);
+	}
+
+	private refusal(agentId: string, by: HeldBy): string {
+		const spec = this.d.specs?.().find((s) => s.id === agentId);
+		const dept = spec ? departmentOf(spec) : undefined;
+		const dname = dept ? (this.d.departments?.() ?? DEFAULT_DEPARTMENTS).find((x) => x.id === dept)?.name : undefined;
+		return refusalText(by, this.nameOf(agentId), dname);
+	}
+
+	/** The words another agent is told when it tries to hand this one work while it is paused; null when it may work. The mail tools ask this before they send. */
+	handoffRefusal(agentId: string): string | null {
+		const by = this.heldNow(agentId);
+		return by ? handoffText(by, this.nameOf(agentId)) : null;
+	}
+
+	/** What is paused now. */
+	heldView() {
+		return this.holds.view();
+	}
+
+	/** Pauses or resumes an agent, a department or everything (a full stop). Pausing stops what the held agents are doing now, and the work they handed out; a full stop also drops the queue
+	 *  and every lane and helper (they live in their run, and the run's signal reaches them). Nothing paused starts anything new until it is resumed. Returns how many runs were stopped. */
+	setHold(target: PauseTarget, paused: boolean): { stopped: number } {
+		const specs = this.d.specs?.() ?? [];
+		if (target.kind === "agent" && target.id !== LEAD_ID && !specs.some((s) => s.id === target.id)) throw new Error(`Nav aģenta ${target.id}.`);
+		if (target.kind === "department" && !(this.d.departments?.() ?? DEFAULT_DEPARTMENTS).some((x) => x.id === target.id)) throw new Error(`Nav nodaļas ${target.id}.`);
+		const { newlyHeld } = this.holds.set(target, paused, [LEAD_ID, ...specs.map((s) => s.id)], specs);
+		let stopped = 0;
+		if (paused) {
+			if (target.kind === "all") {
+				stopped = this.live.size;
+				this.stopAll();
+			} else stopped = this.stopHeldRuns(new Set(newlyHeld));
+		}
+		this.changed();
+		if (!paused) {
+			// Resume: what waited in the queue and in the mail starts
+			this.pump();
+			for (const p of this.projectsInPlay()) this.wake(p);
+		}
+		return { stopped };
+	}
+
+	/** The runs of these agents stop, and the runs and queued items that messages from them started (the work they handed out). Their own queued items stay: they start on Resume. */
+	private stopHeldRuns(agents: ReadonlySet<string>): number {
+		if (!agents.size) return 0;
+		const lives = [...this.live.values()].filter((l) => agents.has(l.thread.agent) || l.askedBy.some((a) => agents.has(a)));
+		for (const l of lives) {
+			l.silent = true;
+			l.abort.abort();
+		}
+		this.denyConfirms((c) => lives.includes(c.live), true);
+		// handed-out work that has not begun: stopped with the one who handed it out (kept in the saved queue as stopped)
+		const dropped: QueueItem[] = [];
+		this.queue = this.queue.map((q) => {
+			if (q.state !== "queued" || agents.has(q.agent) || q.input.cause.by !== "message") return q;
+			const ids = q.input.cause.ids;
+			const from = this.d.mail?.(q.projectId)?.messages().filter((m) => ids.includes(m.id)).map((m) => m.from) ?? [];
+			if (!from.some((a) => agents.has(a))) return q;
+			this.prepared.delete(q.id);
+			dropped.push(q);
+			return { ...q, state: "stopped" as const };
+		});
+		for (const q of dropped) {
+			if (q.input.cause.by === "message") this.setMail(q.projectId, q.input.cause.ids, "stopped");
+			if (![...this.live.values()].some((l) => l.thread.id === q.threadId)) this.settle(q.projectId, q.threadId);
+		}
+		return lives.length;
+	}
+
+	// ---- incidents ------------------------------------------------------------------------------------------------------------------
+
+	private noteIncident(projectId: string | null, threadId: string, agent: string, kind: "failed" | "stalled" | "not-started", detail: string, request: string): void {
+		try {
+			if (this.d.incidents?.add({ projectId, threadId, agent, what: kind, detail, request }, this.now())) this.waitingChanged();
+		} catch {
+			// the list is a help to the user; it never gets in the way of the run's own end
+		}
+	}
+
+	/** The watchdog: a run that has shown no sign of life for 20 minutes (and is not parked on the user's confirmation) is stopped and recorded as stalled. Called by the timer; a test passes the clock. */
+	sweep(nowMs: number = Date.now(), limitMs: number = STALL_MS): number {
+		const parked = new Set([...this.confirms.values()].map((c) => c.live));
+		let n = 0;
+		for (const l of this.live.values()) {
+			if (l.stalled || l.abort.signal.aborted || !isStalled(l.lastActive, nowMs, parked.has(l), limitMs)) continue;
+			l.stalled = true;
+			l.abort.abort();
+			this.noteIncident(l.thread.projectId, l.thread.id, l.thread.agent, "stalled", `Nav aktivitātes ${Math.round(limitMs / 60_000)} minūtes; darbs apturēts.`, l.request);
+			n++;
+		}
+		return n;
+	}
+
+	/** Starts the watchdog's timer (once). It never keeps the process alive. */
+	watch(everyMs = 60_000): void {
+		if (this.watchTimer) return;
+		this.watchTimer = setInterval(() => this.sweep(), everyMs);
+		this.watchTimer.unref?.();
+	}
+
+	/** Retry: the incident leaves the list and its thread carries on where it stopped (a start by the user, so it keeps the user's rights). Refused when the thread has failed more than twice in the hour. */
+	retryIncident(id: string): { runId: string | null; queued: boolean } {
+		const inc = this.d.incidents?.get(id);
+		if (!inc) throw new Error("Šis incidents vairs nav sarakstā.");
+		if (this.d.threads(inc.projectId).get(inc.threadId)?.state === "closed") throw new Error("Saruna ir slēgta (arhivēta): atjauno to, tad atkārto.");
+		if (!inc.mayRetry) throw new Error("Šī saruna jau ir atkārtota divreiz: nolasi kļūdu un izlabo cēloni, nevis mēģini vēlreiz.");
+		const what = inc.what === "stalled" ? "pārstāja darboties" : inc.what === "not-started" ? "nevarēja sākties" : "beidzās ar kļūdu";
+		const text = `[lietotne · atkārtošana · tikai informācija] Iepriekšējais gājiens šajā sarunā neizdevās (${what}): ${inc.detail}\nTurpini no vietas, kur apstājies; to, kas jau izdarīts, nedari vēlreiz.`;
+		const r = this.submit({ threadId: inc.threadId, projectId: inc.projectId, text, focus: [], cause: { by: "user" } });
+		// only once it has started (or queued): a start that is refused leaves the incident where it was
+		this.d.incidents?.remove(id);
+		this.waitingChanged();
+		return r;
+	}
+
+	dismissIncident(id: string): void {
+		if (!this.d.incidents?.remove(id)) throw new Error("Šis incidents vairs nav sarakstā.");
+		this.waitingChanged();
 	}
 
 	/** Aborts the runs that match, marks their queued items stopped (kept in the saved queue) and answers their confirmations with no.
@@ -681,6 +871,8 @@ export class Coordinator {
 				continue;
 			}
 			if (!shouldWake(t.id, ms) || this.threadBusy(t.id)) continue;
+			// a paused agent's mail waits in the mailbox until it is resumed
+			if (this.heldNow(t.agent)) continue;
 			const inbox = inboxOf(t.id, ms);
 			// a specialist removed from the settings before its mail came: the senders hear it now, they do not wait
 			if (this.d.specs && t.agent !== LEAD_ID && !this.d.specs().some((s) => s.id === t.agent)) {
@@ -860,6 +1052,8 @@ export class Coordinator {
 	/** App is quitting: abort the runs (queued items stay queued for the next start) and wait until they have closed their tool servers (the Revit MCP child and the tools child). */
 	async shutdown(): Promise<void> {
 		this.closing = true;
+		if (this.watchTimer) clearInterval(this.watchTimer);
+		this.watchTimer = null;
 		this.held?.abort();
 		for (const l of this.live.values()) l.abort.abort();
 		this.denyConfirms(() => true, true);

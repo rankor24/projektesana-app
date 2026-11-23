@@ -5,7 +5,7 @@ export type { WaitingItem } from "./thread-types.js";
 
 type Of<K extends WaitingItem["kind"]> = Extract<WaitingItem, { kind: K }>;
 
-/** What needs an answer first comes first: a run parked on a confirmation holds a slot of the user's attention, an interrupted restart can wait. */
-export function waitingItems(i: { confirms: Of<"confirm">[]; restore: { interrupted: number; queued: number } | null; paused: Of<"wave-paused">[]; questions: Of<"question">[]; gates: Of<"gate">[]; escalated?: Of<"escalated">[]; eksStarts?: Of<"start-eks">[] }): WaitingItem[] {
-	return [...i.confirms, ...i.gates, ...(i.escalated ?? []), ...(i.eksStarts ?? []), ...i.questions, ...i.paused, ...(i.restore ? [{ kind: "interrupted" as const, ...i.restore }] : [])];
+/** What needs an answer first comes first: a run parked on a confirmation holds a slot of the user's attention, an interrupted restart can wait. Incidents (failed or stalled runs) come after the questions. */
+export function waitingItems(i: { confirms: Of<"confirm">[]; restore: { interrupted: number; queued: number } | null; paused: Of<"wave-paused">[]; questions: Of<"question">[]; gates: Of<"gate">[]; escalated?: Of<"escalated">[]; eksStarts?: Of<"start-eks">[]; incidents?: Of<"incident">[] }): WaitingItem[] {
+	return [...i.confirms, ...i.gates, ...(i.escalated ?? []), ...(i.eksStarts ?? []), ...i.questions, ...(i.incidents ?? []), ...i.paused, ...(i.restore ? [{ kind: "interrupted" as const, ...i.restore }] : [])];
 }

@@ -4,6 +4,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, type Static } from "@earendil-works/pi-ai";
 import type { AgentSpec } from "../shared/agent-types.js";
+import type { Department } from "../shared/departments.js";
 import { canSend, closedReason, threadOnTopic, type Limits, type Mailbox, type Message, type MessageKind, type Topic } from "../core/messages.js";
 import { newId, type Note } from "../core/model.js";
 import type { ProcessState } from "../core/process.js";
@@ -13,12 +14,13 @@ import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
 
 /** The two tools as the gate sees them. Sending mail changes nothing in the project; what the recipient then does goes through its own gate. */
-export const MAIL_TOOL_LEVELS: Record<string, Level> = { send_message: "run", close_topic: "run" };
+export const MAIL_TOOL_LEVELS: Record<string, Level> = { send_message: "run", close_topic: "run", report_answer: "run", assign_task: "run", escalate: "run" };
 
 /** Three lines every agent's standing text carries (the lead's and a specialist's). */
 export const MAIL_RULES =
 	"send_message: darbam, kas pārsniedz tavu gājienu (jautājums citam aģentam, uzdevuma nodošana); atbilde pienāk vēlāk kā ziņa un tevi pamodina. Uz saņemtu ziņu atbildi ar send_message, kind reply, tajā pašā tematā.\n" +
 	"delegate (ja tas tev ir): atskaitei, kas vajadzīga šajā pašā gājienā.\n" +
+	"Uzdevumu (UZDEVUMS) pabeidz ar report_answer: īsa ATBILDE, saturs failos.\n" +
 	"Nekad nesūti ziņu sev.";
 
 export interface MailDeps {
@@ -41,10 +43,18 @@ export interface MailDeps {
 	leadThread?: () => Thread;
 	/** the project's process state, read at each call (the user may switch the mode between two); without it, or null, nothing of process mode applies */
 	process?: () => ProcessState | null;
+	/** the app's departments (their leads decide who may hand out tasks, chief.ts); without it no one is a department lead */
+	departments?: () => readonly Department[];
+	/** the words a message to this agent is refused with while it is paused (holds.ts), null when it may work: nothing is sent and the sender is told not to route around it */
+	held?: (agent: string) => string | null;
+	/** the tool ceiling this run works under (its agent's, lowered by the conversation that handed it work): it travels with what the run sends on, so nothing runs above it (chief.ts `minLevel`) */
+	level?: () => "run" | "confirm" | undefined;
+	/** a thread was made or renamed (the standing task thread): the window hears of it */
+	threadChanged?: (t: Thread) => void;
 }
 
 /** The state of process mode as it is now; null in co-work, with no state, or when it cannot be read (then the co-work rules hold). */
-function processNow(d: MailDeps): ProcessState | null {
+export function processNow(d: MailDeps): ProcessState | null {
 	try {
 		const p = d.process?.() ?? null;
 		return p?.mode === "process" ? p : null;
@@ -65,8 +75,8 @@ const PROCESS_LEADER = "bpv";
 export const NO_PROJECT = "Temata slēgšanai vajag atvērtu projektu.";
 
 // a plain `enum` is a third the size of a union of literals in the declaration every request carries
-const oneOf = <T extends string>(...v: T[]) => Type.Unsafe<T>(Type.String({ enum: v }));
-const strs = Type.Array(Type.String());
+export const oneOf = <T extends string>(...v: T[]) => Type.Unsafe<T>(Type.String({ enum: v }));
+export const strs = Type.Array(Type.String());
 const taskEnvelope = Type.Object({ stage: Type.Optional(Type.String()), goal: Type.String(), context: Type.Optional(strs), expects: Type.String(), iteration: Type.Optional(Type.Number()) });
 const replyEnvelope = Type.Object({
 	status: oneOf("izpildīts", "daļēji", "bloķēts"),
@@ -97,7 +107,7 @@ const closeSchema = Type.Object({
 /** What the four flags of `impact` are called in a note the user reads. */
 const IMPACT_WORD = { cost: "izmaksas", time: "termiņu", norms: "normatīvo atbilstību", pu: "PU" } as const;
 
-const result = (text: string, isError = false) => ({ content: [{ type: "text" as const, text }], details: {}, isError });
+export const result = (text: string, isError = false) => ({ content: [{ type: "text" as const, text }], details: {}, isError });
 
 /** The ids of the messages of a topic: what a note about it refers to. */
 const topicRefs = (d: MailDeps, topic: Topic) => d.mailbox.messages().filter((m) => m.topic === topic.id).map((m) => m.id);
@@ -196,9 +206,12 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 				return result(`Temats «${existing.title}» ir starp ${existing.parties.join(" un ")}; ziņu uz to var sūtīt tikai viens no viņiem otram.`, true);
 			}
 			const process = processNow(d);
+			// a paused agent takes no new work: nothing is sent, and the sender is told not to route around the pause
+			const held = d.held?.(p.to);
+			if (held) return result(held, true);
 			const check = canSend(
 				{ from: d.self.agent, to: p.to, kind: p.kind, topic: existing ?? null, depth: d.self.depth + 1, iteration: p.task?.iteration, stage: p.task?.stage },
-				{ agents: d.agents(), limits: d.limits(), messages: mailbox.messages(), process },
+				{ agents: d.agents(), limits: d.limits(), messages: mailbox.messages(), process, departments: d.departments?.() },
 			);
 			if (!check.ok) {
 				// a limit was reached: the topic goes up with the message that was not sent (a new topic is opened just to record that)
@@ -226,6 +239,8 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 			const msg: Omit<Message, "id" | "at" | "state"> = {
 				wave: d.self.wave, topic: topic.id, from: d.self.agent, to: p.to, kind: p.kind, text: p.text, refs: p.refs ?? [],
 				fromThread: d.self.threadId, toThread, depth: d.self.depth + 1,
+				// the ceiling this conversation works under goes with what it asks of another agent (a reply carries none)
+				...(p.kind !== "reply" && d.level?.() ? { level: d.level() } : {}),
 				// in process mode a task is for the stage that is on unless it says otherwise (and then it was refused above)
 				...(p.task ? { task: { id: newId("u"), ...((p.task.stage ?? process?.stage) ? { stage: p.task.stage ?? process!.stage } : {}), goal: p.task.goal, context: p.task.context ?? [], expects: p.task.expects, iteration: p.task.iteration ?? 1 } } : {}),
 				...(p.reply ? { reply: { id: newId("a"), status: p.reply.status, results: p.reply.results ?? [], questions: p.reply.questions ?? [], decisions: p.reply.decisions ?? [], risks: p.reply.risks } } : {}),
@@ -283,7 +298,7 @@ export function mailTools(d: MailDeps): AgentTool<any>[] {
 	return [send, close];
 }
 
-/** The two tools' declarations as the model sees them, for the estimate of what every request carries. */
+/** The two tools' declarations as the model sees them, for the estimate of what every request carries (the task tools' are in task-tools.ts). */
 export function mailDeclarations(): { name: string; description: string; parameters: unknown }[] {
 	const stub = {} as MailDeps;
 	return mailTools(stub).map((x) => ({ name: x.name, description: x.description, parameters: x.parameters }));

@@ -150,6 +150,14 @@ export class Failover {
 		return pick ? { provider: pick, model: "", effort: "" } : null;
 	}
 
+	/** The provider that checks one agent's work (check before done): the best signed-in one other than the worker's own, "since a model rarely catches its own mistakes"
+	 *  (OpenMausBot server/checker-model.ts `otherProviderSelection`); null when no other is ready, and the checker then stays on the worker's own. */
+	async otherProvider(worker: Pick<Target, "provider">): Promise<Target | null> {
+		const ready = [...(await this.d.ready())].filter((p) => !this.d.holds.held(p));
+		const pick = checkerProvider(ready, [worker.provider]);
+		return pick ? { provider: pick, model: "", effort: "" } : null;
+	}
+
 	/** One helper or specialist job (a lane of `run_subagent` / `delegate`): starts on the backup while its provider is held, and a limit or sign-in failure before any tool ran is resent once there. */
 	async guardLane(a: { agent: string; name: string; primary: Target; backup: Target | null; say: (text: string) => void }, attempt: (t: Target) => Promise<LaneAttempt>): Promise<LaneAttempt> {
 		const begin = await this.start({ ...a, needImages: false });

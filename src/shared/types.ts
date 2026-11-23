@@ -19,6 +19,8 @@ export type RunEvent =
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** A helper or specialist working beside the main run (task 8.15): one lane per job. `step` replaces the lane's current action; `end` carries its report. */
 	| { type: "lane"; id: string; label: string; agent?: string; phase: "start" | "step" | "end"; text?: string; ok?: boolean; report?: string }
+	/** Check before done (core/check-work.ts): one check of the answer by a checker, and what it found. `end` carries the verdict and the checker's report; `fix` = the agent is now fixing what the check found (a full turn of its own). */
+	| { type: "check"; n: number; of: number; by: string; phase: "start" | "end" | "fix"; verdict?: "pass" | "issues" | "cannot" | "unclear"; count?: number; report?: string }
 	/** Raw provider error, never rewritten. `hint`: what the engine itself knows about the cause (the Claude CLI names the limit and its reset); the words stay the provider's. */
 	| { type: "error"; engine: "pi"; message: string; hint?: FailureHint };
 

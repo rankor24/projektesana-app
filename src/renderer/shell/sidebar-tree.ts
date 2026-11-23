@@ -6,8 +6,8 @@
 //   src/lib/sidebar-layout.ts    `moveSection`, `placeSection`, `sidebarLayoutInteractive`      → moveDepartment, placeDepartment, interactive
 //   src/components/SidebarThreadRow.tsx  `visibleSidebarThreads` (search over titles), `attentionRank`  → the search and the agent's dot
 // Adapted: a department has an id and a name (OpenMausBot's section is its name, so a rename rewrites every bot); there is no "drop on a bot to start a
-// department" (a department is added by name, and the list of departments is the app's, not the bots'); threads are listed newest first and nothing is pinned
-// or snoozed (the thread store has no such field; see the report); a closed thread is the archive, shown on request.
+// department" (a department is added by name, and the list of departments is the app's, not the bots'); threads are listed pinned first, then newest first (OpenMausBot's pin; nothing is snoozed);
+// a closed thread is the archive, shown on request, and can be taken back ("Atjaunot").
 import { normRef, type AgentSpec } from "../../shared/agent-types";
 import { departmentOf, type Department } from "../../shared/departments";
 import { LEAD_ID, type QueueView, type Thread, type ThreadState } from "../../shared/thread-types";
@@ -47,7 +47,8 @@ export interface Tree {
 const RANK: Record<ThreadState, number> = { "waiting-confirm": 6, interrupted: 5, running: 4, "waiting-reply": 3, queued: 2, idle: 1, closed: 0 };
 export const mostPressing = (states: readonly ThreadState[]): ThreadState => states.reduce<ThreadState>((a, b) => (RANK[b] > RANK[a] ? b : a), "idle");
 
-const newestFirst = (a: Thread, b: Thread) => (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0);
+/** The user's pins first, then the newest. */
+export const newestFirst = (a: Thread, b: Thread) => Number(!!b.pinned) - Number(!!a.pinned) || (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0);
 
 /** The window's own name for the group of agents in no department. */
 export const NO_DEPARTMENT = (): string => tr("Bez nodaļas");

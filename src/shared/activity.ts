@@ -153,6 +153,9 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	routine_list: { words: "Skatās rutīnas", kind: "read" },
 	routine_create: { words: "Piedāvā rutīnu", kind: "write" },
 	routine_change: { words: "Maina rutīnu", kind: "write" },
+	assign_task: { words: "Nodod uzdevumu aģentam", kind: "other" },
+	report_answer: { words: "Nosūta atbildi uz uzdevumu", kind: "other" },
+	escalate: { words: "Nodod lēmumu lietotājam", kind: "other" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {
