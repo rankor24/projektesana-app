@@ -1,10 +1,13 @@
-// The agents and their conversations: lead first, then the specialists. One dot shows what a thread is doing.
-import { useState } from "react";
+// The agents and their conversations: the lead first, then departments → agents → threads (fold, drag, search, rename, archive). One dot shows what a thread is doing.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
+import { DEPARTMENT_NAME_MAX, type Department } from "../../shared/departments";
 import { LEAD_ID, type QueueView, type Thread, type ThreadState } from "../../shared/thread-types";
 import { agentName, liveState, useThreads } from "./useThreads";
+import { AGENT_DRAG_TYPE, DEPARTMENT_DRAG_TYPE, NO_DEPARTMENT, buildTree, dropPlace, interactive, moveDepartment, placeDepartment, planAgentDrop, sameDrop, stepAgent, unusedName, type AgentDrop, type AgentNode, type DropPlace } from "./sidebar-tree";
+import { useTreeState } from "./sidebar-state";
 import { THREADS } from "../../shared/layout";
-import { errText } from "../bridge";
+import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { windows } from "../windows";
 import { locale, tr } from "../i18n";
@@ -28,69 +31,459 @@ export function StateDot({ state }: { state: ThreadState }) {
 
 const when = (iso: string) => new Date(iso).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+interface MenuItem {
+	label: string;
+	run: () => void;
+	disabled?: boolean;
+	title?: string;
+}
+
+/** The ⋯ button of a row and its small menu: one for a thread (rename, archive) and one for a department (rename, move, delete). Closes on a click outside or Escape.
+ *  (OpenMausBot draws these as two portal menus; here a row's menu is two or four lines, so it opens in place.) */
+function RowMenu({ label, items }: { label: string; items: MenuItem[] }) {
+	const [open, setOpen] = useState(false);
+	const box = useRef<HTMLSpanElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const away = (e: MouseEvent) => {
+			if (!box.current?.contains(e.target as Node)) setOpen(false);
+		};
+		const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+		window.addEventListener("mousedown", away);
+		window.addEventListener("keydown", key);
+		return () => {
+			window.removeEventListener("mousedown", away);
+			window.removeEventListener("keydown", key);
+		};
+	}, [open]);
+	return (
+		<span className="tl-menu-wrap" ref={box} onClick={(e) => e.stopPropagation()}>
+			<button className="ghost small tl-more" aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+				⋯
+			</button>
+			{open && (
+				<div className="tl-menu" role="menu">
+					{items.map((it) => (
+						<button
+							key={it.label}
+							role="menuitem"
+							className="ghost small"
+							disabled={it.disabled}
+							title={it.title}
+							onClick={() => {
+								setOpen(false);
+								it.run();
+							}}
+						>
+							{it.label}
+						</button>
+					))}
+				</div>
+			)}
+		</span>
+	);
+}
+
+/** A name typed in place: Enter or leaving the field keeps it, Escape drops it (OpenMausBot's `SectionNameField` and the thread row's rename input). */
+function NameField({ value, label, max, onCommit, onCancel }: { value: string; label: string; max: number; onCommit: (v: string) => void; onCancel: () => void }) {
+	const [draft, setDraft] = useState(value);
+	const field = useRef<HTMLInputElement>(null);
+	const settled = useRef(false);
+	useEffect(() => {
+		field.current?.focus();
+		field.current?.select();
+	}, []);
+	// Enter and the blur it causes must not both commit
+	const settle = (save: boolean) => {
+		if (settled.current) return;
+		settled.current = true;
+		if (save) onCommit(draft);
+		else onCancel();
+	};
+	return (
+		<input
+			ref={field}
+			className="tl-name-field"
+			value={draft}
+			maxLength={max}
+			aria-label={label}
+			onClick={(e) => e.stopPropagation()}
+			onChange={(e) => setDraft(e.target.value)}
+			onBlur={() => settle(true)}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+					e.preventDefault();
+					settle(true);
+				} else if (e.key === "Escape") {
+					e.preventDefault();
+					e.stopPropagation();
+					settle(false);
+				}
+			}}
+		/>
+	);
+}
+
+/** One thread: its dot, title and time; double-click or the menu renames it, the menu archives it (closes it: the transcript stays, "Rādīt arhivētās" lists it). */
+function ThreadRow({ t, state, current, onSelect, onRename, onClose }: { t: Thread; state: ThreadState; current: boolean; onSelect: () => void; onRename: (title: string) => void; onClose: () => void }) {
+	const [renaming, setRenaming] = useState(false);
+	const busy = state === "running" || state === "queued" || state === "waiting-confirm";
+	if (renaming) {
+		return (
+			<div className="tl-thread on">
+				<StateDot state={state} />
+				<NameField
+					value={t.title}
+					label={tr("Sarunas nosaukums")}
+					max={80}
+					onCommit={(v) => {
+						setRenaming(false);
+						if (v.trim() && v.trim() !== t.title) onRename(v.trim());
+					}}
+					onCancel={() => setRenaming(false)}
+				/>
+			</div>
+		);
+	}
+	const items: MenuItem[] = [{ label: tr("Pārdēvēt"), run: () => setRenaming(true) }];
+	if (t.state !== "closed") items.push({ label: tr("Arhivēt"), run: onClose, disabled: busy, title: busy ? tr("Nevar arhivēt, kamēr saruna strādā") : tr("Slēdz sarunu; pieraksts paliek") });
+	return (
+		<div className={`tl-thread ${current ? "on" : ""} ${t.state === "closed" ? "closed" : ""}`} onClick={onSelect} onDoubleClick={() => setRenaming(true)} title={STATE_TEXT[state]}>
+			<StateDot state={state} />
+			<span className="tl-title">{t.title}</span>
+			<span className="dim small">{when(t.lastAt)}</span>
+			<RowMenu label={tr("Sarunas darbības")} items={items} />
+		</div>
+	);
+}
+
+type DeptDrop = { id: string; place: DropPlace };
+
 interface Props {
 	threads: Thread[];
 	specs: AgentSpec[];
+	departments: Department[];
 	queue: QueueView;
 	/** the thread the chat shows */
 	current: string | null;
 	onSelect: (id: string) => void;
 	onNew: (agent: string) => void;
 	onClose: (id: string) => void;
+	onRename: (id: string, title: string) => Promise<unknown>;
+	/** a dragged (or Alt+arrow) agent: its department (null = none) and the agent it goes before (null = last) */
+	onMoveAgent: (agent: string, department: string | null, before: string | null) => Promise<unknown>;
+	/** the whole department list after an add, rename, reorder or removal */
+	onSaveDepartments: (list: Department[]) => Promise<unknown>;
+	onError: (message: string) => void;
 }
 
-export function ThreadList({ threads, specs, queue, current, onSelect, onNew, onClose }: Props) {
-	const [closed, setClosed] = useState(false);
-	// the lead, the specialists, then agents that still own threads but were removed in Iestatījumi
-	const ids = [LEAD_ID, ...specs.map((s) => s.id)];
-	for (const t of threads) if (!ids.includes(t.agent)) ids.push(t.agent);
-	const shown = threads.filter((t) => closed || t.state !== "closed");
+/** The conversations panel: departments (fold, remembered) → agents (fold, activity dot, "+" for a new conversation) → threads newest first (rename, archive), a search that narrows
+ *  the tree, and drag: an agent to another department or place, a department to another place (Alt+Up / Alt+Down move one place from the keyboard).
+ *  Ported from OpenMausBot (Apache-2.0) src/components/SidebarSections.tsx, SidebarSectionHeader.tsx, SidebarBotDrag.tsx, SidebarThreadRow.tsx; the rules are in sidebar-tree.ts, the
+ *  remembered folds in sidebar-state.ts. */
+export function ThreadList({ threads, specs, departments, queue, current, onSelect, onNew, onClose, onRename, onMoveAgent, onSaveDepartments, onError }: Props) {
+	const [query, setQuery] = useState("");
+	const [showClosed, setShowClosed] = useState(false);
+	const [naming, setNaming] = useState<{ kind: "new"; name: string } | { kind: "rename"; id: string } | null>(null);
+	const [drag, setDrag] = useState<{ kind: "agent" | "department"; id: string } | null>(null);
+	const [agentDrop, setAgentDrop] = useState<AgentDrop | null>(null);
+	const [deptDrop, setDeptDrop] = useState<DeptDrop | null>(null);
+	const tree = useTreeState();
+	const live = interactive(query);
+	const searching = !live;
+
+	const view = useMemo(() => buildTree({ specs, departments, threads, queue, showClosed, query, leadName: agentName(LEAD_ID, specs) }), [specs, departments, threads, queue, showClosed, query]);
+	// the agents of each list, for the drop rules; "" = the group of agents in none (always a place to drop, even when empty)
+	const lists = useMemo(() => {
+		const m = new Map<string, string[]>(view.departments.map((d) => [d.id ?? "", d.agents.map((a) => a.id)]));
+		if (!m.has("")) m.set("", []);
+		return m;
+	}, [view]);
+	const run = (p: Promise<unknown>) => p.catch((e) => onError(errText(e)));
+
+	// the conversation on screen opens its agent and unfolds its department, once each time it changes (a message sent to another agent, the "@" notice)
+	const revealed = useRef<string | null>(null);
+	useEffect(() => {
+		if (!current || revealed.current === current) return;
+		const t = threads.find((x) => x.id === current);
+		if (!t) return;
+		revealed.current = current;
+		if (t.agent === LEAD_ID) return;
+		tree.reveal(t.agent, view.departments.find((d) => d.agents.some((a) => a.id === t.agent))?.id ?? "");
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [current, threads]);
+
+	const endDrag = () => {
+		setDrag(null);
+		setAgentDrop(null);
+		setDeptDrop(null);
+	};
+	const dropAgent = (d: AgentDrop) => {
+		const id = drag?.kind === "agent" ? drag.id : null;
+		endDrag();
+		const mv = id ? planAgentDrop(lists, id, d) : null;
+		if (id && mv) void run(onMoveAgent(id, mv.department, mv.before));
+	};
+	const step = (agent: string, dir: -1 | 1) => {
+		const mv = stepAgent(lists, agent, dir);
+		if (mv) void run(onMoveAgent(agent, mv.department, mv.before));
+	};
+	const ids = departments.map((d) => d.id);
+	const reorderDepartments = (next: string[]) => {
+		if (next.length === ids.length && next.every((id, k) => id === ids[k])) return;
+		void run(onSaveDepartments(next.map((id) => departments.find((d) => d.id === id)!)));
+	};
+
+	const names = departments.map((d) => d.name);
+	const commitDepartment = (n: NonNullable<typeof naming>, draft: string) => {
+		setNaming(null);
+		const name = draft.replace(/\s+/g, " ").trim();
+		if (!name) return;
+		if (n.kind === "new") void run(onSaveDepartments([...departments, { id: "", name }]));
+		else if (departments.find((d) => d.id === n.id)?.name !== name) void run(onSaveDepartments(departments.map((d) => (d.id === n.id ? { ...d, name } : d))));
+	};
+
+	/** One agent: its row (fold, dot, name, count, "+") and, opened, its threads. `movable`: the row may be dragged (an agent of a department; not the lead, not a removed one). */
+	const agentRow = (a: AgentNode, movable: boolean) => {
+		const opened = searching || tree.state.opened.includes(a.id);
+		const drags = live && movable;
+		const openN = a.threads.filter((t) => t.state !== "closed").length;
+		const mark = agentDrop?.kind === "row" && agentDrop.agentId === a.id ? `drop-${agentDrop.place}` : "";
+		return (
+			<div key={a.id} className="tl-agent">
+				<div
+					className={`tl-agent-row ${mark} ${drag?.kind === "agent" && drag.id === a.id ? "dragging" : ""}`}
+					draggable={drags || undefined}
+					onDragStart={
+						drags
+							? (e) => {
+									e.stopPropagation();
+									e.dataTransfer.effectAllowed = "move";
+									e.dataTransfer.setData(AGENT_DRAG_TYPE, a.id);
+									setDrag({ kind: "agent", id: a.id });
+								}
+							: undefined
+					}
+					onDragEnd={drags ? endDrag : undefined}
+					onDragOver={(e) => {
+						if (drag?.kind !== "agent") return;
+						e.preventDefault();
+						e.stopPropagation();
+						const r = e.currentTarget.getBoundingClientRect();
+						const next: AgentDrop | null = a.id === drag.id || !movable ? null : { kind: "row", agentId: a.id, place: dropPlace(e.clientY - r.top, r.height) };
+						setAgentDrop((prev) => (sameDrop(prev, next) ? prev : next));
+					}}
+					onDrop={(e) => {
+						if (drag?.kind !== "agent") return;
+						e.preventDefault();
+						e.stopPropagation();
+						const r = e.currentTarget.getBoundingClientRect();
+						if (a.id === drag.id || !movable) return endDrag();
+						dropAgent({ kind: "row", agentId: a.id, place: dropPlace(e.clientY - r.top, r.height) });
+					}}
+				>
+					<button
+						className="ghost small tl-fold"
+						aria-expanded={opened}
+						title={opened ? tr("Sakļaut sarunas") : tr("Rādīt sarunas")}
+						disabled={searching}
+						onClick={() => tree.toggleOpened(a.id)}
+						onKeyDown={(e) => {
+							if (!drags || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+							e.preventDefault();
+							step(a.id, e.key === "ArrowUp" ? -1 : 1);
+						}}
+					>
+						{opened ? "▾" : "▸"}
+					</button>
+					<StateDot state={a.state} />
+					<b className="tl-agent-name" onClick={() => !searching && tree.toggleOpened(a.id)} title={a.id}>
+						{a.name}
+					</b>
+					{openN > 0 && <span className="dim small">{openN}</span>}
+					{a.gone && (
+						<span className="badge dim" title={tr("Speciālists ir noņemts Iestatījumos")}>
+							{tr("noņemts")}
+						</span>
+					)}
+					<span className="grow" />
+					{!a.gone && (
+						<button className="ghost small tl-new" title={tr("Jauna saruna")} aria-label={tr("Jauna saruna")} onClick={() => onNew(a.id)}>
+							+
+						</button>
+					)}
+				</div>
+				{opened && (
+					<div className="tl-threads">
+						{a.threads.map((t) => (
+							<ThreadRow key={t.id} t={t} state={liveState(t, queue)} current={t.id === current} onSelect={() => onSelect(t.id)} onRename={(title) => void run(onRename(t.id, title))} onClose={() => onClose(t.id)} />
+						))}
+						{a.threads.length === 0 && <div className="dim small tl-none">{tr("nav sarunu")}</div>}
+					</div>
+				)}
+			</div>
+		);
+	};
+
 	return (
-		<div className="thread-list">
-			{ids.map((id) => {
-				const own = shown.filter((t) => t.agent === id);
-				const gone = id !== LEAD_ID && !specs.some((s) => s.id === id);
+		<div className="thread-list tl-tree">
+			<div className="row tl-search">
+				<input
+					type="search"
+					className="grow"
+					value={query}
+					placeholder={tr("Meklēt sarunās, aģentos un nodaļās")}
+					aria-label={tr("Meklēt sarunās, aģentos un nodaļās")}
+					onChange={(e) => setQuery(e.target.value)}
+					onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+				/>
+			</div>
+			{view.lead && agentRow(view.lead, false)}
+			{view.departments.map((d) => {
+				const key = d.id ?? "";
+				const folded = live && tree.state.folded.includes(key);
+				const own = d.id !== null;
+				const renaming = naming?.kind === "rename" && naming.id === d.id;
+				const headDrop = deptDrop?.id === d.id ? `drop-${deptDrop.place}` : "";
+				const into = agentDrop?.kind === "end" && agentDrop.list === key;
+				const at = own ? ids.indexOf(d.id!) : -1;
 				return (
-					<div key={id} className="tl-agent">
-						<div className="row tl-head">
-							<b>{agentName(id, specs)}</b>
-							{gone && <span className="badge dim" title={tr("Speciālists ir noņemts Iestatījumos")}>{tr("noņemts")}</span>}
-							<span className="grow" />
-							{!gone && (
-								<button className="ghost small" onClick={() => onNew(id)}>
-									{tr("Jauna saruna")}</button>
+					<div
+						key={key || "none"}
+						className={`tl-dept ${into ? "drop-into" : ""}`}
+						onDragOver={(e) => {
+							if (drag?.kind !== "agent") return;
+							e.preventDefault();
+							setAgentDrop((prev) => (prev?.kind === "end" && prev.list === key ? prev : { kind: "end", list: key }));
+						}}
+						onDrop={(e) => {
+							if (drag?.kind !== "agent") return;
+							e.preventDefault();
+							dropAgent({ kind: "end", list: key });
+						}}
+					>
+						<div
+							className={`tl-dept-head ${headDrop} ${drag?.kind === "department" && drag.id === d.id ? "dragging" : ""}`}
+							draggable={(live && own && !renaming) || undefined}
+							onDragStart={
+								live && own
+									? (e) => {
+											e.dataTransfer.effectAllowed = "move";
+											e.dataTransfer.setData(DEPARTMENT_DRAG_TYPE, d.id!);
+											setDrag({ kind: "department", id: d.id! });
+										}
+									: undefined
+							}
+							onDragEnd={endDrag}
+							onDragOver={(e) => {
+								if (drag?.kind !== "department" || !own) return;
+								e.preventDefault();
+								e.stopPropagation();
+								const r = e.currentTarget.getBoundingClientRect();
+								const next: DeptDrop | null = d.id === drag.id ? null : { id: d.id!, place: dropPlace(e.clientY - r.top, r.height) };
+								setDeptDrop((prev) => (prev?.id === next?.id && prev?.place === next?.place ? prev : next));
+							}}
+							onDrop={(e) => {
+								if (drag?.kind !== "department" || !own) return;
+								e.preventDefault();
+								e.stopPropagation();
+								const r = e.currentTarget.getBoundingClientRect();
+								const from = drag.id;
+								endDrag();
+								if (from !== d.id) reorderDepartments(placeDepartment(ids, from, d.id!, dropPlace(e.clientY - r.top, r.height)));
+							}}
+						>
+							{renaming ? (
+								<NameField value={d.name} label={tr("Nodaļas nosaukums")} max={DEPARTMENT_NAME_MAX} onCommit={(v) => commitDepartment(naming!, v)} onCancel={() => setNaming(null)} />
+							) : (
+								<button
+									className="ghost tl-dept-toggle"
+									aria-expanded={!folded}
+									title={folded ? tr("Atvērt nodaļu") : tr("Sakļaut nodaļu")}
+									disabled={searching}
+									onClick={() => tree.toggleFolded(key)}
+									onKeyDown={(e) => {
+										if (!live || !own || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+										e.preventDefault();
+										reorderDepartments(moveDepartment(ids, d.id!, e.key === "ArrowUp" ? -1 : 1));
+									}}
+								>
+									<span className="tl-chev">{folded ? "▸" : "▾"}</span>
+									<span className="tl-dept-name">{d.name}</span>
+									{folded && d.active > 0 && (
+										<>
+											<StateDot state={d.state} />
+											<span className="dim small">{d.active}</span>
+										</>
+									)}
+								</button>
+							)}
+							{live && own && !renaming && (
+								<RowMenu
+									label={tr("Nodaļas darbības")}
+									items={[
+										{ label: tr("Pārdēvēt"), run: () => setNaming({ kind: "rename", id: d.id! }) },
+										{ label: tr("Uz augšu"), run: () => reorderDepartments(moveDepartment(ids, d.id!, -1)), disabled: at <= 0 },
+										{ label: tr("Uz leju"), run: () => reorderDepartments(moveDepartment(ids, d.id!, 1)), disabled: at < 0 || at >= ids.length - 1 },
+										{
+											label: tr("Dzēst nodaļu"),
+											run: () => {
+												tree.forget(d.id!);
+												void run(onSaveDepartments(departments.filter((x) => x.id !== d.id)));
+											},
+											disabled: d.agents.length > 0,
+											title: d.agents.length > 0 ? tr("Nodaļā ir aģenti: vispirms pārvieto tos citur") : tr("Noņem tukšo nodaļu"),
+										},
+									]}
+								/>
 							)}
 						</div>
-						{own.map((t) => {
-							const st = liveState(t, queue);
-							const busy = st === "running" || st === "queued" || st === "waiting-confirm";
-							return (
-								<div key={t.id} className={`tl-thread ${t.id === current ? "on" : ""} ${t.state === "closed" ? "closed" : ""}`} onClick={() => onSelect(t.id)} title={STATE_TEXT[st]}>
-									<StateDot state={st} />
-									<span className="tl-title">{t.title}</span>
-									<span className="dim small">{when(t.lastAt)}</span>
-									{t.state !== "closed" && (
-										<button
-											className="ghost small x"
-											title={busy ? tr("Nevar slēgt, kamēr saruna strādā") : tr("Slēgt sarunu (pieraksts paliek)")}
-											disabled={busy}
-											onClick={(e) => {
-												e.stopPropagation();
-												onClose(t.id);
-											}}
-										>
-											×
-										</button>
-									)}
-								</div>
-							);
-						})}
-						{own.length === 0 && <div className="dim small tl-none">{tr("nav sarunu")}</div>}
+						{!folded && (
+							<div className="tl-dept-body">
+								{d.agents.map((a) => agentRow(a, true))}
+								{d.agents.length === 0 && !searching && <div className="dim small tl-none">{drag?.kind === "agent" ? tr("Atlaid šeit") : tr("nav aģentu")}</div>}
+							</div>
+						)}
 					</div>
 				);
 			})}
+			{live && drag?.kind === "agent" && !view.departments.some((d) => d.id === null) && (
+				<div
+					className={`tl-dept tl-slot ${agentDrop?.kind === "end" && agentDrop.list === "" ? "drop-into" : ""}`}
+					onDragOver={(e) => {
+						e.preventDefault();
+						setAgentDrop((prev) => (prev?.kind === "end" && prev.list === "" ? prev : { kind: "end", list: "" }));
+					}}
+					onDrop={(e) => {
+						e.preventDefault();
+						dropAgent({ kind: "end", list: "" });
+					}}
+				>
+					{NO_DEPARTMENT()}: {tr("atlaid šeit, lai izņemtu no nodaļas")}
+				</div>
+			)}
+			{view.removed.length > 0 && (
+				<div className="tl-dept">
+					<div className="tl-dept-head">
+						<span className="tl-dept-name dim">{tr("Noņemtie aģenti")}</span>
+					</div>
+					<div className="tl-dept-body">{view.removed.map((a) => agentRow(a, false))}</div>
+				</div>
+			)}
+			{searching && !view.lead && view.departments.length === 0 && view.removed.length === 0 && <div className="dim small tl-none">{tr("Nekas nav atrasts.")}</div>}
+			{live &&
+				(naming?.kind === "new" ? (
+					<div className="tl-dept-head">
+						<NameField value={naming.name} label={tr("Nodaļas nosaukums")} max={DEPARTMENT_NAME_MAX} onCommit={(v) => commitDepartment(naming, v)} onCancel={() => setNaming(null)} />
+					</div>
+				) : (
+					<button className="ghost small tl-add" onClick={() => setNaming({ kind: "new", name: unusedName(tr("Jauna nodaļa"), names) })}>
+						{tr("+ nodaļa")}
+					</button>
+				))}
 			<label className="small dim tl-closed">
-				<input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} /> {tr("Rādīt slēgtās")}</label>
+				<input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> {tr("Rādīt arhivētās")}
+			</label>
 		</div>
 	);
 }
@@ -116,28 +509,59 @@ export function ThreadPanel({ current, threads, specs, queue }: { threads: Threa
 	);
 }
 
-/** The list of conversations as a window: the agents and their threads, a new conversation, closing, the closed ones. */
+/** The app's departments, in their order; reloaded when main says data changed and when the window gets focus again (the Aģenti page may be in another window). */
+function useDepartments() {
+	const { tick } = useUi();
+	const [list, setList] = useState<Department[] | null>(null);
+	const reload = useCallback(() => {
+		call("departments.list")
+			.then((v) => setList(v.departments))
+			.catch(() => undefined);
+	}, []);
+	useEffect(reload, [tick, reload]);
+	useEffect(() => {
+		window.addEventListener("focus", reload);
+		return () => window.removeEventListener("focus", reload);
+	}, [reload]);
+	return { list, setList };
+}
+
+/** The list of conversations as a window: departments, their agents and threads, a new conversation, rename, archive, the archived ones. */
 export function ThreadsWindow() {
 	const { projectId, thread: selId } = useUi();
 	const T = useThreads(projectId);
+	const D = useDepartments();
 	const [err, setErr] = useState<string | null>(null);
 	if (!projectId) return <div className="threads-win dim">{tr("Atver projektu, lai redzētu sarunas.")}</div>;
 	return (
 		<div className="threads-win">
 			{err && <div className="err small">{err}</div>}
-			<ThreadList
-				threads={T.threads}
-				specs={T.specs}
-				queue={T.queue}
-				current={T.viewId}
-				onSelect={T.select}
-				onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))}
-				onClose={(id) =>
-					void T.close(id)
-						.then(() => id === selId && ui.selectThread(null))
-						.catch((e) => setErr(errText(e)))
-				}
-			/>
+			{D.list && (
+				<ThreadList
+					threads={T.threads}
+					specs={T.specs}
+					departments={D.list}
+					queue={T.queue}
+					current={T.viewId}
+					onSelect={T.select}
+					onNew={(a) => void T.open(a).catch((e) => setErr(errText(e)))}
+					onClose={(id) =>
+						void T.close(id)
+							.then(() => id === selId && ui.selectThread(null))
+							.catch((e) => setErr(errText(e)))
+					}
+					onRename={(id, title) => T.rename(id, title)}
+					// the agents and departments are saved in main; the bump makes every panel of this window (Aģenti, the chat's roster) read them again
+					onMoveAgent={(agent, department, before) => call("agents.move", agent, department, before).then(() => ui.bump())}
+					onSaveDepartments={(list) =>
+						call("departments.save", list).then((saved) => {
+							D.setList(saved);
+							ui.bump();
+						})
+					}
+					onError={setErr}
+				/>
+			)}
 		</div>
 	);
 }

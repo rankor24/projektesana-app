@@ -13,10 +13,11 @@ import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type Standi
 import { declarationTokens } from "../../agent/declarations.js";
 import { listSkills, officeSkillsDir } from "../../agent/skills.js";
 import type { AgentSpec, AgentSpecRow, AgentToolRow } from "../../shared/agent-types.js";
+import { DEFAULT_DEPARTMENTS, checkDepartments, type Department } from "../../shared/departments.js";
 import type { Handlers } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
 
-type K = "agents.list" | "agents.save" | "agents.role.get" | "agents.role.set" | "agents.role.import" | "agents.shared.get" | "agents.shared.set";
+type K = "agents.list" | "agents.save" | "agents.move" | "departments.list" | "departments.save" | "agents.role.get" | "agents.role.set" | "agents.role.import" | "agents.shared.get" | "agents.shared.set";
 
 export function agentHandlers(d: { settings: AppSettings; /** the synced skills folder; without it no agent has a skills list */ skillsDir?: string }): Pick<Handlers, K> {
 	const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, appLevels(), REVIT_LEVELS);
@@ -58,6 +59,8 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 			for (const raw of specs) {
 				const v = validateSpec(raw, levelOf, known, ids, roleExists);
 				if (!v.ok) throw new Error(`${(raw as { name?: string })?.name || (raw as { id?: string })?.id || "speciālists"}: ${v.error}`);
+				// the department is one of the app's list (an empty one = in none); the list is the user's, so an id it lacks is refused rather than filed under a name nobody sees
+				if (v.spec.department && !d.settings.departments().departments.some((x) => x.id === v.spec.department)) throw new Error(`${v.spec.name}: nodaļa ${v.spec.department} nav nodaļu sarakstā.`);
 				if (out.some((o) => o.id === v.spec.id)) throw new Error(`Identifikators ${v.spec.id} atkārtojas.`);
 				out.push(v.spec);
 			}
@@ -74,6 +77,28 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 			if (lead > LEAD_FIXED_MAX && lead > leadOf(d.settings.agentSpecs().specs)) throw new Error(`Galvenā aģenta pastāvīgais konteksts būtu ${lead} tokeni (limits ${LEAD_FIXED_MAX}). Saīsini aģentu aprakstus vai noņem kādu aģentu.`);
 			d.settings.saveAgentSpecs(out);
 			return out;
+		},
+		"agents.move": (id: string, department: string | null, before: string | null) => {
+			const { specs } = d.settings.agentSpecs();
+			if (department !== null && !d.settings.departments().departments.some((x) => x.id === department)) throw new Error(`Nezināma nodaļa: ${department}.`);
+			const at = specs.findIndex((s) => s.id === id);
+			if (at < 0) throw new Error(`Nav aģenta ${id}.`);
+			// only the department changes (and the place in the list, which is the order the panel shows): "" = in none, so the default of its id does not file it back
+			const rest = specs.filter((_, k) => k !== at);
+			const to = before ? rest.findIndex((s) => s.id === before) : -1;
+			rest.splice(to >= 0 ? to : rest.length, 0, { ...specs[at]!, department: department ?? "" });
+			d.settings.saveAgentSpecs(rest);
+			return rest;
+		},
+		"departments.list": () => {
+			const { departments, shipped } = d.settings.departments();
+			return { departments, defaults: DEFAULT_DEPARTMENTS, shipped };
+		},
+		"departments.save": (departments: Department[]) => {
+			const r = checkDepartments(departments, d.settings.agentSpecs().specs, d.settings.departments().departments);
+			if (!r.ok) throw new Error(r.error);
+			d.settings.saveDepartments(r.list);
+			return r.list;
 		},
 		"agents.role.get": (id: string) => readRole(d.settings.dir, id),
 		"agents.role.set": (id: string, text: string) => {
