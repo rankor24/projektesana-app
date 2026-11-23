@@ -1,7 +1,7 @@
 {
   "id": "projektesana",
   "name": "Projektēšanas App",
-  "version": "2.6.9",
+  "version": "2.7.0",
   "apps": ["bimcraft"],
   "api": "1.1",
   "license": "Apache-2.0",
