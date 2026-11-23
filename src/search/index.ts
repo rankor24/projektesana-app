@@ -1,11 +1,13 @@
 // Building the index inside one project's threads.db: cut the text into pieces, give each piece a vector, keep both up to date.
-// Three steps that can each stop at any moment and be run again without redoing finished work:
+// Four steps that can each stop at any moment and be run again without redoing finished work:
 //   1. syncSources   every source's page text (the scan keeps it per page in text\<sha>.json) becomes pieces, once per text-cache
 //                    hash. A source whose text changed (OCR finished, a new issue replaced it) is re-cut; one that is no longer
 //                    current is dropped with its vectors. Cheap: text only, no model.
 //   2. syncMessages  every conversation message not seen before becomes pieces. A high-water mark (the largest message id seen)
 //                    means a turn costs one query, not a pass over the whole history.
-//   3. embedPending  every piece without a vector of the CURRENT model gets one, a small batch at a time, committed as it goes.
+//   3. syncUnits     the memory entries (Atmiņa) and the entries of the decision and question logs: each entry is a unit with a hash of its
+//                    text; a unit whose hash is new is cut, one that is gone (struck through, expired, rewritten) is dropped with its vectors.
+//   4. embedPending  every piece without a vector of the CURRENT model gets one, a small batch at a time, committed as it goes.
 //                    Killing the app in the middle loses at most one batch; the next run picks up at the first piece without a vector.
 // These are plain functions over an open connection, so the worker thread runs them in the background and a test runs them on a
 // temporary database with a stub embedder.
@@ -103,6 +105,55 @@ export function syncSources(db: DatabaseSync, sources: SourceRef[], readPages: (
 	return rep;
 }
 
+/** The kinds of piece that are units of text with a label, besides the sources (pages) and the messages. memory: one entry of a Markdown memory file; decision / question: one note of a log. */
+export type UnitKind = "memory" | "decision" | "question";
+
+/** One thing to index whole: `key` says where it lives (a memory file, a note's id), `sha` the hash of its text, `label` what a citation names. */
+export interface Unit {
+	key: string;
+	sha: string;
+	label: string;
+	text: string;
+}
+
+/** The hash a unit carries: of its text, and of the chunk version, so a change of the cutting re-cuts it. */
+export const unitSha = (text: string): string => `${CHUNK_VERSION}:${createHash("sha1").update(text).digest("hex").slice(0, 16)}`;
+
+/** The units of one kind that exist now → pieces, and the pieces of units that no longer exist (or whose text changed) go. A unit is told apart by its key and hash together, so two entries of one memory file are two units and an edit of one leaves the other alone. Same text twice under one key is one unit. */
+export function syncUnits(db: DatabaseSync, kind: UnitKind, units: Unit[], now = new Date()): SyncReport {
+	const rep: SyncReport = { added: 0, removed: 0, chunks: 0 };
+	const id = (key: string, sha: string) => `${key}\u0000${sha}`;
+	const want = new Map<string, Unit>();
+	// a unit with nothing worth a vector (a heading alone) is not kept: it would look new on every pass
+	for (const u of units) if (!want.has(id(u.key, u.sha)) && chunkText(u.text).length) want.set(id(u.key, u.sha), u);
+	const have = new Map<string, string | null>();
+	for (const r of db.prepare("SELECT DISTINCT source, sha, label FROM chunks WHERE kind = ?").all(kind) as { source: string; sha: string; label: string | null }[]) have.set(id(r.source, r.sha), r.label);
+
+	for (const k of have.keys()) {
+		if (want.has(k)) continue;
+		const [key, sha] = k.split("\u0000");
+		transaction(db, () => db.prepare("DELETE FROM chunks WHERE kind = ? AND source = ? AND sha = ?").run(kind, key, sha));
+		rep.removed++;
+	}
+	const insert = db.prepare("INSERT INTO chunks (kind, source, text, created_at, ord, sha, label) VALUES (?, ?, ?, ?, ?, ?, ?)");
+	for (const [k, u] of want) {
+		if (have.has(k)) {
+			// same text: only a changed label (a keeper that was renamed, the number of a log entry) needs refreshing
+			if (have.get(k) !== u.label) db.prepare("UPDATE chunks SET label = ? WHERE kind = ? AND source = ? AND sha = ?").run(u.label, kind, u.key, u.sha);
+			continue;
+		}
+		transaction(db, () => {
+			chunkText(u.text).forEach((piece, ord) => {
+				insert.run(kind, u.key, piece, now.toISOString(), ord, u.sha, u.label);
+				rep.chunks++;
+			});
+		});
+		rep.added++;
+	}
+	if (rep.added || rep.removed) metaSet(db, "search.updated_at", now.toISOString());
+	return rep;
+}
+
 /** Messages written since the last pass → pieces. Returns how many pieces were made. */
 export function syncMessages(db: DatabaseSync, now = new Date()): number {
 	let hwm = Number(metaGet(db, "search.msg_hwm") ?? 0);
@@ -167,7 +218,7 @@ export async function embedPending(db: DatabaseSync, emb: Embedder, o: EmbedOpti
 	const batch = o.batch ?? 16;
 	const total = pendingCount(db);
 	let done = 0;
-	const next = db.prepare("SELECT c.id AS id, c.text AS text FROM chunks c LEFT JOIN chunk_vectors v ON v.chunk_id = c.id WHERE v.chunk_id IS NULL ORDER BY CASE c.kind WHEN 'message' THEN 0 ELSE 1 END, c.id LIMIT ?");
+	const next = db.prepare("SELECT c.id AS id, c.text AS text FROM chunks c LEFT JOIN chunk_vectors v ON v.chunk_id = c.id WHERE v.chunk_id IS NULL ORDER BY CASE c.kind WHEN 'source' THEN 2 WHEN 'message' THEN 1 ELSE 0 END, c.id LIMIT ?");
 	const put = db.prepare("INSERT OR REPLACE INTO chunk_vectors (chunk_id, model, dims, vec) VALUES (?, ?, ?, ?)");
 	while (!o.stop?.()) {
 		const rows = next.all(batch) as { id: number; text: string }[];
@@ -193,7 +244,9 @@ export function indexStatus(db: DatabaseSync): IndexStatus {
 	const count = (kind: string) => n(`SELECT COUNT(*) n FROM chunks WHERE kind = '${kind}'`);
 	const s = { chunks: count("source"), embedded: emb("source"), files: n("SELECT COUNT(DISTINCT sha) n FROM chunks WHERE kind = 'source'") };
 	const m = { chunks: count("message"), embedded: emb("message") };
-	return { model, chunks: s.chunks + m.chunks, embedded: s.embedded + m.embedded, sources: s, messages: m, updatedAt: metaGet(db, "search.updated_at") };
+	const mem = { chunks: count("memory"), embedded: emb("memory") };
+	const logs = { chunks: count("decision") + count("question"), embedded: emb("decision") + emb("question") };
+	return { model, chunks: s.chunks + m.chunks + mem.chunks + logs.chunks, embedded: s.embedded + m.embedded + mem.embedded + logs.embedded, sources: s, messages: m, memory: mem, logs, updatedAt: metaGet(db, "search.updated_at") };
 }
 
 /** Throws every piece and vector away and forgets what was seen: the next run builds it all again (the Reindex button). Conversations themselves are untouched. */

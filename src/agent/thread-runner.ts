@@ -49,6 +49,10 @@ import type { SessionDeps, ToolServer } from "./session.js";
 /** The process tools that change the process file (not `process_status`); the name may carry the tools server's prefix. */
 const PROCESS_TOOL = /process_(request_gate|skip_stage|set_profile|review_done|change_impact)$/;
 
+/** The tools that write what the search index holds beyond sources and conversations: the Markdown memory, and the notes the decision and question logs are made of.
+ *  They write in the tools server's process, so this is how the main process learns to bring the index up to date (main.ts asks for a run on "memory" and "notes"). */
+const INDEXED_TOOL = /(?:^|__)(memory_write|memory_write_office|write_note|close_topic|report_answer|send_message)$/;
+
 /** What a write tool of an author gets during S5 (14.6): the expert is reading the project, so nobody but eks changes it. */
 export const S5_BLOCK = "S5 laikā sadaļas autors nelabo projektu.";
 
@@ -459,6 +463,8 @@ export class ThreadRunner {
 						// the planning tools write in the tools server's process too: the window reloads what they changed
 						const wrote = e.type === "tool_result" && e.ok ? PLANNING_TOOL_DATA[e.name] : undefined;
 						if (wrote) i.dataChanged?.(wrote);
+						const indexed = e.type === "tool_result" && e.ok ? INDEXED_TOOL.exec(e.name)?.[1] : undefined;
+						if (indexed) i.dataChanged?.([indexed.startsWith("memory_") ? "memory" : "notes"]);
 						if (e.type === "usage") {
 							// the Claude session's size, for the context meter (the SDK holds the messages)
 							if (claude && !e.model) {

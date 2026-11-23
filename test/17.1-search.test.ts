@@ -12,7 +12,10 @@ import type { ToolCtx } from "../src/agent/tools/context.ts";
 import { ThreadsDb } from "../src/core/threads-db.ts";
 import { chunkText, CHUNK_MIN, tidy } from "../src/search/chunk.ts";
 import type { Embedder } from "../src/search/embedder.ts";
-import { adoptModel, embedPending, indexStatus, pendingCount, resetIndex, syncMessages, syncSources } from "../src/search/index.ts";
+import { adoptModel, embedPending, indexStatus, pendingCount, resetIndex, syncMessages, syncSources, syncUnits } from "../src/search/index.ts";
+import { logUnits, memoryUnits } from "../src/search/units.ts";
+import { writeNoteFile } from "../src/core/notes.ts";
+import type { Note } from "../src/core/model.ts";
 import { SearchIndexer } from "../src/search/manager.ts";
 import { searchDbFile } from "../src/search/query.ts";
 import { ensureSearchSchema, hasSearchSchema, INDEX_SCHEMA_VERSION } from "../src/search/schema.ts";
@@ -310,4 +313,133 @@ test("the background worker builds the pieces of a project and reports idle (no 
 	assert.equal(s.index?.chunks, 0);
 	assert.equal(s.model.downloaded, false);
 	await ix.dispose();
+});
+
+// ---- memory and the decision and question logs (plan §10) ----------------------------------------------------------------------------------
+
+const TODAY = Date.parse("2026-11-20T12:00:00Z");
+
+/** An app folder with memory files in the shapes memory-md.ts writes, and a project folder with decision and question notes. */
+function memoryAndLogs() {
+	const appDir = tmp();
+	mkdirSync(join(appDir, "memory", "agents"), { recursive: true });
+	writeFileSync(join(appDir, "memory", "agents", "lead.md"), "# Mana atmiņa\n- 2026-11-10 · Klients Rīgas dome katru piektdienu vēlas īsu statusa ziņu.\n- 2026-11-12 · Ūdensvada pievadu vienmēr saskaņo ar Rīgas ūdeni pirms projektēšanas.\n- 2026-10-01 · ~~Vecs noteikums par drukāšanu~~ · superseded 2026-10-20\n");
+	writeFileSync(join(appDir, "memory", "office.md"), "- 2026-11-01 · Visiem rasējumiem lieto lapu formātu A1 un mērogu 1:100.\n- 2026-01-01 · Pagājis ieraksts par ugunsdrošību · until 2026-02-01\n");
+	const projectDir = join(appDir, "projects", "BD999");
+	const note = (id: string, type: string, title: string, body: string, at: string, extra: object = {}) => writeNoteFile(join(projectDir, "notes"), { id, type, title, body, refs: [], by: "agent", at, agent: "arhitekts", to: "bpv", ...extra } as Note, join(projectDir, "versions"));
+	note("n_d1", "decision", "Fasādes apdare", "Fasādei izvēlēta keramikas apdare ar ventilējamo konstrukciju.", "2026-11-05T10:00:00.000Z");
+	note("n_d2", "decision", "Apkures sistēma", "Apkurei izmanto pieslēgumu pilsētas siltumtīklam.", "2026-11-06T10:00:00.000Z");
+	note("n_q1", "question", "Vai dārza mājiņa ir jāiekļauj projektā?", "Jautājums lietotājam par dārza mājiņu.", "2026-11-07T10:00:00.000Z", { to: "user", status: "open" });
+	return { appDir, projectDir, note };
+}
+
+test("memory units: live entries only (not struck, not expired), each with its keeper and date; an edited entry is cut again and nothing else is", async () => {
+	const { appDir } = memoryAndLogs();
+	const units = memoryUnits(appDir, TODAY);
+	assert.deepEqual(units.map((u) => u.label).sort(), ["Atmiņa · lead", "Atmiņa · lead · 2026-11-01", "Atmiņa · lead · 2026-11-10", "Atmiņa · lead · 2026-11-12"]);
+	assert.ok(units.every((u) => !/Vecs noteikums|ugunsdrošību/.test(u.text)), "a struck-through and an expired entry are not indexed");
+	assert.ok(units.every((u) => !/^\d{4}-\d{2}-\d{2} ·/.test(u.text)), "the date is in the citation, not in the text");
+	const p = project();
+	// the heading alone ("# Mana atmiņa") is page furniture: no piece, so no unit
+	assert.equal(syncUnits(p.raw, "memory", units).added, 3);
+	assert.equal(syncUnits(p.raw, "memory", units).added, 0, "same text: nothing is cut again");
+	const e = stub();
+	await embedPending(p.raw, e);
+	e.calls.length = 0;
+	// one entry is edited, another struck through: one new unit, two gone, the office entry keeps its vector
+	writeFileSync(join(appDir, "memory", "agents", "lead.md"), "# Mana atmiņa\n- 2026-11-10 · Klients Rīgas dome katru ceturtdienu vēlas īsu statusa ziņu.\n- 2026-11-12 · ~~Ūdensvada pievadu vienmēr saskaņo ar Rīgas ūdeni pirms projektēšanas.~~ · superseded 2026-11-20\n");
+	const second = syncUnits(p.raw, "memory", memoryUnits(appDir, TODAY));
+	assert.deepEqual([second.added, second.removed], [1, 2]);
+	await embedPending(p.raw, e);
+	assert.equal(e.calls.flat().length, 1, "only the edited entry is embedded");
+	assert.equal(Number((p.raw.prepare("SELECT COUNT(*) n FROM chunk_vectors").get() as { n: number }).n), indexStatus(p.raw).chunks, "no vector without its piece");
+	assert.equal(indexStatus(p.raw).memory.chunks, 2);
+	p.tdb.close();
+	p.raw.close();
+});
+
+test("log units: every decision and question note is one entry named as the register names it; an answer re-cuts its question only", () => {
+	const { projectDir, note } = memoryAndLogs();
+	const l = logUnits(projectDir);
+	assert.deepEqual(l.decision.map((u) => u.label), ["Lēmumu žurnāls · L-1 · 2026-11-05", "Lēmumu žurnāls · L-2 · 2026-11-06"]);
+	assert.deepEqual(l.question.map((u) => u.label), ["Jautājumu žurnāls · J-1 · 2026-11-07"]);
+	assert.match(l.decision[0].text, /keramikas apdare/);
+	const p = project();
+	assert.equal(syncUnits(p.raw, "decision", l.decision).added, 2);
+	assert.equal(syncUnits(p.raw, "question", l.question).added, 1);
+	assert.equal(syncUnits(p.raw, "decision", l.decision).added + syncUnits(p.raw, "question", l.question).added, 0);
+	// the question is answered: its register block changes ("Atbilde: …"), so it is cut again; the decisions are not
+	note("n_a1", "answer", "Nē, mājiņa netiek iekļauta", "Atbilde.", "2026-11-08T10:00:00.000Z", { refs: ["n_q1"], by: "user", to: "arhitekts" });
+	const again = logUnits(projectDir);
+	assert.equal(syncUnits(p.raw, "decision", again.decision).added, 0);
+	const q = syncUnits(p.raw, "question", again.question);
+	assert.deepEqual([q.added, q.removed], [1, 1]);
+	assert.match((p.raw.prepare("SELECT text FROM chunks WHERE kind = 'question'").get() as { text: string }).text, /mājiņa netiek iekļauta/);
+	const st = indexStatus(p.raw);
+	assert.deepEqual([st.logs.chunks, st.memory.chunks, st.chunks], [3, 0, 3]);
+	p.tdb.close();
+	p.raw.close();
+});
+
+test("search kinds: memory and logs return entries with their citations; the other kinds do not see them; all includes them", async () => {
+	const { appDir, projectDir } = memoryAndLogs();
+	const p = project();
+	syncSources(p.raw, sources, read);
+	syncUnits(p.raw, "memory", memoryUnits(appDir, TODAY));
+	const logs = logUnits(projectDir);
+	syncUnits(p.raw, "decision", logs.decision);
+	syncUnits(p.raw, "question", logs.question);
+	const e = stub();
+	await embedPending(p.raw, e);
+
+	const mem = await searchProject(p.raw, { query: "kad klients vēlas statusa ziņu?", kind: "memory", embedder: e });
+	assert.ok(mem.hits.length > 0 && mem.hits.every((h) => h.kind === "memory"));
+	assert.equal(mem.hits[0].citation, "Atmiņa · lead · 2026-11-10");
+	assert.equal(mem.hits[0].ref, "agent/lead");
+	assert.match(mem.hits[0].text, /piektdienu/);
+	// no BPV among the agents: the office file is kept by the main agent
+	const office = await searchProject(p.raw, { query: "lapu formātu A1", kind: "memory", embedder: null });
+	assert.equal(office.hits[0].citation, "Atmiņa · lead · 2026-11-01");
+	assert.equal(office.hits[0].ref, "office/office");
+
+	const dec = await searchProject(p.raw, { query: "kāda fasādes apdare izvēlēta?", kind: "logs", embedder: e });
+	assert.ok(dec.hits.every((h) => h.kind === "log"));
+	assert.equal(dec.hits[0].citation, "Lēmumu žurnāls · L-1 · 2026-11-05");
+	assert.equal(dec.hits[0].ref, "n_d1");
+	const qs = await searchProject(p.raw, { query: "dārza mājiņa", kind: "logs", embedder: null });
+	assert.equal(qs.hits[0].citation, "Jautājumu žurnāls · J-1 · 2026-11-07");
+
+	const src = await searchProject(p.raw, { query: "fasādes apdare keramikas", kind: "sources", embedder: e });
+	assert.ok(src.hits.every((h) => h.kind === "source"));
+	const chat = await searchProject(p.raw, { query: "fasādes apdare keramikas", kind: "conversations", embedder: e });
+	assert.equal(chat.hits.length, 0);
+	const all = await searchProject(p.raw, { query: "fasādes apdare keramikas", embedder: e, limit: 10 });
+	assert.ok(all.hits.some((h) => h.kind === "log"));
+	p.tdb.close();
+	p.raw.close();
+});
+
+test("the worker indexes memory and logs even in a turn's run, and search_project returns them with their citations", async () => {
+	const { appDir } = memoryAndLogs();
+	const projectsDir = join(appDir, "projects");
+	const seen: string[] = [];
+	// an unknown model id: the worker cuts the pieces (what is tested), then stops before any model is fetched, and says so
+	const ix = new SearchIndexer({ appDir, projectsDir, sources: () => [], emit: (s) => seen.push(s.state), log: () => {}, delayMs: 0, modelId: "none" });
+	ix.request("BD999", "messages", 0);
+	const t0 = Date.now();
+	while (!(seen.includes("running") && seen[seen.length - 1] === "idle") && Date.now() - t0 < 20_000) await new Promise((r) => setTimeout(r, 50));
+	const s = ix.status("BD999");
+	assert.match(s.error ?? "", /Nezināms modelis/);
+	assert.ok((s.index?.memory.chunks ?? 0) >= 2, JSON.stringify(s.index));
+	assert.equal(s.index?.logs.chunks, 3);
+	await ix.dispose();
+
+	const ctx = { appDir, projectsDir, projectId: "BD999", dataDir: appDir, runDir: null, agent: null, thread: null } as ToolCtx;
+	const t = allTools().find((x) => x.name === "search_project")!;
+	const mem = (await t.run(ctx, { query: "ūdensvada pievadu saskaņo", kind: "memory" })) as { passages: { citation: string; ref?: string }[] };
+	assert.ok(mem.passages.some((h) => h.citation.startsWith("Atmiņa · lead · 2026-11-")), "memory entries come back with their citation");
+	assert.equal(mem.passages[0].ref, "agent/lead");
+	const logs = (await t.run(ctx, { query: "siltumtīklam apkure", kind: "logs" })) as { passages: { citation: string; ref?: string }[] };
+	assert.equal(logs.passages[0].citation, "Lēmumu žurnāls · L-2 · 2026-11-06");
+	assert.equal(logs.passages[0].ref, "n_d2");
 });
