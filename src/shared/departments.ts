@@ -20,6 +20,8 @@ import type { AgentSpec } from "./agent-types.js";
 export interface Department {
 	id: string;
 	name: string;
+	/** the department lead (an agent id): assigns inside the department and keeps its memory; absent = BPV does (plan §10). Held and validated here, used by the runner. */
+	lead?: string;
 }
 
 /** The ids the process names (core/process-def.ts has the same `eks`; this file stays node-free, so it carries its own). */
@@ -168,7 +170,15 @@ export function checkDepartments(raw: unknown, specs: readonly Pick<AgentSpec, "
 		if (given && list.some((d) => d.id === given)) return { ok: false, error: `Nodaļas identifikators «${given}» atkārtojas.` };
 		// an id that is not in the saved list is a made-up one: the id of a new department comes from its name here
 		const id = given && current.some((d) => d.id === given) ? given : newDepartmentId(name, [...list.map((d) => d.id), ...current.map((d) => d.id)]);
-		list.push({ id, name });
+		const lead = typeof r?.lead === "string" ? r.lead.trim() : "";
+		list.push(lead ? { id, name, lead } : { id, name });
+	}
+	// a lead is an agent of the saved list that is filed in that department (the user moves an agent first, then makes it the lead)
+	for (const d of list) {
+		if (!d.lead) continue;
+		const who = specs.find((s) => s.id === d.lead);
+		if (!who) return { ok: false, error: `Nodaļas «${d.name}» vadītājs: nezināms aģents ${d.lead}.` };
+		if (departmentOf(who) !== d.id) return { ok: false, error: `Nodaļas «${d.name}» vadītājam ${d.lead} jābūt šajā nodaļā.` };
 	}
 	for (const gone of current.filter((d) => !list.some((x) => x.id === d.id))) {
 		const inside = specs.filter((s) => departmentOf(s) === gone.id).map((s) => s.id);

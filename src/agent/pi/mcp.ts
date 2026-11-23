@@ -5,7 +5,7 @@
 // has nine, so each one is a tool of its own and the model sees exact names and argument schemas.
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "typebox";
-import { McpClient, StdioTransport, toLlmContent } from "@earendil-works/pi-mcp";
+import { McpClient, StdioTransport, StreamableHttpTransport, toLlmContent } from "@earendil-works/pi-mcp";
 
 /** How to start the server: command, arguments and extra environment, as the app's `McpLaunch` describes it. */
 export interface McpLaunchSpec {
@@ -13,7 +13,17 @@ export interface McpLaunchSpec {
 	args: string[];
 	env: Record<string, string>;
 	cwd?: string;
+	/** An agent's own server that is reached by address (agent-mcp.ts): `command` is then "" and is not started; `headers` go with every request. */
+	url?: string;
+	headers?: Record<string, string>;
+	/** The tools reach the model as `<prefix>__<tool>` (agent-mcp.ts `mcpToolName`), so two servers, or a server and the app, cannot offer the same name. The server is still called by the tool's own name. */
+	prefix?: string;
+	/** An agent's own server that does not start must not stop the agent's run: it is left out and named in `missing` (the app's own and Revit's stay required). */
+	optional?: boolean;
 }
+
+/** The name the model sees for a tool of a prefixed server: letters, digits, "_" and "-" only and at most 64 characters, as the providers require. */
+export const prefixedToolName = (prefix: string, tool: string): string => `${prefix}__${tool}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
 
 export interface McpToolsOptions {
 	/** Only these tools are offered to the model. Everything else the server lists is ignored. */
@@ -50,8 +60,13 @@ export async function connectMcpServers(servers: Record<string, McpLaunchSpec & 
 	const closeAll = async () => void (await Promise.all(opened.map((o) => o.close().catch(() => undefined))));
 	try {
 		for (const [name, s] of Object.entries(servers)) {
-			const t = await connectMcpTools(s, { ...opts, allow: s.allow, clientName: opts.clientName ?? name });
-			opened.push({ ...t, missing: t.missing.map((m) => `${name}:${m}`) });
+			try {
+				const t = await connectMcpTools(s, { ...opts, allow: s.allow, clientName: opts.clientName ?? name });
+				opened.push({ ...t, missing: t.missing.map((m) => `${name}:${m}`) });
+			} catch (e) {
+				if (!s.optional) throw e;
+				opened.push({ tools: [], missing: [`${name}:${(e as Error).message}`], close: async () => undefined });
+			}
 		}
 		const tools = opened.flatMap((o) => o.tools);
 		const dup = tools.map((t) => t.name).filter((n, i, a) => a.indexOf(n) !== i);
@@ -65,7 +80,7 @@ export async function connectMcpServers(servers: Record<string, McpLaunchSpec & 
 
 export async function connectMcpTools(spec: McpLaunchSpec, opts: McpToolsOptions = {}): Promise<McpTools> {
 	const client = new McpClient({ name: opts.clientName ?? "agent-pi", version: "1.0.0", requestTimeoutMs: opts.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS });
-	await client.connect(new StdioTransport({ command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env, stderr: "pipe" }));
+	await client.connect(spec.url ? new StreamableHttpTransport({ url: spec.url, ...(spec.headers ? { headers: spec.headers } : {}) }) : new StdioTransport({ command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env, stderr: "pipe" }));
 	const timeoutMs = opts.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
 	const maxChars = opts.maxResultChars;
 	try {
@@ -73,7 +88,7 @@ export async function connectMcpTools(spec: McpLaunchSpec, opts: McpToolsOptions
 		const allow = opts.allow ? new Set(opts.allow) : null;
 		const offered = listed.filter((t) => !allow || allow.has(t.name));
 		const tools: AgentTool<TSchema>[] = offered.map((t) => ({
-			name: t.name,
+			name: spec.prefix ? prefixedToolName(spec.prefix, t.name) : t.name,
 			label: t.title ?? t.name,
 			description: t.description ?? t.name,
 			parameters: parametersOf(t.inputSchema),

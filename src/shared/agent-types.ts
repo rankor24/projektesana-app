@@ -6,8 +6,11 @@ export const ROLE_MAX = 16_000; // characters of a role text
 export const SHARED_MAX = 6_000; // characters of the shared rules
 /** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
 export const SPECIALIST_FIXED_MAX = 16_000; // tokens
-/** The same for the lead (standing text with the roster and skills list + its declarations); the 0.6 guard holds it, and saving specialists is refused past it (R49). */
-export const LEAD_FIXED_MAX = 10_000; // tokens
+/** The same for the lead (standing text with the roster and skills list + its declarations); the 0.6 guard holds it, and saving specialists is refused past it (R49).
+ *  16 000 since the team import: the lead's declarations alone (the app's tools and the app_calls catalog) measure ~12 100 tokens and its standing text ~1 400, so the old
+ *  10 000 refused every added agent ("a save that makes the lead heavier is refused while it is over") and the 16 BD roles could not be saved. A roster line costs ~12 tokens, so
+ *  16 000 leaves room for ~120 more agents. */
+export const LEAD_FIXED_MAX = 16_000; // tokens
 
 export interface AgentSpec {
 	id: string;
@@ -34,7 +37,37 @@ export interface AgentSpec {
 	skills?: string[];
 	/** the department (shared/departments.ts) the agent is filed in: an id of the app's department list; absent = the default of its id (BD roles), "" = in none */
 	department?: string;
+	/** check before done (docs/BD adoption plan, "Check before done"): who reads this agent's finished answer against the request before it is handed on. `agent` = another agent of
+	 *  the list, else `provider` + `model` = a model of its own (another provider than the author's by default, set here); `maxChecks` = the most checks a task gets (1-3).
+	 *  Absent = no check. This file only holds and validates the fields; the logic that runs the check is the runner's. */
+	check?: { agent?: string; provider?: string; model?: string; maxChecks?: number };
+	/** MCP servers this agent alone may use (ported from OpenMausBot docs/custom-mcp-servers.md), pasted as `claude mcp add …` and parsed (shared/mcp-paste.ts). */
+	mcp?: AgentMcpServer[];
 }
+
+/** One MCP server of one agent: a program to start (`command`, `args`, `env`) or an address (`url`, `headers`). The tools it offers are listed once by the settings dialog (`tools`)
+ *  and only those are offered to the agent: a tool the server adds later stays out until the user lists it again. Every tool needs the user's confirmation per batch
+ *  (level `confirm`) unless the user marked it in `read` (a tool that only looks things up). */
+export interface AgentMcpServer {
+	/** lower case letters, digits, "-" and "_"; the tools reach the model as `<name>__<tool>` */
+	name: string;
+	command?: string;
+	args?: string[];
+	/** environment of the program; values are secrets: the window gets them masked (MCP_SECRET_SET) and sends the mask back to keep one */
+	env?: Record<string, string>;
+	url?: string;
+	/** request headers of a `url` server (an Authorization token is a secret like `env`) */
+	headers?: Record<string, string>;
+	/** the server's tool names as the dialog listed them: the ones offered to the agent */
+	tools?: string[];
+	/** the listed tools the user marked as read-only: they run without the per-batch confirmation */
+	read?: string[];
+}
+
+/** What the window shows and sends back for a secret value that is saved: the real value never leaves the main process. */
+export const MCP_SECRET_SET = "••• saglabāts";
+export const MCP_NAME = /^[a-z][a-z0-9_-]{0,31}$/;
+export const AGENT_CHECKS_MAX = 3;
 
 /** Lower case, no diacritics, letters and digits only: "Ekspertīzes lasītājs" and "ekspertizeslasitajs" are the same. */
 export const normRef = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
@@ -64,4 +97,32 @@ export interface AgentsView {
 	/** every tool a specialist can be given, with its level: `run` ones always, `confirm` ones only for an agent with maxLevel "confirm" (the page filters) */
 	tools: AgentToolRow[];
 	maxParallel: number;
+}
+
+/** What «Importēt BD komandu…» did, for the page to show (agents.importTeam). */
+export interface TeamImportReport {
+	folder: string;
+	/** agent ids made new / updated (the user's own settings kept) */
+	created: string[];
+	updated: string[];
+	/** a role that could not be saved, and why */
+	skipped: { id: string; why: string }[];
+	/** role numbers (01–16) that had no file in the folder */
+	missing: string[];
+	skills: {
+		/** put into the office library now */
+		imported: string[];
+		/** already in the library: left as they were (their tested mark stays) */
+		kept: string[];
+		refused: { name: string; why: string }[];
+		/** skills of the team still waiting for the user's «tested» mark in Prasmes: an agent is told about a ready skill only */
+		notReady: number;
+	};
+	/** skill names now on the imported agents' lists, in all */
+	assigned: number;
+}
+
+/** The tools an MCP server listed when the dialog tried it. */
+export interface McpProbe {
+	tools: { name: string; description: string }[];
 }

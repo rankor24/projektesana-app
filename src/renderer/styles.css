@@ -915,3 +915,38 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .drop-before::before { top: -1px; }
 .drop-after::after { bottom: -1px; }
 .tl-dept-head.drop-before, .tl-dept-head.drop-after { position: relative; }
+
+/* Aģenti (panels/Agenti.tsx): the team by department, one card per agent; the agent dialog (panels/AgentDialog.tsx) */
+.ag-toolbar { flex-wrap: wrap; }
+.ag-report { margin: 6px 0; }
+.ag-dept { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 6px; border-radius: 8px; border: 1px solid transparent; }
+.ag-dept.drop-into { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.ag-dept-head { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.ag-dept-head[draggable="true"] { cursor: grab; }
+.ag-dept-name { font-size: 14px; }
+.ag-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.ag-cardwrap { position: relative; }
+.ag-card { display: flex; flex-direction: column; gap: 4px; height: 100%; box-sizing: border-box; padding: 8px 10px 30px; background: var(--elev); border: 1px solid var(--border); border-radius: 8px; cursor: grab; }
+.ag-card:hover { border-color: var(--border-strong); }
+.ag-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-desc { min-height: 2.6em; }
+.ag-meta { display: flex; flex-direction: column; gap: 1px; color: var(--dim); }
+.ag-edit { position: absolute; right: 8px; bottom: 6px; }
+.ag-slot { grid-column: 1 / -1; padding: 8px; border: 1px dashed var(--border-strong); border-radius: 8px; }
+.ag-dialog { width: min(1020px, 94vw); height: min(780px, 86vh); box-sizing: border-box; }
+.ag-dialog-body { display: flex; gap: 12px; flex: 1; min-height: 0; }
+.ag-dialog-nav { display: flex; flex-direction: column; gap: 2px; flex: none; width: 190px; }
+.ag-dialog-nav button { display: flex; align-items: center; gap: 6px; text-align: left; border: 1px solid transparent; }
+.ag-dialog-nav button.on { border-color: var(--accent); background: var(--elev2); }
+.ag-dialog-pane { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; overflow: auto; padding-right: 4px; }
+.ag-dialog-pane > * { flex-shrink: 0; }
+.ag-role { width: 100%; min-height: 300px; flex: 1; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; }
+.ag-label { width: 130px; flex: none; }
+.ag-skills { display: flex; flex-direction: column; gap: 2px; }
+.ag-skill { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.ag-skill:hover { background: var(--elev2); }
+.ag-paste { width: 100%; min-height: 70px; box-sizing: border-box; }
+.ag-mcp { margin-top: 4px; }
+.ag-cmd { overflow-wrap: anywhere; }
+.ag-secret input { min-width: 160px; }
+.ag-tools { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }

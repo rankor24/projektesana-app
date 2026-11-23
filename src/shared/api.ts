@@ -10,7 +10,7 @@ import type { AuditReport, CoordReference, Declared } from "../core/coordination
 import type { UndoRow } from "../core/undo-types.js";
 import type { TraceView } from "./trace-types.js";
 import type { RenameMode, RenameResult, RenameRow } from "./rename.js";
-import type { AgentSpec, AgentsView } from "./agent-types.js";
+import type { AgentMcpServer, AgentSpec, AgentsView, McpProbe, TeamImportReport } from "./agent-types.js";
 import type { Department } from "./departments.js";
 import type { SkillInfo } from "./skill-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
@@ -548,6 +548,11 @@ export interface ApiSpec {
 	/** the rules every agent gets (agents\_kopejie.md, 6 000 characters at most) */
 	"agents.shared.get": () => string;
 	"agents.shared.set": (text: string) => void;
+	/** Reads a team folder (the 16 BD role files and `skilli\`) at run time and makes or updates the agents: name from the heading, description from the first sentence of «Loma», the file as the role text,
+	 *  department by id, skills into the library and onto the agents; an agent that exists keeps the user's own settings. The folder is remembered (`Settings.teamFolder`). Returns what was created, updated and skipped. */
+	"agents.importTeam": (folder: string) => TeamImportReport;
+	/** Starts an agent's MCP server once and lists its tools (the dialog's «Pārbaudīt»); secrets the window shows as the mask are the saved ones of `agent`. Rejects with the server's own reason. Never from an agent: it starts a program. */
+	"agents.mcp.probe": (agent: string, server: AgentMcpServer) => McpProbe;
 	/** the skills library (13.6): the synced Revit skills and the office's own, with state and placeholder count; assignment to an agent is agents.save (spec.skills) */
 	"skills.list": () => SkillInfo[];
 	/** every <group>/<name>/SKILL.md under the folder is copied into <appDir>\skills; a name that exists is replaced and the old one kept under versions */
@@ -802,6 +807,8 @@ export const API_NAMES = [
 	"agents.role.import",
 	"agents.shared.get",
 	"agents.shared.set",
+	"agents.importTeam",
+	"agents.mcp.probe",
 	"skills.list",
 	"skills.import",
 	"skills.tested",

@@ -6,7 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OfficeMemory } from "../core/office-memory.js";
-import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
+import { AGENT_CHECKS_MAX, LEAD_FIXED_MAX, MCP_NAME, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentMcpServer, type AgentSpec } from "../shared/agent-types.js";
 import { mayReach, ownDepartmentFirst } from "../shared/departments.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
@@ -173,7 +173,99 @@ export function validateSpec(
 		// stored as given: a name the library lacks (yet), or a draft, is simply not listed to the agent (skillsFor), so assigning ahead is allowed
 		spec.skills = [...new Set((r.skills as unknown[]).map(str).filter(Boolean))];
 	}
+	if (r.check !== undefined && r.check !== null) {
+		const c = checkOf(r.check, id, ids);
+		if (!c.ok) return c;
+		if (c.check) spec.check = c.check;
+	}
+	if (r.mcp !== undefined && r.mcp !== null) {
+		const m = mcpOf(r.mcp);
+		if (!m.ok) return m;
+		if (m.mcp.length) spec.mcp = m.mcp;
+	}
 	return { ok: true, spec };
+}
+
+/** The check-before-done fields: another agent of the list (not itself), or a provider and model of its own, and how many checks at most. Empty fields = no check. */
+function checkOf(raw: unknown, self: string, ids?: readonly string[]): { ok: true; check?: NonNullable<AgentSpec["check"]> } | { ok: false; error: string } {
+	if (typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "Pārbaude pirms nodošanas: nederīgi lauki." };
+	const c = raw as Record<string, unknown>;
+	const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+	for (const k of ["agent", "provider", "model"]) if (c[k] !== undefined && typeof c[k] !== "string") return { ok: false, error: `Pārbaude pirms nodošanas: ${k} ir teksts.` };
+	const out: NonNullable<AgentSpec["check"]> = {};
+	const agent = s(c.agent);
+	if (agent) {
+		if (agent === self) return { ok: false, error: "Pārbaude pirms nodošanas: aģents nevar pārbaudīt pats sevi." };
+		if (ids && agent !== LEAD_ID && !ids.includes(agent)) return { ok: false, error: `Pārbaude pirms nodošanas: nezināms aģents ${agent}.` };
+		out.agent = agent;
+	}
+	const provider = s(c.provider);
+	if (provider) {
+		if (!isKnownProvider(provider)) return { ok: false, error: `Pārbaude pirms nodošanas: nezināms pakalpojums ${provider}.` };
+		out.provider = provider;
+	}
+	const model = s(c.model);
+	if (model) out.model = model;
+	if (c.maxChecks !== undefined) {
+		if (typeof c.maxChecks !== "number" || !Number.isInteger(c.maxChecks) || c.maxChecks < 1 || c.maxChecks > AGENT_CHECKS_MAX) return { ok: false, error: `Pārbaude pirms nodošanas: pārbaužu skaits 1–${AGENT_CHECKS_MAX}.` };
+		out.maxChecks = c.maxChecks;
+	}
+	// a check with nothing chosen is no check (the dialog's "off")
+	return { ok: true, ...(out.agent || out.provider || out.model ? { check: out } : {}) };
+}
+
+/** Names the app's own tool servers use: a custom server may not take one (OpenMausBot's RESERVED_MCP_NAMES, here the two of this app). */
+const MCP_RESERVED = new Set(["projektesana-tools", "revit"]);
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
+
+/** An agent's own MCP servers, checked: a name, and a program to start or an address, not both. Secrets stay as they are (the handler swaps back masked ones). */
+function mcpOf(raw: unknown): { ok: true; mcp: AgentMcpServer[] } | { ok: false; error: string } {
+	if (!Array.isArray(raw)) return { ok: false, error: "MCP serveri: saraksts." };
+	if (raw.length > 12) return { ok: false, error: "MCP serveru var būt līdz 12 vienam aģentam." };
+	const out: AgentMcpServer[] = [];
+	const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+	const strList = (v: unknown): string[] | null => (Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : null);
+	const pairs = (v: unknown, key: RegExp): Record<string, string> | null => {
+		if (v === undefined) return {};
+		if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+		const e = Object.entries(v as Record<string, unknown>);
+		return e.every(([k, x]) => key.test(k) && typeof x === "string") ? Object.fromEntries(e as [string, string][]) : null;
+	};
+	for (const x of raw as Record<string, unknown>[]) {
+		const name = str(x?.name);
+		if (!MCP_NAME.test(name)) return { ok: false, error: `MCP servera nosaukums «${name}»: mazie burti, cipari, - un _, jāsākas ar burtu, līdz 32 zīmēm.` };
+		if (MCP_RESERVED.has(name)) return { ok: false, error: `MCP servera nosaukums ${name} ir rezervēts.` };
+		if (out.some((o) => o.name === name)) return { ok: false, error: `MCP serveris ${name} atkārtojas.` };
+		const command = str(x.command);
+		const url = str(x.url);
+		if (!command === !url) return { ok: false, error: `MCP serveris ${name}: jānorāda vai nu komanda, vai adrese.` };
+		const s: AgentMcpServer = { name };
+		if (command) {
+			const args = x.args === undefined ? [] : strList(x.args);
+			const env = pairs(x.env, ENV_NAME);
+			if (!args || !env) return { ok: false, error: `MCP serveris ${name}: argumenti un vides mainīgie nav derīgi.` };
+			s.command = command;
+			if (args.length) s.args = args;
+			if (Object.keys(env).length) s.env = env;
+		} else {
+			if (!/^https?:\/\/\S+$/i.test(url)) return { ok: false, error: `MCP serveris ${name}: adresei jāsākas ar http:// vai https://.` };
+			const headers = pairs(x.headers, HEADER_NAME);
+			if (!headers) return { ok: false, error: `MCP serveris ${name}: galvenes nav derīgas.` };
+			s.url = url;
+			if (Object.keys(headers).length) s.headers = headers;
+		}
+		const tools = x.tools === undefined ? [] : strList(x.tools);
+		const read = x.read === undefined ? [] : strList(x.read);
+		if (!tools || !read) return { ok: false, error: `MCP serveris ${name}: rīku saraksti nav derīgi.` };
+		const uniq = [...new Set(tools.map((t) => t.trim()).filter(Boolean))];
+		if (uniq.length) s.tools = uniq;
+		// only a listed tool can be marked read
+		const marked = [...new Set(read.map((t) => t.trim()))].filter((t) => uniq.includes(t));
+		if (marked.length) s.read = marked;
+		out.push(s);
+	}
+	return { ok: true, mcp: out };
 }
 
 // ---- knowledge (13.4) ----
