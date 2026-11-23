@@ -14,14 +14,15 @@
 // match the plain letters; and a plain word is searched by its beginning, because Latvian endings change
 // (būvniecība, būvniecības, būvniecību): see ftsMatch.
 //
-// What is not built yet (D10): embeddings. The `chunks` table is the place for them: one row per piece of text that gets a
-// vector later (a message, a memory, a source page), keyed to its message; the vectors themselves go in a table of their own
-// next to it, so nothing here changes when they arrive.
+// Embeddings (D10) live next to this schema, not in it: the `chunks` table below is where a piece of text that gets a vector is
+// kept (a message, a source page), and src/search/schema.ts adds the vectors table, the chunk full-text index and the chunk
+// columns as a migration of its own (ensureSearchSchema, called by open()). `user_version` is raised there and never set back.
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { ChatEntry } from "../shared/api.js";
 import type { Thread } from "../shared/thread-types.js";
+import { ensureSearchSchema } from "../search/schema.js";
 
 /** Above this size the check at open is skipped: it reads the whole file, and the app waits on it. */
 export const START_CHECK_MAX_BYTES = 256 * 1024 * 1024;
@@ -188,12 +189,10 @@ export const SCHEMA_VERSION = 2;
 /** Brings a file made by an older build up to `SCHEMA_VERSION`. The SCHEMA text above makes the tables of version 1; each later change is a step here. Idempotent: a column that is there is not added again. */
 export function migrate(db: DatabaseSync): void {
 	const version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
-	if (version >= SCHEMA_VERSION) return;
-	if (version < 2) {
-		const has = (db.prepare("PRAGMA table_info(threads)").all() as { name: string }[]).some((c) => c.name === "pinned");
-		if (!has) db.exec("ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
-	}
-	db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+	// the search index (search/schema.ts) raises user_version too, so the column is looked for, not inferred from the number
+	const has = (db.prepare("PRAGMA table_info(threads)").all() as { name: string }[]).some((c) => c.name === "pinned");
+	if (!has) db.exec("ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+	if (version < SCHEMA_VERSION) db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
 const MIGRATED = "migrated_from_files";
@@ -294,6 +293,7 @@ export class ThreadsDb {
 			db.exec("PRAGMA synchronous = NORMAL");
 			db.exec(SCHEMA);
 			migrate(db);
+			ensureSearchSchema(db);
 			return new ThreadsDb(file, db);
 		} catch (e) {
 			try {

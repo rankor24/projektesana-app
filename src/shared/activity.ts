@@ -85,6 +85,7 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	search_sources: { words: "Meklē avotos", kind: "search" },
 	search_law: { words: "Meklē normatīvos", kind: "search" },
 	search_conversations: { words: "Meklē iepriekšējās sarunās", kind: "search" },
+	search_project: { words: "Meklē projektā (avoti un sarunas)", kind: "search" },
 	get_profile: { words: "Skatās projekta profilu", kind: "read" },
 	extract_candidates: { words: "Meklē kandidātus", kind: "search" },
 	set_fact: { words: "Iesaka faktu", kind: "write" },

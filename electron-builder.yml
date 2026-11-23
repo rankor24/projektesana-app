@@ -9,6 +9,13 @@ files:
   - dist/**
   - package.json
   - "!**/*.map"
+  # transformers.js (the search index's embedding model) runs on onnxruntime-node: only the Windows x64 binary is needed, and its
+  # browser build (onnxruntime-web) is already inside transformers.js's own bundle. The model files are not here: they are downloaded
+  # into the app data folder on first use.
+  - "!node_modules/onnxruntime-web/**"
+  - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
+  - "!node_modules/onnxruntime-node/bin/napi-v6/linux/**"
+  - "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
 extraResources:
   - from: data
     to: data
@@ -30,6 +37,9 @@ asarUnpack:
   - dist/agent/tools/**
   # claude.exe of the Claude Agent SDK (Claude subscription engine): an exe inside the asar cannot be started
   - node_modules/@anthropic-ai/claude-agent-sdk-*/**
+  # onnxruntime.dll and its binding: a native library cannot be loaded from inside the asar
+  - node_modules/onnxruntime-node/**
+  - node_modules/@img/**
 win:
   target:
     - nsis

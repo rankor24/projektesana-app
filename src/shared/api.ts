@@ -18,6 +18,7 @@ import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { AppSettingChange, AppSettingEvent } from "./app-settings.js";
 import type { PauseTarget, QueueView, Thread, WaitingItem } from "./thread-types.js";
+import type { SearchKind, SearchResult, SearchStatus } from "./search-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
@@ -526,6 +527,14 @@ export interface ApiSpec {
 	"sources.text": (id: string, sourceId: string) => { pages: string[]; state: string; reason?: string } | null;
 	"sources.bytes": (id: string, sourceId: string) => Uint8Array;
 	"sources.openOriginal": (id: string, sourceId: string) => void;
+	/** The project's search index (source pages and conversations, words + meaning): which model, how many pieces have a vector, whether a run is going, the model download. */
+	"search.status": (id: string) => SearchStatus;
+	/** Builds what is missing in the background (the model is downloaded the first time); the page watches `search.progress`. */
+	"search.update": (id: string) => void;
+	/** Throws the index away and builds it again from the sources and conversations. */
+	"search.reindex": (id: string) => void;
+	/** The agent's search_project, for the Avoti page: passages with their citation. */
+	"search.query": (id: string, query: string, kind?: SearchKind, limit?: number) => SearchResult;
 	"rooms.table": (id: string) => InventoryTable[];
 	"facts.list": (id: string) => Fact[];
 	"deliveries.list": (id: string) => Delivery[];
@@ -828,6 +837,10 @@ export const API_NAMES = [
 	"sources.text",
 	"sources.bytes",
 	"sources.openOriginal",
+	"search.status",
+	"search.update",
+	"search.reindex",
+	"search.query",
 	"rooms.table",
 	"facts.list",
 	"deliveries.list",
@@ -1007,11 +1020,13 @@ export interface EventSpec {
 	/** a popped window's request to the main window */
 	"layout.relay": { msg: RelayMsg };
 	"scan.progress": ScanProgress;
+	/** the search index of a project changed state or moved on (a run started, the model download, vectors made, a run ended) */
+	"search.progress": SearchStatus;
 	/** What the agent or the folder scan is doing, as a line a person reads (shared/activity.ts). */
 	activity: Activity;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "appSettings.changed", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "appSettings.changed", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "search.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };
