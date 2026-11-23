@@ -104,17 +104,25 @@ export function mayReach(from: string, to: string, specs: readonly ReachSpec[], 
  *   - EKS is independent: it writes to every author but not to BPV, and nobody opens a topic with it (an answer to its own question always gets through, see `canSend`);
  *   - BPV writes to every agent and every agent writes to BPV (it is in charge of every department but Kvalitāte);
  *   - UD writes to every department (it issues requirements to all, docs/BD 00_README step 2), and takes the answers;
- *   - otherwise only inside one department; two agents in none are the one department "bez nodaļas", so a team that never set departments works as before. */
+ *   - the design disciplines talk across departments directly (docs/BD projektesanas_process §7.3: "aģenti sazinās tieši, ja vajadzīga otras sadaļas
+ *     piekrišana vai informācija"): two agents in known departments other than Kvalitāte reach each other; a department is authority (who BPV
+ *     manages, roster order), not a wall (Boris, 2026-11-23);
+ *   - otherwise only inside one department; a department the list does not know fails closed; two agents in none are the one department
+ *     "bez nodaļas", so a team that never set departments works as before. */
 function defaultReach(a: ReachSpec, b: ReachSpec, names?: readonly Department[]): Reach {
 	if (b.id === EKS_ID) return { ok: false, why: "department", reason: "Ekspertīzes aģentam raksta tikai atbildes uz tā jautājumiem." };
 	if (a.id === EKS_ID) return b.id === BPV_ID ? { ok: false, why: "department", reason: "Ekspertīzes aģents nesazinās ar BPV: tas ziņo cilvēkam." } : { ok: true };
 	if (a.id === BPV_ID || b.id === BPV_ID || a.id === UD_ID) return { ok: true };
 	const da = departmentOf(a);
-	if (da === departmentOf(b)) return { ok: true };
+	const db = departmentOf(b);
+	if (da === db) return { ok: true };
+	const known = new Set((names ?? DEFAULT_DEPARTMENTS).map((d) => d.id));
+	const discipline = (d: string | undefined) => !!d && d !== KVALITATE_ID && known.has(d);
+	if (discipline(da) && discipline(db)) return { ok: true };
 	return {
 		ok: false,
 		why: "department",
-		reason: `Aģents «${a.id}» (${labelOf(da, names)}) raksta savas nodaļas aģentiem, BPV un tiem, ko Iestatījumos atļauts; «${b.id}» ir nodaļā ${labelOf(departmentOf(b), names)}. Nodod to BPV vai atļauj sazināties lapā Aģenti (Drīkst rakstīt).`,
+		reason: `Aģents «${a.id}» (${labelOf(da, names)}) nevar rakstīt aģentam «${b.id}» (${labelOf(db, names)}): savā starpā raksta projektēšanas nodaļu aģenti, BPV un tie, ko lapā Aģenti atļauts (Drīkst rakstīt). Nodod to BPV.`,
 	};
 }
 

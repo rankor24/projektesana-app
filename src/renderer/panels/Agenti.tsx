@@ -313,7 +313,7 @@ export function Agenti() {
 											</option>
 										))}
 									</select>
-									<span className="small dim">{tr("Pēc noklusējuma raksta savas nodaļas aģentiem un BPV (skat. «Drīkst rakstīt» zemāk).")}</span>
+									<span className="small dim">{tr("Pēc noklusējuma raksta visu projektēšanas nodaļu aģentiem un BPV; Kvalitāte (EKS) ir atsevišķi (skat. «Drīkst rakstīt» zemāk).")}</span>
 								</label>
 								<div className="row">
 									<label className="row">

@@ -74,7 +74,7 @@ export const settings: Record<string, string> = {
 	"Kods nosūtīts, gaida apstiprinājumu…": "Code sent, waiting for confirmation…",
 	"Nodaļa": "Department",
 	"bez nodaļas": "no department",
-	"Pēc noklusējuma raksta savas nodaļas aģentiem un BPV (skat. «Drīkst rakstīt» zemāk).": "By default it writes to the agents of its own department and to BPV (see «May write to» below).",
+	"Pēc noklusējuma raksta visu projektēšanas nodaļu aģentiem un BPV; Kvalitāte (EKS) ir atsevišķi (skat. «Drīkst rakstīt» zemāk).": "By default it writes to the agents of every design department and to BPV; Kvalitāte (EKS) stays apart (see «May write to» below).",
 	"Rezerve": "Backup",
 	"izvēlies modeli": "pick a model",
 	"Bez modeļa rezerve netiks saglabāta.": "Without a model the backup is not saved.",

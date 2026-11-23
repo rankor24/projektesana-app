@@ -1,4 +1,4 @@
-// Who may write to whom by default (shared/departments.ts mayReach): own department + BPV; EKS reports to the human; UD reaches every department;
+// Who may write to whom by default (shared/departments.ts mayReach): the design departments talk across (BD §7.3), BPV both ways; EKS reports to the human;
 // the lists the user sets still decide (a list that leaves the other out closes it, one that names it opens it); the lead is open; an unknown department fails closed.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -13,11 +13,13 @@ const ok = (from: string, to: string, specs: readonly ReachSpec[] = team) => may
 test("reach by department: own department and BPV, EKS apart, UD to all, lists decide, unknown department fails closed", () => {
 	// the default: the same department, BPV both ways, UD to everybody, nobody opens a topic with EKS, EKS writes to authors but not to BPV
 	assert.equal(ok("uk", "avk"), true);
-	assert.equal(ok("ar", "bk"), false, "another department: not by default");
+	assert.equal(ok("ar", "bk"), true, "design departments talk across (BD §7.3)");
+	assert.equal(ok("ar", "uk"), true);
 	assert.equal(ok("ar", "bpv"), true);
 	assert.equal(ok("bpv", "bk"), true);
 	assert.equal(ok("ud", "bk"), true);
-	assert.equal(ok("bk", "ud"), false, "UD reaches every department; the others do not reach it unasked");
+	assert.equal(ok("bk", "ud"), true, "UD is a design department too: asked directly");
+	assert.equal(ok("ar", "x", [s("ar"), s("x", { department: "kvalitate" })]), false, "Kvalitāte stays apart");
 	assert.equal(ok("bpv", "eks"), false);
 	assert.equal(ok("ar", "eks"), false);
 	assert.equal(ok("eks", "ar"), true);
@@ -46,7 +48,7 @@ test("reach by department: own department and BPV, EKS apart, UD to all, lists d
 
 	// the send rule uses it, and says why
 	const c = { agents: team as never, limits: DEFAULT_LIMITS, messages: [] };
-	const no = canSend({ from: "ar", to: "bk", kind: "ask", topic: null, depth: 1 }, c);
+	const no = canSend({ from: "ar", to: "dokumenti", kind: "ask", topic: null, depth: 1 }, c);
 	assert.equal(no.ok, false);
 	assert.equal(!no.ok && no.code, "acl");
 	assert.match(!no.ok ? no.reason : "", /Arhitektūra/);
