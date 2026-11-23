@@ -33,7 +33,8 @@ function app() {
 test("heading and the first sentence of Loma", () => {
 	assert.equal(nameFromHeading("# Agents: Arhitekts\n\n## Loma\nx"), "Arhitekts");
 	assert.equal(nameFromHeading("# Meliorators\n"), "Meliorators");
-	assert.equal(descriptionFromLoma("# A\n\n## Loma\nTu esi tests. Otrais teikums.\n\n## Cits\nnē"), "Tu esi tests.");
+	assert.equal(descriptionFromLoma("# A\n\n## Loma\nTu esi tests. Otrais teikums.\n\n## Cits\nnē"), "Otrais teikums.");
+	assert.equal(descriptionFromLoma("## Loma\nPārbauda telpas. Otrais."), "Pārbauda telpas.");
 	assert.equal(descriptionFromLoma("# A\n## Loma\nBez punkta beigās"), "Bez punkta beigās");
 	assert.equal(descriptionFromLoma("# A\nnav sadaļas"), "");
 	assert.equal(descriptionFromLoma(`## Loma\n${"v".repeat(300)}.`).length, 200);
