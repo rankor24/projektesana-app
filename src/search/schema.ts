@@ -10,6 +10,8 @@
 //   chunks_fts                        full-text index over chunks.text, same tokenizer as messages_fts (diacritics folded)
 //   chunk_vectors                     one row per piece: the model that made it, its size, and the vector as raw Float32 bytes
 // Triggers keep chunks_fts in step and remove a piece's vector with the piece.
+// The sqlite-vec copy of the vectors (table chunk_vec, vec0) is not made here: it needs the extension, which this connection may not
+// have loaded. src/search/vec.ts creates and fills it (index worker), and a search that cannot use it scans chunk_vectors.
 import type { DatabaseSync } from "node:sqlite";
 
 export const INDEX_SCHEMA_VERSION = 2;

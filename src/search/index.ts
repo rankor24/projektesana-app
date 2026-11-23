@@ -16,6 +16,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { chunkText } from "./chunk.js";
 import type { IndexStatus } from "../shared/search-types.js";
 import type { Embedder } from "./embedder.js";
+import { f32, vecClear, vecDropWhere, vecEngine, vecPut, vectorOf } from "./vec.js";
 
 /** Raise when chunkText changes: every source is then re-cut on the next pass. */
 export const CHUNK_VERSION = 1;
@@ -71,6 +72,7 @@ export function syncSources(db: DatabaseSync, sources: SourceRef[], readPages: (
 	for (const sha of known.keys()) {
 		if (live.has(sha)) continue;
 		transaction(db, () => {
+			vecDropWhere(db, "kind = 'source' AND sha = ?", sha);
 			db.prepare("DELETE FROM chunks WHERE kind = 'source' AND sha = ?").run(sha);
 			db.prepare("DELETE FROM meta WHERE key = ?").run(SRC + sha);
 		});
@@ -88,6 +90,7 @@ export function syncSources(db: DatabaseSync, sources: SourceRef[], readPages: (
 			continue;
 		}
 		transaction(db, () => {
+			vecDropWhere(db, "kind = 'source' AND sha = ?", sha);
 			db.prepare("DELETE FROM chunks WHERE kind = 'source' AND sha = ?").run(sha);
 			let n = 0;
 			pages.forEach((text, i) => {
@@ -132,7 +135,10 @@ export function syncUnits(db: DatabaseSync, kind: UnitKind, units: Unit[], now =
 	for (const k of have.keys()) {
 		if (want.has(k)) continue;
 		const [key, sha] = k.split("\u0000");
-		transaction(db, () => db.prepare("DELETE FROM chunks WHERE kind = ? AND source = ? AND sha = ?").run(kind, key, sha));
+		transaction(db, () => {
+			vecDropWhere(db, "kind = ? AND source = ? AND sha = ?", kind, key, sha);
+			db.prepare("DELETE FROM chunks WHERE kind = ? AND source = ? AND sha = ?").run(kind, key, sha);
+		});
 		rep.removed++;
 	}
 	const insert = db.prepare("INSERT INTO chunks (kind, source, text, created_at, ord, sha, label) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -179,12 +185,7 @@ export function syncMessages(db: DatabaseSync, now = new Date()): number {
 	return made;
 }
 
-const f32 = (v: Float32Array): Uint8Array => new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
-
-/** The vector a row holds, copied out aligned (the row's bytes may start anywhere in a bigger buffer). */
-export function vectorOf(blob: Uint8Array): Float32Array {
-	return new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength));
-}
+export { vectorOf };
 
 export interface EmbedOptions {
 	/** pieces per model call and per commit */
@@ -207,6 +208,7 @@ export function adoptModel(db: DatabaseSync, modelId: string): boolean {
 	if (had === modelId) return false;
 	transaction(db, () => {
 		db.exec("DELETE FROM chunk_vectors");
+		vecClear(db);
 		metaSet(db, "search.model", modelId);
 	});
 	return had !== null;
@@ -218,17 +220,23 @@ export async function embedPending(db: DatabaseSync, emb: Embedder, o: EmbedOpti
 	const batch = o.batch ?? 16;
 	const total = pendingCount(db);
 	let done = 0;
-	const next = db.prepare("SELECT c.id AS id, c.text AS text FROM chunks c LEFT JOIN chunk_vectors v ON v.chunk_id = c.id WHERE v.chunk_id IS NULL ORDER BY CASE c.kind WHEN 'source' THEN 2 WHEN 'message' THEN 1 ELSE 0 END, c.id LIMIT ?");
+	const next = db.prepare("SELECT c.id AS id, c.text AS text, c.kind AS kind FROM chunks c LEFT JOIN chunk_vectors v ON v.chunk_id = c.id WHERE v.chunk_id IS NULL ORDER BY CASE c.kind WHEN 'source' THEN 2 WHEN 'message' THEN 1 ELSE 0 END, c.id LIMIT ?");
 	const put = db.prepare("INSERT OR REPLACE INTO chunk_vectors (chunk_id, model, dims, vec) VALUES (?, ?, ?, ?)");
 	while (!o.stop?.()) {
-		const rows = next.all(batch) as { id: number; text: string }[];
+		const rows = next.all(batch) as { id: number; text: string; kind: string }[];
 		if (!rows.length) break;
 		const t0 = Date.now();
 		const vs = await emb.embed(
 			rows.map((r) => r.text),
 			"doc",
 		);
-		transaction(db, () => rows.forEach((r, i) => put.run(r.id, emb.model, vs[i].length, f32(vs[i]))));
+		// the BLOB and its sqlite-vec copy are written together, so a search never sees one without the other
+		transaction(db, () =>
+			rows.forEach((r, i) => {
+				put.run(r.id, emb.model, vs[i].length, f32(vs[i]));
+				vecPut(db, r.id, r.kind, vs[i]);
+			}),
+		);
 		done += rows.length;
 		metaSet(db, "search.updated_at", new Date().toISOString());
 		o.onProgress?.(done, total);
@@ -246,7 +254,7 @@ export function indexStatus(db: DatabaseSync): IndexStatus {
 	const m = { chunks: count("message"), embedded: emb("message") };
 	const mem = { chunks: count("memory"), embedded: emb("memory") };
 	const logs = { chunks: count("decision") + count("question"), embedded: emb("decision") + emb("question") };
-	return { model, chunks: s.chunks + m.chunks + mem.chunks + logs.chunks, embedded: s.embedded + m.embedded + mem.embedded + logs.embedded, sources: s, messages: m, memory: mem, logs, updatedAt: metaGet(db, "search.updated_at") };
+	return { model, vector: vecEngine(db), chunks: s.chunks + m.chunks + mem.chunks + logs.chunks, embedded: s.embedded + m.embedded + mem.embedded + logs.embedded, sources: s, messages: m, memory: mem, logs, updatedAt: metaGet(db, "search.updated_at") };
 }
 
 /** Throws every piece and vector away and forgets what was seen: the next run builds it all again (the Reindex button). Conversations themselves are untouched. */
@@ -254,6 +262,7 @@ export function resetIndex(db: DatabaseSync): void {
 	transaction(db, () => {
 		db.exec("DELETE FROM chunks");
 		db.exec("DELETE FROM chunk_vectors");
+		vecClear(db);
 		db.exec("DELETE FROM meta WHERE key LIKE 'search.%'");
 	});
 }

@@ -6,13 +6,14 @@
 // every batch (a share of the batch's own time), so a long first build leaves the CPU for the app and for the agent.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { parentPort, workerData } from "node:worker_threads";
 import { ThreadsDb } from "../core/threads-db.js";
 import type { DownloadState } from "../shared/search-types.js";
 import { loadEmbedder, modelById } from "./embedder.js";
 import { adoptModel, embedPending, pendingCount, resetIndex, syncMessages, syncSources, syncUnits, type SourceRef } from "./index.js";
 import { ensureSearchSchema } from "./schema.js";
+import { openWithVec, syncVec, vecReason } from "./vec.js";
 import { logUnits, memoryUnits } from "./units.js";
 
 export interface IndexJob {
@@ -53,14 +54,26 @@ function readPages(sha: string): string[] | null {
 	}
 }
 
+/** Brings the sqlite-vec copy in step with the stored vectors. A failure is not the run's: the search scans the vectors instead. */
+function tryVec(d: DatabaseSync): void {
+	try {
+		syncVec(d);
+	} catch {
+		// reported by the Avoti page, which asks the index for its engine
+	}
+}
+
 let db: DatabaseSync | null = null;
 try {
 	// the app's own open makes the file and the conversation tables if there are none yet (and refuses a damaged one); this connection then only adds rows
 	ThreadsDb.open(job.dbFile).close();
-	db = new DatabaseSync(job.dbFile, { timeout: 5000 } as ConstructorParameters<typeof DatabaseSync>[1]);
+	// sqlite-vec is loaded when it can be (vec.ts); without it the vectors are still written, and searched by a plain scan
+	db = openWithVec(job.dbFile, { timeout: 5000 });
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA synchronous = NORMAL");
 	ensureSearchSchema(db);
+	// a project indexed before sqlite-vec was used gets its vec0 copy here, from the stored vectors
+	tryVec(db);
 	post({ type: "phase", phase: "pieces" });
 	if (job.mode === "rebuild") resetIndex(db);
 	if (job.mode !== "messages") syncSources(db, job.sources, readPages);
@@ -91,6 +104,7 @@ try {
 		post({ type: "phase", phase: "vectors" });
 		const r = await embedPending(db, embedder, { batch: 16, rest: job.rest, stop: () => stopped, onProgress: (done, total) => post({ type: "progress", done, total }) });
 		await embedder.dispose?.();
+		tryVec(db);
 		post({ type: "done", left: r.left });
 	} else post({ type: "done", left: pendingCount(db) });
 } catch (e) {

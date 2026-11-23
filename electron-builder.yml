@@ -40,6 +40,8 @@ asarUnpack:
   # onnxruntime.dll and its binding: a native library cannot be loaded from inside the asar
   - node_modules/onnxruntime-node/**
   - node_modules/@img/**
+  # sqlite-vec (vector nearest-neighbour search in SQLite) and its platform package with vec0.dll: loadExtension needs a real file
+  - node_modules/sqlite-vec*/**
 win:
   target:
     - nsis

@@ -90,6 +90,8 @@ export function SearchIndex({ projectId }: { projectId: string }) {
 			</div>
 			{ix && ix.chunks > 0 && (
 				<div className="dim small">
+					{ix.vector.engine === "sqlite-vec" ? tr("Vektoru meklēšana: sqlite-vec") : tr("Vektoru meklēšana: JS (sqlite-vec neielādējās: {reason})", { reason: ix.vector.note ?? "?" })}
+					<br />
 					{tr("Avoti: {done} / {total} fragmenti no {files} failiem; sarunas: {mdone} / {mtotal}", { done: ix.sources.embedded, total: ix.sources.chunks, files: ix.sources.files, mdone: ix.messages.embedded, mtotal: ix.messages.chunks })}
 					<br />
 					{tr("Atmiņa: {done} / {total} fragmenti; žurnāli (lēmumi, jautājumi): {ldone} / {ltotal}", { done: ix.memory.embedded, total: ix.memory.chunks, ldone: ix.logs.embedded, ltotal: ix.logs.chunks })}
