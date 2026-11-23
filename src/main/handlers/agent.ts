@@ -77,8 +77,15 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			void m.refreshStaleModels(rt, signedIn).then((done) => done.length && d.emit("data.changed", { projectId: null, what: ["agent"] }));
 			return rows;
 		},
+		"agent.holds": () => d.session.holds(),
+		"agent.releaseHold": (provider) => {
+			d.session.releaseHold(provider);
+			d.emit("data.changed", { projectId: null, what: ["agent"] });
+		},
 		"agent.setKey": (provider, key) => {
 			d.settings.setApiKey(provider, key);
+			// a new key (or Claude token) ends a hold for its sign-in: the agents try the provider again at their next run
+			d.session.signedIn(provider);
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
 			void refreshNow(provider);
 		},
@@ -110,7 +117,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 					},
 					abort.signal,
 				)
-				.then(() => (d.emit("agent.login", { provider, type: "done" }), refreshNow(provider)))
+				.then(() => (d.session.signedIn(provider), d.emit("agent.login", { provider, type: "done" }), refreshNow(provider)))
 				.catch((e: Error) => d.emit("agent.login", { provider, type: "error", message: e.message }))
 				.finally(() => {
 					if (login === current) login = null;

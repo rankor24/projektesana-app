@@ -108,6 +108,19 @@ export interface ChatEntry {
 	tokens?: { before: number; after: number };
 }
 
+/** A provider on hold: it refused a run for its usage limit, for want of credit, or because its sign-in is gone; the agents carry on with their backups until `until`. */
+export interface HoldRow {
+	provider: string;
+	label: string;
+	/** a model's own limit names the model */
+	model?: string;
+	scope: "provider" | "model" | "credits" | "signed-out";
+	/** when it is tried again, epoch ms */
+	until: number;
+	/** when the provider said the limit resets, epoch ms */
+	resetsAt?: number;
+}
+
 export interface ProviderRow {
 	id: string;
 	label: string;
@@ -414,6 +427,10 @@ export interface ApiSpec {
 	"screen.capture": (rect: { x: number; y: number; width: number; height: number }) => Uint8Array;
 	"agent.status": () => AgentStatus;
 	"agent.providers": () => ProviderRow[];
+	/** the providers on hold now (a usage limit, no credit, a sign-in gone) */
+	"agent.holds": () => HoldRow[];
+	/** the user ends a provider's holds by hand: its agents try it again at their next run */
+	"agent.releaseHold": (provider: string) => void;
 	"agent.setKey": (provider: string, key: string) => void;
 	"agent.clearKey": (provider: string) => void;
 	"agent.login": (provider: string) => void;
@@ -685,6 +702,8 @@ export const API_NAMES = [
 	"screen.capture",
 	"agent.status",
 	"agent.providers",
+	"agent.holds",
+	"agent.releaseHold",
 	"agent.setKey",
 	"agent.clearKey",
 	"agent.login",

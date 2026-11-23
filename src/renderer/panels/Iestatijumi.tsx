@@ -1,8 +1,9 @@
-// Settings, in tabs like BIM Crew's (General · AI · Integrations · Paths): which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort, theme,
+// Settings, in tabs like BIM Crew's (General · AI · Integrations · Paths): which provider the agent uses (each user sets their own default), sign-in, API keys, model, effort,
+// the backup AI every agent carries on with when its provider is at its limit or signed out (an agent's own backup, set in Aģenti, wins), automatic recovery, theme,
 // Revit MCP path. Keys are stored encrypted by main; nothing here shows a stored key.
 import { useEffect, useState } from "react";
 import type { LoginNotice } from "../../shared/types";
-import type { ProviderRow } from "../../shared/api";
+import type { HoldRow, ProviderRow } from "../../shared/api";
 import { call, errText, on } from "../bridge";
 import { usageText } from "../../shared/tokens";
 import { Badge, Err, useLoad } from "../ui";
@@ -22,6 +23,7 @@ export function Iestatijumi() {
 	const setTab = (t: SettingsTab) => setTabState((lastTab = t));
 	const settings = useLoad(() => call("settings.get"), []);
 	const providers = useLoad<ProviderRow[]>(() => call("agent.providers"), []);
+	const holds = useLoad<HoldRow[]>(() => call("agent.holds"), []);
 	const [notice, setNotice] = useState<LoginNotice | null>(null);
 	const [answer, setAnswer] = useState("");
 	const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
@@ -37,12 +39,14 @@ export function Iestatijumi() {
 			await fn();
 			settings.reload();
 			providers.reload();
+			holds.reload();
 		} catch (e) {
 			setErr(errText(e));
 		}
 	};
 	const current = providers.data?.find((p) => p.id === s?.provider);
 	const model = current?.models.find((m) => m.id === s?.model);
+	const backupRow = providers.data?.find((p) => p.id === s?.backup?.provider);
 
 	return (
 		<div className="pane fill">
@@ -195,6 +199,73 @@ export function Iestatijumi() {
 							{notice.type === "done" && <Badge tone="ok">{tr("pieslēgts")}</Badge>}
 							{notice.type === "error" && <div className="err">{notice.message}</div>}
 						</div>
+					)}
+					<div className="section-title">{tr("Rezerves AI")}</div>
+					<div className="dim small">{tr("Kad aģenta pakalpojums sasniedz lietojuma limitu vai tā pieteikšanās beidzas, aģenta jaunie darbi sākas ar rezerves AI, līdz limits atjaunojas. Aģenta paša rezerve (Aģenti) ir svarīgāka par šo.")}</div>
+					{s && (
+						<>
+							<div className="row">
+								<label>
+									{tr("Rezerves pakalpojums")}{" "}
+									<select value={s.backup?.provider ?? ""} onChange={(e) => act(() => call("settings.set", { backup: e.target.value ? { provider: e.target.value, model: "" } : null }))}>
+										<option value="">{tr("nav")}</option>
+										{(providers.data ?? []).map((p) => (
+											<option key={p.id} value={p.id}>
+												{p.label}
+												{p.configured ? "" : tr(" (nav pieslēgts)")}
+											</option>
+										))}
+									</select>
+								</label>
+								{s.backup && (
+									<label>
+										{tr("Modelis")}{" "}
+										<select value={s.backup.model} onChange={(e) => act(() => call("settings.set", { backup: { provider: s.backup!.provider, model: e.target.value } }))}>
+											<option value="">{tr("noklusējums")}</option>
+											{(backupRow?.models ?? []).map((m) => (
+												<option key={m.id} value={m.id}>
+													{m.name}
+													{m.legacy ? tr(" (vecāks)") : ""}
+												</option>
+											))}
+										</select>
+									</label>
+								)}
+							</div>
+							{s.backup && s.backup.provider === s.provider && <div className="dim small">{tr("Tas pats pakalpojums nepārņem darbu, kad limits ir visam kontam; tas palīdz tikai tad, ja limits skar vienu modeli.")}</div>}
+							<label className="row">
+								<input type="checkbox" checked={s.automaticRecovery === true} onChange={(e) => act(() => call("settings.set", { automaticRecovery: e.target.checked }))} />
+								<span>{tr("Automātiskā atkopšana")}</span>
+							</label>
+							<div className="dim small">{tr("Ieslēgta: ja gājiens neizdodas, pirms kāds rīks ir darbojies (limits, beigusies pieteikšanās, pakalpojums nedarbojas), to mēģina vēlreiz vienu reizi ar rezerves AI. Izslēgta: tu nosūti ziņu vēlreiz. Cita aģenta uzdevumu pēc limita pārsūta uz rezervi vienmēr, ar tām pašām tiesībām.")}</div>
+						</>
+					)}
+					{(holds.data ?? []).length > 0 && (
+						<table>
+							<thead>
+								<tr>
+									<th>{tr("Aizturēts")}</th>
+									<th>{tr("Iemesls")}</th>
+									<th>{tr("Mēģina vēlreiz")}</th>
+									<th />
+								</tr>
+							</thead>
+							<tbody>
+								{(holds.data ?? []).map((h) => (
+									<tr key={`${h.provider}/${h.model ?? ""}/${h.scope}`}>
+										<td>
+											{h.label}
+											{h.model ? ` ${h.model}` : ""}
+										</td>
+										<td>{h.scope === "signed-out" ? tr("pieteikšanās beigusies") : h.scope === "credits" ? tr("kredīti iztērēti") : tr("lietojuma limits")}</td>
+										<td>{new Date(h.until).toLocaleString(locale(), { weekday: "short", hour: "2-digit", minute: "2-digit" })}</td>
+										<td>
+											<button onClick={() => act(() => call("agent.releaseHold", h.provider).then(holds.reload))}>{tr("Atbrīvot")}</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					)}
 					<div className="section-title">{tr("Izmantojums")}</div>
 					<UsageTable />

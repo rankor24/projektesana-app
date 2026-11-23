@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DEFAULT_LIMITS, clampLimits } from "../core/messages.js";
 import { readJson, writeAtomic } from "../core/safe-file.js";
 import { DEFAULT_AGENTS } from "../agent/subagents.js";
+import { isKnownProvider } from "../agent/failover/plan.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import type { Limits } from "../shared/thread-types.js";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/types.js";
@@ -34,10 +35,18 @@ export class AppSettings {
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits", "backup", "automaticRecovery"];
 		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
 		if ("language" in clean && clean.language !== "lv" && clean.language !== "en") delete clean.language;
 		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
+		// the app-wide backup: a provider this app knows and a model of it (empty = the provider's default), or null for none
+		if ("backup" in clean) {
+			const b = clean.backup as { provider?: unknown; model?: unknown } | null | undefined;
+			if (b === null || b === undefined) clean.backup = null;
+			else if (typeof b.provider === "string" && isKnownProvider(b.provider.trim()) && (b.model === undefined || typeof b.model === "string")) clean.backup = { provider: b.provider.trim(), model: (b.model as string | undefined)?.trim() ?? "" };
+			else throw new Error("Rezerves AI: nezināms pakalpojums vai modelis.");
+		}
+		if ("automaticRecovery" in clean) clean.automaticRecovery = clean.automaticRecovery === true;
 		// a patch may name only some limits: the rest stay as they are
 		if ("limits" in clean) clean.limits = clampLimits(clean.limits as Partial<Limits>, this.get().limits);
 		const s = { ...this.get(), ...clean };

@@ -189,6 +189,7 @@ const session = new AgentSession({
 		activity.event(runId, event, meta);
 		emit("agent.event", { runId, event, ...meta });
 	},
+	onHolds: () => emit("data.changed", { projectId: null, what: ["agent"] }),
 	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
 	onQueue: (v) => emit("queue.changed", v),
 	onWaiting: (items) => emit("waiting.changed", items),

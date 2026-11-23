@@ -19,8 +19,23 @@ export type RunEvent =
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** A helper or specialist working beside the main run (task 8.15): one lane per job. `step` replaces the lane's current action; `end` carries its report. */
 	| { type: "lane"; id: string; label: string; agent?: string; phase: "start" | "step" | "end"; text?: string; ok?: boolean; report?: string }
-	/** Raw provider error, never rewritten. */
-	| { type: "error"; engine: "pi"; message: string };
+	/** Raw provider error, never rewritten. `hint`: what the engine itself knows about the cause (the Claude CLI names the limit and its reset); the words stay the provider's. */
+	| { type: "error"; engine: "pi"; message: string; hint?: FailureHint };
+
+/** Why a run failed, as an engine knows it beyond the provider's words: src/agent/failover reads it before it reads the text. */
+export interface FailureHint {
+	kind?: "usage_limit" | "credits" | "signed_out";
+	/** a usage limit that stops the whole provider, or only one model (a weekly window of one model family) */
+	scope?: "provider" | "model";
+	/** when the limit resets, epoch ms */
+	resetsAt?: number;
+}
+
+/** A provider and a model of it; an empty model is the provider's default. */
+export interface ModelChoice {
+	provider: string;
+	model: string;
+}
 
 export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -46,9 +61,13 @@ export interface Settings {
 	maxParallelAgents: number;
 	/** how far agents may talk to each other and how much one wave may start and spend (task 12.4) */
 	limits: Limits;
+	/** The AI an agent carries on with when its provider is at its usage limit or signed out; an agent's own backup (AgentSpec.backup) wins. null / absent = none. */
+	backup?: ModelChoice | null;
+	/** On: a run that fails before any tool ran is tried once more on the backup (limit, expired sign-in, a provider that is down). Off by default. */
+	automaticRecovery?: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =
