@@ -4,10 +4,10 @@
 // life of the process (loading takes a second or two; a question after the first costs a few dozen milliseconds).
 // No model on disk, or no vectors yet: the search still answers, by words alone, and says so in its note.
 import { existsSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import type { SearchKind, SearchResult } from "../shared/search-types.js";
 import { loadEmbedder, modelById, modelReady, type Embedder } from "./embedder.js";
 import { searchProject } from "./search.js";
+import { openWithVec } from "./vec.js";
 
 export type EmbedderLoader = (modelId: string, modelsDir: string) => Promise<Embedder | null>;
 
@@ -40,7 +40,8 @@ export interface DbSearch {
 /** Null: there is no database file. */
 export async function searchDbFile(file: string, modelsDir: string, q: DbSearch, load: EmbedderLoader = defaultLoader): Promise<SearchResult | null> {
 	if (!existsSync(file)) return null;
-	const db = new DatabaseSync(file, { readOnly: true, timeout: 2000 } as ConstructorParameters<typeof DatabaseSync>[1]);
+	// sqlite-vec is loaded into this read-only connection when it can be; the search says which engine answered
+	const db = openWithVec(file, { readOnly: true, timeout: 2000 });
 	try {
 		const modelId = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'meta'").get() ? (db.prepare("SELECT value FROM meta WHERE key = 'search.model'").get() as { value: string } | undefined)?.value : undefined;
 		let embedder: Embedder | null = null;

@@ -26,6 +26,15 @@ export interface SearchResult {
 	hits: Passage[];
 	/** "hybrid": words and meaning. "keyword": no model was ready, only the words were used (see note). */
 	mode: "hybrid" | "keyword";
+	/** which search ran the vector side of a hybrid result: sqlite-vec inside SQLite, or the plain scan of the stored vectors */
+	engine?: VectorEngine["engine"];
+	note?: string;
+}
+
+/** Which search finds the nearest vectors: sqlite-vec (the vec0 table), or the plain scan of the stored vectors, with the reason it is not sqlite-vec. */
+export interface VectorEngine {
+	engine: "sqlite-vec" | "js";
+	/** why the plain scan runs (sqlite-vec did not load, its table is not built yet) */
 	note?: string;
 }
 
@@ -33,6 +42,8 @@ export interface SearchResult {
 export interface IndexStatus {
 	/** the model that made the stored vectors; null before any */
 	model: string | null;
+	/** which search the vectors are found by */
+	vector: VectorEngine;
 	/** pieces in all, and how many have a vector of that model */
 	chunks: number;
 	embedded: number;

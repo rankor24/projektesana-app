@@ -12,7 +12,7 @@
 // starts at the first piece without a vector (see index.ts).
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 import type { DownloadState, ModelInfo, SearchKind, SearchResult, SearchStatus } from "../shared/search-types.js";
 import { DEFAULT_MODEL_ID, MODELS, modelById, modelReady } from "./embedder.js";
@@ -20,6 +20,7 @@ import { indexStatus, type SourceRef } from "./index.js";
 import type { IndexJob, WorkerMessage } from "./index-worker.js";
 import type { QueryReply, QueryRequest } from "./query-worker.js";
 import { hasSearchSchema } from "./schema.js";
+import { openWithVec } from "./vec.js";
 
 export type IndexMode = IndexJob["mode"];
 const STRENGTH: Record<IndexMode, number> = { messages: 0, update: 1, rebuild: 2 };
@@ -179,7 +180,8 @@ export class SearchIndexer {
 		if (!existsSync(file)) return null;
 		let db: DatabaseSync | null = null;
 		try {
-			db = new DatabaseSync(file, { readOnly: true, timeout: 1000 } as ConstructorParameters<typeof DatabaseSync>[1]);
+			// loaded with sqlite-vec like the searches are, so the status tells which engine they will use
+			db = openWithVec(file, { readOnly: true, timeout: 1000 });
 			return hasSearchSchema(db) ? indexStatus(db) : null;
 		} catch {
 			return null;

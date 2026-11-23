@@ -12,13 +12,14 @@
 // Four kinds of passage are searched, each by itself and then merged by score: source pages, conversation messages, memory entries
 // and log entries (the last two carry the citation the index stored with them).
 //
-// Vectors are compared in plain code: one project is thousands of pieces of a few hundred numbers, which is a few milliseconds.
-// (sqlite-vec was tried: it loads in Node's SQLite and in Electron's, but at this size it saves nothing and adds a native file to ship.)
+// The nearest vectors come from sqlite-vec (a vec0 table next to the stored vectors, see vec.ts) when it is loaded in the connection
+// and its table is in step with the vectors; otherwise from a plain scan of the stored vectors in code, which finds the same pieces.
+// Boris's decision (plan §10): sqlite-vec when it loads in Electron's node:sqlite, else the scan.
 import type { DatabaseSync } from "node:sqlite";
 import type { Passage, SearchKind, SearchResult } from "../shared/search-types.js";
 import type { Embedder } from "./embedder.js";
-import { vectorOf } from "./index.js";
 import { hasSearchSchema } from "./schema.js";
+import { vecNearest, vecUsable, vectorOf } from "./vec.js";
 
 export type { Passage, SearchKind, SearchResult };
 
@@ -55,11 +56,15 @@ export function rrf(lists: string[][], k = RRF_K, weights: number[] = []): Map<s
 
 const byScore = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]);
 
-/** The ids of the `limit` rows with the highest dot product with `q` (vectors are unit length, so that is the cosine). */
-function nearest(db: DatabaseSync, q: Float32Array, model: string, kind: string | string[], limit: number): { id: number; sim: number }[] {
+/** The ids of the `limit` rows with the highest dot product with `q` (vectors are unit length, so that is the cosine): from sqlite-vec when `useVec`, or when it cannot answer, by a scan of the stored vectors. */
+export function nearest(db: DatabaseSync, q: Float32Array, model: string, kind: string | string[], limit: number, useVec = true): { id: number; sim: number }[] {
+	const kinds = Array.isArray(kind) ? kind : [kind];
+	if (useVec) {
+		const fast = vecNearest(db, q, kinds, limit);
+		if (fast) return fast;
+	}
 	const top: { id: number; sim: number }[] = [];
 	let floor = -Infinity;
-	const kinds = Array.isArray(kind) ? kind : [kind];
 	const rows = db.prepare(`SELECT v.chunk_id AS id, v.vec AS vec FROM chunk_vectors v JOIN chunks c ON c.id = v.chunk_id WHERE v.model = ? AND c.kind IN (${kinds.map(() => "?").join(", ")})`).iterate(model, ...kinds) as Iterable<{ id: number; vec: Uint8Array }>;
 	for (const r of rows) {
 		const v = vectorOf(r.vec);
@@ -86,10 +91,10 @@ interface ChunkRow {
 	label: string | null;
 }
 
-function sourcePassages(db: DatabaseSync, q: string, qv: Float32Array | null, model: string | null, limit: number): Passage[] {
+function sourcePassages(db: DatabaseSync, q: string, qv: Float32Array | null, model: string | null, limit: number, useVec: boolean): Passage[] {
 	const match = ftsAny(q);
 	const keyword = match ? (db.prepare("SELECT c.id AS id FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid WHERE chunks_fts MATCH ? AND c.kind = 'source' ORDER BY bm25(chunks_fts) LIMIT ?").all(match, DEPTH) as { id: number }[]).map((r) => String(r.id)) : [];
-	const meaning = qv && model ? nearest(db, qv, model, "source", DEPTH).map((r) => String(r.id)) : [];
+	const meaning = qv && model ? nearest(db, qv, model, "source", DEPTH, useVec).map((r) => String(r.id)) : [];
 	const fused = byScore(rrf([keyword, meaning], RRF_K, [1, MEANING_WEIGHT])).slice(0, limit);
 	const get = db.prepare("SELECT id, text, page, source, label FROM chunks WHERE id = ?");
 	const out: Passage[] = [];
@@ -102,11 +107,11 @@ function sourcePassages(db: DatabaseSync, q: string, qv: Float32Array | null, mo
 }
 
 /** The memory entries and the log entries: pieces that carry their own citation (the label the index stored), found by the same two searches as the sources. */
-function unitPassages(db: DatabaseSync, kinds: ("memory" | "decision" | "question")[], passageKind: "memory" | "log", q: string, qv: Float32Array | null, model: string | null, limit: number): Passage[] {
+function unitPassages(db: DatabaseSync, kinds: ("memory" | "decision" | "question")[], passageKind: "memory" | "log", q: string, qv: Float32Array | null, model: string | null, limit: number, useVec: boolean): Passage[] {
 	const match = ftsAny(q);
 	const marks = kinds.map(() => "?").join(", ");
 	const keyword = match ? (db.prepare(`SELECT c.id AS id FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid WHERE chunks_fts MATCH ? AND c.kind IN (${marks}) ORDER BY bm25(chunks_fts) LIMIT ?`).all(match, ...kinds, DEPTH) as { id: number }[]).map((r) => String(r.id)) : [];
-	const meaning = qv && model ? nearest(db, qv, model, kinds, DEPTH).map((r) => String(r.id)) : [];
+	const meaning = qv && model ? nearest(db, qv, model, kinds, DEPTH, useVec).map((r) => String(r.id)) : [];
 	const fused = byScore(rrf([keyword, meaning], RRF_K, [1, MEANING_WEIGHT])).slice(0, limit);
 	const get = db.prepare("SELECT id, text, page, source, label FROM chunks WHERE id = ?");
 	const out: Passage[] = [];
@@ -128,7 +133,7 @@ interface MsgRow {
 	agent: string | null;
 }
 
-function conversationPassages(db: DatabaseSync, q: string, qv: Float32Array | null, model: string | null, limit: number): Passage[] {
+function conversationPassages(db: DatabaseSync, q: string, qv: Float32Array | null, model: string | null, limit: number, useVec: boolean): Passage[] {
 	const match = ftsAny(q);
 	// the existing message index (its own tokenizer settings, same as the conversation search)
 	const keyword = match ? (db.prepare("SELECT m.id AS id FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid WHERE messages_fts MATCH ? AND m.kind = 'text' ORDER BY bm25(messages_fts) LIMIT ?").all(match, DEPTH) as { id: number }[]).map((r) => String(r.id)) : [];
@@ -137,7 +142,7 @@ function conversationPassages(db: DatabaseSync, q: string, qv: Float32Array | nu
 	const meaning: string[] = [];
 	if (qv && model) {
 		const pieceMsg = db.prepare("SELECT message_id AS mid FROM chunks WHERE id = ?");
-		for (const n of nearest(db, qv, model, "message", DEPTH)) {
+		for (const n of nearest(db, qv, model, "message", DEPTH, useVec)) {
 			const mid = String((pieceMsg.get(n.id) as { mid: number | null } | undefined)?.mid ?? "");
 			if (!mid || bestPiece.has(mid)) continue;
 			bestPiece.set(mid, n.id);
@@ -166,6 +171,8 @@ export interface SearchOptions {
 	embedder: Embedder | null;
 	/** why there is no embedder, for the note (not downloaded, failed to load) */
 	embedderNote?: string;
+	/** "js" forces the plain scan of the stored vectors (tests compare the two); default: sqlite-vec when it can answer */
+	engine?: "auto" | "js";
 }
 
 /** Searches an open threads.db (read-only is enough). */
@@ -183,13 +190,14 @@ export async function searchProject(db: DatabaseSync, o: SearchOptions): Promise
 			model = built;
 		} else note = "Vektori vēl nav uzbūvēti ar šo modeli; meklē tikai pēc atslēgvārdiem.";
 	}
+	const useVec = qv !== null && o.engine !== "js" && vecUsable(db, qv.length);
 	const want = (k: SearchKind) => kind === "all" || kind === k;
-	const src = want("sources") ? sourcePassages(db, o.query, qv, model, limit) : [];
-	const conv = want("conversations") ? conversationPassages(db, o.query, qv, model, limit) : [];
-	const mem = want("memory") ? unitPassages(db, ["memory"], "memory", o.query, qv, model, limit) : [];
-	const logs = want("logs") ? unitPassages(db, ["decision", "question"], "log", o.query, qv, model, limit) : [];
+	const src = want("sources") ? sourcePassages(db, o.query, qv, model, limit, useVec) : [];
+	const conv = want("conversations") ? conversationPassages(db, o.query, qv, model, limit, useVec) : [];
+	const mem = want("memory") ? unitPassages(db, ["memory"], "memory", o.query, qv, model, limit, useVec) : [];
+	const logs = want("logs") ? unitPassages(db, ["decision", "question"], "log", o.query, qv, model, limit, useVec) : [];
 	const hits = [...src, ...conv, ...mem, ...logs].sort((a, b) => b.score - a.score).slice(0, limit);
 	// a build that is still going: the meaning side only sees what has a vector so far
 	const left = qv ? Number((db.prepare("SELECT COUNT(*) n FROM chunks c LEFT JOIN chunk_vectors v ON v.chunk_id = c.id WHERE v.chunk_id IS NULL").get() as { n: number }).n) : 0;
-	return { hits, mode: qv ? "hybrid" : "keyword", ...(qv ? (left ? { note: `Indekss vēl tiek veidots: ${left} fragmentiem vēl nav vektora, tie atrodami tikai pēc vārdiem.` } : {}) : { note: note ?? "Meklē tikai pēc atslēgvārdiem." }) };
+	return { hits, mode: qv ? "hybrid" : "keyword", ...(qv ? { engine: useVec ? ("sqlite-vec" as const) : ("js" as const) } : {}), ...(qv ? (left ? { note: `Indekss vēl tiek veidots: ${left} fragmentiem vēl nav vektora, tie atrodami tikai pēc vārdiem.` } : {}) : { note: note ?? "Meklē tikai pēc atslēgvārdiem." }) };
 }

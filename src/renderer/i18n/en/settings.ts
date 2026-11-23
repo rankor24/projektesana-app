@@ -446,6 +446,8 @@ export const settings: Record<string, string> = {
 	"Sagatavo fragmentus": "Preparing pieces",
 	"{done} / {total} fragmenti": "{done} / {total} pieces",
 	"nav uzbūvēts": "not built",
+	"Vektoru meklēšana: sqlite-vec": "Vector search: sqlite-vec",
+	"Vektoru meklēšana: JS (sqlite-vec neielādējās: {reason})": "Vector search: JS scan (sqlite-vec did not load: {reason})",
 	"atjaunots {when}": "updated {when}",
 	"apm. {size} MB, lokāli, licence {licence}": "about {size} MB, runs on this PC, licence {licence}",
 	"lejupielādēts": "downloaded",
