@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type Thread } from "../shared/thread-types.js";
+import { LEAD_ID, type IncidentView, type Thread } from "../shared/thread-types.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
 import { compactMessages, type Complete } from "./compact.js";
@@ -41,7 +41,7 @@ import { agentMcpRun } from "./agent-mcp.js";
 import { EKS, LEADER, PROCESS_OWN_TOOLS, stageCard } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools, type MailDeps } from "./mail.js";
 import { chiefOf, taskTools } from "./task-tools.js";
-import { minLevel, type Level as CapLevel } from "../core/chief.js";
+import { holdsChiefTools, minLevel, type Level as CapLevel } from "../core/chief.js";
 import { CHECKER_SYSTEM, CHECK_MAX_MS, afterCheck, checkBrief, fixBrief, readVerdict, roundsOf, worthChecking } from "../core/check-work.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
@@ -106,7 +106,7 @@ export class ThreadRunner {
 	/** where each thread's last run really went (its backup while its provider was held, the checker's provider for eks): the context meter and the attachment limits describe that model */
 	private lastOn = new Map<string, Target>();
 
-	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox; failover?: Failover; /** the words a handoff to a paused agent is refused with (null = it may work) */ held?: (agent: string) => string | null }) {}
+	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox; failover?: Failover; /** the words a handoff to a paused agent is refused with (null = it may work) */ held?: (agent: string) => string | null; /** the open incidents of a project, and an agent's Retry of one (coordinator.ts) */ incidents?: (projectId: string | null) => IncidentView[]; retryIncident?: (id: string, by: { agent: string; projectId: string | null }) => { runId: string | null; queued: boolean } }) {}
 
 	private store(thread: Thread): ThreadStore {
 		return this.d.threads(thread.projectId);
@@ -169,7 +169,10 @@ export class ThreadRunner {
 	private standingDeps(s: Settings, spec: AgentSpec | null, revitTools?: ReadonlySet<string>, projectId: string | null = null): Parameters<typeof standingFor>[1] {
 		// a specialist carries what the office wrote down for it (13.4); the lead's text stays as the 0.6 guard measures it: it reads office memory with read_notes
 		const knowledge = spec ? knowledgeFor(new OfficeMemory(join(this.d.ctx.appDir, "memory")), spec.id) : "";
-		return { appDir: this.d.ctx.appDir, userName: s.userName, specs: this.d.agents?.() ?? DEFAULT_AGENTS, skills: listSkills(this.d.ctx.skillsDir ?? "", officeSkillsDir(this.d.ctx.appDir)), knowledge, revitTools, ...this.processText(projectId, spec ? spec.id : LEAD_ID) };
+		const specs = this.d.agents?.() ?? DEFAULT_AGENTS;
+		// BPV and a department's lead hold the Chief's tools, so their text carries the line on incidents
+		const chief = !!spec && holdsChiefTools(spec.id, specs, this.d.departments?.() ?? []);
+		return { appDir: this.d.ctx.appDir, userName: s.userName, specs, chief, skills: listSkills(this.d.ctx.skillsDir ?? "", officeSkillsDir(this.d.ctx.appDir)), knowledge, revitTools, ...this.processText(projectId, spec ? spec.id : LEAD_ID) };
 	}
 
 	/** The cheap ways to keep a stored conversation small, always applied: old screenshots out, old tool results cut. Idempotent. */
@@ -438,6 +441,11 @@ export class ThreadRunner {
 							leadThread: () => this.store(thread).lead(projectId, join(this.d.chatDir, `${projectId ?? "_"}.jsonl`)),
 							departments: () => this.d.departments?.() ?? [],
 							held: (agent) => this.d.held?.(agent) ?? null,
+							incidents: () => this.d.incidents?.(projectId) ?? [],
+							retryIncident: (id) => {
+								if (!this.d.retryIncident) throw new Error("Atkārtošana šeit nav pieejama.");
+								return this.d.retryIncident(id, { agent: spec ? spec.id : LEAD_ID, projectId });
+							},
 							// the ceiling this run works under goes with the work it hands on (never raised on the way)
 							level: () => (spec ? minLevel(capOf(spec) as CapLevel, i.levelCap) : i.levelCap),
 							threadChanged: (t) => this.d.onThread?.(t),

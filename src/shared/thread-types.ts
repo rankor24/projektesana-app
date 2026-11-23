@@ -114,6 +114,8 @@ export interface IncidentView {
 	/** how many times the user has retried this thread's incidents; the third is refused */
 	retries: number;
 	mayRetry: boolean;
+	/** who retried this thread's earlier incident when it was an agent (BPV, a department's lead), by name: the card says "BPV atkārtoja"; absent when the user did */
+	retriedBy?: string;
 }
 
 /** One thing that waits for the user (Gaida tevi). Items of every project, not only the open one. `wave-paused`, `question` and `gate` are filled by 12.4, 12.3 and 14.3. */

@@ -5,11 +5,12 @@ import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Coordinator } from "../src/agent/coordinator.ts";
+import { standingFor } from "../src/agent/agents.ts";
 import { taskTools } from "../src/agent/task-tools.ts";
 import { chiefOf } from "../src/agent/task-tools.ts";
 import type { MailDeps } from "../src/agent/mail.ts";
 import { afterCheck, checkBrief, CHECK_ROUNDS, fixBrief, readVerdict, roundsOf, worthChecking } from "../src/core/check-work.ts";
-import { holdsChiefTools, levelOfMessages, mayAssign, minLevel, nextIteration, nextTaskId, standingThread, taskThreadTitle } from "../src/core/chief.ts";
+import { holdsChiefTools, levelOfMessages, mayAssign, mayHandleIncidentOf, minLevel, nextIteration, nextTaskId, standingThread, taskThreadTitle } from "../src/core/chief.ts";
 import { Holds, applyPause, handoffText, heldBy, refusalText } from "../src/core/holds.ts";
 import { INCIDENT_HARD_LIMIT, IncidentLedger, IncidentStore, STALL_MS, isStalled } from "../src/core/incidents.ts";
 import { DEFAULT_LIMITS, Mailbox, answered, canSend, type Message } from "../src/core/messages.ts";
@@ -608,4 +609,127 @@ test("the ceiling a task brings lowers the agent's own: a confirm-level agent un
 	assert.ok(offered[0].includes(confirmTool!), "on its own it has the confirm tool");
 	assert.ok(!offered[1].includes(confirmTool!), "under a run-level Chief it does not");
 	void ar;
+});
+
+// ---- BPV and a department lead retry a stuck agent's thread -----------------------------------------------------------------------------------
+
+test("mayHandleIncidentOf: BPV for every agent but Kvalitāte; a lead inside its department only; never eks, never one's own", () => {
+	assert.deepEqual(mayHandleIncidentOf("bpv", "ar", TEAM, DEPTS), { ok: true, as: "bpv" });
+	assert.equal(mayHandleIncidentOf("bpv", "eks", TEAM, DEPTS).ok, false);
+	assert.equal(mayHandleIncidentOf("bpv", "bpv", TEAM, DEPTS).ok, false);
+	assert.deepEqual(mayHandleIncidentOf("uk", "avk", TEAM, DEPTS), { ok: true, as: "lead" });
+	const other = mayHandleIncidentOf("uk", "ar", TEAM, DEPTS);
+	assert.equal(other.ok, false);
+	assert.match(other.ok ? "" : other.reason, /To dara BPV/);
+	assert.equal(mayHandleIncidentOf("ar", "bk", TEAM, DEPTS).ok, false, "an agent that leads nothing retries nothing");
+});
+
+const failedOn = async (r: ReturnType<typeof rig>, thread: { id: string }, message = "engine exited with code 1") => {
+	const at = r.started.length;
+	await r.c.start({ threadId: thread.id, projectId: "P1", text: "darbs", focus: [], cause: { by: "user" } });
+	r.started[at].finish(false, message);
+	await new Promise((res) => setTimeout(res, 20));
+};
+
+test("retry_thread / list_incidents: the user's Retry done by an agent: authority, pause, the limit shared with the user, and who retried", async () => {
+	const r = rig();
+	const k = kit("bpv");
+	const wire = (agent: string): MailDeps => ({
+		...k.deps(agent, k.mine.id),
+		incidents: () => r.c.listIncidents("P1"),
+		retryIncident: (id) => r.c.retryIncident(id, { agent, projectId: "P1" }),
+	});
+	const bpv = wire("bpv");
+	const list = toolOf(bpv, "list_incidents");
+	const retry = toolOf(bpv, "retry_thread");
+	assert.match((await k.run(list, {})).text, /Atvērtu incidentu nav/);
+	assert.equal((await k.run(retry, {})).error, true, "needs an incident or a thread");
+
+	const ar = r.open("ar");
+	const eks = r.open("eks");
+	const avk = r.open("avk");
+	await failedOn(r, ar);
+	await failedOn(r, eks);
+	await failedOn(r, avk);
+	const inc = (agent: string) => r.incidents.list().find((i) => i.agent === agent)!;
+
+	// BPV sees ar and avk, not eks; the line carries agent, thread, kind and what the run said
+	const seen = (await k.run(list, {})).text;
+	assert.match(seen, new RegExp(`${inc("ar").id} · ar · saruna ${ar.id} · neizdevās`));
+	assert.match(seen, /engine exited/);
+	assert.match(seen, /avk/);
+	assert.doesNotMatch(seen, /· eks ·/, "the expert is not BPV's to manage");
+	// a department lead sees its own department only
+	const uk = wire("uk");
+	const leadSees = (await k.run(toolOf(uk, "list_incidents"), {})).text;
+	assert.match(leadSees, /· avk ·/);
+	assert.doesNotMatch(leadSees, /· ar ·/);
+
+	// outside its authority: refused, the incident stays
+	const outside = await k.run(toolOf(uk, "retry_thread"), { incident: inc("ar").id });
+	assert.equal(outside.error, true);
+	assert.match(outside.text, /To dara BPV/);
+	const expert = await k.run(retry, { incident: inc("eks").id });
+	assert.match(expert.text, /Kvalitātes nodaļā/);
+	assert.ok(r.incidents.get(inc("ar").id) && r.incidents.get(inc("eks").id));
+
+	// paused: refused with the pause's own words, nothing started, the incident stays
+	r.c.setHold({ kind: "agent", id: "ar" }, true);
+	const before = r.started.length;
+	const paused = await k.run(retry, { incident: inc("ar").id });
+	assert.equal(paused.error, true);
+	assert.match(paused.text, /ir apturēts/);
+	assert.equal(r.started.length, before);
+	assert.ok(r.incidents.get(inc("ar").id));
+	r.c.setHold({ kind: "agent", id: "ar" }, false);
+
+	// a lead retries inside its department; by thread id works as well
+	const ok = await k.run(toolOf(uk, "retry_thread"), { thread: avk.id });
+	assert.equal(ok.error, false, ok.text);
+	assert.match(r.started[r.started.length - 1].text, /UK atkārtoja/);
+	r.started[r.started.length - 1].finish(true);
+	await new Promise((res) => setTimeout(res, 20));
+	assert.equal(r.incidents.list().some((i) => i.agent === "avk"), false, "the retried thread worked: no incident is left");
+
+	// BPV retries ar: the same text the user's Retry sends, plus who did it
+	const first = await k.run(retry, { incident: inc("ar").id });
+	assert.equal(first.error, false, first.text);
+	const text = r.started[r.started.length - 1].text;
+	assert.match(text, /Iepriekšējais gājiens/);
+	assert.match(text, /BPV atkārtoja/);
+	assert.equal(r.incidents.get(inc("ar")?.id ?? ""), undefined);
+	// it fails again: the new incident says who retried it
+	r.started[r.started.length - 1].finish(false, "engine exited again");
+	await new Promise((res) => setTimeout(res, 20));
+	assert.equal(inc("ar").retriedBy, "BPV");
+	assert.match((await k.run(list, {})).text, /atkārtots 1× \(BPV atkārtoja\)/);
+
+	// the limit is the user's: a second retry, by the user this time, uses up the allowance; BPV is refused the third
+	assert.ok(r.c.retryIncident(inc("ar").id).runId);
+	r.started[r.started.length - 1].finish(false, "and again");
+	await new Promise((res) => setTimeout(res, 20));
+	assert.equal(inc("ar").mayRetry, false);
+	assert.equal(inc("ar").retriedBy, undefined, "the user retried last");
+	const third = await k.run(retry, { incident: inc("ar").id });
+	assert.equal(third.error, true);
+	assert.match(third.text, /atkārtota divreiz/);
+	assert.ok(r.incidents.get(inc("ar").id), "a refused retry leaves the incident where it was");
+	assert.match((await k.run(list, {})).text, /atkārtot vairs nedrīkst, eskalē/);
+});
+
+test("retry_thread: an incident of another project is refused; the Chief's tools carry the incident line in the standing text", async () => {
+	const r = rig();
+	const ar = r.threads("P2").create({ projectId: "P2", agent: "ar", title: "ar", startedBy: "user" });
+	await r.c.start({ threadId: ar.id, projectId: "P2", text: "x", focus: [], cause: { by: "user" } });
+	r.started[0].finish(false, "boom");
+	await new Promise((res) => setTimeout(res, 20));
+	const inc = r.incidents.list()[0];
+	assert.equal(r.c.listIncidents("P1").length, 0);
+	assert.throws(() => r.c.retryIncident(inc.id, { agent: "bpv", projectId: "P1" }), /citā projektā/);
+	assert.ok(r.incidents.get(inc.id));
+	const text = standingFor(null, { appDir: tmp("st-"), userName: "B", specs: TEAM, skills: [], knowledge: "" });
+	assert.doesNotMatch(text, /list_incidents/, "the lead's own text is unchanged");
+	const bpvText = standingFor(TEAM[0], { appDir: tmp("st-"), userName: "B", specs: TEAM, skills: [], knowledge: "", chief: true });
+	assert.match(bpvText, /list_incidents, vienreiz retry_thread, ja atkal neizdodas, escalate/);
+	assert.doesNotMatch(standingFor(TEAM[1], { appDir: tmp("st-"), userName: "B", specs: TEAM, skills: [], knowledge: "" }), /retry_thread/);
 });

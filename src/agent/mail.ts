@@ -10,11 +10,11 @@ import { newId, type Note } from "../core/model.js";
 import type { ProcessState } from "../core/process.js";
 import { EKS } from "../core/process-def.js";
 import type { ThreadStore } from "../core/threads.js";
-import { LEAD_ID, type Thread } from "../shared/thread-types.js";
+import { LEAD_ID, type IncidentView, type Thread } from "../shared/thread-types.js";
 import type { Level } from "./tools/levels.js";
 
 /** The two tools as the gate sees them. Sending mail changes nothing in the project; what the recipient then does goes through its own gate. */
-export const MAIL_TOOL_LEVELS: Record<string, Level> = { send_message: "run", close_topic: "run", report_answer: "run", assign_task: "run", escalate: "run" };
+export const MAIL_TOOL_LEVELS: Record<string, Level> = { send_message: "run", close_topic: "run", report_answer: "run", assign_task: "run", escalate: "run", list_incidents: "read", retry_thread: "run" };
 
 /** Three lines every agent's standing text carries (the lead's and a specialist's). */
 export const MAIL_RULES =
@@ -22,6 +22,9 @@ export const MAIL_RULES =
 	"delegate (ja tas tev ir): atskaitei, kas vajadzīga šajā pašā gājienā.\n" +
 	"Uzdevumu (UZDEVUMS) pabeidz ar report_answer: īsa ATBILDE, saturs failos.\n" +
 	"Nekad nesūti ziņu sev.";
+
+/** One line more for BPV and a department's lead (the Chief's tools, task-tools.ts): what to do with a stalled or failed agent. */
+export const CHIEF_RULES = "Aģents apstājies vai neizdevies: list_incidents, vienreiz retry_thread, ja atkal neizdodas, escalate.";
 
 export interface MailDeps {
 	mailbox: Mailbox;
@@ -51,6 +54,10 @@ export interface MailDeps {
 	level?: () => "run" | "confirm" | undefined;
 	/** a thread was made or renamed (the standing task thread): the window hears of it */
 	threadChanged?: (t: Thread) => void;
+	/** the open incidents of this run's project (core/incidents.ts); without it there are none to list */
+	incidents?: () => readonly IncidentView[];
+	/** the user's Retry, done by this run's agent: the same function (coordinator.retryIncident) with the same limits; throws the reason in Latvian when it is refused */
+	retryIncident?: (id: string) => { runId: string | null; queued: boolean };
 }
 
 /** The state of process mode as it is now; null in co-work, with no state, or when it cannot be read (then the co-work rules hold). */

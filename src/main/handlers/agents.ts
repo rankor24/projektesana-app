@@ -16,7 +16,7 @@ import { maskMcp, probeMcpTools, restoreSecrets } from "../../agent/agent-mcp.js
 import { mergeRole, readTeam } from "../../agent/team-import.js";
 import type { SkillInfo } from "../../shared/skill-types.js";
 import type { AgentMcpServer, AgentSpec, AgentSpecRow, AgentToolRow, McpProbe, TeamImportReport } from "../../shared/agent-types.js";
-import { DEFAULT_DEPARTMENTS, checkDepartments, departmentOf, type Department } from "../../shared/departments.js";
+import { BPV_ID, DEFAULT_DEPARTMENTS, checkDepartments, departmentOf, type Department } from "../../shared/departments.js";
 import type { Handlers } from "../../shared/api.js";
 import type { AppSettings } from "../settings.js";
 
@@ -37,7 +37,7 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 	// the library is read from disk (every SKILL.md and its files): a call that measures many agents reads it once and passes it in
 	const library = () => listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir));
 	const fixedOf = (spec: AgentSpec, specs: readonly AgentSpec[], unsaved: Pick<StandingDeps, "roleText" | "sharedText"> = {}, skills: SkillInfo[] = library()) =>
-		fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills, ...processReserve(spec), ...unsaved }, declarationTokens(spec) + revitReserve(spec));
+		fixedTokens(spec, { appDir: d.settings.dir, userName: d.settings.get().userName, specs, skills, chief: spec.id === BPV_ID, ...processReserve(spec), ...unsaved }, declarationTokens(spec) + revitReserve(spec));
 	/** A role or shared text that would push a saved agent past the limit is refused before it is written; an agent that is over already may only get smaller. */
 	const holds = (unsaved: Pick<StandingDeps, "roleText" | "sharedText">) => {
 		const { specs, shipped } = d.settings.agentSpecs();

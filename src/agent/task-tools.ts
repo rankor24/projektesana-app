@@ -3,19 +3,23 @@
 //                  that stage (found or made; its title carries the task id), and the agent is started (the coordinator wakes it as for any mail).
 //   report_answer  the agent answers in the fixed ATBILDE format; the answer is posted into the thread of the one that handed the task out.
 //   escalate       BPV puts a question to the user with up to three options and a recommendation (process §8: cost, deadline, regulation risk, unresolved after 3).
+//   list_incidents BPV / a department lead reads the open incidents (failed, stalled, could not start) of the agents it manages: agent, thread, kind, when, what the run said.
+//   retry_thread   ... and retries one: the user's own Retry (coordinator.retryIncident, same limits: twice an hour), refused for a paused agent or one outside its reach.
 // Like the mail tools they are main-process tools handed to the engine as `extraTools`, not served by the tools server.
 //
 // Ported from OpenMausBot (Apache-2.0): server/coordinator.ts + server/chief-of-staff.ts (`coordinate_bots`: work goes into the conversation's one standing work thread with
 // each teammate, with a brief that is "clear, self-contained"; the call returns at once and the Chief resumes when the result returns; "a refusal ... means nothing was
 // sent: fix what it names and retry; never describe a handoff the tool did not accept"), docs/approval-levels.md (the Chief's ceiling flows down), server/host/rework-cap.ts
-// (rework is counted and stops at a limit). The formats and the limits are the BD process's (§7.1, §7.2, §8): chief.ts has the pure parts.
+// (rework is counted and stops at a limit), server/drivers/agents-call.ts + docs/team-incidents.md (`retry_thread`: Chief-only, for a teammate the Chief can reach; the retried
+// thread keeps its own approval level, the Chief is not woken for its result; "retry once, then report" is the standing rule). The formats and the limits are the BD process's (§7.1, §7.2, §8): chief.ts has the pure parts.
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, type Static } from "@earendil-works/pi-ai";
 import { canSend, answered, type Message } from "../core/messages.js";
-import { holdsChiefTools, mayAssign, nextIteration, nextTaskId, openTaskIn, standingThread, STAGE_RE, taskThreadTitle, topicTitle } from "../core/chief.js";
+import { holdsChiefTools, mayAssign, mayHandleIncidentOf, nextIteration, nextTaskId, openTaskIn, standingThread, STAGE_RE, taskThreadTitle, topicTitle } from "../core/chief.js";
 import { newId, type Note } from "../core/model.js";
 import { checkEscalation, ESCALATION_REASONS, renderEscalation, type Escalation } from "../shared/escalation.js";
 import { limitsOf } from "../core/messages.js";
+import type { IncidentView } from "../shared/thread-types.js";
 import { oneOf, processNow, result, strs, type MailDeps } from "./mail.js";
 
 const assignSchema = Type.Object({
@@ -34,6 +38,11 @@ const answerSchema = Type.Object({
 	questions: Type.Optional(strs),
 	decisions: Type.Optional(strs),
 	risks: Type.Optional(Type.String()),
+});
+
+const retrySchema = Type.Object({
+	incident: Type.Optional(Type.String({ description: "Incident id from list_incidents." })),
+	thread: Type.Optional(Type.String({ description: "Or the thread id of the incident." })),
 });
 
 const escalateSchema = Type.Object({
@@ -164,7 +173,55 @@ export function taskTools(d: MailDeps, o: { chief: boolean }): AgentTool<any>[] 
 			}
 		},
 	};
-	return [answer, assign, escalate];
+
+	const list: AgentTool<typeof emptySchema> = {
+		name: "list_incidents",
+		label: "Incidenti",
+		description: "The open incidents (a run failed, stalled or could not start) of the agents you manage: agent, thread, kind, when, what the run said, whether Retry is still allowed.",
+		parameters: emptySchema,
+		execute: async () => {
+			const agents = d.agents();
+			const departments = d.departments?.() ?? [];
+			const mine = (d.incidents?.() ?? []).filter((i) => mayHandleIncidentOf(d.self.agent, i.agent, agents, departments).ok);
+			if (!mine.length) return result("Atvērtu incidentu nav.");
+			return result(mine.map(incidentLine).join("\n"));
+		},
+	};
+
+	const retry: AgentTool<typeof retrySchema> = {
+		name: "retry_thread",
+		label: "Atkārtot sarunu",
+		description: "Retry the thread of an incident, as the user's Retry does (twice an hour per thread at most). Not for a paused agent or one outside your department. Its result stays in that thread.",
+		parameters: retrySchema,
+		execute: async (_id, p: Static<typeof retrySchema>) => {
+			const key = (p.incident ?? "").trim() || (p.thread ?? "").trim();
+			if (!key) return result("Norādi incidentu vai sarunu (id no list_incidents).", true);
+			const found = (d.incidents?.() ?? []).find((i) => i.id === key || i.threadId === key);
+			if (!found) return result("Šāda atvērta incidenta nav: to jau kāds atkārtoja vai noņēma. Skaties list_incidents.", true);
+			const may = mayHandleIncidentOf(d.self.agent, found.agent, d.agents(), d.departments?.() ?? []);
+			if (!may.ok) return result(may.reason, true);
+			if (!d.retryIncident) return result("Atkārtošana šeit nav pieejama.", true);
+			try {
+				const r = d.retryIncident(found.id);
+				d.note(`\n[lietotne] ATKĀRTOJA sarunu ${found.threadId} (${found.agent})`);
+				return result(`Saruna ${found.threadId} (${found.agent}) ${r.queued ? "ielikta rindā" : "atkal darbojas"}. Rezultāts paliek tajā sarunā, tevi tas nepamodina; vēlāk pārbaudi ar list_incidents. Ja tā neizdodas vēlreiz, eskalē, nemēģini trešo reizi.`);
+			} catch (e) {
+				return result(e instanceof Error ? e.message : String(e), true);
+			}
+		},
+	};
+	return [answer, assign, escalate, list, retry];
+}
+
+const emptySchema = Type.Object({});
+
+const KIND_WORD = { failed: "neizdevās", stalled: "pārstāja darboties", "not-started": "nevarēja sākties" } as const;
+
+/** One incident as a line for list_incidents: id, agent, thread, kind, when, retries, who retried it, what the run said and what it was asked. */
+export function incidentLine(i: IncidentView): string {
+	const when = i.at.slice(0, 16).replace("T", " ");
+	const retried = i.retries > 0 ? `atkārtots ${i.retries}×${i.retriedBy ? ` (${i.retriedBy} atkārtoja)` : ""}` : "neatkārtots";
+	return `${i.id} · ${i.agent} · saruna ${i.threadId} · ${KIND_WORD[i.what]} · ${when} · ${retried} · ${i.mayRetry ? "atkārtot drīkst" : "atkārtot vairs nedrīkst, eskalē"} · «${i.detail}»${i.request ? ` · prasība: «${i.request}»` : ""}`;
 }
 
 /** Does this run get the Chief's tools: BPV, or a department's lead (chief.ts). */
