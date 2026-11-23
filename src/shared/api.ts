@@ -120,6 +120,17 @@ export interface ProviderRow {
 	models: { id: string; name: string; legacy: boolean; efforts: string[]; defaultEffort: string }[];
 }
 
+/** The Claude subscription's sign-in as `claude auth status --json` last said (src/agent/claude/login.ts). */
+export interface ClaudeAuthStatus {
+	/** a login made by Sign in in the app's own Claude folder; only `loggedIn: false` is "out", a check with no answer is "unknown" */
+	login: "in" | "out" | "unknown";
+	/** a setup-token is pasted (it wins over the login in a run) */
+	token: boolean;
+	account?: { email?: string; organization?: string };
+	/** a sign-in or sign-out is running */
+	busy: boolean;
+}
+
 /** What the agent receives as the Fokuss: what the user has selected in panels and the preview. */
 export interface FocusItem {
 	kind: "source" | "page-region" | "fact" | "requirement" | "finding" | "room" | "delivery" | "element" | "pin" | "note" | "sketch" | "text" | "view";
@@ -419,6 +430,10 @@ export interface ApiSpec {
 	"agent.login": (provider: string) => void;
 	"agent.loginAnswer": (text: string) => void;
 	"agent.logout": (provider: string) => void;
+	/** stops a sign-in that is waiting for the code (the Claude subscription's `claude auth login`; the other providers' flows end by a new login) */
+	"agent.loginCancel": (provider: string) => void;
+	/** the Claude subscription's sign-in: what `claude auth status --json` says; `refresh` asks the program now instead of using the last answer */
+	"claude.authStatus": (refresh?: boolean) => ClaudeAuthStatus;
 	"agent.send": (projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean };
 	"agent.stop": () => void;
 	/** What the start-up found left in flight, until the user answers; null when nothing waits for an answer. */
@@ -690,6 +705,8 @@ export const API_NAMES = [
 	"agent.login",
 	"agent.loginAnswer",
 	"agent.logout",
+	"agent.loginCancel",
+	"claude.authStatus",
 	"agent.send",
 	"agent.stop",
 	"queue.restored",

@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { join, sep } from "node:path";
 import { EVENT_NAMES, type EventName, type EventSpec } from "../shared/api.js";
 import type { PiRuntime } from "../agent/pi/index.js";
+import { ClaudeAccount } from "../agent/claude/login.js";
 import { CLAUDE_SUB } from "../agent/claude/provider.js";
 import type { ClaudeRunOptions } from "../agent/claude/run.js";
 import { AgentSession } from "../agent/session.js";
@@ -135,16 +136,25 @@ const pi = () =>
 // Claude Code keeps its sessions in the app's own folder, never the user's ~/.claude: none of their settings, hooks or memory reach a run.
 const claudeDir = join(appDir, "claude-code");
 let claudeEngine: Promise<(o: ClaudeRunOptions) => Promise<void>> | null = null;
-const claudeExecutable = (): string | undefined => {
-	if (!app.isPackaged) return undefined;
+// The sign-in runs this same claude.exe by its path (`claude auth login`), so in development too the path is resolved, not left to the SDK.
+const claudeBinary = (): string => {
 	const exe = createRequire(import.meta.url).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude${process.platform === "win32" ? ".exe" : ""}`);
-	return exe.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+	return app.isPackaged ? exe.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`) : exe;
 };
+const claudeExecutable = (): string | undefined => (app.isPackaged ? claudeBinary() : undefined);
+// Sign in (`claude auth login` into claudeDir), its status and Sign out; a run with no pasted setup-token uses this login.
+const claudeAccount = new ClaudeAccount({
+	cli: claudeBinary,
+	configDir: claudeDir,
+	onChange: () => emit("data.changed", { projectId: null, what: ["agent"] }),
+	log: (line) => log(`claude: ${line}`),
+});
 const claudeRun = async (o: ClaudeRunOptions) =>
 	(await (claudeEngine ??= import("../agent/claude/run.js").then((m) => {
 		mkdirSync(join(claudeDir, "work"), { recursive: true });
 		return m.createClaudeRun({
 			token: () => settings.apiKey(CLAUDE_SUB),
+			login: () => claudeAccount.ensureSignedIn(),
 			executable: claudeExecutable(),
 			configDir: claudeDir,
 			cwd: join(claudeDir, "work"),
@@ -159,7 +169,11 @@ const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..",
 const session = new AgentSession({
 	runtime: pi,
 	claudeRun,
-	claudeConnected: () => !!settings.apiKey(CLAUDE_SUB),
+	claudeConnected: () => {
+		if (settings.apiKey(CLAUDE_SUB)) return "setup-token";
+		claudeAccount.refreshIfStale();
+		return claudeAccount.peek().state === "in" ? "login" : false;
+	},
 	settings: () => settings.get(),
 	toolsServer: (env) => {
 		const r = settings.get();
@@ -238,6 +252,7 @@ const handlers = createHandlers({
 	session,
 	activity,
 	pi,
+	claude: claudeAccount,
 	emit,
 	popouts,
 	pickFolder: async (title) => {
@@ -350,7 +365,7 @@ app.whenReady().then(() => {
 let closing = false;
 async function shutdown(): Promise<void> {
 	pageRenderer.close();
-	const closeAll = Promise.allSettled([session.shutdown(), revit.close(), ocr.close()]);
+	const closeAll = Promise.allSettled([session.shutdown(), revit.close(), ocr.close(), claudeAccount.dispose()]);
 	popouts.closeAll();
 	await Promise.race([closeAll, new Promise((r) => setTimeout(r, 4000))]);
 }

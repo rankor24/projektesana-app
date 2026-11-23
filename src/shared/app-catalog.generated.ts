@@ -121,6 +121,20 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 			"provider"
 		]
 	},
+	"agent.loginCancel": {
+		"sig": "(provider: string) => void",
+		"params": [
+			"provider"
+		],
+		"doc": "stops a sign-in that is waiting for the code (the Claude subscription's `claude auth login`; the other providers' flows end by a new login)"
+	},
+	"claude.authStatus": {
+		"sig": "(refresh?: boolean) => ClaudeAuthStatus",
+		"params": [
+			"refresh"
+		],
+		"doc": "the Claude subscription's sign-in: what `claude auth status --json` says; `refresh` asks the program now instead of using the last answer"
+	},
 	"agent.send": {
 		"sig": "(projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean }",
 		"params": [

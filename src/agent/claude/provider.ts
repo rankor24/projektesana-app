@@ -2,7 +2,8 @@
 // Plain data, no SDK imports, so the renderer and the settings can read it too.
 //
 // pi stays the engine for every other provider and for Claude by API key. This id runs the Claude Agent SDK instead,
-// signed in with each user's own `claude setup-token` (a long-lived OAuth token of their Claude Pro/Max/Team seat).
+// signed in with each user's own Claude Pro/Max/Team seat: by Sign in (the unmodified `claude auth login`, a login kept in the app's own
+// Claude folder, src/agent/claude/login.ts) or by a `claude setup-token` the user pastes (a long-lived OAuth token). A pasted token wins.
 // Model facts (context window, images, efforts) come from pi's `anthropic` catalog: same models, same ids.
 
 export const CLAUDE_SUB = "claude-sub";
@@ -15,7 +16,7 @@ export const CLAUDE_SUB_DEFAULT_MODEL = "claude-sonnet-5-5";
 /** How the person gets the token: one command in any terminal where Claude Code is installed, then paste the printed token. */
 export const CLAUDE_SUB_TOKEN_HELP = "Terminālī palaid: claude setup-token — un ielīmē izdrukāto atslēgu.";
 
-export const NOT_CONNECTED = "Claude abonements nav pieslēgts: Iestatījumi → Claude (abonements) → ielīmē atslēgu no `claude setup-token`.";
+export const NOT_CONNECTED = "Claude abonements nav pieslēgts: Iestatījumi → Claude (abonements) → Pieslēgties (vai ielīmē atslēgu no `claude setup-token`).";
 
 export const isClaudeSub = (provider: string): boolean => provider === CLAUDE_SUB;
 
