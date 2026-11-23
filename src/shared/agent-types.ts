@@ -28,6 +28,12 @@ export interface AgentSpec {
 	acceptsFrom?: string[];
 	/** skill names this agent is told about; absent = the synced Revit skills, as today (13.6 checks the names) */
 	skills?: string[];
+	/** the department (shared/departments.ts) the agent is filed in: an id of the app's department list; absent = the default of its id (BD roles), "" = in none */
+	department?: string;
+	/** a provider of its own (an id of `agent.providers`); empty or absent = the run's. Checked when the run starts, not on save. The backup's logic is the engines' (phase A) */
+	provider?: string;
+	/** where this agent's turns go on when its provider is at a limit or signed out */
+	backup?: { provider: string; model: string };
 }
 
 /** Lower case, no diacritics, letters and digits only: "Ekspertīzes lasītājs" and "ekspertizeslasitajs" are the same. */

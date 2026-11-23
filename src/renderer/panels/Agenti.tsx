@@ -2,11 +2,13 @@
 // A specialist is a name, what it is for (the agent reads this line to choose), its instructions, and the tools it may use besides
 // reading. Tools that need the user's batch confirmation cannot be ticked: no one is looking at a helper's confirmation. The agent's
 // read-only helpers (`run_subagent`) need no setup. Saved in agents.json of the app data; until the first save the shipped three are used.
+// Phase B: each agent is filed in a department (a picker; the list of departments is edited in the conversations panel) and may have a provider, model and backup of its own.
 // 13.5: each agent also has a role text (agents\<id>.md, edited here or imported from a .md), a level, a model and effort of its own, and lists of who it
 // may message and accept from; one editor holds the rules every agent gets. The page measures nothing itself: the fixed context comes from the handler.
 import { useEffect, useState } from "react";
 import { ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../../shared/agent-types";
 import type { ProviderRow } from "../../shared/api";
+import { departmentOf } from "../../shared/departments";
 import { call, errText } from "../bridge";
 import { Badge, Err, useLoad } from "../ui";
 import { locale, tr } from "../i18n";
@@ -115,6 +117,7 @@ export function Agenti() {
 	const view = useLoad(() => call("agents.list"), []);
 	const providers = useLoad<ProviderRow[]>(() => call("agent.providers"), []);
 	const settings = useLoad(() => call("settings.get"), []);
+	const depts = useLoad(() => call("departments.list"), []);
 	const [list, setList] = useState<Draft[]>([]);
 	const [open, setOpen] = useState<string | null>(null);
 	const [dirty, setDirty] = useState(false);
@@ -193,8 +196,8 @@ export function Agenti() {
 		setOpen(null);
 	};
 
-	const provider = providers.data?.find((p) => p.id === settings.data?.provider);
-	const models = provider?.models.filter((m) => !m.legacy) ?? [];
+	/** the models of a provider that are offered (not legacy); the provider is the agent's own, else the one in the settings */
+	const modelsOf = (providerId: string | undefined) => providers.data?.find((p) => p.id === providerId)?.models.filter((m) => !m.legacy) ?? [];
 
 	return (
 		<div>
@@ -220,13 +223,18 @@ export function Agenti() {
 			{list.map((a, i) => {
 				const others = list.filter((x, k) => k !== i && x.id).map((x) => ({ id: x.id, name: x.name || x.id }));
 				const aclOptions = [...others, { id: "lead", name: tr("galvenais aģents") }];
+				const models = modelsOf(a.provider || settings.data?.provider);
 				const model = models.find((m) => m.id === (a.model || settings.data?.model));
+				const backupModels = modelsOf(a.backup?.provider);
+				const dept = departmentOf(a) ?? "";
+				const deptName = depts.data?.departments.find((x) => x.id === dept)?.name;
 				const level = a.maxLevel === "confirm" ? "confirm" : "run";
 				const roleLen = a.role?.length ?? 0;
 				return (
 					<div key={i} className="confirm">
 						<div className="row">
 							<b className="grow">{a.name || tr("(bez nosaukuma)")}</b>
+							{deptName && <Badge tone="dim">{deptName}</Badge>}
 							<span className="mono small dim">{a.id}</span>
 							<button className="small ghost" onClick={() => setOpen(open === `${i}` ? null : `${i}`)}>
 								{open === `${i}` ? tr("Aizvērt") : tr("Labot")}
@@ -294,6 +302,34 @@ export function Agenti() {
 										</label>
 									))}
 								</div>
+								<label className="row">
+									<span style={{ width: 110 }}>{tr("Nodaļa")}</span>
+									<select value={dept} onChange={(e) => patch(i, { department: e.target.value })}>
+										<option value="">{tr("bez nodaļas")}</option>
+										{dept && !depts.data?.departments.some((x) => x.id === dept) && <option value={dept}>{dept}</option>}
+										{(depts.data?.departments ?? []).map((x) => (
+											<option key={x.id} value={x.id}>
+												{x.name}
+											</option>
+										))}
+									</select>
+									<span className="small dim">{tr("Pēc noklusējuma raksta savas nodaļas aģentiem un BPV (skat. «Drīkst rakstīt» zemāk).")}</span>
+								</label>
+								<div className="row">
+									<label className="row">
+										<span style={{ width: 110 }}>{tr("Pakalpojums")}</span>
+										<select value={a.provider ?? ""} onChange={(e) => patch(i, { provider: e.target.value || undefined, model: undefined, effort: "" })}>
+											<option value="">{tr("kā iestatījumos")}</option>
+											{a.provider && !providers.data?.some((p) => p.id === a.provider) && <option value={a.provider}>{a.provider}</option>}
+											{(providers.data ?? []).map((p) => (
+												<option key={p.id} value={p.id}>
+													{p.label}
+													{p.configured ? "" : tr(" (nav pieslēgts)")}
+												</option>
+											))}
+										</select>
+									</label>
+								</div>
 								<div className="row">
 									<label className="row">
 										<span style={{ width: 110 }}>{tr("Modelis")}</span>
@@ -317,6 +353,30 @@ export function Agenti() {
 											))}
 										</select>
 									</label>
+								</div>
+
+								<div className="row">
+									<span style={{ width: 110 }}>{tr("Rezerve")}</span>
+									<select value={a.backup?.provider ?? ""} onChange={(e) => patch(i, { backup: e.target.value ? { provider: e.target.value, model: "" } : undefined })}>
+										<option value="">{tr("nav")}</option>
+										{(providers.data ?? []).map((p) => (
+											<option key={p.id} value={p.id}>
+												{p.label}
+											</option>
+										))}
+									</select>
+									{a.backup && (
+										<select value={a.backup.model} onChange={(e) => patch(i, { backup: { provider: a.backup!.provider, model: e.target.value } })}>
+											<option value="">{tr("izvēlies modeli")}</option>
+											{a.backup.model && !backupModels.some((m) => m.id === a.backup!.model) && <option value={a.backup.model}>{a.backup.model}</option>}
+											{backupModels.map((m) => (
+												<option key={m.id} value={m.id}>
+													{m.name}
+												</option>
+											))}
+										</select>
+									)}
+									<span className="small dim">{a.backup && !a.backup.model ? tr("Bez modeļa rezerve netiks saglabāta.") : tr("Kur turpināt, ja pakalpojumam ir limits vai tas nav pieslēgts.")}</span>
 								</div>
 
 								<AclEditor label={tr("Drīkst rakstīt")} value={a.mayMessage} options={aclOptions} onChange={(x) => patch(i, { mayMessage: x })} />

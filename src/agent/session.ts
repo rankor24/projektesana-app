@@ -207,6 +207,16 @@ export class AgentSession {
 		return next;
 	}
 
+	/** A new title for a thread (the sidebar's rename). Allowed while it runs and when it is closed: only `title` of thread.json changes, never the conversation. */
+	renameThread(threadId: string, projectId: string | null, title: string): Thread {
+		const t = this.threadOf(threadId, projectId);
+		const name = typeof title === "string" ? title.replace(/\s+/g, " ").trim() : "";
+		if (name.length < 1 || name.length > 80) throw new Error("Sarunas nosaukums: 1–80 zīmes.");
+		const next = this.threads(projectId).patch(t.id, { title: name });
+		this.d.onThread?.(next);
+		return next;
+	}
+
 	threadHistory(threadId: string, projectId: string | null): ChatEntry[] {
 		return this.threads(projectId).transcript(this.threadOf(threadId, projectId).id);
 	}

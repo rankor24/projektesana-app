@@ -7,6 +7,7 @@ import { DEFAULT_LIMITS, clampLimits } from "../core/messages.js";
 import { readJson, writeAtomic } from "../core/safe-file.js";
 import { DEFAULT_AGENTS } from "../agent/subagents.js";
 import type { AgentSpec } from "../shared/agent-types.js";
+import { DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
 import type { Limits } from "../shared/thread-types.js";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/types.js";
 
@@ -59,6 +60,24 @@ export class AppSettings {
 
 	saveAgentSpecs(specs: AgentSpec[]): void {
 		writeFileSync(join(this.dir, "agents.json"), JSON.stringify(specs, null, 2), "utf8");
+	}
+
+	/** the departments (nodaļas), ordered: the saved list, or the plan's eight until the user changes them. Kept apart from agents.json so an agent list saved from an older
+	 *  window never loses them; an agent holds only the id of its department (`AgentSpec.department`). */
+	departments(): { departments: Department[]; shipped: boolean } {
+		const f = join(this.dir, "departments.json");
+		if (!existsSync(f)) return { departments: DEFAULT_DEPARTMENTS, shipped: true };
+		try {
+			const j = JSON.parse(readFileSync(f, "utf8")) as { departments?: unknown };
+			const list = Array.isArray(j.departments) ? (j.departments as Partial<Department>[]).filter((d) => typeof d?.id === "string" && typeof d.name === "string") : null;
+			return list ? { departments: list as Department[], shipped: false } : { departments: DEFAULT_DEPARTMENTS, shipped: true };
+		} catch {
+			return { departments: DEFAULT_DEPARTMENTS, shipped: true };
+		}
+	}
+
+	saveDepartments(departments: Department[]): void {
+		writeAtomic(join(this.dir, "departments.json"), JSON.stringify({ departments }, null, 2));
 	}
 
 	private keyFile(provider: string) {

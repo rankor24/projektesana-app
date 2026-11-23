@@ -7,6 +7,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFil
 import { join } from "node:path";
 import type { OfficeMemory } from "../core/office-memory.js";
 import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
+import { mayReach, ownDepartmentFirst } from "../shared/departments.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { estimateTextTokens } from "./context.js";
 import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-def.js";
@@ -144,6 +145,21 @@ export function validateSpec(
 		spec[key] = list;
 	}
 
+	// the department is an id of the app's list; "" is kept (the user took the agent out of its department), and the handler checks the id against the list
+	if (r.department !== undefined) {
+		if (typeof r.department !== "string" || (r.department.trim() && !/^[a-z0-9-]{1,40}$/.test(r.department.trim()))) return { ok: false, error: "Nodaļa: nodaļas identifikators vai tukšs." };
+		spec.department = r.department.trim();
+	}
+	// the agent's own provider and its backup; whether they exist and are signed in is the run's to find out (as with `model`)
+	if (r.provider !== undefined && typeof r.provider !== "string") return { ok: false, error: "Pakalpojums: teksts." };
+	if (str(r.provider)) spec.provider = str(r.provider);
+	if (r.backup !== undefined && r.backup !== null) {
+		const b = r.backup as { provider?: unknown; model?: unknown };
+		if (typeof b !== "object" || typeof b.provider !== "string" || typeof b.model !== "string") return { ok: false, error: "Rezerves modelis: pakalpojums un modelis." };
+		// a half-filled backup is a form left open, not a choice: it is dropped
+		if (b.provider.trim() && b.model.trim()) spec.backup = { provider: b.provider.trim(), model: b.model.trim() };
+	}
+
 	if (r.skills !== undefined) {
 		if (!Array.isArray(r.skills)) return { ok: false, error: "skills: saraksts ar prasmju nosaukumiem." };
 		// stored as given: a name the library lacks (yet), or a draft, is simply not listed to the agent (skillsFor), so assigning ahead is allowed
@@ -201,11 +217,12 @@ export interface StandingDeps {
 }
 
 /** Whom an agent may write to, one line each. The lead's is the specialists' list as before (it delegates to them); a specialist's holds the agents
- *  its `mayMessage` allows (absent = everyone), never itself, and `lead`. "" when it may write to nobody. */
+ *  `mayReach` lets it write to (its own department first, shared/departments.ts: the lists, then the department default), never itself, and `lead`.
+ *  "" when it may write to nobody. */
 export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): string {
 	if (!spec) return rosterText(specs, LEAD_ROSTER_DESC_MAX);
-	const may = (id: string) => !spec.mayMessage || spec.mayMessage.includes(id);
-	const lines = [...specs.filter((s) => s.id !== spec.id && may(s.id)).map((s) => `- ${s.id}: ${s.description || s.name}`), ...(may(LEAD_ID) ? [`- ${LEAD_ID}: galvenais aģents`] : [])];
+	const peers = ownDepartmentFirst(spec, specs.filter((s) => s.id !== spec.id && mayReach(spec.id, s.id, specs).ok));
+	const lines = [...peers.map((s) => `- ${s.id}: ${s.description || s.name}`), ...(mayReach(spec.id, LEAD_ID, specs).ok ? [`- ${LEAD_ID}: galvenais aģents`] : [])];
 	return lines.length ? `Aģenti, kuriem vari rakstīt ar send_message (id: apraksts):\n${lines.join("\n")}` : "";
 }
 

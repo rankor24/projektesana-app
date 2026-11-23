@@ -3,6 +3,7 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
+import { mayReach } from "../shared/departments.js";
 import type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic } from "../shared/message-types.js";
 import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
 import { newId } from "./model.js";
@@ -96,10 +97,9 @@ export function canSend(
 	const t = m.topic;
 	const answersOwnTopic = m.kind === "reply" && !!t && t.state === "open" && t.parties.includes(m.from) && t.parties.includes(m.to);
 	if (!answersOwnTopic) {
-		const may = spec(m.from)?.mayMessage;
-		if (may && !may.includes(m.to)) return refuse("acl", `Aģentam «${m.from}» nav atļauts sūtīt ziņas aģentam «${m.to}».`);
-		const accepts = spec(m.to)?.acceptsFrom;
-		if (accepts && !accepts.includes(m.from)) return refuse("acl", `Aģents «${m.to}» nepieņem ziņas no aģenta «${m.from}».`);
+		// the lists the user set, then the department default (shared/departments.ts); a refusal says which of the two it was
+		const reach = mayReach(m.from, m.to, c.agents);
+		if (!reach.ok) return refuse("acl", reach.reason);
 	}
 
 	if (c.process?.mode === "process") {

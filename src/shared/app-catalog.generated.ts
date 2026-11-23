@@ -223,6 +223,15 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "Closes a thread (kept on disk); refused while it is running or queued."
 	},
+	"threads.rename": {
+		"sig": "(threadId: string, projectId: string | null, title: string) => Thread",
+		"params": [
+			"threadId",
+			"projectId",
+			"title"
+		],
+		"doc": "Gives a thread a new title (1-80 characters); the conversation itself is not touched."
+	},
 	"agent.confirm": {
 		"sig": "(confirmId: string, allow: boolean) => void",
 		"params": [
@@ -495,6 +504,27 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		"params": [
 			"specs"
 		]
+	},
+	"agents.move": {
+		"sig": "(id: string, department: string | null, before: string | null) => AgentSpec[]",
+		"params": [
+			"id",
+			"department",
+			"before"
+		],
+		"doc": "Files one agent in a department (an id from departments.list; null = in none), before the agent `before` of that department or last, and changes nothing else of the specs: the drag in the conversations panel. Returns the saved list."
+	},
+	"departments.list": {
+		"sig": "() => { departments: Department[]; defaults: Department[]; shipped: boolean }",
+		"params": [],
+		"doc": "The departments (nodaļas) in the order the panels show them; `defaults` are the eight of the plan, `shipped` = none saved yet. Which department an agent is in is `AgentSpec.department`, or the default of its id."
+	},
+	"departments.save": {
+		"sig": "(departments: Department[]) => Department[]",
+		"params": [
+			"departments"
+		],
+		"doc": "Saves the departments: add, rename (the id stays), reorder, remove an empty one (refused while an agent is in it; the agents are moved first). A new one needs no id. Returns the saved list."
 	},
 	"agents.role.get": {
 		"sig": "(id: string) => string | null",

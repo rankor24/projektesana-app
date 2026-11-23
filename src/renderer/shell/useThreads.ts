@@ -131,6 +131,20 @@ export function useThreads(projectId: string | null) {
 		};
 	}, [tick]);
 
+	// the agents may have been changed in another window (Iestatījumi → Aģenti, a drag in the conversations window): read them again when this one gets focus
+	useEffect(() => {
+		let live = true;
+		const reread = () =>
+			call("agents.list")
+				.then((v) => live && setSpecs(v.specs))
+				.catch(() => undefined);
+		window.addEventListener("focus", reread);
+		return () => {
+			live = false;
+			window.removeEventListener("focus", reread);
+		};
+	}, []);
+
 	useEffect(
 		() =>
 			on("agent.event", ({ threadId, event }) => {
@@ -190,6 +204,14 @@ export function useThreads(projectId: string | null) {
 		},
 		[projectId, add, select],
 	);
+	const rename = useCallback(
+		async (id: string, title: string) => {
+			const p = projectId;
+			const t = await call("threads.rename", id, p, title);
+			if (current.current === p) add(t);
+		},
+		[projectId, add],
+	);
 	const close = useCallback(
 		async (id: string) => {
 			const p = projectId;
@@ -199,5 +221,5 @@ export function useThreads(projectId: string | null) {
 		[projectId, add],
 	);
 
-	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close };
+	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close, rename };
 }

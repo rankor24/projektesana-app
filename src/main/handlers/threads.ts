@@ -36,6 +36,7 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 		"threads.history": (threadId, projectId) => d.session.threadHistory(threadId, projectId),
 		"threads.stop": (threadId) => d.session.stopThread(threadId),
 		"threads.close": (threadId, projectId) => d.session.closeThread(threadId, projectId),
+		"threads.rename": (threadId, projectId, title) => d.session.renameThread(threadId, projectId, title),
 		"queue.view": () => d.session.queueView(),
 		"queue.pause": () => d.session.pauseQueue(),
 		"queue.resume": () => d.session.resumeQueue(),
