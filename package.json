@@ -24,6 +24,7 @@
 		"@earendil-works/pi-agent-core": "1.4.0",
 		"@earendil-works/pi-ai": "1.4.0",
 		"@earendil-works/pi-mcp": "1.4.0",
+		"@huggingface/transformers": "4.3.2",
 		"@modelcontextprotocol/sdk": "1.32.2",
 		"fflate": "0.8.3",
 		"pdfjs-dist": "6.5.438",

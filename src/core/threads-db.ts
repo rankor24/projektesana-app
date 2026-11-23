@@ -14,14 +14,15 @@
 // match the plain letters; and a plain word is searched by its beginning, because Latvian endings change
 // (būvniecība, būvniecības, būvniecību): see ftsMatch.
 //
-// What is not built yet (D10): embeddings. The `chunks` table is the place for them: one row per piece of text that gets a
-// vector later (a message, a memory, a source page), keyed to its message; the vectors themselves go in a table of their own
-// next to it, so nothing here changes when they arrive.
+// Embeddings (D10) live next to this schema, not in it: the `chunks` table below is where a piece of text that gets a vector is
+// kept (a message, a source page), and src/search/schema.ts adds the vectors table, the chunk full-text index and the chunk
+// columns as a migration of its own (ensureSearchSchema, called by open()). `user_version` is raised there and never set back.
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { ChatEntry } from "../shared/api.js";
 import type { Thread } from "../shared/thread-types.js";
+import { ensureSearchSchema } from "../search/schema.js";
 
 /** Above this size the check at open is skipped: it reads the whole file, and the app waits on it. */
 export const START_CHECK_MAX_BYTES = 256 * 1024 * 1024;
@@ -180,7 +181,6 @@ const SCHEMA = `
 		created_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS chunks_message ON chunks(message_id);
-	PRAGMA user_version = 1;
 `;
 
 const MIGRATED = "migrated_from_files";
@@ -279,6 +279,7 @@ export class ThreadsDb {
 			db.exec("PRAGMA journal_mode = WAL");
 			db.exec("PRAGMA synchronous = NORMAL");
 			db.exec(SCHEMA);
+			ensureSearchSchema(db);
 			return new ThreadsDb(file, db);
 		} catch (e) {
 			try {

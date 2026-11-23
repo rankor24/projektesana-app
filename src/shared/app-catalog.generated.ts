@@ -401,6 +401,37 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 			"sourceId"
 		]
 	},
+	"search.status": {
+		"sig": "(id: string) => SearchStatus",
+		"params": [
+			"id"
+		],
+		"doc": "The project's search index (source pages and conversations, words + meaning): which model, how many pieces have a vector, whether a run is going, the model download."
+	},
+	"search.update": {
+		"sig": "(id: string) => void",
+		"params": [
+			"id"
+		],
+		"doc": "Builds what is missing in the background (the model is downloaded the first time); the page watches `search.progress`."
+	},
+	"search.reindex": {
+		"sig": "(id: string) => void",
+		"params": [
+			"id"
+		],
+		"doc": "Throws the index away and builds it again from the sources and conversations."
+	},
+	"search.query": {
+		"sig": "(id: string, query: string, kind?: SearchKind, limit?: number) => SearchResult",
+		"params": [
+			"id",
+			"query",
+			"kind",
+			"limit"
+		],
+		"doc": "The agent's search_project, for the Avoti page: passages with their citation."
+	},
 	"rooms.table": {
 		"sig": "(id: string) => InventoryTable[]",
 		"params": [

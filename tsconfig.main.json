@@ -11,6 +11,6 @@
 		"sourceMap": true,
 		"types": ["node"]
 	},
-	"include": ["src/core/**/*", "src/sources/**/*", "src/rules/**/*", "src/checks/**/*", "src/agent/**/*", "src/revit/**/*", "src/main/**/*", "src/shared/**/*"],
+	"include": ["src/core/**/*", "src/sources/**/*", "src/rules/**/*", "src/checks/**/*", "src/agent/**/*", "src/search/**/*", "src/revit/**/*", "src/main/**/*", "src/shared/**/*"],
 	"exclude": ["src/main/preload.cts"]
 }

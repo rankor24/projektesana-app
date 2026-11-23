@@ -12,6 +12,7 @@ import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { RoleQuestions, ScanBar, useScanProgress } from "./Projekts";
 import { Normativi } from "./Normativi";
+import { SearchIndex } from "./SearchIndex";
 import { sourceExt } from "../shell/Preview";
 import { locale, tr } from "../i18n";
 
@@ -75,6 +76,7 @@ export function Avoti({ filter }: { filter?: string }) {
 			{progress && <ScanBar p={progress} />}
 			<RoleQuestions projectId={projectId} />
 			<Normativi projectId={projectId} />
+			<SearchIndex projectId={projectId} />
 			{sources.error ? <Err error={sources.error} /> : null}
 			{sources.data && sources.data.length === 0 && !progress && <Empty title={tr("run scan")}>{tr("Projekts vēl nav nolasīts.")}</Empty>}
 			{summary.data && summary.data.skipped.archive > 0 && <div className="dim small">{tr("Arhīva mapēs {archive} faili netiek lasīti.", { archive: summary.data.skipped.archive })}</div>}

@@ -35,6 +35,7 @@ import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
 import { startAgentBridge } from "./agent-bridge.js";
 import { PageRenderer } from "./offscreen.js";
+import { SearchIndexer } from "../search/manager.js";
 
 const here = import.meta.dirname; // dist/main
 const dataDir = app.isPackaged ? join(process.resourcesPath, "data") : join(here, "..", "..", "data");
@@ -163,6 +164,21 @@ const claudeRun = async (o: ClaudeRunOptions) =>
 		});
 	})))(o);
 
+// The project search index (src/search): built in a background worker after every scan and conversation turn and a little after
+// the app starts; the model files are fetched into <appDir>\models on the first build. Declared before the session because its
+// thread callback asks for a run, and `registry` (further down) is only touched when a run starts.
+const searchIndex = new SearchIndexer({
+	appDir,
+	projectsDir: settings.projectsDir(),
+	sources: (projectId) =>
+		registry.store(projectId).read("sources").flatMap((s) => {
+			const v = s.versions[s.versions.length - 1];
+			return s.kind === "document" && v?.sha256 ? [{ id: s.id, title: s.title, sha: v.textCache ? v.textCache.replace(/\.json$/, "") : v.sha256 }] : [];
+		}),
+	emit: (s) => emit("search.progress", s),
+	log,
+});
+
 // The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
 const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
 const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills");
@@ -204,7 +220,11 @@ const session = new AgentSession({
 		emit("agent.event", { runId, event, ...meta });
 	},
 	onHolds: () => emit("data.changed", { projectId: null, what: ["agent"] }),
-	onThread: (thread) => emit("threads.changed", { projectId: thread.projectId, thread }),
+	onThread: (thread) => {
+		emit("threads.changed", { projectId: thread.projectId, thread });
+		// a turn ended (the thread is waiting for the user or closed): its new messages go into the search index
+		if (thread.projectId && (thread.state === "idle" || thread.state === "waiting-reply" || thread.state === "closed")) searchIndex.request(thread.projectId, "messages");
+	},
 	onQueue: (v) => emit("queue.changed", v),
 	onWaiting: (items) => emit("waiting.changed", items),
 	onData: (projectId, what) => {
@@ -241,6 +261,8 @@ const engine = new ProjectEngine({
 });
 
 const handlers = createHandlers({
+	search: searchIndex,
+	onScanned: (projectId) => searchIndex.request(projectId, "update"),
 	skillsDir,
 	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	engine,
@@ -358,6 +380,8 @@ app.whenReady().then(() => {
 		return new Response(res.body, { status: 200, headers: r.headers });
 	});
 	createWindow();
+	// whatever an earlier session left unfinished in the search index (a closed window, a crash)
+	searchIndex.requestAll(registry.list().map((p) => p.id));
 });
 // Quitting must end every process the app started. Closing the window alone does not: the hidden page-renderer window
 // keeps "window-all-closed" from firing, and the Revit MCP server and the agent's tool servers are separate processes
@@ -366,7 +390,7 @@ app.whenReady().then(() => {
 let closing = false;
 async function shutdown(): Promise<void> {
 	pageRenderer.close();
-	const closeAll = Promise.allSettled([session.shutdown(), revit.close(), ocr.close(), claudeAccount.dispose()]);
+	const closeAll = Promise.allSettled([searchIndex.dispose(), session.shutdown(), revit.close(), ocr.close(), claudeAccount.dispose()]);
 	popouts.closeAll();
 	await Promise.race([closeAll, new Promise((r) => setTimeout(r, 4000))]);
 }

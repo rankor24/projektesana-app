@@ -21,6 +21,8 @@ export interface ProjectDeps {
 	afterChange?: (store: ProjectStore, what: string) => void | Promise<void>;
 	/** a project's first scan has finished: the app starts the agent's first-scan task (main/api.ts) */
 	onFirstScan?: (projectId: string) => void | Promise<void>;
+	/** a scan finished and its text is saved: the search index picks up the new pages (main/main.ts) */
+	onScanned?: (projectId: string) => void;
 }
 
 type K = "projects.list" | "projects.summaries" | "projects.dashboard" | "projects.add" | "projects.forget" | "projects.scan" | "projects.scanSummary" | "projects.roleQuestions" | "projects.confirmRole" | "sources.setRole" | "sources.list" | "sources.text" | "sources.bytes" | "sources.openOriginal";
@@ -58,6 +60,7 @@ export function projectHandlers(d: ProjectDeps): Pick<Handlers, K> {
 			void scanProject(store, (p) => d.emit("scan.progress", { projectId: id, ...p }), d.hooks())
 				.then(async () => {
 					await d.afterChange?.(store, "sources");
+					d.onScanned?.(id);
 					if (first) await d.onFirstScan?.(id);
 				})
 				.catch((e: Error) => d.emit("scan.progress", { projectId: id, phase: "error", done: 0, total: 0, message: e.message }))

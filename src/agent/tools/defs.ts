@@ -23,6 +23,7 @@ import { documentTools } from "./documents.js";
 import { expertTools } from "./expert.js";
 import { processTools } from "./process.js";
 import { conversationTools } from "./conversations.js";
+import { searchTools } from "./search.js";
 
 
 export const focusTools: ToolDef[] = [
@@ -36,7 +37,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...documentTools, ...expertTools, ...processTools, ...viewerTools, ...pinTools, ...todoTools, ...planningTools, ...appTools, ...generalTools, ...planTools, ...coordinationTools, ...skillTools, ...revitCommandTools, ...conversationTools];
+	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...documentTools, ...expertTools, ...processTools, ...viewerTools, ...pinTools, ...todoTools, ...planningTools, ...appTools, ...generalTools, ...planTools, ...coordinationTools, ...skillTools, ...revitCommandTools, ...conversationTools, ...searchTools];
 }
 
 /** Level table of the app's own tools, for the gate. */
