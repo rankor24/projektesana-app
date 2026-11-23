@@ -16,8 +16,12 @@ export function fmtTokens(n: number): string {
 /** A run's or project's usage on one line: tokens in (cached ones included) and out, and the price when it is known. A price
  *  for only some turns is marked "no", never presented as the total. */
 export function usageText(u: { input: number; output: number; cacheRead: number; cost: number | null; turns?: number; priced?: number }): string {
-	const tokens = `${fmtTokens(u.input + u.cacheRead)} ievade · ${fmtTokens(u.output)} izvade`;
-	if (u.cost === null) return `${tokens} · cena nav zināma`;
+	return `${fmtTokens(u.input + u.cacheRead)} ievade · ${fmtTokens(u.output)} izvade · ${costText(u)}`;
+}
+
+/** The price part of a usage line, the same everywhere: dollars at the catalogue price, or "cena nav zināma" when no turn had one. */
+export function costText(u: { cost: number | null; turns?: number; priced?: number }): string {
+	if (u.cost === null) return "cena nav zināma";
 	const partial = u.turns !== undefined && u.priced !== undefined && u.priced < u.turns ? ` (no ${u.priced} no ${u.turns} piegājieniem)` : "";
-	return `${tokens} · $${u.cost < 1 ? u.cost.toFixed(3) : u.cost.toFixed(2)}${partial}`;
+	return `$${u.cost < 1 ? u.cost.toFixed(3) : u.cost.toFixed(2)}${partial}`;
 }
