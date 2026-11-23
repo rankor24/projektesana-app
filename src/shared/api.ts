@@ -16,6 +16,7 @@ import type { SkillInfo } from "./skill-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
+import type { AppSettingChange, AppSettingEvent } from "./app-settings.js";
 import type { QueueView, Thread, WaitingItem } from "./thread-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
@@ -420,6 +421,10 @@ export interface ApiSpec {
 	"app.info": () => AppInfo;
 	"settings.get": () => Settings;
 	"settings.set": (patch: Partial<Settings>) => Settings;
+	/** the settings an agent changed through app_settings in this session, newest first, with their before and after (Settings shows them with Undo) */
+	"appSettings.recent": () => AppSettingChange[];
+	/** Undo of one of those changes; refused when the setting has been changed since (so a newer change is never overwritten) */
+	"appSettings.undo": (id: string) => AppSettingChange;
 	/** where each window is, per page (task 9.0): the renderer's own state, kept in the app's data folder */
 	"layout.get": () => LayoutStore;
 	/** `origin` names the window that saved: it is told "layout.changed" like the others, and ignores its own */
@@ -716,6 +721,8 @@ export const API_NAMES = [
 	"app.info",
 	"settings.get",
 	"settings.set",
+	"appSettings.recent",
+	"appSettings.undo",
 	"layout.get",
 	"layout.set",
 	"layout.popOut",
@@ -930,6 +937,8 @@ export interface EventSpec {
 	/** a confirmation opened or was answered, or the restart question was answered: the whole list as it is now (task 11.5) */
 	"waiting.changed": WaitingItem[];
 	"agent.login": LoginNotice;
+	/** an agent changed a setting (with Undo), the change was undone, or the agent asks the user to change one only the user may */
+	"appSettings.changed": AppSettingEvent;
 	/** the layout file was saved (by `origin`): every window adopts it (task 9.11) */
 	"layout.changed": { store: LayoutStore; origin: string };
 	/** the OS window of a popped layout window was closed */
@@ -942,6 +951,6 @@ export interface EventSpec {
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "appSettings.changed", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

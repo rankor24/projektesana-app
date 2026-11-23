@@ -17,7 +17,7 @@ const CALLS: Record<string, string> = {
 	versijas: "versions.between, models.*, sheets.sets/diff/trace, compare.text, revit.files",
 	koordinacija: "coordination.*",
 	projekts: "projects.*, facts.* (profils)",
-	iestatijumi: "settings.get, agent.providers, revit.status",
+	iestatijumi: "settings.get, agent.providers, revit.status; iestatījumus maini ar app_settings (find, get, set, undo)",
 	prasmes: "skills.*",
 	agenti: "agents.*",
 };

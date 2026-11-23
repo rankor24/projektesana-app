@@ -12,6 +12,7 @@ import { APP_CALL_LEVEL, type AppCallLevel } from "../shared/app-calls.js";
 import type { Registry } from "../core/registry.js";
 import { sourceBytes } from "../sources/bytes.js";
 import type { PageRenderer } from "./offscreen.js";
+import type { AppSettingsHost } from "./app-settings/host.js";
 
 export interface Bridge {
 	url: string;
@@ -40,7 +41,7 @@ const body = (req: IncomingMessage): Promise<unknown> =>
 
 const isBytes = (v: unknown): boolean => v instanceof Uint8Array || (v !== null && typeof v === "object" && Object.values(v as object).some((x) => x instanceof Uint8Array));
 
-export function startAgentBridge(d: { handlers: Handlers; registry: Registry; renderer: PageRenderer }): Promise<Bridge> {
+export function startAgentBridge(d: { handlers: Handlers; registry: Registry; renderer: PageRenderer; /** the app_settings tool's host (main/app-settings); absent in tests that do not use it */ appSettings?: AppSettingsHost }): Promise<Bridge> {
 	const token = randomBytes(24).toString("hex");
 	const server = createServer(async (req, res) => {
 		const send = (status: number, v: unknown) => {
@@ -61,6 +62,14 @@ export function startAgentBridge(d: { handlers: Handlers; registry: Registry; re
 				const result = await fn(...args);
 				if (isBytes(result)) return send(400, { error: `${name} atgriež faila baitus, ne datus.` });
 				return send(200, { result: result === undefined ? "ok" : result });
+			}
+			// app_settings (agent/tools/app-settings.ts): find, get, set, undo over the settings registry; the tier of each setting decides what happens
+			if (req.url === "/app-settings") {
+				if (!d.appSettings) return send(404, { error: "Iestatījumu rīks šeit nav pieejams." });
+				const action = String(b.action ?? "");
+				if (!["find", "get", "set", "undo"].includes(action)) return send(400, { error: "action: find, get, set vai undo." });
+				const r = await d.appSettings.handle({ action: action as "find", query: typeof b.query === "string" ? b.query : undefined, id: typeof b.id === "string" ? b.id : undefined, value: b.value, run: typeof b.run === "string" ? b.run : null, agent: typeof b.agent === "string" ? b.agent : null });
+				return r.ok ? send(200, { text: r.text }) : send(400, { error: r.text });
 			}
 			if (req.url === "/page") {
 				const store = d.registry.store(String(b.projectId ?? ""));

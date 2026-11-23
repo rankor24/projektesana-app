@@ -34,6 +34,7 @@ import { Ocr } from "../sources/text/ocr.js";
 import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
 import { startAgentBridge } from "./agent-bridge.js";
+import { createAppSettingsHost } from "./app-settings/handlers.js";
 import { PageRenderer } from "./offscreen.js";
 
 const here = import.meta.dirname; // dist/main
@@ -240,7 +241,17 @@ const engine = new ProjectEngine({
 	modelRooms: async () => (revit.configured() ? (await revitRead.rooms(revit)).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.uniqueId })) : undefined),
 });
 
+// the agent's settings tool (app_settings, main/app-settings): the Settings window's Undo and the agent bridge use this one host, so its write budget,
+// its list of changes and its Undo are the same everywhere; the providers come from the handlers made just below
+const appSettingsHost = createAppSettingsHost({
+	settings,
+	providers: async () => handlers["agent.providers"](),
+	holds: async () => handlers["agent.holds"](),
+	emit: (e) => emit("appSettings.changed", e),
+	changed: () => emit("data.changed", { projectId: null, what: ["settings"] }),
+});
 const handlers = createHandlers({
+	appSettings: appSettingsHost,
 	skillsDir,
 	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	engine,
@@ -277,7 +288,7 @@ const handlers = createHandlers({
 registerIpc(handlers, log);
 // the agent's way into every call of the app and to page images (main/agent-bridge.ts); each agent run's tools server gets its
 // address and token (agent/tools/context.ts ctxEnv)
-void startAgentBridge({ handlers, registry, renderer: pageRenderer })
+void startAgentBridge({ handlers, registry, renderer: pageRenderer, appSettings: appSettingsHost })
 	.then((b) => {
 		process.env.PROJEKTESANA_BRIDGE = b.url;
 		process.env.PROJEKTESANA_BRIDGE_TOKEN = b.token;

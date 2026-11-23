@@ -915,3 +915,48 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .drop-before::before { top: -1px; }
 .drop-after::after { bottom: -1px; }
 .tl-dept-head.drop-before, .tl-dept-head.drop-after { position: relative; }
+
+/* Settings window (panels/settings/*): grouped left navigation with search, one page at a time. In a narrow (docked) window the list and the page are one column each (.st.narrow). Ported in layout from OpenMausBot's SettingsWindow. */
+.st { flex: 1; min-height: 0; height: 100%; display: flex; min-width: 0; }
+.st-nav { width: 220px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 8px 10px 12px; border-right: 1px solid var(--border); overflow: auto; }
+.st.narrow .st-nav { width: auto; flex: 1; border-right: none; }
+.st-search input { width: 100%; box-sizing: border-box; }
+.st-pages { display: flex; flex-direction: column; gap: 10px; }
+.st-group { display: flex; flex-direction: column; gap: 1px; }
+.st-group-title { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); padding: 2px 8px; }
+.st-page, .st-hit { text-align: left; border-color: transparent; background: transparent; padding: 5px 8px; border-radius: 6px; overflow-wrap: anywhere; }
+.st-page.on, .st-hit.on { background: var(--elev2); border-color: var(--border); }
+.st-page.on { box-shadow: inset 2px 0 0 var(--accent); }
+.st-hits { display: flex; flex-direction: column; gap: 2px; }
+.st-hit { display: flex; flex-direction: column; gap: 1px; }
+.st-hit-title { color: var(--text); }
+.st-mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
+.st-none { padding: 4px 8px; }
+.st-main { flex: 1; min-width: 0; overflow: auto; padding: 10px 14px 24px; display: flex; flex-direction: column; gap: 10px; }
+.st.narrow .st-main { padding: 8px 10px 20px; }
+.st-main > * { flex-shrink: 0; }
+.st-back { align-self: flex-start; }
+.st-header { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.st-title { margin: 0; font-size: 17px; font-weight: 650; }
+.st-intro { margin: 0; font-size: 12.5px; }
+.st-page-body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.st-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; border-radius: 8px; }
+.st-block > .section-title { margin: 0; }
+.st-scroll { overflow-x: auto; max-width: 100%; }
+.st-wrap { overflow-wrap: anywhere; }
+.st-field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-field-label { flex: 0 0 190px; max-width: 100%; }
+.st.narrow .st-field-label { flex-basis: 100%; }
+.st-field input { min-width: 0; }
+.st-field input.grow { flex: 1 1 200px; }
+[data-settings-highlight] { animation: st-flash 1.2s ease-out; outline: 2px solid var(--accent); outline-offset: 2px; }
+@keyframes st-flash { from { background: color-mix(in srgb, var(--accent) 28%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { [data-settings-highlight] { animation: none; } }
+.st-recent { border: 1px solid var(--accent); border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.st-recent > summary { cursor: pointer; font-weight: 600; }
+.st-change { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 3px 0; }
+.st-change.done { opacity: 0.6; }
+.st-change-text { min-width: 0; overflow-wrap: anywhere; }
+.st-toasts { position: fixed; right: 14px; bottom: 36px; z-index: 900; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 28px)); }
+.st-toast { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4); overflow-wrap: anywhere; }
+.st-toast.ask { border-color: var(--warn); }

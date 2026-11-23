@@ -15,7 +15,10 @@ type Name = (typeof API_NAMES)[number];
 export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"app.info": "read",
 	"settings.get": "read",
-	"settings.set": "confirm",
+	// agents change settings with app_settings (agent/tools/app-settings.ts: tiers, a write budget, Undo), never with the raw call
+	"settings.set": "never",
+	"appSettings.recent": "read",
+	"appSettings.undo": "never",
 	"layout.get": "never",
 	"layout.set": "never",
 	"layout.popOut": "never",
