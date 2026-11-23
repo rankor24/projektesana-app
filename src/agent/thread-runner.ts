@@ -35,6 +35,7 @@ import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, capOf, ownTools, subagentTools } from "./subagents.js";
+import { agentMcpRun } from "./agent-mcp.js";
 import { EKS, LEADER, PROCESS_OWN_TOOLS, stageCard } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS, mailTools } from "./mail.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
@@ -266,6 +267,14 @@ export class ThreadRunner {
 					if (mine.length) mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
 					const theirs = [...own].filter((n) => revitTools.has(n));
 					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs };
+					// the agent's own MCP servers (agent-mcp.ts), this agent's thread only: never a lane (`delegate`), never another agent. Their tools are `confirm` (or `read`
+					// where the user marked them); `app` (this run's own table of the app's levels) and `own` take the names, so the level lookup and the gate below know them.
+					if (spec?.mcp?.length) {
+						const mine = agentMcpRun(spec);
+						Object.assign(mcp, mine.servers);
+						Object.assign(app, mine.levels);
+						for (const n of Object.keys(mine.levels)) own.add(n);
+					}
 				} else {
 					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf).filter((n) => !PROCESS_OWN_TOOLS.has(n)) };
 					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };

@@ -168,8 +168,8 @@ function keepOld(officeDir: string, name: string, target: string): string {
  *  folder moved to <officeDir>\versions\<name>.<timestamp> (never deleted). `syncedDir`: a name equal to a synced skill is refused.
  *  Each skill stands alone: one that fails (a locked folder, a long path) is refused with the reason and the rest go on. The new text has not been tested,
  *  so skills.json (the group, no tested mark) is written BEFORE the folder is swapped: whatever fails after that can leave an old text, never an untested
- *  one marked tested. A staging folder a failure leaves behind is named in the reason and never deleted. */
-export function importSkills(src: string, officeDir: string, syncedDir?: string): { imported: string[]; refused: { name: string; why: string }[] } {
+ *  one marked tested. `skip`: names the caller leaves as they are (not imported, not refused). A staging folder a failure leaves behind is named in the reason and never deleted. */
+export function importSkills(src: string, officeDir: string, syncedDir?: string, skip?: (name: string) => boolean): { imported: string[]; refused: { name: string; why: string }[] } {
 	if (!existsSync(src) || !statSync(src).isDirectory()) throw new Error(`Mape nav atrasta: ${src}`);
 	const syncedNames = new Set(listSkills(syncedDir ?? "").map((s) => s.name));
 	const imported: string[] = [];
@@ -184,6 +184,8 @@ export function importSkills(src: string, officeDir: string, syncedDir?: string)
 			else if (RESERVED.test(name)) refused.push({ name, why: `Nosaukums ${name} ir Windows rezervēts vārds; pārsauc prasmi.` });
 			else if (syncedNames.has(name)) refused.push({ name, why: `Prasme ${name} jau ir starp Revit prasmēm.` });
 			else if (imported.includes(name)) refused.push({ name, why: `Nosaukums ${name} šajā mapē atkārtojas.` });
+			// the caller keeps this one as it is (the team import leaves a skill of the library alone: a re-import must not drop its tested mark)
+			else if (skip?.(name)) continue;
 			else {
 				mkdirSync(officeDir, { recursive: true });
 				const target = join(officeDir, name);

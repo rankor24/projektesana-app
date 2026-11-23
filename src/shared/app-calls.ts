@@ -116,6 +116,8 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"agents.role.import": "confirm",
 	"agents.shared.get": "read",
 	"agents.shared.set": "confirm",
+	"agents.importTeam": "confirm",
+	"agents.mcp.probe": "never",
 	"skills.list": "read",
 	"skills.import": "confirm",
 	"skills.tested": "confirm",

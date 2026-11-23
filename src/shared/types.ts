@@ -65,6 +65,8 @@ export interface Settings {
 	backup?: ModelChoice | null;
 	/** On: a run that fails before any tool ran is tried once more on the backup (limit, expired sign-in, a provider that is down). Off by default. */
 	automaticRecovery?: boolean;
+	/** The folder the team was last imported from (Aģenti → «Importēt BD komandu…»); the picker offers it again. null / absent = never imported. */
+	teamFolder?: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false };

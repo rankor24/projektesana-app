@@ -249,4 +249,155 @@ export const settings: Record<string, string> = {
 	"Uzdevums parādās Grafikā uz dienu, kad rutīna palaista.": "The task appears in Grafiks on the day the routine runs.",
 	"Saglabāt izmaiņas": "Save changes",
 	"Saglabāt rutīnu": "Save routine",
+	// Aģenti: the team by department, the agent dialog, the team import, MCP servers
+	"Identifikators: mazie burti, cipari un domuzīme, 2–31 zīmes (piem. dokumenti).":
+		"Identifier: lower case letters, digits and hyphens, 2–31 characters (e.g. dokumenti).",
+	"Izņemt aģentu {name}? Tā sarunas paliek, lomas fails paliek mapē agents.":
+		"Remove the agent {name}? Its conversations stay and its role file stays in the agents folder.",
+	"Lomas apraksts (.md)":
+		"Role description (.md)",
+	"Modelis un rezerve":
+		"Model and backup",
+	"Rīki":
+		"Tools",
+	"Sazināšanās":
+		"Messaging",
+	"MCP serveri":
+		"MCP servers",
+	"Pārbaude pirms nodošanas":
+		"Check before done",
+	"Aģenta iestatījumi":
+		"Agent settings",
+	"Jauns aģents":
+		"New agent",
+	"Vispirms ieraksti nosaukumu un identifikatoru (Vispārīgi)":
+		"Enter a name and an identifier first (General)",
+	"Esoša aģenta identifikators nav maināms: pie tā ir sarunas un lomas fails":
+		"The identifier of an existing agent cannot be changed: its conversations and role file belong to it",
+	"Šīs nodaļas vadītājs":
+		"Lead of this department",
+	"Vadītājs uzdod darbus savā nodaļā un uztur tās atmiņu; bez vadītāja to dara BPV. Katrai nodaļai ir viens.":
+		"The lead hands out work in its department and keeps its memory; without a lead BPV does. A department has one.",
+	"Meklēt prasmi":
+		"Search skills",
+	"{n} izvēlētas":
+		"{n} chosen",
+	"Aģents zina tikai gatavās prasmes (bez vietturiem un ar tavu atzīmi «pārbaudīta» lapā Prasmes). Melnraksta prasmi var piešķirt jau tagad.":
+		"An agent knows only ready skills (no placeholders and marked tested by you on the Skills page). A draft skill can be assigned now.",
+	"Ielādē…":
+		"Loading…",
+	"Prasmju bibliotēka ir tukša: importē prasmes lapā Prasmes vai importē komandu.":
+		"The skills library is empty: import skills on the Skills page or import the team.",
+	"gatava":
+		"ready",
+	"Pirms aģents nodod atbildi, to izlasa pārbaudītājs un salīdzina ar pieprasījumu: līdz {n} pārbaudēm. Labāk citam pakalpojumam nekā autoram: modelis reti ievēro savas kļūdas.":
+		"Before the agent hands over an answer, a checker reads it against the request: up to {n} checks. Better another provider than the author's: a model rarely notices its own mistakes.",
+	"cits aģents":
+		"another agent",
+	"modelis":
+		"model",
+	"pakalpojuma noklusējums":
+		"provider default",
+	"Pārbaužu skaits":
+		"Number of checks",
+	"Katra pārbaude ir pilns modeļa gājiens (izmaksas redzamas darba kartītē).":
+		"Each check is a full model turn (the cost shows in the run card).",
+	"Izņemt aģentu":
+		"Remove agent",
+	"Komandas imports":
+		"Team import",
+	"Izveidoti: {n}":
+		"Created: {n}",
+	"Atjaunoti (tavi iestatījumi paturēti): {n}":
+		"Updated (your own settings kept): {n}",
+	"Izlaisti: {n}":
+		"Skipped: {n}",
+	"Mapē nav lomu failu ar numuriem: {list}":
+		"The folder has no role files with the numbers: {list}",
+	"Prasmes: importētas {a}, jau bija bibliotēkā {b}, atteiktas {c}; aģentiem piešķirti nosaukumi kopā: {d}":
+		"Skills: imported {a}, already in the library {b}, refused {c}; skill names now on the agents' lists: {d}",
+	"{n} prasmes vēl ir melnraksti: aģents tās zinās pēc tam, kad tās atzīmēsi kā pārbaudītas.":
+		"{n} skills are still drafts: the agent will know them once you mark them as tested.",
+	"Nodaļas vadītājs":
+		"Department lead",
+	"vadītājs":
+		"lead",
+	"nav apraksta":
+		"no description",
+	"rezerve":
+		"backup",
+	"prasmes":
+		"skills",
+	"pārbaude":
+		"check",
+	"Mape ar BD komandu (01_….md … 16_….md un mape skilli)":
+		"Folder with the BD team (01_….md … 16_….md and the skilli folder)",
+	"noklusējuma modelis":
+		"default model",
+	" Šobrīd ir piegādātais saraksts; tas saglabājas, kad saglabā kādu aģentu vai importē komandu.":
+		" The shipped list is in use now; it is saved when you save an agent or import the team.",
+	"Nolasa mapi ar 16 lomu failiem un prasmēm un izveido vai atjauno aģentus":
+		"Reads a folder with the 16 role files and the skills and creates or updates the agents",
+	"Importē…":
+		"Importing…",
+	"Importēt BD komandu…":
+		"Import the BD team…",
+	"Vēlreiz no pēdējās mapes":
+		"Again from the last folder",
+	"Vadītājs uzdod darbus savā nodaļā un uztur tās atmiņu; bez vadītāja to dara BPV.":
+		"The lead hands out work in its department and keeps its memory; without a lead BPV does.",
+	"BPV (noklusējums)":
+		"BPV (default)",
+	"Augstāk":
+		"Higher",
+	"Zemāk":
+		"Lower",
+	"Nodaļa nav tukša: vispirms pārvieto aģentus":
+		"The department is not empty: move its agents first",
+	"Izņemt tukšo nodaļu":
+		"Remove the empty department",
+	"Izņemt nodaļu {name}?":
+		"Remove the department {name}?",
+	"+ aģents":
+		"+ agent",
+	"Nomet šeit":
+		"Drop here",
+	"Pievieno piegādātos trīs speciālistus, kuru vēl nav sarakstā (esošie netiek mainīti)":
+		"Adds the three shipped specialists that are not in the list yet (existing ones are not changed)",
+	"iestatīts":
+		"set",
+	"nav iestatīts":
+		"not set",
+	"jauna vērtība (tukšs = atstāt)":
+		"new value (empty = keep)",
+	"ievadi vērtību":
+		"enter a value",
+	"Šī aģenta paša MCP serveri: citi aģenti to rīkus neredz. Katrs rīks prasa tavu apstiprinājumu (pa partijām), ja neatzīmē «tikai lasa».":
+		"This agent's own MCP servers: other agents do not see their tools. Every tool asks for your confirmation (per batch) unless it is marked \"read only\".",
+	"Ielīmē claude mcp add …, claude mcp add-json …, npx/uvx/docker run rindu, servera adresi vai mcpServers JSON":
+		"Paste claude mcp add …, claude mcp add-json …, an npx/uvx/docker run line, a server address or mcpServers JSON",
+	"Nav pievienotu MCP serveru.":
+		"No MCP servers added.",
+	"adrese":
+		"address",
+	"programma":
+		"program",
+	"{n} rīki":
+		"{n} tools",
+	"Vispirms ievadi trūkstošās vērtības":
+		"Enter the missing values first",
+	"Pārbauda…":
+		"Checking…",
+	"Ielīmētajā tekstā nebija vērtību: {names}. Ievadi tās zemāk.":
+		"The pasted text had no values for: {names}. Enter them below.",
+	"Serveris neatbild:":
+		"The server does not answer:",
+	"Rīks":
+		"Tool",
+	"dot aģentam":
+		"give to agent",
+	"tikai lasa":
+		"read only",
+	"Rīks, kas nav atzīmēts «tikai lasa», prasa apstiprinājumu pirms katras partijas. Serveris var vēlāk pievienot jaunus rīkus: tie netiek doti, kamēr nenospied «Pārbaudīt».":
+		"A tool not marked \"read only\" asks for confirmation before each batch. The server may add new tools later: they are not given until you press \"Check\".",
 };

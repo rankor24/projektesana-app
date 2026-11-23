@@ -606,6 +606,21 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 			"text"
 		]
 	},
+	"agents.importTeam": {
+		"sig": "(folder: string) => TeamImportReport",
+		"params": [
+			"folder"
+		],
+		"doc": "Reads a team folder (the 16 BD role files and `skilli\\`) at run time and makes or updates the agents: name from the heading, description from the first sentence of «Loma», the file as the role text, department by id, skills into the library and onto the agents; an agent that exists keeps the user's own settings. The folder is remembered (`Settings.teamFolder`). Returns what was created, updated and skipped."
+	},
+	"agents.mcp.probe": {
+		"sig": "(agent: string, server: AgentMcpServer) => McpProbe",
+		"params": [
+			"agent",
+			"server"
+		],
+		"doc": "Starts an agent's MCP server once and lists its tools (the dialog's «Pārbaudīt»); secrets the window shows as the mask are the saved ones of `agent`. Rejects with the server's own reason. Never from an agent: it starts a program."
+	},
 	"skills.list": {
 		"sig": "() => SkillInfo[]",
 		"params": [],
