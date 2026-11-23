@@ -1,5 +1,7 @@
 // App, settings, dialog and agent handlers (sign-in, chat, confirmations).
 import { join } from "node:path";
+import type { ClaudeAccount } from "../../agent/claude/login.js";
+import { CLAUDE_SUB, isClaudeSub } from "../../agent/claude/provider.js";
 import type { AgentSession } from "../../agent/session.js";
 import { readUsage, summarizeUsage } from "../../agent/usage.js";
 import type { ActivityLog } from "../activity.js";
@@ -17,6 +19,8 @@ export interface CoreDeps {
 	/** what the agent is doing, in readable lines; absent in tests that do not look at it */
 	activity?: ActivityLog;
 	pi: () => Promise<PiRuntime>;
+	/** the Claude subscription's login (Sign in by `claude auth login`); absent in tests and where Claude is not built in */
+	claude?: ClaudeAccount;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	pickFolder(title: string): Promise<string | null>;
 	pickFile(title: string, extensions: string[]): Promise<string | null>;
@@ -25,11 +29,37 @@ export interface CoreDeps {
 	openUrl(url: string): void;
 }
 
-type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "dialog.pickFolder" | "dialog.pickFile" | "screen.capture" | `agent.${string}` | "queue.restored" | "queue.resumeInterrupted" | "queue.discardInterrupted" | "activity.recent";
+type K = "usage.summary" | "app.info" | "settings.get" | "settings.set" | "claude.authStatus" | "dialog.pickFolder" | "dialog.pickFile" | "screen.capture" | `agent.${string}` | "queue.restored" | "queue.resumeInterrupted" | "queue.discardInterrupted" | "activity.recent";
 
 export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers, K>> {
 	// one sign-in at a time; a pasted answer goes to the prompt that is waiting
 	let login: { abort: AbortController; answer: ((s: string) => void) | null } | null = null;
+	// the Claude subscription's sign-in runs the unmodified `claude auth login` (src/agent/claude/login.ts) and reports through the same
+	// agent.login notices as the other providers: url, then ask (the code), then done or error
+	let claudeAsking = false;
+	let claudeCancelling = false;
+	const claudeNotice = (n: { type: "url"; url: string } | { type: "ask"; message: string } | { type: "info"; message: string } | { type: "done" } | { type: "error"; message: string }) =>
+		d.emit("agent.login", { provider: CLAUDE_SUB, ...n } as EventSpec["agent.login"]);
+	const claudeLogin = () => {
+		const claude = d.claude;
+		if (!claude) throw new Error("Claude pieslēgšanās šeit nav pieejama.");
+		claudeAsking = false;
+		claudeCancelling = false;
+		void claude
+			.start((r) => {
+				claudeAsking = false;
+				if (r.ok) claudeNotice({ type: "done" });
+				else claudeNotice(claudeCancelling ? { type: "info", message: r.message } : { type: "error", message: r.message });
+				d.emit("data.changed", { projectId: null, what: ["agent"] });
+			})
+			.then(({ url }) => {
+				if (!url) return; // already signed in: onEnd says done
+				claudeAsking = true;
+				claudeNotice({ type: "url", url });
+				claudeNotice({ type: "ask", message: `Ielogojies Anthropic lapā un ielīmē kodu, ko tā parāda (ja pārlūks pats pabeidza, kods nav vajadzīgs). Saite: ${url}` });
+			})
+			.catch((e: Error) => claudeNotice({ type: "error", message: e.message }));
+	};
 	/** a provider just signed in or got a key: its own model list now, not tomorrow */
 	const refreshNow = async (provider: string) => {
 		const m = await import("../../agent/pi/index.js");
@@ -65,12 +95,15 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 				// right after Claude by API key: the same models through the user's own Claude subscription (the Agent SDK engine)
 				if (p.id === "anthropic") {
 					const c = await import("../../agent/claude/provider.js");
-					const on = !!d.settings.apiKey(c.CLAUDE_SUB);
+					// a pasted setup-token or a login made by Sign in; the token wins in a run, so it names the method
+					const token = !!d.settings.apiKey(c.CLAUDE_SUB);
+					const on = token || d.claude?.peek().state === "in";
+					d.claude?.refreshIfStale();
 					const subModels = models.map((x) => {
 						const efforts = x.efforts.filter((e) => c.claudeEffort(e));
 						return { ...x, efforts, defaultEffort: efforts.includes(x.defaultEffort) ? x.defaultEffort : efforts.includes("medium") ? "medium" : (efforts[0] ?? "") };
 					});
-					rows.push({ id: c.CLAUDE_SUB, label: c.CLAUDE_SUB_LABEL, auth: ["api_key"], configured: on, method: on ? "api_key" : undefined, keyHelp: c.CLAUDE_SUB_TOKEN_HELP, models: subModels });
+					rows.push({ id: c.CLAUDE_SUB, label: c.CLAUDE_SUB_LABEL, auth: d.claude ? ["oauth", "api_key"] : ["api_key"], configured: on, method: on ? (token ? "api_key" : "oauth") : undefined, keyHelp: c.CLAUDE_SUB_TOKEN_HELP, models: subModels });
 				}
 			}
 			// the providers' own model lists, fetched in the background when missing or a day old; the pickers reload when they arrive
@@ -87,6 +120,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			d.emit("data.changed", { projectId: null, what: ["agent"] });
 		},
 		"agent.login": async (provider) => {
+			if (isClaudeSub(provider)) return claudeLogin();
 			const m = await import("../../agent/pi/index.js");
 			if (!m.isPiProvider(provider)) throw new Error(`Nezināms pakalpojums: ${provider}`);
 			login?.abort.abort();
@@ -118,11 +152,36 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 				});
 		},
 		"agent.loginAnswer": (text) => {
+			if (claudeAsking) return d.claude?.complete(text);
 			if (!login?.answer) throw new Error("Pieslēgšanās šobrīd neko negaida.");
 			login.answer(text);
 			login.answer = null;
 		},
+		"agent.loginCancel": async (provider) => {
+			if (isClaudeSub(provider)) {
+				claudeCancelling = true;
+				claudeAsking = false;
+				await d.claude?.cancel();
+				return;
+			}
+			login?.abort.abort();
+		},
+		"claude.authStatus": async (refresh) => {
+			const claude = d.claude;
+			if (claude) {
+				if (refresh) await claude.refresh();
+				else claude.refreshIfStale();
+			}
+			const info = claude?.peek();
+			return { login: info?.state ?? "unknown", token: !!d.settings.apiKey(CLAUDE_SUB), ...(info?.account ? { account: info.account } : {}), busy: claude?.busy ?? false };
+		},
 		"agent.logout": async (provider) => {
+			if (isClaudeSub(provider)) {
+				if (!d.claude) throw new Error("Claude pieslēgšanās šeit nav pieejama.");
+				await d.claude.signOut();
+				d.emit("data.changed", { projectId: null, what: ["agent"] });
+				return;
+			}
 			const m = await import("../../agent/pi/index.js");
 			if (!m.isPiProvider(provider)) throw new Error(`Nezināms pakalpojums: ${provider}`);
 			await m.logoutProvider((await d.pi()).models, provider);

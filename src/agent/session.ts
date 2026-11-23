@@ -62,8 +62,8 @@ export interface SessionDeps {
 	runAgent?: typeof runPi;
 	/** the Claude subscription engine (Agent SDK), bound to the user's setup-token; absent = not offered (tests, or not built in) */
 	claudeRun?: (o: ClaudeRunOptions) => Promise<void>;
-	/** is a Claude subscription token stored? (the status line) */
-	claudeConnected?: () => boolean;
+	/** how the Claude subscription is connected: a pasted setup-token, a login made by Sign in, or false (the status line) */
+	claudeConnected?: () => "setup-token" | "login" | false;
 	/** is the active Revit document this project's working copy? (6.3) */
 	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
 	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
@@ -142,7 +142,8 @@ export class AgentSession {
 		const s = this.d.settings();
 		const revit = this.d.revit() ? "savienots" : s.revitServerJs ? "nav savienojuma" : "nav konfigurēts";
 		if (isClaudeSub(s.provider)) {
-			const on = this.d.claudeConnected?.() ?? false;
+			const via = this.d.claudeConnected?.() ?? false;
+			const on = via !== false;
 			let images: boolean | null = null;
 			let limits: AgentStatus["imageLimits"] = null;
 			try {
@@ -152,7 +153,7 @@ export class AgentSession {
 			} catch {
 				// unknown model: the run says why
 			}
-			return { provider: s.provider, providerLabel: CLAUDE_SUB_LABEL, model: s.model || "(noklusējums)", signedIn: on, reason: on ? "setup-token" : "nav pieslēgts", revit, images, imageLimits: limits };
+			return { provider: s.provider, providerLabel: CLAUDE_SUB_LABEL, model: s.model || "(noklusējums)", signedIn: on, reason: on ? via : "nav pieslēgts", revit, images, imageLimits: limits };
 		}
 		if (!isPiProvider(s.provider)) return { provider: s.provider, providerLabel: s.provider, model: s.model, signedIn: false, reason: `nezināms pakalpojums: ${s.provider}`, revit, images: null, imageLimits: null };
 		const info = piProviderInfo(s.provider);

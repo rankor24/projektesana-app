@@ -1,4 +1,4 @@
-// One agent run on the Claude Agent SDK, for users who connect their own Claude subscription (`claude setup-token`).
+// One agent run on the Claude Agent SDK, for users who connect their own Claude subscription (a Sign in by `claude auth login`, or a pasted `claude setup-token`).
 // Same contract as pi/run.ts (PiRunOptions in, RunEvents out, never throws), so ThreadRunner and the lanes use either engine.
 //
 // What stays the app's: the tool servers (connected through pi-mcp, as pi does), the approval gate and the write locks
@@ -15,12 +15,15 @@ import { connectMcpServers } from "../pi/mcp.js";
 import { effortFor, lookupPiModel } from "../pi/models.js";
 import { DEFAULT_MAX_TURNS, DEFAULT_SYSTEM_PROMPT, type PiRunOptions } from "../pi/run.js";
 import { claudeEvents, newClaudeState, toolNameOf, TOOL_SERVER } from "./events.js";
+import { claudeBaseEnv } from "./login.js";
 import { catalogProvider, claudeEffort, CLAUDE_SUB, NOT_CONNECTED } from "./provider.js";
 import { toolServer } from "./tools.js";
 
 export interface ClaudeEngineConfig {
-	/** The user's setup-token (stored encrypted by the settings); null = not connected. */
+	/** The user's setup-token (stored encrypted by the settings); null = none pasted. */
 	token: () => string | null;
+	/** Is there a login made by Sign in in `configDir`? Asked only when there is no setup-token (a pasted token wins); absent = no login offered. */
+	login?: () => Promise<boolean>;
 	/** claude.exe of the SDK's platform package, outside the asar in a packaged app; undefined = the SDK finds it (development). */
 	executable?: string;
 	/** Claude Code's own config folder for this app (sessions, caches): never the user's ~/.claude, so none of their settings, hooks or memory reach a run. */
@@ -40,12 +43,11 @@ export interface ClaudeRunOptions extends PiRunOptions {
 	onSession?: (sessionId: string) => void;
 }
 
-/** The environment of claude.exe: the app's token and config folder; nothing that would switch the account or the endpoint. */
-export function claudeEnv(token: string, cfg: Pick<ClaudeEngineConfig, "configDir" | "clientApp">, base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
-	const env: Record<string, string | undefined> = { ...base };
+/** The environment of claude.exe: the app's config folder and, when there is one, the setup-token; nothing that would switch the account or the endpoint.
+ * No token = the run uses the login in the config folder, so a `CLAUDE_CODE_OAUTH_TOKEN` of the user's shell must not reach it either. */
+export function claudeEnv(token: string | null, cfg: Pick<ClaudeEngineConfig, "configDir" | "clientApp">, base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
 	// a colleague's own key or proxy settings must not change which account a run uses (same rule as pi's createPiRuntime)
-	for (const k of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) delete env[k];
-	return { ...env, CLAUDE_CODE_OAUTH_TOKEN: token, CLAUDE_CONFIG_DIR: cfg.configDir, CLAUDE_AGENT_SDK_CLIENT_APP: cfg.clientApp };
+	return { ...claudeBaseEnv(cfg.configDir, base), ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}), CLAUDE_AGENT_SDK_CLIENT_APP: cfg.clientApp };
 }
 
 type Block = { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
@@ -106,7 +108,7 @@ export function createClaudeRun(cfg: ClaudeEngineConfig) {
 		let session: string | null = null;
 		try {
 			const token = cfg.token();
-			if (!token) throw new Error(NOT_CONNECTED);
+			if (!token && !(await cfg.login?.())) throw new Error(NOT_CONNECTED);
 			// the model and effort as pi's Claude catalog knows them: an effort the model lacks becomes its default
 			const model = o.model ?? lookupPiModel(o.runtime, catalogProvider(o.provider ?? CLAUDE_SUB), o.modelId);
 			const effort = claudeEffort(effortFor(model, o.effort));

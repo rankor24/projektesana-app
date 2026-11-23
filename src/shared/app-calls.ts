@@ -33,6 +33,8 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"agent.login": "never",
 	"agent.loginAnswer": "never",
 	"agent.logout": "never",
+	"agent.loginCancel": "never",
+	"claude.authStatus": "read",
 	"agent.send": "never",
 	"agent.stop": "never",
 	"agent.confirm": "never",
