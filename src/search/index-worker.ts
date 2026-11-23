@@ -1,5 +1,5 @@
 // Worker thread: builds or updates one project's search index in the background, so the window never waits for it.
-// Does the three steps of index.ts in order (cut the text, cut the new messages, make the missing vectors) with its own
+// Does the steps of index.ts in order (cut the text, cut the new messages, cut the memory and the logs, make the missing vectors) with its own
 // connection to threads.db (the app's connection keeps writing messages meanwhile; SQLite's write-ahead log lets both work and
 // each write here is one short transaction). Tells the main thread what it is doing as plain messages: phase, model download
 // progress, vectors made. Lowest priority a thread can have in Node: fewer model threads than the machine has, and a rest after
@@ -11,16 +11,19 @@ import { parentPort, workerData } from "node:worker_threads";
 import { ThreadsDb } from "../core/threads-db.js";
 import type { DownloadState } from "../shared/search-types.js";
 import { loadEmbedder, modelById } from "./embedder.js";
-import { adoptModel, embedPending, pendingCount, resetIndex, syncMessages, syncSources, type SourceRef } from "./index.js";
+import { adoptModel, embedPending, pendingCount, resetIndex, syncMessages, syncSources, syncUnits, type SourceRef } from "./index.js";
 import { ensureSearchSchema } from "./schema.js";
+import { logUnits, memoryUnits } from "./units.js";
 
 export interface IndexJob {
 	dbFile: string;
 	modelsDir: string;
 	modelId: string;
-	/** the project's data folder: text cache at text\<sha>.json */
+	/** the project's data folder: text cache at text\<sha>.json, and the notes the decision and question logs are made of */
 	projectDir: string;
-	/** update: sources and messages; messages: only the new messages (after a turn); rebuild: throw everything away first */
+	/** <appData>\Projektesana: the Markdown memory is read from here */
+	appDir: string;
+	/** update: sources and messages; messages: only the new messages (after a turn); rebuild: throw everything away first. Memory and logs are read in every mode: they are a few files, and an agent writes them during a turn. */
 	mode: "update" | "messages" | "rebuild";
 	sources: SourceRef[];
 	/** pause after each batch, as a share of the batch's time */
@@ -62,6 +65,10 @@ try {
 	if (job.mode === "rebuild") resetIndex(db);
 	if (job.mode !== "messages") syncSources(db, job.sources, readPages);
 	syncMessages(db);
+	syncUnits(db, "memory", memoryUnits(job.appDir));
+	const logs = logUnits(job.projectDir);
+	syncUnits(db, "decision", logs.decision);
+	syncUnits(db, "question", logs.question);
 	// an index made by another model has to be made again
 	if (modelById(job.modelId)) adoptModel(db, job.modelId);
 	if (pendingCount(db) > 0 && !stopped) {

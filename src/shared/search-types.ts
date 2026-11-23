@@ -1,12 +1,13 @@
 // Shapes of the project search index and its results, shared by the main process, the background worker, the agent's tool and the
 // Avoti page. No node imports here: the window reads them too.
 
-export type SearchKind = "sources" | "conversations" | "all";
+/** sources: the documents' pages; conversations: earlier messages; memory: the Markdown memory files (Atmiņa); logs: the decision and question logs; all: every one of them. */
+export type SearchKind = "sources" | "conversations" | "memory" | "logs" | "all";
 
 /** One passage that answers (or may answer) a question, with what to name when citing it. */
 export interface Passage {
-	kind: "source" | "conversation";
-	/** a source's title and page, or a thread's title, date and speaker */
+	kind: "source" | "conversation" | "memory" | "log";
+	/** a source's title and page, a thread's title, date and speaker, "Atmiņa · keeper · date", or "Lēmumu žurnāls · L-3 · date" */
 	citation: string;
 	text: string;
 	/** the fused rank score; only comparable within one result */
@@ -17,6 +18,8 @@ export interface Passage {
 	page?: number;
 	threadId?: string;
 	at?: string;
+	/** a memory file (`agent/bpv`, `office/office`) or a log note's id: what to open to see the whole entry */
+	ref?: string;
 }
 
 export interface SearchResult {
@@ -35,6 +38,9 @@ export interface IndexStatus {
 	embedded: number;
 	sources: { chunks: number; embedded: number; files: number };
 	messages: { chunks: number; embedded: number };
+	/** the Markdown memory entries, and the entries of the decision and question logs */
+	memory: { chunks: number; embedded: number };
+	logs: { chunks: number; embedded: number };
 	updatedAt: string | null;
 }
 

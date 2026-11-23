@@ -1,5 +1,5 @@
-// Meklēšanas indekss: the state of the project's search index (which model, how many pieces of the sources and conversations
-// have a vector, the model download, the run in progress) with a button to update or rebuild it, and a box to try the very
+// Meklēšanas indekss: the state of the project's search index (which model, how many pieces of the sources, conversations,
+// memory and decision and question logs have a vector, the model download, the run in progress) with a button to update or rebuild it, and a box to try the very
 // search the agents use (`search_project`): words and meaning together, answered with passages and where they come from.
 // The index builds itself (after a scan, after a turn, at start); nothing here is needed for that. Shown in Avoti.
 import { useEffect, useState } from "react";
@@ -91,6 +91,8 @@ export function SearchIndex({ projectId }: { projectId: string }) {
 			{ix && ix.chunks > 0 && (
 				<div className="dim small">
 					{tr("Avoti: {done} / {total} fragmenti no {files} failiem; sarunas: {mdone} / {mtotal}", { done: ix.sources.embedded, total: ix.sources.chunks, files: ix.sources.files, mdone: ix.messages.embedded, mtotal: ix.messages.chunks })}
+					<br />
+					{tr("Atmiņa: {done} / {total} fragmenti; žurnāli (lēmumi, jautājumi): {ldone} / {ltotal}", { done: ix.memory.embedded, total: ix.memory.chunks, ldone: ix.logs.embedded, ltotal: ix.logs.chunks })}
 				</div>
 			)}
 			{line && (
@@ -109,7 +111,7 @@ export function SearchIndex({ projectId }: { projectId: string }) {
 				<button className="ghost small" disabled={st.state !== "idle"} title={tr("Uzbūvē to, kā trūkst; pirmajā reizē lejupielādē modeli")} onClick={() => call("search.update", projectId).catch((e) => setErr(errText(e)))}>
 					{st.model.downloaded ? tr("Atjaunināt") : tr("Lejupielādēt modeli un veidot indeksu")}
 				</button>
-				<button className="ghost small" disabled={st.state === "running"} title={tr("Izmet visu un uzbūvē no jauna no avotiem un sarunām")} onClick={() => call("search.reindex", projectId).catch((e) => setErr(errText(e)))}>
+				<button className="ghost small" disabled={st.state === "running"} title={tr("Izmet visu un uzbūvē no jauna no avotiem, sarunām, atmiņas un žurnāliem")} onClick={() => call("search.reindex", projectId).catch((e) => setErr(errText(e)))}>
 					{tr("Pārindeksēt")}
 				</button>
 				<span className="dim small">{tr("Indekss veidojas pats: pēc nolasīšanas un pēc katras sarunas.")}</span>
@@ -120,6 +122,8 @@ export function SearchIndex({ projectId }: { projectId: string }) {
 					<option value="all">{tr("Viss")}</option>
 					<option value="sources">{tr("Avoti")}</option>
 					<option value="conversations">{tr("Sarunas")}</option>
+					<option value="memory">{tr("Atmiņa")}</option>
+					<option value="logs">{tr("Žurnāli")}</option>
 				</select>
 				<button className="primary" disabled={busy || q.trim().length < 2} onClick={() => void ask()}>
 					{tr("Meklēt")}

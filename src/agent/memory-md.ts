@@ -281,7 +281,7 @@ export function select(appDir: string, ref: MemoryRef, budget: number, now = Dat
 }
 
 const STANDING =
-	"Atmiņa: memory_read un memory_write (tava, nodaļas un biroja Markdown faili; nodaļas un biroja atmiņu raksta tikai to vadītājs, citiem nosūti ar send_message). Raksti tikai to, kas der nākamajām reizēm. " +
+	"Atmiņa: memory_read un memory_write (tava, nodaļas un biroja Markdown faili; nodaļas un biroja atmiņu raksta tikai to vadītājs, citiem nosūti ar send_message). Raksti tikai to, kas der nākamajām reizēm. Ierakstus, kas nav parādīti, atrod arī search_project ar kind memory. " +
 	"Kļūda pašā lietotnē (trūkst rīka, nepareizs nolasījums, avārija) nav projekta piezīme: ziņo to ar report_app_issue.";
 
 /** The memory block of an agent's standing text: its pointer line always, and the files that exist within their budgets. `spec` null = the main agent. */

@@ -4,7 +4,8 @@
 // the log) is handed in, so a test can run it on a temporary folder.
 //
 // When it runs. The index builds itself: after a folder scan finishes (new text), after a conversation turn (new messages) and
-// a little after the app starts (whatever a crash or an earlier closed window left unfinished). A request is held a moment so a
+// a little after the app starts (whatever a crash or an earlier closed window left unfinished), and after a write to the Markdown
+// memory or to a project's decision and question notes (main.ts asks; every run reads those few files, whatever mode it was asked in). A request is held a moment so a
 // burst of them (several threads finishing together) becomes one run, and only one run goes at a time across all projects, so a
 // first build of a large project cannot take every core. A request that arrives while its project is being built is remembered
 // and run again afterwards. Nothing is lost if the app closes in between: the worker commits in small batches and the next run
@@ -118,7 +119,7 @@ export class SearchIndexer {
 		const dbFile = this.dbFile(projectId);
 		let job: IndexJob;
 		try {
-			job = { dbFile, modelsDir: this.modelsDir, modelId: this.modelId, projectDir: join(this.d.projectsDir, projectId), mode, sources: this.d.sources(projectId), rest: this.d.rest ?? 0.35 };
+			job = { dbFile, modelsDir: this.modelsDir, modelId: this.modelId, projectDir: join(this.d.projectsDir, projectId), appDir: this.d.appDir, mode, sources: this.d.sources(projectId), rest: this.d.rest ?? 0.35 };
 		} catch (e) {
 			// a project that was forgotten since the request
 			this.fail(projectId, (e as Error).message);

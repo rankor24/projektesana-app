@@ -546,11 +546,24 @@ function questionEntry(n: Note, nr: number, notes: readonly Note[]): string {
 	].join("\n");
 }
 
+/** One entry of a register with what names it: `L-3` / `J-2`, the note it comes from and the block of text. The search index takes one piece of text per entry from this. */
+export interface LogEntry {
+	id: string;
+	note: Note;
+	text: string;
+}
+
+/** Every decision note of the project as an L- entry, oldest first (cancellations included). */
+export const decisionEntries = (notes: readonly Note[]): LogEntry[] => inTime(notes, "decision").map((n, i) => ({ id: idOf("L", i + 1), note: n, text: decisionEntry(n, i + 1) }));
+
+/** Every question note of the project as a J- entry, oldest first. */
+export const questionEntries = (notes: readonly Note[]): LogEntry[] => inTime(notes, "question").map((n, i) => ({ id: idOf("J", i + 1), note: n, text: questionEntry(n, i + 1, notes) }));
+
 /** Every decision note of the project as an L- block, oldest first (cancellations included). */
-export const decisionLog = (notes: readonly Note[]): string[] => inTime(notes, "decision").map((n, i) => decisionEntry(n, i + 1));
+export const decisionLog = (notes: readonly Note[]): string[] => decisionEntries(notes).map((e) => e.text);
 
 /** Every question note of the project as a J- block, oldest first. */
-export const questionLog = (notes: readonly Note[]): string[] => inTime(notes, "question").map((n, i) => questionEntry(n, i + 1, notes));
+export const questionLog = (notes: readonly Note[]): string[] => questionEntries(notes).map((e) => e.text);
 
 /** Risks and changes have no block in the process document; the same head line and a title and description keep them readable beside the others. */
 export function noteLog(notes: readonly Note[], type: "risk" | "change"): string[] {

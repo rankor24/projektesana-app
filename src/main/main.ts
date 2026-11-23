@@ -105,7 +105,10 @@ const popouts = new PopoutManager(
 );
 
 const events = new Set<string>(EVENT_NAMES);
+// set below, once the search index exists: what a data change means for it
+let indexOnData: ((p: EventSpec["data.changed"]) => void) | null = null;
 const emit = <E extends EventName>(event: E, payload: EventSpec[E]) => {
+	if (event === "data.changed") indexOnData?.(payload as EventSpec["data.changed"]);
 	// the folder scan also shows in the activity feed, beside the agent's runs
 	if (event === "scan.progress") activity.scan(payload as EventSpec["scan.progress"]);
 	if (!events.has(event)) return;
@@ -180,6 +183,15 @@ const searchIndex = new SearchIndexer({
 	emit: (s) => emit("search.progress", s),
 	log,
 });
+
+// The Markdown memory (Atmiņa) and the notes of a project's decision and question logs are in the index too: a write to them, by the user
+// (the Atmiņa page, a decision cancelled) or by an agent (memory_write, write_note, close_topic: thread-runner reports them), asks for a run.
+// Notes belong to one project. Memory is app-wide and each project's index holds a copy, so every project is asked, one after another; a run
+// that finds nothing changed reads a few files and ends without loading the model.
+indexOnData = (p) => {
+	if (p.what.includes("memory")) registry.list().forEach((x, i) => searchIndex.request(x.id, "messages", 4000 + i * 1000));
+	else if (p.projectId && p.what.includes("notes")) searchIndex.request(p.projectId, "messages");
+};
 
 // The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
 const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
