@@ -14,7 +14,7 @@ export interface ImageResult {
 	text: string;
 }
 
-async function bridge(ctx: ToolCtx, path: string, body: unknown): Promise<Record<string, unknown>> {
+export async function bridge(ctx: ToolCtx, path: string, body: unknown): Promise<Record<string, unknown>> {
 	if (!ctx.bridge) throw new Error("Lietotnes tilts nav pieejams (rīki darbojas bez lietotnes loga).");
 	const res = await fetch(`${ctx.bridge.url}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "x-bridge-token": ctx.bridge.token }, body: JSON.stringify(body), signal: AbortSignal.timeout(180_000) });
 	const j = (await res.json()) as Record<string, unknown>;

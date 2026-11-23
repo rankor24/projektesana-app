@@ -25,6 +25,7 @@ import { WindowLayer } from "./shell/WindowLayer";
 import { ui, useUi } from "./state";
 import { Empty } from "./ui";
 import { Iestatijumi } from "./panels/Iestatijumi";
+import { ChangesToast } from "./panels/settings/ChangesToast";
 import { AgentiPage } from "./panels/AgentiPage";
 import { Prasmes } from "./panels/Prasmes";
 import { Projekts } from "./panels/Projekts";
@@ -273,6 +274,7 @@ export function App() {
 			<CommandPalette />
 			<ComparePicker />
 			<ScreenGrab />
+			<ChangesToast />
 		</div>
 	);
 }

@@ -14,6 +14,18 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 			"patch"
 		]
 	},
+	"appSettings.recent": {
+		"sig": "() => AppSettingChange[]",
+		"params": [],
+		"doc": "the settings an agent changed through app_settings in this session, newest first, with their before and after (Settings shows them with Undo)"
+	},
+	"appSettings.undo": {
+		"sig": "(id: string) => AppSettingChange",
+		"params": [
+			"id"
+		],
+		"doc": "Undo of one of those changes; refused when the setting has been changed since (so a newer change is never overwritten)"
+	},
 	"layout.get": {
 		"sig": "() => LayoutStore",
 		"params": [],

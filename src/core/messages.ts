@@ -16,7 +16,8 @@ export type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic };
 // the shapes live in shared/thread-types.ts (Settings carries them); everything that imported them from here still can
 export { DEFAULT_LIMITS, type Limits };
 
-const RANGES: Record<Exclude<keyof Limits, "waveCost">, [number, number]> = { exchangesPerTopic: [1, 10], chainDepth: [1, 20], runsPerWave: [1, 200], taskIterations: [1, 10] };
+/** The range of each whole-number limit; the Settings registry (main/app-settings) validates an agent's value against the same table. */
+export const LIMIT_RANGES: Record<Exclude<keyof Limits, "waveCost">, [number, number]> = { exchangesPerTopic: [1, 10], chainDepth: [1, 20], runsPerWave: [1, 200], taskIterations: [1, 10] };
 
 /** A number from a form or a hand-edited file; "", null and booleans are not numbers (`Number(null)` would be 0). */
 const num = (v: unknown): number => (v === null || v === "" || typeof v === "boolean" ? NaN : Number(v));
@@ -25,9 +26,9 @@ const num = (v: unknown): number => (v === null || v === "" || typeof v === "boo
 export function clampLimits(patch: Partial<Limits> | undefined, base: Limits): Limits {
 	const out: Limits = { ...base };
 	const p = patch ?? {};
-	for (const k of Object.keys(RANGES) as (keyof typeof RANGES)[]) {
+	for (const k of Object.keys(LIMIT_RANGES) as (keyof typeof LIMIT_RANGES)[]) {
 		const n = Math.round(num(p[k]));
-		if (Number.isFinite(n)) out[k] = Math.max(RANGES[k][0], Math.min(RANGES[k][1], n));
+		if (Number.isFinite(n)) out[k] = Math.max(LIMIT_RANGES[k][0], Math.min(LIMIT_RANGES[k][1], n));
 	}
 	if ("waveCost" in p) {
 		const c = num(p.waveCost);

@@ -25,8 +25,9 @@ import { processHandlers } from "./handlers/process.js";
 import { FIRST_SCAN_TASK } from "../agent/tasks.js";
 import type { RevitClient } from "../revit/client.js";
 import type { PopoutManager } from "./windows.js";
+import { appSettingsHandlers, createAppSettingsHost, type AppSettingsHost } from "./app-settings/handlers.js";
 
-export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string; popouts?: PopoutManager; /** the synced skills folder, for the settings page's measure of an agent's standing text */ skillsDir?: string } & Pick<LibraryDeps, "fetchPage">;
+export type AppDeps = CoreDeps & Omit<ProjectDeps, "emit" | "openPath" | "afterChange"> & { engine: ProjectEngine; revit: RevitClient; bimcraftApp: string; popouts?: PopoutManager; /** the synced skills folder, for the settings page's measure of an agent's standing text */ skillsDir?: string; /** the agent settings tool's host, shared with the agent bridge (main.ts); made here when absent (tests) */ appSettings?: AppSettingsHost } & Pick<LibraryDeps, "fetchPage">;
 
 export function createHandlers(d: AppDeps): Handlers {
 	const afterChange = (store: Parameters<ProjectEngine["afterChange"]>[0], what: string) => d.engine.afterChange(store, what).then(() => undefined);
@@ -40,6 +41,8 @@ export function createHandlers(d: AppDeps): Handlers {
 		await d.session.send(projectId, FIRST_SCAN_TASK, []);
 	};
 	const e = { ...d, afterChange, userName, onFirstScan };
+	const core = coreHandlers(d);
+	const appSettings = d.appSettings ?? createAppSettingsHost({ settings: d.settings, providers: async () => core["agent.providers"](), holds: async () => core["agent.holds"](), emit: (ev) => d.emit("appSettings.changed", ev), changed: () => d.emit("data.changed", { projectId: null, what: ["settings"] }) });
 	const projects = projectHandlers(e);
-	return { ...coreHandlers(d), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...compare2dHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d), ...processHandlers(d) };
+	return { ...core, ...appSettingsHandlers(appSettings), ...projects, ...roomHandlers(d), ...factHandlers(e), ...requirementHandlers({ ...d, userName }), ...revitHandlers(d), ...deliveryHandlers(d), ...compareHandlers(d), ...compare2dHandlers(d), ...libraryHandlers(d), ...fileHandlers(d), ...todoHandlers(d), ...coordinationHandlers(d), ...expertHandlers({ ...d, setRole: projects["sources.setRole"] }), ...agentHandlers(d), ...skillHandlers(d), ...layoutHandlers(d), ...planHandlers(d), ...threadHandlers(d), ...processHandlers(d) };
 }
