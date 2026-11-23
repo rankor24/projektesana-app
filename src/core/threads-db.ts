@@ -199,7 +199,15 @@ export function ftsMatch(query: string): string | null {
 	return terms.length ? terms.join(" ") : null;
 }
 
-const dayEnd = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T23:59:59.999Z` : d);
+// A day the user names is a Riga calendar day (the office's), not a UTC one: a message written at 23:30 in Riga belongs to that day.
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const rigaMidnight = (d: string): number => {
+	const name = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Riga", timeZoneName: "shortOffset" }).formatToParts(new Date(`${d}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "GMT+2";
+	const h = Number(/GMT([+-]\d+)/.exec(name)?.[1] ?? 2);
+	return Date.parse(`${d}T00:00:00Z`) - h * 3_600_000;
+};
+const dayStart = (d: string) => (ISO_DAY.test(d) ? new Date(rigaMidnight(d)).toISOString() : d);
+const dayEnd = (d: string) => (ISO_DAY.test(d) ? new Date(rigaMidnight(d) + 86_400_000 - 1).toISOString() : d);
 
 /** The search itself, on any open connection (the app's, or the read-only one the agent's tools server opens). */
 export function searchIn(db: DatabaseSync, q: SearchQuery): ConversationHit[] {
@@ -209,7 +217,7 @@ export function searchIn(db: DatabaseSync, q: SearchQuery): ConversationHit[] {
 	const args: (string | number)[] = [match];
 	if (q.agent) (where.push("t.agent = ?"), args.push(q.agent));
 	if (q.threadId) (where.push("m.thread_id = ?"), args.push(q.threadId));
-	if (q.from) (where.push("m.at >= ?"), args.push(q.from));
+	if (q.from) (where.push("m.at >= ?"), args.push(dayStart(q.from)));
 	if (q.to) (where.push("m.at <= ?"), args.push(dayEnd(q.to)));
 	args.push(Math.max(1, Math.min(q.limit ?? 8, 50)));
 	const rows = db
