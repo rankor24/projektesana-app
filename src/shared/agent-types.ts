@@ -23,6 +23,10 @@ export interface AgentSpec {
 	/** a model id and effort of its own; empty or absent = the run's. Checked when the run starts, not on save */
 	model?: string;
 	effort?: Effort | "";
+	/** the provider this agent runs on (a pi provider id or "claude-sub"); absent = the app's provider. `model` then names a model of this provider (empty = its default). */
+	provider?: string;
+	/** where this agent carries on when its provider is at its usage limit or signed out; absent = the app-wide backup (settings.backup), none when that is not set either */
+	backup?: { provider: string; model: string };
 	/** who this agent may message / take messages from: ids or "lead"; absent = everyone, [] = nobody */
 	mayMessage?: string[];
 	acceptsFrom?: string[];
@@ -30,10 +34,6 @@ export interface AgentSpec {
 	skills?: string[];
 	/** the department (shared/departments.ts) the agent is filed in: an id of the app's department list; absent = the default of its id (BD roles), "" = in none */
 	department?: string;
-	/** a provider of its own (an id of `agent.providers`); empty or absent = the run's. Checked when the run starts, not on save. The backup's logic is the engines' (phase A) */
-	provider?: string;
-	/** where this agent's turns go on when its provider is at a limit or signed out */
-	backup?: { provider: string; model: string };
 }
 
 /** Lower case, no diacritics, letters and digits only: "Ekspertīzes lasītājs" and "ekspertizeslasitajs" are the same. */

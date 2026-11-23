@@ -1,0 +1,9 @@
+OpenMausBot, https://github.com/milind-soni/OpenMausBot (commit 3aec210)
+Copyright 2026 Milind Soni and OpenMausBot contributors
+Used under the Apache License, Version 2.0 (third_party/OpenMausBot/LICENSE). Nothing from its enterprise/ folder is used.
+
+Adapted here, each file naming its source in its header comment:
+- src/agent/failover/ and src/agent/claude/limits.ts: the usage-limit takeover, the error classification, the notices and the
+  checker's provider of server/host/limit-takeover.ts, server/host/peer-limit-resend.ts, server/drivers/engine-errors.ts,
+  server/drivers/claude-limits.ts, server/drivers/retry.ts, server/limit-notices.ts, server/limit-failover.ts,
+  server/automatic-recovery.ts and server/checker-model.ts. Rewritten for this application's engines, settings and agents.

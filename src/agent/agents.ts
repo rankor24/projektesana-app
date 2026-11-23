@@ -14,6 +14,7 @@ import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-de
 import { STATUS_MAX } from "../core/process.js";
 import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
+import { isKnownProvider } from "./failover/plan.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
 import { LEAD_SKILL_DESC_MAX, skillsFor, skillsText, type SkillInfo } from "./skills.js";
 import { LEAD_ROSTER_DESC_MAX, LEVEL_RANK, MAIN_TOOLS, RULES, SPECIALIST_CAP, rosterText } from "./subagents.js";
@@ -133,6 +134,23 @@ export function validateSpec(
 	if (r.effort !== undefined && r.effort !== "" && !(EFFORTS as readonly unknown[]).includes(r.effort)) return { ok: false, error: `Domāšanas līmenis (effort): ${EFFORTS.join(", ")} vai tukšs.` };
 	if (r.effort) spec.effort = r.effort as AgentSpec["effort"];
 
+	// the provider this agent runs on, and the backup it carries on with when that is at its limit or signed out (Phase A); both are looked up when a run starts, not on save
+	if (r.provider !== undefined && typeof r.provider !== "string") return { ok: false, error: "Pakalpojums: teksts." };
+	const provider = str(r.provider);
+	if (provider) {
+		if (!isKnownProvider(provider)) return { ok: false, error: `Nezināms pakalpojums: ${provider}.` };
+		spec.provider = provider;
+	}
+	if (r.backup !== undefined && r.backup !== null) {
+		const b = r.backup as { provider?: unknown; model?: unknown };
+		if (typeof b !== "object" || typeof b.provider !== "string" || (b.model !== undefined && typeof b.model !== "string")) return { ok: false, error: "Rezerves AI: pakalpojums un modelis." };
+		const bp = b.provider.trim();
+		if (bp) {
+			if (!isKnownProvider(bp)) return { ok: false, error: `Rezerves AI: nezināms pakalpojums ${bp}.` };
+			spec.backup = { provider: bp, model: (b.model as string | undefined)?.trim() ?? "" };
+		}
+	}
+
 	for (const key of ["mayMessage", "acceptsFrom"] as const) {
 		const v = r[key];
 		if (v === undefined) continue;
@@ -150,16 +168,6 @@ export function validateSpec(
 		if (typeof r.department !== "string" || (r.department.trim() && !/^[a-z0-9-]{1,40}$/.test(r.department.trim()))) return { ok: false, error: "Nodaļa: nodaļas identifikators vai tukšs." };
 		spec.department = r.department.trim();
 	}
-	// the agent's own provider and its backup; whether they exist and are signed in is the run's to find out (as with `model`)
-	if (r.provider !== undefined && typeof r.provider !== "string") return { ok: false, error: "Pakalpojums: teksts." };
-	if (str(r.provider)) spec.provider = str(r.provider);
-	if (r.backup !== undefined && r.backup !== null) {
-		const b = r.backup as { provider?: unknown; model?: unknown };
-		if (typeof b !== "object" || typeof b.provider !== "string" || typeof b.model !== "string") return { ok: false, error: "Rezerves modelis: pakalpojums un modelis." };
-		// a half-filled backup is a form left open, not a choice: it is dropped
-		if (b.provider.trim() && b.model.trim()) spec.backup = { provider: b.provider.trim(), model: b.model.trim() };
-	}
-
 	if (r.skills !== undefined) {
 		if (!Array.isArray(r.skills)) return { ok: false, error: "skills: saraksts ar prasmju nosaukumiem." };
 		// stored as given: a name the library lacks (yet), or a draft, is simply not listed to the agent (skillsFor), so assigning ahead is allowed

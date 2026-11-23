@@ -103,4 +103,21 @@ export const settings: Record<string, string> = {
 	"Jauna nodaļa": "New department",
 	"+ nodaļa": "+ department",
 	"Rādīt arhivētās": "Show archived",
+	"Rezerves AI": "Backup AI",
+	"Kad aģenta pakalpojums sasniedz lietojuma limitu vai tā pieteikšanās beidzas, aģenta jaunie darbi sākas ar rezerves AI, līdz limits atjaunojas. Aģenta paša rezerve (Aģenti) ir svarīgāka par šo.":
+		"When an agent's provider reaches its usage limit or its sign-in expires, the agent's new work starts on the backup AI until the limit resets. An agent's own backup (Agents) wins over this one.",
+	"Rezerves pakalpojums": "Backup provider",
+	"nav": "none",
+	"Tas pats pakalpojums nepārņem darbu, kad limits ir visam kontam; tas palīdz tikai tad, ja limits skar vienu modeli.":
+		"The same provider does not take over when the limit is on the whole account; it helps only when the limit is on one model.",
+	"Automātiskā atkopšana": "Automatic recovery",
+	"Ieslēgta: ja gājiens neizdodas, pirms kāds rīks ir darbojies (limits, beigusies pieteikšanās, pakalpojums nedarbojas), to mēģina vēlreiz vienu reizi ar rezerves AI. Izslēgta: tu nosūti ziņu vēlreiz. Cita aģenta uzdevumu pēc limita pārsūta uz rezervi vienmēr, ar tām pašām tiesībām.":
+		"On: when a run fails before any tool has run (a limit, an expired sign-in, a provider that is down), it is tried once more on the backup AI. Off: you send the message again. Another agent's task is resent to the backup after a limit in any case, with the same rights.",
+	"Aizturēts": "On hold",
+	"Iemesls": "Reason",
+	"Mēģina vēlreiz": "Tried again",
+	"pieteikšanās beigusies": "sign-in expired",
+	"kredīti iztērēti": "credits used up",
+	"lietojuma limits": "usage limit",
+	"Atbrīvot": "Release",
 };

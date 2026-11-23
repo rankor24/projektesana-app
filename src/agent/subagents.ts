@@ -10,17 +10,22 @@
 //   - writes take turns through WriteLocks (locks.ts), keyed by staging / project data / Revit
 //   - Stop reaches every lane: a lane's signal is the main run's signal
 //   - every lane shows on the activity feed (a "lane" event) and its model turns are counted in the run's usage
+//   - a lane runs on its specialist's own provider and model when the spec names them, and is guarded like any agent-to-agent work (failover/): while its provider
+//     is on hold it starts on the backup, and a usage limit or sign-in failure before any tool ran is resent once there, with the same tools and the same gate
 // The lanes run in the main process (they need the sign-in and the model catalogue), so these are main-process tools handed to
 // pi next to the tool servers' tools (PiRunOptions.extraTools), not tools of the MCP server.
 import type { AgentTool, BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import { Type, type Static } from "@earendil-works/pi-ai";
 import { TOOLS } from "../shared/activity.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
-import type { RunEvent } from "../shared/types.js";
+import type { FailureHint, RunEvent } from "../shared/types.js";
+import type { Failover, LaneAttempt } from "./failover/index.js";
+import type { Target } from "./failover/plan.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
-import type { McpLaunchSpec, PiRunOptions } from "./pi/index.js";
+import { lookupPiModel, type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
+import { catalogProvider } from "./claude/provider.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
 // ---- levels -------------------------------------------------------------------------------------------------------------------
@@ -126,6 +131,10 @@ export interface LaneDeps {
 	maxTurns?: number;
 	/** the system text of a specialist's lane (standingFor, from the run); without it the spec's own prompt */
 	standing?(spec: AgentSpec): string;
+	/** the guard that moves a lane to a backup (failover/); without it a lane runs where it is told and fails as it fails */
+	failover?: Failover;
+	/** an agent's backup: its own, else the app-wide one; null for a helper without a spec = the run's agent's */
+	backupOf?(spec: AgentSpec | null): Target | null;
 }
 
 interface Job {
@@ -137,9 +146,12 @@ interface Job {
 	task: string;
 	system: string;
 	allowed: string[];
-	/** the specialist's own model and effort (13.3); absent = the run's */
+	/** the specialist's own provider, model and effort (13.3); absent = the run's. A model named without a provider is a model of the run's provider. */
+	provider?: string;
 	model?: string;
 	effort?: AgentSpec["effort"];
+	/** the specialist, for its backup */
+	spec?: AgentSpec;
 }
 
 export interface LaneResult {
@@ -156,6 +168,14 @@ const REPORT_MAX = 6000;
 let laneN = 0;
 
 const stepWords = (name: string) => TOOLS[name]?.words ?? name;
+
+/** Where a lane runs: its specialist's own provider, model and effort, else the run's. A model or effort named for the run's own provider stays that provider's;
+ *  a lane on another provider takes that provider's default when its spec names no model. */
+export function laneTarget(base: Pick<PiRunOptions, "provider" | "modelId" | "effort">, job: { provider?: string; model?: string; effort?: AgentSpec["effort"] }): Target {
+	const provider = job.provider?.trim() || base.provider || "";
+	const sameAsRun = provider === (base.provider ?? "");
+	return { provider, model: job.model || (sameAsRun ? (base.modelId ?? "") : ""), effort: String(job.effort || (sameAsRun ? (base.effort ?? "") : "")) };
+}
 
 async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<LaneResult> {
 	const owner = `${deps.ownerPrefix ? `${deps.ownerPrefix}/` : ""}lane:${job.id}`;
@@ -178,35 +198,71 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 	};
 	let answer = "";
 	let error: string | null = null;
+	let hint: FailureHint | undefined;
 	let toolCalls = 0;
 	let toolErrors = 0;
-	// its own model and effort replace the run's; its turns are logged under the model it really used
-	const base = { ...deps.base, ...(job.model ? { modelId: job.model } : {}), ...(job.effort ? { effort: job.effort } : {}) };
-	const modelName = job.model ? `${base.provider}/${job.model}` : undefined;
+	// its own provider, model and effort replace the run's; its turns are logged under the model it really used
+	const primary = laneTarget(deps.base, job);
+	const modelName = (t: Target): string | undefined => {
+		if (t.provider === (deps.base.provider ?? "") && t.model === (deps.base.modelId ?? "")) return undefined;
+		try {
+			return `${t.provider}/${lookupPiModel(deps.base.runtime, catalogProvider(t.provider), t.model).id}`;
+		} catch {
+			return `${t.provider}/${t.model || "(noklusējums)"}`;
+		}
+	};
+	const attempt = async (t: Target): Promise<LaneAttempt> => {
+		answer = "";
+		error = null;
+		hint = undefined;
+		toolCalls = 0;
+		toolErrors = 0;
+		const named = modelName(t);
+		try {
+			await deps.run({
+				...deps.base,
+				provider: t.provider || undefined,
+				modelId: t.model || undefined,
+				effort: (t.effort || undefined) as PiEffort | undefined,
+				prompt: job.task,
+				systemPrompt: job.system,
+				mcp: deps.mcpFor(job.allowed, job.agentId),
+				signal,
+				maxTurns: deps.maxTurns ?? 40,
+				history: [],
+				beforeToolCall: before,
+				afterToolCall: after,
+				onEvent: (e) => {
+					if (e.type === "done") answer = e.text;
+					else if (e.type === "error") {
+						error = e.message;
+						hint = e.hint;
+					} else if (e.type === "tool") {
+						toolCalls++;
+						deps.emit({ type: "lane", id: job.id, label: job.label, agent: job.agent, phase: "step", text: stepWords(e.name) });
+					} else if (e.type === "tool_result" && !e.ok) toolErrors++;
+					else if (e.type === "usage") deps.emit(named ? { ...e, model: named } : e);
+				},
+			});
+		} catch (e) {
+			error = (e as Error).message;
+		}
+		return { error, hint, toolCalls, aborted: signal.aborted };
+	};
 	deps.emit({ type: "lane", id: job.id, label: job.label, agent: job.agent, phase: "start" });
 	try {
-		await deps.run({
-			...base,
-			prompt: job.task,
-			systemPrompt: job.system,
-			mcp: deps.mcpFor(job.allowed, job.agentId),
-			signal,
-			maxTurns: deps.maxTurns ?? 40,
-			history: [],
-			beforeToolCall: before,
-			afterToolCall: after,
-			onEvent: (e) => {
-				if (e.type === "done") answer = e.text;
-				else if (e.type === "error") error = e.message;
-				else if (e.type === "tool") {
-					toolCalls++;
-					deps.emit({ type: "lane", id: job.id, label: job.label, agent: job.agent, phase: "step", text: stepWords(e.name) });
-				} else if (e.type === "tool_result" && !e.ok) toolErrors++;
-				else if (e.type === "usage") deps.emit(modelName ? { ...e, model: modelName } : e);
-			},
-		});
-	} catch (e) {
-		error = (e as Error).message;
+		if (deps.failover) {
+			await deps.failover.guardLane(
+				{
+					agent: job.agentId ?? "helper",
+					name: job.agent ?? job.label,
+					primary,
+					backup: deps.backupOf?.(job.spec ?? null) ?? null,
+					say: (text) => deps.emit({ type: "lane", id: job.id, label: job.label, agent: job.agent, phase: "step", text }),
+				},
+				attempt,
+			);
+		} else await attempt(primary);
 	} finally {
 		deps.locks.releaseOwner(owner);
 	}
@@ -277,11 +333,14 @@ export function subagentTools(deps: LaneDeps): AgentTool<any>[] {
 			const jobs: Job[] = params.jobs.map((j) => {
 				const spec = findSpec(specs, j.agent)!;
 				const model = spec.model?.trim(); // as the run's modelFor does: a stray space in the settings is not part of the id
+				const provider = spec.provider?.trim();
 				return {
 					id: newJobId(), label: j.label?.trim() || spec.name, agent: spec.name, agentId: spec.id, task: j.task,
 					system: (deps.standing ? deps.standing(spec) : spec.prompt) + RULES,
 					// no Revit in a lane: the one Revit takes one MCP connection, and the parent run holds it (a lane's Revit work is the parent's)
 					allowed: specialistTools(deps.listed, deps.levelOf, deps.revitTools, spec).filter((n) => !deps.revitTools.has(n)),
+					spec,
+					...(provider ? { provider } : {}),
 					...(model ? { model } : {}),
 					...(spec.effort ? { effort: spec.effort } : {}),
 				};

@@ -8,8 +8,9 @@ import { measureAttachment, prepareAttachments, type PreparedAttachments } from 
 import { type Complete } from "./compact.js";
 import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
-import { isPiProvider, lookupPiModel, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
-import { catalogProvider, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
+import { isPiProvider, lookupPiModel, PI_PROVIDERS, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
+import { catalogProvider, CLAUDE_SUB, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
+import { Failover, ProviderHolds } from "./failover/index.js";
 import type { ClaudeRunOptions } from "./claude/run.js";
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
@@ -68,18 +69,34 @@ export interface SessionDeps {
 	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
 	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
 	afterBatch?: (projectId: string, summary: string) => Promise<string>;
+	/** the providers that can run now; by default the ones with a key, a sign-in or a token stored (tests name them) */
+	ready?: () => Promise<ReadonlySet<string>>;
+	/** the provider holds changed (a limit was met, a hold ended): the settings page shows them */
+	onHolds?: () => void;
 }
 
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
+
+/** A provider as the person knows it. */
+export const providerLabel = (provider: string): string => (isClaudeSub(provider) ? CLAUDE_SUB_LABEL : isPiProvider(provider) ? piProviderInfo(provider).label : provider);
 
 export class AgentSession {
 	private runner: ThreadRunner;
 	private coordinator: Coordinator;
 	private stores = new Map<string, ThreadStore>();
 	private mailboxes = new Map<string, Mailbox>();
+	/** the providers on hold (a usage limit, no credit, a sign-in gone) and the backups that take over; the holds are saved in the app data folder */
+	readonly failover: Failover;
 
 	constructor(private d: SessionDeps) {
-		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId) });
+		this.failover = new Failover({
+			holds: new ProviderHolds({ file: join(d.ctx.appDir, "provider-holds.json"), onChange: () => d.onHolds?.() }),
+			ready: d.ready ?? (() => this.readyProviders()),
+			describe: (t) => this.describeModel(t),
+			label: providerLabel,
+			log: (line) => console.warn(line),
+		});
+		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId), failover: this.failover });
 		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))) });
 	}
 
@@ -136,6 +153,44 @@ export class AgentSession {
 			set: (k: string, c: Conversation) => this.runner.conversations.set(lead(k), c),
 			clear: () => this.runner.conversations.clear(),
 		};
+	}
+
+	/** The providers that can run now: a key or a sign-in is stored (pi), or the Claude subscription's token. Nothing is refreshed and no network is used. */
+	private async readyProviders(): Promise<ReadonlySet<string>> {
+		const out = new Set<string>();
+		if (this.d.claudeConnected?.()) out.add(CLAUDE_SUB);
+		try {
+			const rt = await this.d.runtime();
+			for (const p of PI_PROVIDERS) if ((await piAuthState(rt, p.id)).configured) out.add(p.id);
+		} catch {
+			// no runtime: only what is known without it
+		}
+		return out;
+	}
+
+	/** A model as the catalogue knows it (the provider's default when none is named), and whether it takes images; null when unknown. */
+	private async describeModel(t: { provider: string; model: string }): Promise<{ id: string; images: boolean } | null> {
+		try {
+			const m = lookupPiModel(await this.d.runtime(), catalogProvider(t.provider), t.model);
+			return { id: m.id, images: seesImages(m) };
+		} catch {
+			return null;
+		}
+	}
+
+	/** The holds as the settings page lists them. */
+	holds() {
+		return this.failover.holds.rows().map((h) => ({ ...h, label: providerLabel(h.provider) }));
+	}
+
+	/** The user ends a provider's holds by hand (a plan was upgraded, a limit reset early). */
+	releaseHold(provider: string): void {
+		this.failover.holds.release(provider);
+	}
+
+	/** A key was saved or a sign-in finished: the provider is signed in again, its hold ends and its next sign-out is told. */
+	signedIn(provider: string): void {
+		this.failover.holds.signedIn(provider);
 	}
 
 	async status(): Promise<AgentStatus> {

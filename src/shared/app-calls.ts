@@ -28,6 +28,8 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"screen.capture": "never",
 	"agent.status": "read",
 	"agent.providers": "read",
+	"agent.holds": "read",
+	"agent.releaseHold": "never",
 	"agent.setKey": "never",
 	"agent.clearKey": "never",
 	"agent.login": "never",

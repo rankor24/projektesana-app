@@ -14,8 +14,9 @@ import { compactMessages, type Complete } from "./compact.js";
 import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
-import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRuntime } from "./pi/index.js";
+import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime } from "./pi/index.js";
 import { catalogProvider, isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
+import { backupFor, classifyFailure, targetFor, type Failover, type Target } from "./failover/index.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
 import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
 import { OfficeMemory } from "../core/office-memory.js";
@@ -51,6 +52,9 @@ const S5_OPEN = (name: string) => Object.hasOwn(MAIL_TOOL_LEVELS, name) || name.
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
 
+/** Names a conversation and its usage rows: the provider and the model as chosen. */
+const keyOf = (t: Pick<Target, "provider" | "model">) => `${t.provider}/${t.model}`;
+
 export interface RunInput {
 	runId: string;
 	thread: Thread;
@@ -66,6 +70,8 @@ export interface RunInput {
 	ask: (req: ConfirmRequest) => Promise<boolean>;
 	/** how many hops of messages brought this run about: 0 for a run the user started */
 	depth?: number;
+	/** this run answers another agent's mail (a task or an ask): a usage limit or a lost sign-in before any tool ran is resent once on the backup, whatever automatic recovery says */
+	peer?: boolean;
 	/** a message was added to the mailbox: the coordinator delivers it */
 	wake?: () => void;
 	/** a question for the user was written into Atmiņa: "Gaida tevi" changed */
@@ -89,8 +95,10 @@ export class ThreadRunner {
 	readonly conversations = new Map<string, Conversation>();
 	/** compactions per thread since the app started */
 	private compactions = new Map<string, number>();
+	/** where each thread's last run really went (its backup while its provider was held, the checker's provider for eks): the context meter and the attachment limits describe that model */
+	private lastOn = new Map<string, Target>();
 
-	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox }) {}
+	constructor(private d: SessionDeps & { threads: (projectId: string | null) => ThreadStore; locks: LockRegistry; mail?: (projectId: string | null) => Mailbox; failover?: Failover }) {}
 
 	private store(thread: Thread): ThreadStore {
 		return this.d.threads(thread.projectId);
@@ -106,17 +114,25 @@ export class ThreadRunner {
 		return thread.agent === LEAD_ID ? null : ((this.d.agents?.() ?? DEFAULT_AGENTS).find((a) => a.id === thread.agent) ?? null);
 	}
 
-	/** The model a run of this agent uses: the spec's own model and effort when it has them, else the settings'. `key` names the conversation and the usage rows. */
-	private modelFor(s: Settings, spec: AgentSpec | null): { provider: string; modelId: string; effort: PiEffort | undefined; key: string } {
-		const modelId = spec?.model?.trim() || s.model;
-		return { provider: s.provider, modelId, effort: ((spec?.effort || s.effort) || undefined) as PiEffort | undefined, key: `${s.provider}/${modelId}` };
+	/** The model a run of this agent uses: the spec's own provider, model and effort when it has them, else the settings'. `key` names the conversation and the usage rows.
+	 *  With `thread`: the model its conversation in memory lives on, when that was not the agent's own (a backup, the checker's provider). */
+	private modelFor(s: Settings, spec: AgentSpec | null, thread?: Thread): { provider: string; modelId: string; effort: PiEffort | undefined; key: string } {
+		const own = targetFor(spec, s);
+		const used = thread ? this.lastOn.get(thread.id) : undefined;
+		const t = used && this.conversations.get(thread!.id)?.key === keyOf(used) ? used : own;
+		return { provider: t.provider, modelId: t.model, effort: (t.effort || undefined) as PiEffort | undefined, key: keyOf(t) };
+	}
+
+	/** The engine of a provider: the Claude Agent SDK for the Claude subscription, pi for every other. Undefined = the subscription engine is not built in. */
+	private engineOf(provider: string): ((o: PiRunOptions) => Promise<void>) | undefined {
+		return isClaudeSub(provider) ? this.d.claudeRun : (this.d.runAgent ?? runPi);
 	}
 
 	/** Images the thread's live conversation holds, for the attachment limits (0 when it is not in memory or the model changed). */
 	imagesInContext(thread: Thread): number {
 		const s = this.d.settings();
 		const conv = this.conversations.get(thread.id);
-		return conv && conv.key === this.modelFor(s, this.specOf(thread)).key ? countImages(this.shrink(conv.messages)) : 0;
+		return conv && conv.key === this.modelFor(s, this.specOf(thread), thread).key ? countImages(this.shrink(conv.messages)) : 0;
 	}
 
 	/** What every request starts with, built by standingFor (agents.ts): the lead's rules, roster and skills, or a specialist's shared rules, role,
@@ -318,38 +334,62 @@ export class ThreadRunner {
 					return undefined;
 				};
 
-				// the agent's own model and effort (13.3); an unknown model fails here with the provider's own error
-				const { provider, modelId, effort, key } = this.modelFor(s, spec);
 				const conv = this.conversations.get(thread.id);
 				const rt = await this.d.runtime();
-				const model = lookupPiModel(rt, catalogProvider(provider), modelId);
-				// the engine: the Claude Agent SDK for a Claude subscription, pi for every other provider (lanes use the same one)
-				const claude = isClaudeSub(provider);
-				if (claude && !this.d.claudeRun) throw new Error(NOT_CONNECTED);
-				const engine = claude ? this.d.claudeRun! : (this.d.runAgent ?? runPi);
-				const resume = claude && conv && conv.key === key ? conv.sessionId : undefined;
+				// Where this run goes (Phase A). The agent's own provider and model (13.3) and its backup; eks, with no provider of its own, on a provider other than its authors';
+				// and the backup in place of a provider that is on hold (a usage limit, a lost sign-in) so the run starts there and not on a refusal. An unknown model fails
+				// below with the provider's own error.
+				const fo = this.d.failover;
+				let primary: Target = targetFor(spec, s);
+				if (fo && spec?.id === EKS) {
+					const checker = await fo.checkerTarget(spec, this.d.agents?.() ?? DEFAULT_AGENTS, s);
+					if (checker) primary = checker;
+				}
+				const backup = backupFor(spec, s);
+				const needImages = files.images.length > 0 || (conv ? countImages(this.shrink(conv.messages)) > 0 : false);
+				const started = fo ? await fo.start({ agent: agentId, name: label, primary, backup, needImages }) : { on: primary, id: primary.model, took: false, notice: undefined };
+				if (started.notice) emit({ type: "text", text: `[lietotne] ${started.notice}\n\n` });
+				// a run already on the backup has no second one; a retry on the backup is made once
+				let retried = !!started.took;
+				// everything that follows the choice of provider: the model, the engine (the Claude Agent SDK for a Claude subscription, pi for every other provider; lanes use the same
+				// ones), the conversation's key and, for a Claude session, the one to resume
+				const shapeFor = (target: Target) => {
+					const model = lookupPiModel(rt, catalogProvider(target.provider), target.model);
+					const claude = isClaudeSub(target.provider);
+					if (claude && !this.d.claudeRun) throw new Error(NOT_CONNECTED);
+					const key = keyOf(target);
+					return { target, provider: target.provider, modelId: target.model, effort: (target.effort || undefined) as PiEffort | undefined, model, claude, engine: claude ? this.d.claudeRun! : (this.d.runAgent ?? runPi), key, resume: claude && conv && conv.key === key ? conv.sessionId : undefined, keepRecent: keepRecentFor(model.contextWindow) };
+				};
+				let shape = shapeFor(started.on);
+				this.lastOn.set(thread.id, started.on);
 				// the plan lines the user changed belong to the lead: a specialist neither carries nor clears them
 				// this project's mailbox: the thread's open topics go into every prompt, and the mail tools write into it
 				const mailbox = this.d.mail?.(projectId);
 				const topics = mailbox ? topicsLine(openTopicsOf(thread, mailbox.topics(), mailbox.messages())) : "";
 				const prompt = [buildPrompt(this.pinsOf(projectId), focus, [text.trim(), files.text].filter(Boolean).join("\n\n"), spec ? "" : this.planOf(projectId, true), topics), seatLine].filter(Boolean).join("\n\n");
 				const promptTokens = estimateTextTokens(prompt) + files.images.length * IMAGE_TOKENS;
-				const keepRecent = keepRecentFor(model.contextWindow);
 
 				// 1. the cheap ways first: old screenshots out, old tool results cut (already-shrunk messages stay shrunk)
-				let history = conv && conv.key === key ? this.shrink(conv.messages) : [];
 				// 2. at the line (80% of the window, at most 200K) the older conversation becomes a summary, before the request is made
-				if (history.length && estimateContext(history).tokens + promptTokens > compactLine(model.contextWindow)) {
-					history = (await this.compactHistory({ thread, rt, model, history, signal, emit, keepRecent })) ?? history;
-				}
+				// (a conversation that lives on another model than this run's is not carried over: it is rebuilt from the transcript, as after a change of model)
+				const historyFor = async (sh: typeof shape): Promise<AgentMessage[]> => {
+					let h = conv && conv.key === sh.key ? this.shrink(conv.messages) : [];
+					if (h.length && estimateContext(h).tokens + promptTokens > compactLine(sh.model.contextWindow)) h = (await this.compactHistory({ thread, rt, model: sh.model, history: h, signal, emit, keepRecent: sh.keepRecent })) ?? h;
+					return h;
+				};
+				const history = await historyFor(shape);
 
 				const standing = this.standing(s, spec, revitTools, false, projectId);
 				// a resumed SDK session already holds the conversation: the earlier lines are not repeated (history stays [] for that engine)
-				const seed = resume ? { summary: null, earlier: [] } : this.transcriptSeed(thread);
-				const seeded = seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing;
+				const seedFor = (sh: typeof shape) => {
+					const seed = sh.resume ? { summary: null, earlier: [] } : this.transcriptSeed(thread);
+					return { seed, seeded: seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing };
+				};
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
-				const st = { toolsRan: false, overflowed: null as string | null, retried: false };
-				const attempt = async (h: AgentMessage[]) => {
+				const st = { toolsRan: false, overflowed: null as string | null, retried: false, held: null as (RunEvent & { type: "error" }) | null };
+				const attempt = async (h: AgentMessage[], sh: typeof shape) => {
+					const { provider, modelId, effort, key, claude, engine, resume } = sh;
+					const { seed, seeded } = seedFor(sh);
 					st.overflowed = null;
 					const base = estimateContext(h).tokens;
 					const handle = (e: RunEvent): void => {
@@ -383,13 +423,30 @@ export class ThreadRunner {
 							emit({ ...e, message: `${e.message}\n\nKonteksts ir pilns. Spied «saspiest» virs ievades vai sāc jaunu sarunu.` });
 							return;
 						}
-						if (e.type === "error") failed = true;
+						if (e.type === "error") {
+							// Before any tool ran, an error that a backup may answer (a limit, a lost sign-in, a provider that is down) is held back: below the run decides whether it is
+							// tried again on the backup or shown as it is. After a tool ran nothing is resent, but the hold is still recorded so the next run starts on the backup.
+							if (fo && !retried && !st.toolsRan && !signal.aborted && classifyFailure(e.message, e.hint).kind !== "other") {
+								st.held = e;
+								return;
+							}
+							fo?.record(sh.target, sh.model.id, e.message, e.hint);
+							failed = true;
+						}
 						emit(e);
 					};
 					// helpers and specialists (task 8.15): lanes of their own, with the tools the gate allows them, writing one at a time
 					const lanes = spec ? [] : subagentTools({
-						run: engine,
+						// each lane on the engine of its own provider (a specialist may be on another one than this run)
+						run: (o) => {
+							const e = this.engineOf(o.provider ?? provider);
+							if (!e) throw new Error(NOT_CONNECTED);
+							return e(o);
+						},
 						base: { runtime: rt, provider, modelId, effort },
+						failover: fo,
+						// a helper (no spec) carries on where this run's agent would
+						backupOf: (sp) => backupFor(sp ?? spec, s),
 						// a lane has no Revit (a second connection to the one Revit): no Revit rules in its text, no Revit server below
 						standing: (sp) => this.standing(s, sp, new Set(), true),
 						// a delegated specialist's tools run as that specialist, in the lead's thread (the parent conversation): the log names who did the work
@@ -466,17 +523,54 @@ export class ThreadRunner {
 						extraTools: extraTools.length ? extraTools : undefined,
 					});
 				};
-				await attempt(history);
+				await attempt(history, shape);
 				if (st.overflowed && !st.toolsRan && !st.retried && !signal.aborted) {
 					// the model refused the request for its size, although the estimate said it fits: summarize harder and ask again, once
 					st.retried = true;
-					const smaller = history.length ? await this.compactHistory({ thread, rt, model, history, signal, emit, keepRecent: Math.floor(keepRecent / 2) }) : null;
-					if (smaller) await attempt(smaller);
+					const smaller = history.length ? await this.compactHistory({ thread, rt, model: shape.model, history, signal, emit, keepRecent: Math.floor(shape.keepRecent / 2) }) : null;
+					if (smaller) await attempt(smaller, shape);
 					else {
 						failed = true;
 						emit({ type: "error", engine: "pi", message: `${st.overflowed}\n\nKonteksts ir pilns, un to nevarēja saspiest. Sāc jaunu sarunu vai pievieno mazāk.` });
 					}
 				}
+				// An error held back before any tool ran (a usage limit, a lost sign-in, a provider that is down): the provider is put on hold when the error says so, and the run is
+				// tried once more on the backup when that is allowed (agent-to-agent work, or automatic recovery on); else the error is shown as the provider wrote it. The retry is
+				// this same run, so it has the gate, the tools, the depth and the wave it had: a resend never carries more than the first try.
+				if (st.held) {
+					const err = st.held;
+					st.held = null;
+					const d = fo ? await fo.afterFailure({ agent: agentId, name: label, on: shape.target, id: shape.model.id, backup: retried ? null : backup, error: err.message, hint: err.hint, toolsRan: st.toolsRan, aborted: signal.aborted, mode: i.peer ? "peer" : "direct", recovery: s.automaticRecovery === true, needImages }) : null;
+					if (d?.notice) emit({ type: "text", text: `
+
+[lietotne] ${d.notice}
+
+` });
+					let next: typeof shape | null = null;
+					if (d?.retryOn) {
+						try {
+							next = shapeFor(d.retryOn);
+						} catch {
+							// the backup cannot be set up (its model is gone from the catalogue): the first error stands
+						}
+					}
+					if (next) {
+						retried = true;
+						shape = next;
+						this.lastOn.set(thread.id, d!.retryOn!);
+						// the notice above names the switch once per stretch; this line says it for this run
+						if (!d?.notice) emit({ type: "text", text: `
+
+[lietotne] Atkārto ar ${fo!.label(d!.retryOn!.provider)} (rezerve).
+
+` });
+						await attempt(await historyFor(shape), shape);
+					} else {
+						failed = true;
+						emit(err);
+					}
+				}
+				if (fo && !failed && !signal.aborted) fo.worked(agentId, shape.target, shape.model.id);
 			} catch (e) {
 				failed = true;
 				emit({ type: "error", engine: "pi", message: (e as Error).message });
@@ -536,7 +630,7 @@ export class ThreadRunner {
 		const s = this.d.settings();
 		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text, declarations and model
 		const agent = this.specOf(thread);
-		const mf = this.modelFor(s, agent);
+		const mf = this.modelFor(s, agent, thread);
 		const model = lookupPiModel(await this.d.runtime(), catalogProvider(mf.provider), mf.modelId);
 		const conv = this.conversations.get(thread.id);
 		const live = conv && conv.key === mf.key && conv.messages.length > 0 ? conv : null;
@@ -562,12 +656,12 @@ export class ThreadRunner {
 
 	/** Summarizes the thread's in-memory conversation now; the caller guards against a run going on. */
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
-		const mf = this.modelFor(this.d.settings(), this.specOf(thread));
+		const mf = this.modelFor(this.d.settings(), this.specOf(thread), thread);
 		if (isClaudeSub(mf.provider)) throw new Error("Claude abonementa sarunu Claude saspiež pats, kad tā tuvojas limitam. Jaunai tēmai sāc jaunu sarunu.");
 		const conv = this.conversations.get(thread.id);
 		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();
-		const model = lookupPiModel(rt, mf.provider, mf.modelId);
+		const model = lookupPiModel(rt, catalogProvider(mf.provider), mf.modelId);
 		const history = this.shrink(conv.messages);
 		const before = estimateContext(conv.messages).tokens;
 		const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });

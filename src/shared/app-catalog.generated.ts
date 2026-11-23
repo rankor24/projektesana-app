@@ -90,6 +90,18 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		"sig": "() => ProviderRow[]",
 		"params": []
 	},
+	"agent.holds": {
+		"sig": "() => HoldRow[]",
+		"params": [],
+		"doc": "the providers on hold now (a usage limit, no credit, a sign-in gone)"
+	},
+	"agent.releaseHold": {
+		"sig": "(provider: string) => void",
+		"params": [
+			"provider"
+		],
+		"doc": "the user ends a provider's holds by hand: its agents try it again at their next run"
+	},
 	"agent.setKey": {
 		"sig": "(provider: string, key: string) => void",
 		"params": [
