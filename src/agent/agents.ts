@@ -13,7 +13,7 @@ import { memoryText } from "./memory-md.js";
 import { estimateTextTokens } from "./context.js";
 import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-def.js";
 import { STATUS_MAX } from "../core/process.js";
-import { MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
+import { CHIEF_RULES, MAIL_RULES, MAIL_TOOL_LEVELS } from "./mail.js";
 import { EFFORTS } from "./pi/models.js";
 import { isKnownProvider } from "./failover/plan.js";
 import { SYSTEM_PROMPT, userLine } from "./prompt.js";
@@ -315,6 +315,8 @@ export interface StandingDeps {
 	/** a `delegate` lane of a specialist (13.3 review): it has no mail tools and nobody to write to, and `delegate` adds the common rules itself,
 	 *  so the text leaves out the rules, the mail lines and the roster */
 	lane?: boolean;
+	/** this agent holds the Chief's tools (BPV, a department's lead): its text gets the line on incidents */
+	chief?: boolean;
 }
 
 /** Whom an agent may write to, one line each. The lead's is the specialists' list as before (it delegates to them); a specialist's holds the agents
@@ -338,7 +340,7 @@ function standingBase(spec: AgentSpec | null, d: StandingDeps): string {
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
-	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? MAIL_RULES : "", talk && d.chief ? CHIEF_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }
 
 /** The standing text and, at its end, the agent's memory (agent/memory-md.ts): the one call this file makes into the Markdown memory. It sits last so a memory that changes

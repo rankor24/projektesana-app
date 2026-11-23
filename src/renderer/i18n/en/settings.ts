@@ -434,6 +434,7 @@ export const settings: Record<string, string> = {
 	"Atkārtot": "Retry",
 	"Noņem no saraksta, neatkārtojot": "Removes it from the list without retrying",
 	"jau mēģināts: {n}": "already tried: {n}",
+	"{who} atkārtoja": "{who} retried it",
 	"BPV eskalācija ({reason}): izvēlies variantu vai uzraksti savu lēmumu": "BPV escalation ({reason}): pick an option or write your own decision",
 	"Izvēlos variantu {n}: {text}": "I choose option {n}: {text}",
 	"BPV iesaka": "BPV recommends",

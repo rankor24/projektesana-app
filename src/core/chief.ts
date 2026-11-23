@@ -36,7 +36,23 @@ export function mayAssign(from: string, to: string, specs: readonly Spec[], depa
 	return { ok: false, reason: led ? `Nodaļas «${led.name}» vadītājs nodod uzdevumus tikai savas nodaļas aģentiem; «${to}» ir citur. To dara BPV.` : "Uzdevumus dod BPV un nodaļas vadītājs." };
 }
 
-/** Does this agent hold a Chief's tools (assign a task, escalate)? BPV, or the lead of a department. */
+export type Handle = { ok: true; as: "bpv" | "lead" } | { ok: false; reason: string };
+
+/** May `from` list and retry the incidents of agent `agentId`'s threads? The same reach as handing out a task: BPV, for any agent of a department it is in charge of; a department
+ *  lead, for the agents of its own department; nobody for the expert (eks, Kvalitāte) and nobody for its own threads (OpenMausBot `retry_thread` is "Chief-only, for a teammate the
+ *  Chief can reach"). The reasons are in Latvian, for the agent that asked. */
+export function mayHandleIncidentOf(from: string, agentId: string, specs: readonly Spec[], departments: readonly Department[]): Handle {
+	if (from === agentId) return { ok: false, reason: "Savu sarunu pats neatkārto: to dara BPV vai nodaļas vadītājs." };
+	const target = specs.find((s) => s.id === agentId);
+	if (!target) return { ok: false, reason: `Nezināms aģents «${agentId}».` };
+	if (agentId === EKS || !bpvManages(target)) return { ok: false, reason: `Aģents «${agentId}» ir Kvalitātes nodaļā: tā sarunas atkārto tikai lietotājs.` };
+	if (from === BPV_ID) return specs.some((s) => s.id === BPV_ID) ? { ok: true, as: "bpv" } : { ok: false, reason: "BPV aģenta nav." };
+	const led = departmentLedBy(from, departments);
+	if (led && departmentOf(target) === led.id) return { ok: true, as: "lead" };
+	return { ok: false, reason: led ? `Nodaļas «${led.name}» vadītājs atkārto tikai savas nodaļas aģentu sarunas; «${agentId}» ir citur. To dara BPV.` : "Sarunas atkārto BPV un nodaļas vadītājs." };
+}
+
+/** Does this agent hold a Chief's tools (assign a task, escalate, list incidents, retry a thread)? BPV, or the lead of a department. */
 export function holdsChiefTools(agentId: string, specs: readonly Spec[], departments: readonly Department[]): boolean {
 	if (!specs.some((s) => s.id === agentId)) return false;
 	return agentId === BPV_ID || !!departmentLedBy(agentId, departments);

@@ -10,6 +10,8 @@
 //     failure of work it handed out: a run started by a message therefore raises no incident of its own.
 //   - A run the user stopped is not an incident (OpenMausBot: "A run the person stopped is not an incident"), nor is a run cut by the app closing.
 //   - The list is kept in <app data>\incidents.json so a restart does not lose it.
+//   - OpenMausBot's `retry_thread` (the Chief resumes a teammate's broken thread, server/drivers/agents-call.ts, docs/team-incidents.md) is here the agent's way into the very
+//     Retry the user has (coordinator.retryIncident): the store remembers who retried a thread, so when the retry fails again the new incident says "BPV atkārtoja".
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { IncidentView } from "../shared/thread-types.js";
@@ -72,6 +74,8 @@ export interface NewIncident {
 export class IncidentStore {
 	private items: IncidentView[];
 	private readonly ledger: IncidentLedger;
+	/** the agent that retried each thread last (by name), until the thread works again: the thread's next incident carries it */
+	private readonly retriedBy = new Map<string, string>();
 
 	constructor(private readonly file?: string, ledger?: IncidentLedger) {
 		this.ledger = ledger ?? new IncidentLedger();
@@ -90,7 +94,7 @@ export class IncidentStore {
 	add(n: NewIncident, at: string = new Date().toISOString()): IncidentView | null {
 		const c = this.ledger.note(n.threadId);
 		if (c.muted) return null;
-		const view: IncidentView = { id: newId("i"), at, projectId: n.projectId, threadId: n.threadId, agent: n.agent, what: n.what, detail: fold(n.detail, 400), request: fold(n.request, 300), retries: c.count - 1, mayRetry: c.mayRetry };
+		const view: IncidentView = { id: newId("i"), at, projectId: n.projectId, threadId: n.threadId, agent: n.agent, what: n.what, detail: fold(n.detail, 400), request: fold(n.request, 300), retries: c.count - 1, mayRetry: c.mayRetry, ...(this.retriedBy.has(n.threadId) ? { retriedBy: this.retriedBy.get(n.threadId) } : {}) };
 		this.items = [view, ...this.items.filter((i) => i.threadId !== n.threadId)];
 		this.save();
 		return view;
@@ -105,9 +109,16 @@ export class IncidentStore {
 		return found;
 	}
 
+	/** An agent (BPV, a department's lead) retried this thread, by name; or the user did (no name). Remembered for the thread's next incident. */
+	retried(threadId: string, by?: string): void {
+		if (by) this.retriedBy.set(threadId, by);
+		else this.retriedBy.delete(threadId);
+	}
+
 	/** The thread finished a run well: its incidents are over, its count forgotten. True when the list changed. */
 	settled(threadId: string): boolean {
 		this.ledger.forget(threadId);
+		this.retriedBy.delete(threadId);
 		const had = this.items.some((i) => i.threadId === threadId);
 		if (had) {
 			this.items = this.items.filter((i) => i.threadId !== threadId);

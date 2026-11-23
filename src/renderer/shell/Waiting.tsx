@@ -134,6 +134,7 @@ export function IncidentRow({ i, specs, projectId, onOpen, onRetry, onDismiss }:
 					{tr("Noņemt")}
 				</button>
 				{i.retries > 0 && <span className="dim small">{tr("jau mēģināts: {n}", { n: i.retries })}</span>}
+				{i.retriedBy && <span className="dim small">{tr("{who} atkārtoja", { who: i.retriedBy })}</span>}
 			</div>
 		</div>
 	);

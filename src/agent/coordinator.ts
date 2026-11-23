@@ -8,15 +8,15 @@
 //   - the Chief's ceiling: the tool level a message carries (`Message.level`) caps the run it starts (core/chief.ts `minLevel`; docs/approval-levels.md).
 // No Electron imports: the runner, the stores and the sink are injected.
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type PauseTarget, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
+import { LEAD_ID, type IncidentView, type PauseTarget, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { answered, inboxOf, limitsOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
 import { EKS } from "../core/process-def.js";
 import { Holds, handoffText, refusalText, type HeldBy } from "../core/holds.js";
 import { IncidentStore, STALL_MS, isStalled } from "../core/incidents.js";
-import { levelOfMessages, type Level } from "../core/chief.js";
-import { departmentOf, DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
+import { levelOfMessages, mayHandleIncidentOf, type Level } from "../core/chief.js";
+import { BPV_ID, departmentOf, DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, waveCheck, type QueueItem, type Running } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
@@ -650,17 +650,35 @@ export class Coordinator {
 		this.watchTimer.unref?.();
 	}
 
-	/** Retry: the incident leaves the list and its thread carries on where it stopped (a start by the user, so it keeps the user's rights). Refused when the thread has failed more than twice in the hour. */
-	retryIncident(id: string): { runId: string | null; queued: boolean } {
+	/** The open incidents, newest first: all of them, or those of one project (an agent sees only its own project's). */
+	listIncidents(projectId?: string | null): IncidentView[] {
+		return (this.d.incidents?.list() ?? []).filter((i) => projectId === undefined || i.projectId === projectId);
+	}
+
+	/** Retry: the incident leaves the list and its thread carries on where it stopped (a start by the user, so it keeps the user's rights). Refused when the thread has failed more than twice in the hour.
+	 *  `by` is an agent doing it (BPV, a department's lead: OpenMausBot's `retry_thread`): the same function with the same limits, plus what the agent may reach (core/chief.ts `mayHandleIncidentOf`),
+	 *  its own project, and a pause refused first with its own words; the thread's text and its next incident say who retried. The retried thread keeps its own approval level. */
+	retryIncident(id: string, by?: { agent: string; projectId: string | null }): { runId: string | null; queued: boolean } {
 		const inc = this.d.incidents?.get(id);
 		if (!inc) throw new Error("Šis incidents vairs nav sarakstā.");
+		let who = "";
+		if (by) {
+			const specs = this.d.specs?.() ?? [];
+			const may = mayHandleIncidentOf(by.agent, inc.agent, specs, this.d.departments?.() ?? DEFAULT_DEPARTMENTS);
+			if (!may.ok) throw new Error(may.reason);
+			if (inc.projectId !== by.projectId) throw new Error("Šis incidents ir citā projektā: to atkārto tur.");
+			const held = this.heldNow(inc.agent);
+			if (held) throw new Error(this.refusal(inc.agent, held));
+			who = by.agent === BPV_ID ? "BPV" : this.nameOf(by.agent);
+		}
 		if (this.d.threads(inc.projectId).get(inc.threadId)?.state === "closed") throw new Error("Saruna ir slēgta (arhivēta): atjauno to, tad atkārto.");
 		if (!inc.mayRetry) throw new Error("Šī saruna jau ir atkārtota divreiz: nolasi kļūdu un izlabo cēloni, nevis mēģini vēlreiz.");
 		const what = inc.what === "stalled" ? "pārstāja darboties" : inc.what === "not-started" ? "nevarēja sākties" : "beidzās ar kļūdu";
-		const text = `[lietotne · atkārtošana · tikai informācija] Iepriekšējais gājiens šajā sarunā neizdevās (${what}): ${inc.detail}\nTurpini no vietas, kur apstājies; to, kas jau izdarīts, nedari vēlreiz.`;
+		const text = `[lietotne · atkārtošana${who ? ` · ${who} atkārtoja` : ""} · tikai informācija] Iepriekšējais gājiens šajā sarunā neizdevās (${what}): ${inc.detail}\nTurpini no vietas, kur apstājies; to, kas jau izdarīts, nedari vēlreiz.`;
 		const r = this.submit({ threadId: inc.threadId, projectId: inc.projectId, text, focus: [], cause: { by: "user" } });
 		// only once it has started (or queued): a start that is refused leaves the incident where it was
 		this.d.incidents?.remove(id);
+		this.d.incidents?.retried(inc.threadId, who || undefined);
 		this.waitingChanged();
 		return r;
 	}

@@ -157,6 +157,8 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	assign_task: { words: "Nodod uzdevumu aģentam", kind: "other" },
 	report_answer: { words: "Nosūta atbildi uz uzdevumu", kind: "other" },
 	escalate: { words: "Nodod lēmumu lietotājam", kind: "other" },
+	list_incidents: { words: "Skatās incidentus", kind: "read" },
+	retry_thread: { words: "Atkārto aģenta sarunu", kind: "other" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {
