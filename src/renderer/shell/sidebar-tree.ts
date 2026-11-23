@@ -22,6 +22,8 @@ export interface AgentNode {
 	threads: Thread[];
 	/** the most pressing state of its open threads: what its dot shows */
 	state: ThreadState;
+	/** unread messages over all its open threads (a search that hides some threads does not change it): the badge beside its dot */
+	unread: number;
 }
 
 export interface DepartmentNode {
@@ -33,6 +35,8 @@ export interface DepartmentNode {
 	state: ThreadState;
 	/** open threads that are not idle, for the same mark */
 	active: number;
+	/** the unread messages of its agents, shown on a folded header */
+	unread: number;
 }
 
 export interface Tree {
@@ -55,7 +59,9 @@ export const NO_DEPARTMENT = (): string => tr("Bez nodaļas");
 
 function node(id: string, name: string, gone: boolean, all: Thread[], queue: QueueView, showClosed: boolean): AgentNode {
 	const threads = all.filter((t) => t.agent === id && (showClosed || t.state !== "closed")).sort(newestFirst);
-	return { id, name, gone, threads, state: mostPressing(threads.filter((t) => t.state !== "closed").map((t) => liveState(t, queue))) };
+	// an archived thread does not nag, so only open threads count, whether or not the archive is shown
+	const unread = all.filter((t) => t.agent === id && t.state !== "closed").reduce((n, t) => n + (t.unread ?? 0), 0);
+	return { id, name, gone, threads, state: mostPressing(threads.filter((t) => t.state !== "closed").map((t) => liveState(t, queue))), unread };
 }
 
 /** True when `needle` (already `normRef`-ed) is in `text`: case, diacritics and punctuation do not matter ("bk 3" finds "BK-3", "Ugunsdrosiba" finds "Ugunsdrošība"). */
@@ -87,7 +93,7 @@ export function buildTree(i: { specs: readonly AgentSpec[]; departments: readonl
 		const agents = g.specs.map((s) => narrow(make(s.id, s.name, false), deptMatches)).filter((a): a is AgentNode => a !== null);
 		// an empty department stays (it is a place to drag to), but not while a search narrows the tree; "no department" only when someone is in it
 		if (agents.length === 0 && (needle || g.id === null)) continue;
-		departments.push({ id: g.id, name: g.name, agents, state: mostPressing(agents.map((a) => a.state)), active: agents.reduce((n, a) => n + a.threads.filter((t) => t.state !== "closed" && liveState(t, i.queue) !== "idle").length, 0) });
+		departments.push({ id: g.id, name: g.name, agents, state: mostPressing(agents.map((a) => a.state)), active: agents.reduce((n, a) => n + a.threads.filter((t) => t.state !== "closed" && liveState(t, i.queue) !== "idle").length, 0), unread: agents.reduce((n, a) => n + a.unread, 0) });
 	}
 
 	const lead = narrow(make(LEAD_ID, i.leadName, false), false);

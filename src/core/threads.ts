@@ -46,11 +46,11 @@ function atomicWrite(file: string, body: string) {
 	renameSync(tmp, file);
 }
 
-type Patch = Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">>;
+type Patch = Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">> & { seen?: true };
 type Filter = { agent?: string; open?: boolean };
 
 /** The threads as the files keep them: the old store, now the fallback and the source of the one-time copy into the database. */
-class FileThreads {
+export class FileThreads {
 	constructor(private readonly dir: string) {}
 
 	private folder(id: string) {
@@ -67,21 +67,33 @@ class FileThreads {
 		mkdirSync(this.folder(t.id), { recursive: true });
 		// before thread.json: a failed seed leaves a folder list() skips, never a thread with missing history
 		seed?.(this.chatFile(t.id));
-		this.save(t);
+		// what a new thread starts with (the old lead chat) has been read: the mark is the line count when it is made
+		this.save({ ...t, seen: this.transcript(t.id).length });
 	}
 
-	private save(t: Thread) {
+	private save(t: Thread & { seen?: number }) {
 		atomicWrite(this.metaFile(t.id), JSON.stringify(t, null, 1));
 	}
 
-	get(id: string): Thread | null {
+	/** The thread as thread.json holds it, with its seen mark (the number of transcript lines the user has had open), without the unread count. */
+	private stored(id: string): (Thread & { seen?: number }) | null {
 		try {
 			const t = JSON.parse(readFileSync(this.metaFile(id), "utf8"));
 			// parseable but not a thread (hand-edited, other tool): treated as absent, so list() never throws on it
-			return typeof t?.id === "string" && typeof t.agent === "string" ? (t as Thread) : null;
+			return typeof t?.id === "string" && typeof t.agent === "string" ? (t as Thread & { seen?: number }) : null;
 		} catch {
 			return null;
 		}
+	}
+
+	/** The thread with its unread count: the assistant's lines after the seen mark. A thread with no mark yet (made by an older build) counts as read. */
+	get(id: string): Thread | null {
+		const s = this.stored(id);
+		if (!s) return null;
+		const { seen, ...t } = s;
+		if (seen === undefined) return t;
+		const unread = this.transcript(id).slice(seen).filter((e) => e.role === "assistant" && e.kind === undefined).length;
+		return unread > 0 ? { ...t, unread } : t;
 	}
 
 	/** Newest `lastAt` first. A folder without a readable thread.json (a half-made thread) is left out. */
@@ -105,11 +117,12 @@ class FileThreads {
 	}
 
 	patch(id: string, p: Patch): Thread {
-		const t = this.get(id);
+		const t = this.stored(id);
 		if (!t) throw new Error(`Saruna ${id} nav atrasta.`);
-		const next: Thread = { ...t, ...p };
+		const { seen, ...fields } = p;
+		const next = { ...t, ...fields, ...(seen ? { seen: this.transcript(id).length } : {}) };
 		this.save(next);
-		return next;
+		return this.get(id) ?? next;
 	}
 
 	append(id: string, e: ChatEntry): void {

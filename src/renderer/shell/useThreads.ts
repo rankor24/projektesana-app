@@ -68,7 +68,8 @@ export interface LaneItem {
 	step: string | null;
 }
 
-export function useThreads(projectId: string | null) {
+/** `markSeen`: this is the window that shows the chat, so the thread on screen counts as read (threads.seen); the list window leaves it alone. */
+export function useThreads(projectId: string | null, opts: { markSeen?: boolean } = {}) {
 	const { tick, thread: selId } = useUi();
 	const [threads, setThreads] = useState<Thread[]>([]);
 	const [queue, setQueue] = useState<QueueView>(NO_QUEUE);
@@ -196,6 +197,28 @@ export function useThreads(projectId: string | null) {
 	const viewId = selId ?? lead?.id ?? null;
 	const viewThread = threads.find((t) => t.id === viewId);
 	const leadPath = selId === null || selId === lead?.id;
+
+	// the thread on screen is read while the window is in front: opening it, or a message arriving in it, moves its seen mark (main pushes the thread back without `unread`)
+	const [inFront, setInFront] = useState(() => (typeof document === "undefined" ? true : document.hasFocus()));
+	useEffect(() => {
+		if (!opts.markSeen) return;
+		const on = () => setInFront(true);
+		const off = () => setInFront(false);
+		window.addEventListener("focus", on);
+		window.addEventListener("blur", off);
+		return () => {
+			window.removeEventListener("focus", on);
+			window.removeEventListener("blur", off);
+		};
+	}, [opts.markSeen]);
+	const unreadOnScreen = viewThread?.unread ?? 0;
+	useEffect(() => {
+		if (!opts.markSeen || !inFront || unreadOnScreen <= 0 || !viewId) return;
+		const p = projectId;
+		call("threads.seen", viewId, p)
+			.then((t) => current.current === p && setThreads((ts) => upsert(ts, t)))
+			.catch(() => undefined);
+	}, [opts.markSeen, inFront, unreadOnScreen, viewId, projectId]);
 	/** the lead's current thread is the null selection, so a click on it is the same as today's chat */
 	const select = useCallback((id: string) => ui.selectThread(id === lead?.id ? null : id), [lead?.id]);
 	const open = useCallback(

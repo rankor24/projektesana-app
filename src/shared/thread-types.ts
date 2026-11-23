@@ -21,6 +21,8 @@ export interface Thread {
 	runs: number;
 	/** pinned by the user: listed first in its agent's threads */
 	pinned?: boolean;
+	/** how many messages of the assistant came after the last time the user had this thread open; absent = none */
+	unread?: number;
 }
 
 /** Who an event belongs to. The coordinator stamps it on every event of a run; the window uses it to route the event to a lane. */

@@ -1,19 +1,19 @@
 // The eight pages of Settings, each a few blocks. A block carries `data-settings-block="<anchor>"`: that is what a search result or an
 // agent's "please open this" scrolls to, focuses and lights (SettingsWindow.tsx). Every setting the four old tabs had is here, working the same
 // way (same calls, same Latvian text); what is new is where it sits (the four groups of shared/settings-index.ts) and the Aģenti group, which
-// shows the departments and the limits the Agents page also has.
+// holds the team editor (the Agents page's own component) and the limits the Agents page also has.
 // Moved from panels/Iestatijumi.tsx: the provider table, the sign-in box, model / effort, the backup, automatic recovery, the held providers,
 // the usage table, the Revit MCP and component rows, the Revit add-in, the paths, the office standard PDF, the user name, language and theme.
 import { useEffect, useState, type ReactNode } from "react";
 import { call, errText } from "../../bridge";
 import { usageText } from "../../../shared/tokens";
-import { departmentOf } from "../../../shared/departments";
 import type { Limits } from "../../../shared/thread-types";
 import type { SettingsPageId } from "../../../shared/settings-index";
 import { Badge, Err, useLoad } from "../../ui";
 import { getLang, LANGS, locale, setLang, tr, trDyn } from "../../i18n";
 import { windows } from "../../windows";
 import { ClaudeSignIn } from "../ClaudeSignIn";
+import { TeamEditor } from "../Agenti";
 import type { SettingsCtx } from "./data";
 
 /** One anchored block of a page. */
@@ -358,57 +358,19 @@ function UsageTable() {
 }
 
 // ---- Aģenti · Komanda un prasmes
-/** The departments with the agents filed in each, read from the same lists the Agents page edits; the buttons open that page and the skills library. */
+/** The team editor itself, the same component as the Agents page (panels/Agenti.tsx TeamEditor): departments with their agents, drag, lead, add / rename / reorder / remove, the agent cards and dialog, the import. Below it the skills library. */
 function TeamPage() {
-	const depts = useLoad(() => call("departments.list"), []);
-	const agents = useLoad(() => call("agents.list"), []);
 	const skills = useLoad(() => call("skills.list"), []);
-	const specs = agents.data?.specs ?? [];
-	const list = depts.data?.departments ?? [];
-	const known = new Set(list.map((d) => d.id));
-	const loose = specs.filter((a) => !known.has(departmentOf(a) ?? ""));
 	const office = (skills.data ?? []).filter((k) => k.origin === "office").length;
 	return (
 		<>
 			<Block anchor="departments" title={tr("Nodaļas")}>
-				{depts.error ? <Err error={depts.error} /> : null}
-				{agents.error ? <Err error={agents.error} /> : null}
-				{!depts.data || !agents.data ? (
-					<div className="dim small">{tr("ielādē…")}</div>
-				) : (
-					<div className="st-scroll">
-						<table className="small">
-							<thead>
-								<tr>
-									<th>{tr("Nodaļa")}</th>
-									<th>{tr("Aģenti")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{list.map((d) => {
-									const members = specs.filter((a) => departmentOf(a) === d.id);
-									return (
-										<tr key={d.id}>
-											<td>{d.name}</td>
-											<td>{members.length ? members.map((a) => a.name || a.id).join(", ") : <span className="dim">{tr("neviena aģenta")}</span>}</td>
-										</tr>
-									);
-								})}
-								{loose.length > 0 && (
-									<tr>
-										<td className="dim">{tr("bez nodaļas")}</td>
-										<td>{loose.map((a) => a.name || a.id).join(", ")}</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
-				)}
+				<TeamEditor />
 				<div className="row">
-					<button className="primary" onClick={() => windows.open("agenti")}>
+					<button className="ghost" onClick={() => windows.open("agenti")}>
 						{tr("Atvērt Aģentu lapu…")}
 					</button>
-					<span className="dim small">{tr("Aģentu lomas, nodaļas, modeļi, rezerves un tiesības tiek iestatītas tur.")}</span>
+					<span className="dim small">{tr("Kopējie noteikumi, ko saņem katrs aģents, ir Aģentu lapā.")}</span>
 				</div>
 			</Block>
 			<Block anchor="skills" title={tr("Prasmju bibliotēka")}>

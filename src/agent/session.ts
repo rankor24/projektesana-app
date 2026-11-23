@@ -290,6 +290,15 @@ export class AgentSession {
 		return next;
 	}
 
+	/** The user has this conversation open: everything in it counts as read from now on. A thread with nothing unread is answered as it is, with no write and no push. */
+	seenThread(threadId: string, projectId: string | null): Thread {
+		const t = this.threadOf(threadId, projectId);
+		if (!t.unread) return t;
+		const next = this.threads(projectId).patch(t.id, { seen: true });
+		this.d.onThread?.(next);
+		return next;
+	}
+
 	/** Takes an archived (closed) conversation back: idle again, its transcript as it was. Refused for one that is not archived. */
 	reopenThread(threadId: string, projectId: string | null): Thread {
 		const t = this.threadOf(threadId, projectId);

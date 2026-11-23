@@ -296,6 +296,14 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "Takes an archived conversation back (Atjaunot): idle again, its transcript as it was."
 	},
+	"threads.seen": {
+		"sig": "(threadId: string, projectId: string | null) => Thread",
+		"params": [
+			"threadId",
+			"projectId"
+		],
+		"doc": "The user has the thread open: its unread messages count as read. Answers the thread with `unread` gone, and pushes it to the windows."
+	},
 	"pause.set": {
 		"sig": "(target: PauseTarget, paused: boolean) => { stopped: number }",
 		"params": [

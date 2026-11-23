@@ -46,7 +46,7 @@ type Line =
 
 export function AgentDock() {
 	const { projectId, focus, view, viewChoice } = useUi();
-	const T = useThreads(projectId);
+	const T = useThreads(projectId, { markSeen: true });
 	const { selId, viewId, viewThread, leadPath, viewKey } = T;
 	// Auto adds one item built from the viewer to every message (the 3D tab); Manual sends only the Fokuss (documents)
 	const mode = effectiveMode(viewChoice, view.kind);

@@ -2,7 +2,9 @@
 // for, provider and model, backup, skills, a mark on the department's lead); an agent is dragged to another department or place (agents.move); a department is dragged or stepped to
 // another place and added, renamed or removed (departments.save); agents in none are the group «Bez nodaļas». A card opens the agent's settings dialog (AgentDialog.tsx).
 // «Importēt BD komandu…» reads the user's team folder (the 16 role files and their skills) and shows what it made, updated and skipped (agents.importTeam).
-// The rules every agent gets (agents\_kopejie.md) and the number of parallel helpers stay at the top; the limits on how far agents talk are on the page below (AgentiPage).
+// The rules every agent gets (agents\_kopejie.md) and the number of parallel helpers stay at the top of the Agents page; the limits on how far agents talk are on the page below (AgentiPage).
+// The department tree itself (import, groups with drag, lead, add / rename / reorder / remove, the cards and the dialog) is TeamEditor: one component, used by the Agents page (Agenti
+// below) and by Settings → Aģenti → Komanda un prasmes (settings/pages.tsx), so the two cannot drift apart.
 //
 // Ported from OpenMausBot (Apache-2.0): the grouped layout and the drag rules are SidebarSections.tsx / SidebarSectionHeader.tsx / SidebarBotDrag.tsx as src/renderer/shell/ThreadList.tsx
 // already took them (the rules are in shell/sidebar-tree.ts, used here as they are); the agent dialog is src/components/BotSettingsDialog.tsx (AgentDialog.tsx).
@@ -150,7 +152,8 @@ function Card({ a, deptLead, provider, model, backup, drag }: { a: AgentSpecRow;
 	);
 }
 
-export function Agenti() {
+/** The team editor: import, departments with their agents (drag, lead, add, rename, reorder, remove when empty), the agent cards and the agent dialog. `onChanged` tells the host that something was saved. */
+export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 	const view = useLoad(() => call("agents.list"), []);
 	const providers = useLoad<ProviderRow[]>(() => call("agent.providers"), []);
 	const settings = useLoad(() => call("settings.get"), []);
@@ -171,6 +174,7 @@ export function Agenti() {
 		view.reload();
 		depts.reload();
 		settings.reload();
+		onChanged?.();
 	};
 	const run = async (p: Promise<unknown>) => {
 		setErr(null);
@@ -291,27 +295,10 @@ export function Agenti() {
 
 	const agentDragging = drag?.kind === "agent";
 	return (
-		<div>
+		<div className="ag-team">
 			<Err error={err} />
 			{view.error ? <Err error={view.error} /> : null}
-			{v && (
-				<div className="row">
-					<label>
-						{tr("Cik palīgi drīkst strādāt reizē")}{" "}
-						<select value={v.maxParallel} onChange={(e) => run(call("settings.set", { maxParallelAgents: Number(e.target.value) }))}>
-							{[1, 2, 3, 4, 5, 6].map((n) => (
-								<option key={n}>{n}</option>
-							))}
-						</select>
-					</label>
-					<span className="dim small">{tr("Katrs palīgs ir atsevišķs modeļa izsaukums ar savu kontekstu, un maksā savus tokenus (skat. Izmantojums).")}</span>
-				</div>
-			)}
-			<div className="dim small">
-				{tr("Speciālistiem aģents var uzdot darbu (delegate). Viņi nevar redzēt sarunu un nevar palaist citus aģentus. Rīkus, kuriem vajag tavu apstiprinājumu, var dot tikai speciālistam ar līmeni «apstiprina lietotājs». Izmaiņas nodevuma mapē un projekta datos viņi veic pa vienam, lai nesadurtos.")}
-				{v?.shipped ? tr(" Šobrīd ir piegādātais saraksts; tas saglabājas, kad saglabā kādu aģentu vai importē komandu.") : ""}
-			</div>
-			<SharedRules onSaved={() => view.reload()} />
+			{v?.shipped ? <div className="dim small">{tr(" Šobrīd ir piegādātais saraksts; tas saglabājas, kad saglabā kādu aģentu vai importē komandu.").trim()}</div> : null}
 
 			<div className="row ag-toolbar">
 				<button className="primary" disabled={importing} onClick={pickAndImport} title={tr("Nolasa mapi ar 16 lomu failiem un prasmēm un izveido vai atjauno aģentus")}>
@@ -487,6 +474,43 @@ export function Agenti() {
 					onSaved={reload}
 				/>
 			)}
+		</div>
+	);
+}
+
+/** The Agents page body: the number of parallel helpers, what delegation means, the rules every agent gets, then the team editor. */
+export function Agenti() {
+	const view = useLoad(() => call("agents.list"), []);
+	const v = view.data;
+	const [err, setErr] = useState<string | null>(null);
+	return (
+		<div>
+			<Err error={err} />
+			{view.error ? <Err error={view.error} /> : null}
+			{v && (
+				<div className="row">
+					<label>
+						{tr("Cik palīgi drīkst strādāt reizē")}{" "}
+						<select
+							value={v.maxParallel}
+							onChange={(e) => {
+								setErr(null);
+								call("settings.set", { maxParallelAgents: Number(e.target.value) })
+									.then(() => view.reload())
+									.catch((x) => setErr(errText(x)));
+							}}
+						>
+							{[1, 2, 3, 4, 5, 6].map((n) => (
+								<option key={n}>{n}</option>
+							))}
+						</select>
+					</label>
+					<span className="dim small">{tr("Katrs palīgs ir atsevišķs modeļa izsaukums ar savu kontekstu, un maksā savus tokenus (skat. Izmantojums).")}</span>
+				</div>
+			)}
+			<div className="dim small">{tr("Speciālistiem aģents var uzdot darbu (delegate). Viņi nevar redzēt sarunu un nevar palaist citus aģentus. Rīkus, kuriem vajag tavu apstiprinājumu, var dot tikai speciālistam ar līmeni «apstiprina lietotājs». Izmaiņas nodevuma mapē un projekta datos viņi veic pa vienam, lai nesadurtos.")}</div>
+			<SharedRules onSaved={() => view.reload()} />
+			<TeamEditor onChanged={() => view.reload()} />
 		</div>
 	);
 }
