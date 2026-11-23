@@ -183,4 +183,14 @@ export const part7: Record<string, string> = {
 	"Rādīt šodienu vidū": "Show today in the middle",
 	"Velc tukšu vietu, lai pārbīdītu; Ctrl + ritenis tuvina; Shift + ritenis bīda sāņus": "Drag an empty place to pan; Ctrl + wheel zooms; Shift + wheel pans sideways",
 	"velc: pārbīdīt · Ctrl + ritenis: tuvināt": "drag: pan · Ctrl + wheel: zoom",
+	// the BD team offer above the chat (shell/TeamOffer.tsx)
+	"BD komanda vēl nav lietotnē": "The BD team is not in the app yet",
+	"Lietotnē ir {n} aģenti. BD komanda ir 16 lomu aģenti 8 nodaļās (BPV vada, EKS pārbauda). Importē tos no mapes ar lomu failiem 01_….md … 16_….md un mapi skilli.": "The app has {n} agents. The BD team is 16 role agents in 8 departments (BPV leads, EKS checks). Import them from the folder with the role files 01_….md … 16_….md and the skilli folder.",
+	"Importēt no {folder}": "Import from {folder}",
+	"Vēlāk": "Later",
+	"Paslēpj līdz nākamajai palaišanai; imports ir arī lapā Aģenti": "Hides it until the next start; the import is also on the Agents page",
+	"BD komanda importēta: {created} jauni, {updated} atjaunoti aģenti, {skills} prasmes.": "BD team imported: {created} new, {updated} updated agents, {skills} skills.",
+	"Izlaisti: {list}.": "Skipped: {list}.",
+	"Mapē nav lomu: {list}.": "Roles missing from the folder: {list}.",
+	"Labi": "OK",
 };

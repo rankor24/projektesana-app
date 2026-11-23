@@ -31,6 +31,7 @@ import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
 import { Waiting } from "./Waiting";
+import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
 
 type Line =
@@ -424,6 +425,7 @@ export function AgentDock() {
 				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} />
 			</div>
 			<ProcessStrip projectId={projectId} />
+			<TeamOffer specs={T.specs} onDone={T.reload} />
 			<Waiting items={T.waiting} specs={T.specs} projectId={projectId} onConfirm={T.confirm} onOpen={T.select} />
 			<div className="chat" ref={setChatEl}>
 				{lines.length === 0 && loadedFor === viewKey && (
