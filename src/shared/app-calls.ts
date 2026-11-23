@@ -55,6 +55,7 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"threads.history": "read",
 	"threads.stop": "never",
 	"threads.close": "never",
+	"threads.export": "read",
 	"activity.recent": "read",
 	"projects.list": "read",
 	"projects.summaries": "read",

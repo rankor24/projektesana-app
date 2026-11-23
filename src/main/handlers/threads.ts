@@ -1,5 +1,6 @@
 // Threads and the queue: talk to any agent (task 11.4). The session does the work; this file only adds the activity title a run is shown under.
 import type { AgentSession } from "../../agent/session.js";
+import { exportThread } from "../../core/thread-export.js";
 import type { Handlers } from "../../shared/api.js";
 import type { ActivityLog } from "../activity.js";
 
@@ -36,6 +37,13 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 		"threads.history": (threadId, projectId) => d.session.threadHistory(threadId, projectId),
 		"threads.stop": (threadId) => d.session.stopThread(threadId),
 		"threads.close": (threadId, projectId) => d.session.closeThread(threadId, projectId),
+		"threads.export": (threadId, projectId, format) => {
+			// history first: it refuses a thread that is not in this project, with the same text as the history call
+			const entries = d.session.threadHistory(threadId, projectId);
+			const thread = d.session.listThreads(projectId).find((t) => t.id === threadId);
+			if (!thread) throw new Error(`Saruna ${threadId} nav atrasta.`);
+			return exportThread(thread, entries, format === "md" ? "md" : "jsonl");
+		},
 		"queue.view": () => d.session.queueView(),
 		"queue.pause": () => d.session.pauseQueue(),
 		"queue.resume": () => d.session.resumeQueue(),
