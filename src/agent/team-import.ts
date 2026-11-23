@@ -69,7 +69,7 @@ export function descriptionFromLoma(text: string): string {
 	if (!flat) return "";
 	// a sentence ends at . ! ? followed by a space or the end; «Nr. 169»-like abbreviations are not in the Loma lines of these files, and a cut one is still a fair description
 	const sentences = flat.match(/.*?[.!?](?=\s|$)/g)?.map((s) => s.trim()) ?? [flat];
-	// the first sentence of these files only says who the agent is («Tu esi Būvdizains arhitekta agents.»); the next one says what it does, which is what a roster line needs
+	// the first sentence of these files only names the role ("you are the office's … agent"); the next one says what it does, which is what a roster line needs
 	const first = (/^Tu esi\b/i.test(sentences[0] ?? "") && sentences[1] ? sentences[1] : sentences[0]) ?? flat;
 	// a roster line in the lead's text for each of 16 agents: 140 characters say what the role does without making the lead heavy
 	return first.length > 140 ? `${first.slice(0, 139).trimEnd()}…` : first;
