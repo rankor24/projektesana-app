@@ -91,6 +91,7 @@ fix (`14e0b8a`). "Open" means nothing has been done about it yet.
 ## 4. How to work with these (from how he reacted)
 
 - A UI change goes in only after the layout rule behind it is clear; he stopped an unannounced redesign with "changes not approved yet".
+  What he has approved counts: the rows of the OpenMausBot adoption plan (new Settings, Agents page by department, the BD team) are approved UI and get built, not postponed.
 - State the plan in a few lines first, then do it. Long questions annoy him; a wrong guess annoys him more.
 - Do not run his real project in the app to test (his own rule). Pure logic goes into tests; how a drag feels is his to judge, and I say so.
 - Read BIM Crew's code before inventing a behaviour: every time I invented one (the conversation list, the per-page layouts, the top tool bar) it was wrong.

@@ -27,6 +27,16 @@
 - The approved design is the Whiteboard "Projektesana UI layout plan" and BIM Crew's behaviour (`D:\Code\BIM\BIM Crew`). Read them
   before inventing a layout. His complaints and rulings so far: `docs/ui-complaints.md`.
 
+## Done means the whole plan, on screen
+
+- The current assignment is `docs/BD/openmausbot-adoption-plan.md` (local, untracked: never commit it): every row of its
+  "Everything we take" table and every decision in §8 and §10. Phase letters there are an order of work, not stopping points.
+- Before any "done", "built", release note or "result:": go through that table row by row and check each against the built
+  app (the screen Boris opens, the data it shows). The 16 BD agents, their skills, the new Settings: if Boris cannot see it
+  in `release\win-unpacked\Projektesana.exe`, it is not done.
+- Report per row. Anything missing goes in the first line as "Not done: N of M" with the rows named.
+- A version built and pushed while plan rows remain is a progress build, not a finish: its report starts with "Not done: N of M".
+
 ## Tests: focused only
 
 - Never run the full suite (`npm test`, `test/**/*.test.ts`): it takes too long. Run only the tests that cover what changed
