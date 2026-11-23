@@ -237,6 +237,15 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "Closes a thread (kept on disk); refused while it is running or queued."
 	},
+	"threads.export": {
+		"sig": "(threadId: string, projectId: string | null, format: \"jsonl\" | \"md\") => { fileName: string; mime: string; text: string }",
+		"params": [
+			"threadId",
+			"projectId",
+			"format"
+		],
+		"doc": "A thread as a file: JSONL (one entry per line) or Markdown. Answers with the file name and the text; saving it is the window's job."
+	},
 	"agent.confirm": {
 		"sig": "(confirmId: string, allow: boolean) => void",
 		"params": [

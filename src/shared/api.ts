@@ -461,6 +461,8 @@ export interface ApiSpec {
 	"threads.stop": (threadId: string) => void;
 	/** Closes a thread (kept on disk); refused while it is running or queued. */
 	"threads.close": (threadId: string, projectId: string | null) => Thread;
+	/** A thread as a file: JSONL (one entry per line) or Markdown. Answers with the file name and the text; saving it is the window's job. */
+	"threads.export": (threadId: string, projectId: string | null, format: "jsonl" | "md") => { fileName: string; mime: string; text: string };
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
 	"agent.reset": (projectId: string | null) => void;
@@ -723,6 +725,7 @@ export const API_NAMES = [
 	"threads.history",
 	"threads.stop",
 	"threads.close",
+	"threads.export",
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",
