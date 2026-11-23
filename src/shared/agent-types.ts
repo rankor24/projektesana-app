@@ -9,8 +9,9 @@ export const SPECIALIST_FIXED_MAX = 16_000; // tokens
 /** The same for the lead (standing text with the roster and skills list + its declarations); the 0.6 guard holds it, and saving specialists is refused past it (R49).
  *  16 000 since the team import: the lead's declarations alone (the app's tools and the app_calls catalog) measure ~12 100 tokens and its standing text ~1 400, so the old
  *  10 000 refused every added agent ("a save that makes the lead heavier is refused while it is over") and the 16 BD roles could not be saved. A roster line costs ~12 tokens, so
- *  16 000 leaves room for ~120 more agents. */
-export const LEAD_FIXED_MAX = 16_000; // tokens
+ *  16 000 leaves room for ~120 more agents. 18 000 since 2.8.0: the Chief's tools (tasks, incidents), memory, routines and search added ~2 000 to the declarations,
+ *  and the 16 roles with their descriptions came to 16 011; a guard against a runaway text, far under any model's context. */
+export const LEAD_FIXED_MAX = 18_000; // tokens
 
 export interface AgentSpec {
 	id: string;

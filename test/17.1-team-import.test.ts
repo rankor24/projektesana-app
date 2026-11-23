@@ -37,7 +37,7 @@ test("heading and the first sentence of Loma", () => {
 	assert.equal(descriptionFromLoma("## Loma\nPārbauda telpas. Otrais."), "Pārbauda telpas.");
 	assert.equal(descriptionFromLoma("# A\n## Loma\nBez punkta beigās"), "Bez punkta beigās");
 	assert.equal(descriptionFromLoma("# A\nnav sadaļas"), "");
-	assert.equal(descriptionFromLoma(`## Loma\n${"v".repeat(300)}.`).length, 200);
+	assert.equal(descriptionFromLoma(`## Loma\n${"v".repeat(300)}.`).length, 140);
 });
 
 test("a small invented team: created, then updated with the user's own settings kept", () => {
@@ -111,7 +111,7 @@ test("the real BD team: 16 agents, their departments and skills, only the temp f
 		assert.ok(s, `agent ${id}`);
 		assert.equal(s.roleFile, true);
 		assert.ok(s.name.length >= 2 && !s.name.startsWith("Agents"), `name of ${id}: ${s.name}`);
-		assert.ok(s.description.length > 10 && s.description.length <= 200, `description of ${id}`);
+		assert.ok(s.description.length > 10 && s.description.length <= 140, `description of ${id}`);
 		assert.equal(departmentOf(s), DEFAULT_DEPARTMENT_OF[id]);
 		assert.equal((s.skills ?? []).length, skillsIn(`00-`) + skillsIn(`${nn(id)}-`), `${id}: the common skills and those of its own folder`);
 		assert.ok(readFileSync(join(a.dir, "agents", `${id}.md`), "utf8").startsWith("# Agents:"));

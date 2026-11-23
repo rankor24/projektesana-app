@@ -71,7 +71,8 @@ export function descriptionFromLoma(text: string): string {
 	const sentences = flat.match(/.*?[.!?](?=\s|$)/g)?.map((s) => s.trim()) ?? [flat];
 	// the first sentence of these files only says who the agent is («Tu esi Būvdizains arhitekta agents.»); the next one says what it does, which is what a roster line needs
 	const first = (/^Tu esi\b/i.test(sentences[0] ?? "") && sentences[1] ? sentences[1] : sentences[0]) ?? flat;
-	return first.length > 200 ? `${first.slice(0, 199).trimEnd()}…` : first;
+	// a roster line in the lead's text for each of 16 agents: 140 characters say what the role does without making the lead heavy
+	return first.length > 140 ? `${first.slice(0, 139).trimEnd()}…` : first;
 }
 
 /** The skill names of one folder `<root>\<group>`: every `<skill>\SKILL.md` directly under it. A skill without a name in its front matter is not listed (the library refuses it too). */
