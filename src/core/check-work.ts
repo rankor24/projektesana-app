@@ -9,7 +9,11 @@
 //   - any failure (the checker could not start, failed, was unclear, a fix failed) delivers the answer as it is, marked not checked;
 //   - the checker's brief: the RULES list (unmet instruction, changed fact, unsupported detail, regression), the request, the earlier report on later rounds, the result.
 // Adapted: the checker's tools are read tools of this app (it opens the files the answer names), the answer's "worth" also counts a run that used tools (an ATBILDE of the
-// BD process is short on purpose: the work is in files), and the words are Latvian where the user reads them.
+// BD process is short on purpose: the work is in files), and the words are Latvian where the user reads them. Every check and fix turn is also counted on its own
+// (tokens and the catalogue price, as the usage totals show them), so the run card can say what the loop cost line by line and in all.
+
+import type { CheckUsage } from "../shared/types.js";
+import { costText, fmtTokens } from "../shared/tokens.js";
 
 export const CHECK_ROUNDS = 3;
 export const CHECK_MAX_MS = 30 * 60_000;
@@ -41,6 +45,39 @@ export function worthChecking(answer: string, toolsRan: boolean): boolean {
 	const last = text.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
 	if (last.endsWith("?")) return false;
 	return toolsRan || text.length >= CHECK_MIN_CHARS;
+}
+
+/** An empty tally for one turn of the loop. */
+export const noUsage = (): CheckUsage => ({ turns: 0, priced: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: null });
+
+/** One model turn's usage event added to a tally (the tally changes). A turn the provider gave no price for adds tokens and no cost. */
+export function addTurn(t: CheckUsage, e: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }): void {
+	t.turns++;
+	t.input += e.input;
+	t.output += e.output;
+	t.cacheRead += e.cacheRead;
+	t.cacheWrite += e.cacheWrite;
+	if (e.cost !== null) {
+		t.cost = (t.cost ?? 0) + e.cost;
+		t.priced++;
+	}
+}
+
+/** The tally of two tallies (the first changes). */
+export function addTally(t: CheckUsage, o: CheckUsage): void {
+	t.turns += o.turns;
+	t.priced += o.priced;
+	t.input += o.input;
+	t.output += o.output;
+	t.cacheRead += o.cacheRead;
+	t.cacheWrite += o.cacheWrite;
+	if (o.cost !== null) t.cost = (t.cost ?? 0) + o.cost;
+}
+
+/** The closing line of the loop: how many checks and fixes were made and what they all used. Tokens are everything sent and read (cached too) and written. */
+export function totalLine(checks: number, fixes: number, u: CheckUsage): string {
+	const tokens = `${fmtTokens(u.input + u.cacheRead + u.output)} tokeni`;
+	return `Pārbaudes kopā: ${checks} ${checks === 1 ? "pārbaude" : "pārbaudes"}, ${fixes} ${fixes === 1 ? "labojums" : "labojumi"} — ${tokens}, ${costText(u)}`;
 }
 
 export type Next =

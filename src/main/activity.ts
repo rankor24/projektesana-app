@@ -7,6 +7,8 @@
 // No Electron imports: the sink, the project's sources and the tool levels are injected.
 import { randomUUID } from "node:crypto";
 import type { ScanProgress } from "../shared/api.js";
+import { totalLine } from "../core/check-work.js";
+import { usageText } from "../shared/tokens.js";
 import type { RunEvent } from "../shared/types.js";
 import type { RunMeta } from "../shared/thread-types.js";
 import {
@@ -212,10 +214,11 @@ export class ActivityLog {
 				// check before done: one line per check that goes running -> its verdict, and one for the fix turn that follows a check that found issues
 				const head = `Pārbaude ${e.n}/${e.of} — ${e.by}`;
 				if (e.phase === "start") {
-					// the fix of the check before has been made: its line closes
-					if (e.n > 1) this.line(r, "note", `Labots pēc pārbaudes ${e.n - 1}/${e.of}`, { step: `check-${e.n - 1}-fix`, status: "ok", tool: "check" });
 					this.line(r, "note", `${head}: lasa atbildi`, { step: `check-${e.n}`, status: "running", tool: "check" });
 				} else if (e.phase === "fix") this.line(r, "note", `Labo pēc pārbaudes ${e.n}/${e.of}`, { step: `check-${e.n}-fix`, status: "running", tool: "check" });
+				// the fix turn is over: its line closes with what that turn used (the card shows the line's text, so the price is in it)
+				else if (e.phase === "fixed") this.line(r, "note", `Labots pēc pārbaudes ${e.n}/${e.of}${e.usage ? ` · ${usageText(e.usage)}` : ""}`, { step: `check-${e.n}-fix`, status: "ok", tool: "check" });
+				else if (e.phase === "total") this.line(r, "note", totalLine(e.checks ?? 0, e.fixes ?? 0, e.usage ?? { turns: 0, priced: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: null }), { step: "check-total", status: "ok", tool: "check" });
 				else {
 					const last = e.n >= e.of;
 					const text =
@@ -226,7 +229,7 @@ export class ActivityLog {
 								: e.verdict === "cannot"
 									? `${head}: nevar pārbaudīt, atbilde nodota nepārbaudīta`
 									: `${head}: pārbaudītāja atbilde nav skaidra, atbilde nodota nepārbaudīta`;
-					this.line(r, "note", text, { step: `check-${e.n}`, status: e.verdict === "pass" ? "ok" : e.verdict === "issues" ? "failed" : "stopped", tool: "check", ...(e.report ? { detail: e.report } : {}) });
+					this.line(r, "note", e.usage ? `${text} · ${usageText(e.usage)}` : text, { step: `check-${e.n}`, status: e.verdict === "pass" ? "ok" : e.verdict === "issues" ? "failed" : "stopped", tool: "check", ...(e.report ? { detail: e.report } : {}) });
 				}
 				return;
 			}

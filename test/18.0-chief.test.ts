@@ -25,6 +25,8 @@ import { NOTHING_HELD } from "../src/shared/thread-types.ts";
 import { DEFAULT_SETTINGS } from "../src/shared/types.ts";
 import { initial } from "../src/core/process.ts";
 import { tmp } from "./helpers.ts";
+import { ActivityLog } from "../src/main/activity.ts";
+import { readUsage } from "../src/agent/usage.ts";
 
 const spec = (id: string, extra: Partial<AgentSpec> = {}): AgentSpec => ({ id, name: id.toUpperCase(), description: "", prompt: "", tools: [], ...extra });
 const TEAM: AgentSpec[] = ["bpv", "ar", "bk", "uk", "avk", "eks"].map((id) => spec(id));
@@ -514,7 +516,7 @@ function runnerRig(specs: AgentSpec[], engine: (o: PiRunOptions) => Promise<void
 		const r = await runner.run({ runId: "r1", thread, spec, text, focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: (e) => void events.push(e), ask: async () => false, ...extra });
 		return { r, events, transcript: threads(null).transcript(thread.id) };
 	};
-	return { go, threads, thread };
+	return { go, threads, thread, dir };
 }
 
 test("check before done: the checker finds an issue, the agent fixes it in a full turn of its own, the second check passes; the card gets each check and one done with the fixed answer", async () => {
@@ -536,7 +538,7 @@ test("check before done: the checker finds an issue, the agent fixes it in a ful
 	assert.equal(r.ok, true);
 	assert.match(r.answer, /^Labotā versija/);
 	const checks = events.filter((e): e is Extract<RunEvent, { type: "check" }> => e.type === "check");
-	assert.deepEqual(checks.map((c) => `${c.n}:${c.phase}:${c.verdict ?? ""}`), ["1:start:", "1:end:issues", "1:fix:", "2:start:", "2:end:pass"]);
+	assert.deepEqual(checks.map((c) => `${c.n}:${c.phase}:${c.verdict ?? ""}`), ["1:start:", "1:end:issues", "1:fix:", "1:fixed:", "2:start:", "2:end:pass", "2:total:"]);
 	assert.equal(checks[1].count, 1);
 	assert.match(checks[1].report ?? "", /lappuses atsauces/);
 	const done = events.filter((e) => e.type === "done");
@@ -545,6 +547,49 @@ test("check before done: the checker finds an issue, the agent fixes it in a ful
 	assert.ok(events.filter((e) => e.type === "usage").length >= 4, "the check and fix turns' tokens are counted in the run");
 	// the transcript: request, first answer, the fix request, the fixed answer
 	assert.deepEqual(transcript.map((t) => t.role), ["user", "assistant", "user", "assistant"]);
+});
+
+test("check before done: each check and fix line carries its own tokens and price, the last line the totals, and the usage log has them under the model that really worked", async () => {
+	// work 1.0 cent, check 0.2 cent (the checker is on another provider), fix 0.4 cent; the second check has no price
+	const engine = async (o: PiRunOptions) => {
+		const isCheck = (o.systemPrompt ?? "").includes("You check another agent's finished work");
+		const kind = isCheck ? "check" : o.prompt.includes("<report>") ? "fix" : "work";
+		const first = !seenChecks.length || kind !== "check";
+		if (kind === "check") seenChecks.push(1);
+		const u = kind === "work" ? { input: 1000, output: 200, cost: 0.01 } : kind === "fix" ? { input: 2000, output: 300, cost: 0.004 } : first ? { input: 500, output: 40, cost: 0.002 } : { input: 700, output: 10, cost: null };
+		o.onEvent({ type: "usage", input: u.input, output: u.output, cacheRead: 0, cacheWrite: 0, cost: u.cost });
+		o.onEvent({ type: "done", text: kind === "work" ? `Pirmā versija. ${"x".repeat(450)}` : kind === "fix" ? `Labotā versija. ${"y".repeat(450)}` : first ? "issues: 1\n1. Trūkst." : "pass" });
+	};
+	const seenChecks: number[] = [];
+	const ar = spec("ar", { check: { maxChecks: 3, provider: "openai", model: "gpt-5" } });
+	const k = runnerRig([ar], engine);
+	const { events } = await k.go(ar, "Sagatavo sienu sarakstu");
+	// the events: usage per turn on end / fixed, and one total
+	const ev = events.filter((e): e is Extract<RunEvent, { type: "check" }> => e.type === "check");
+	const end1 = ev.find((e) => e.phase === "end" && e.n === 1)!;
+	assert.deepEqual([end1.usage?.input, end1.usage?.output, end1.usage?.cost], [500, 40, 0.002]);
+	const fixed = ev.find((e) => e.phase === "fixed")!;
+	assert.deepEqual([fixed.usage?.input, fixed.usage?.output, fixed.usage?.cost], [2000, 300, 0.004]);
+	const end2 = ev.find((e) => e.phase === "end" && e.n === 2)!;
+	assert.equal(end2.usage?.cost, null, "a check with no catalogue price shows tokens only");
+	const total = ev.filter((e) => e.phase === "total");
+	assert.equal(total.length, 1);
+	assert.deepEqual([total[0].checks, total[0].fixes, total[0].usage?.input, total[0].usage?.output], [2, 1, 3200, 350]);
+	assert.ok(Math.abs((total[0].usage?.cost ?? 0) - 0.006) < 1e-9, "the work turn's price is not in the checks' total");
+	// the run card's lines
+	const sent: { step?: string; text: string }[] = [];
+	const log = new ActivityLog({ send: (a) => sent.push(a), sources: () => [], levelOf: () => "read", templates: [] });
+	for (const e of events) log.event("r1", e);
+	const line = (step: string) => [...sent].reverse().find((l) => l.step === step)?.text ?? "";
+	assert.match(line("check-1"), /1 problēma, labo · 500 ievade · 40 izvade · \$0\.002$/);
+	assert.match(line("check-1-fix"), /^Labots pēc pārbaudes 1\/3 · 2\.0K ievade · 300 izvade · \$0\.004$/);
+	assert.match(line("check-2"), /kļūdu nav · 700 ievade · 10 izvade · cena nav zināma$/);
+	assert.equal(line("check-total"), "Pārbaudes kopā: 2 pārbaudes, 1 labojums — 3.5K tokeni, $0.006 (no 2 no 3 piegājieniem)");
+	// the usage totals: the checks are logged under the checker's provider, the work and the fix under the agent's own model
+	const rows = readUsage(join(k.dir, "usage.jsonl"));
+	assert.equal(rows.length, 4);
+	assert.deepEqual(rows.filter((r) => r.model.startsWith("openai/")).map((r) => r.input), [500, 700], "the check turns are counted under the checker's provider");
+	assert.equal(rows.filter((r) => !r.model.startsWith("openai/")).length, 2);
 });
 
 test("check before done: every check finds issues -> 3 checks and 2 fixes, then the answer stays with the issues open; a checker that cannot work leaves the answer as it is", async () => {

@@ -19,10 +19,22 @@ export type RunEvent =
 	| { type: "retry"; attempt: number; of: number; delayMs: number; message: string }
 	/** A helper or specialist working beside the main run (task 8.15): one lane per job. `step` replaces the lane's current action; `end` carries its report. */
 	| { type: "lane"; id: string; label: string; agent?: string; phase: "start" | "step" | "end"; text?: string; ok?: boolean; report?: string }
-	/** Check before done (core/check-work.ts): one check of the answer by a checker, and what it found. `end` carries the verdict and the checker's report; `fix` = the agent is now fixing what the check found (a full turn of its own). */
-	| { type: "check"; n: number; of: number; by: string; phase: "start" | "end" | "fix"; verdict?: "pass" | "issues" | "cannot" | "unclear"; count?: number; report?: string }
+	/** Check before done (core/check-work.ts): one check of the answer by a checker, and what it found. `end` carries the verdict and the checker's report; `fix` = the agent is now fixing what the check found (a full turn of its own);
+	 *  `fixed` = that fix turn is over. `end` and `fixed` carry the turn's own `usage`; `total` closes the loop with the checks and fixes made and what all of them used. */
+	| { type: "check"; n: number; of: number; by: string; phase: "start" | "end" | "fix" | "fixed" | "total"; verdict?: "pass" | "issues" | "cannot" | "unclear"; count?: number; report?: string; usage?: CheckUsage; checks?: number; fixes?: number }
 	/** Raw provider error, never rewritten. `hint`: what the engine itself knows about the cause (the Claude CLI names the limit and its reset); the words stay the provider's. */
 	| { type: "error"; engine: "pi"; message: string; hint?: FailureHint };
+
+/** What one check or fix turn (or all of them) used: the model turns' tokens, and the catalogue price in US dollars (null = no turn had a price). `turns` model turns, `priced` of them with a price. */
+export interface CheckUsage {
+	turns: number;
+	priced: number;
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number | null;
+}
 
 /** Why a run failed, as an engine knows it beyond the provider's words: src/agent/failover reads it before it reads the text. */
 export interface FailureHint {

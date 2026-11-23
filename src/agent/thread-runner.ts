@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type IncidentView, type Thread } from "../shared/thread-types.js";
-import type { RunEvent, Settings } from "../shared/types.js";
+import type { CheckUsage, RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
 import { compactMessages, type Complete } from "./compact.js";
 import { appendUsage } from "./usage.js";
@@ -42,7 +42,7 @@ import { EKS, LEADER, PROCESS_OWN_TOOLS, stageCard } from "../core/process-def.j
 import { MAIL_TOOL_LEVELS, mailTools, type MailDeps } from "./mail.js";
 import { chiefOf, taskTools } from "./task-tools.js";
 import { holdsChiefTools, minLevel, type Level as CapLevel } from "../core/chief.js";
-import { CHECKER_SYSTEM, CHECK_MAX_MS, afterCheck, checkBrief, fixBrief, readVerdict, roundsOf, worthChecking } from "../core/check-work.js";
+import { CHECKER_SYSTEM, CHECK_MAX_MS, addTally, addTurn, afterCheck, noUsage, checkBrief, fixBrief, readVerdict, roundsOf, worthChecking } from "../core/check-work.js";
 import { limitsOf, openTasks, openTopicsOf, topicsLine, type Mailbox } from "../core/messages.js";
 import type { SessionDeps, ToolServer } from "./session.js";
 
@@ -456,6 +456,8 @@ export class ThreadRunner {
 							}) : null;
 				// state changed inside the callbacks below (a plain object: TypeScript does not follow closure assignments of a local)
 				const st = { toolsRan: false, overflowed: null as string | null, retried: false, held: null as (RunEvent & { type: "error" }) | null };
+				// the tally of the fix turn now running (check before done): its model turns are added to it as they report
+				let fixTally: CheckUsage | null = null;
 				const attempt = async (h: AgentMessage[], sh: typeof shape) => {
 					const { provider, modelId, effort, key, claude, engine, resume } = sh;
 					const { seed, seeded } = seedFor(sh);
@@ -474,6 +476,7 @@ export class ThreadRunner {
 						const indexed = e.type === "tool_result" && e.ok ? INDEXED_TOOL.exec(e.name)?.[1] : undefined;
 						if (indexed) i.dataChanged?.([indexed.startsWith("memory_") ? "memory" : "notes"]);
 						if (e.type === "usage") {
+							if (fixTally) addTurn(fixTally, e);
 							// the Claude session's size, for the context meter (the SDK holds the messages)
 							if (claude && !e.model) {
 								const c = this.conversations.get(thread.id);
@@ -640,6 +643,7 @@ export class ThreadRunner {
 					const usageSink = (e: RunEvent): void => {
 						// the check turns' tokens are counted in the run and logged like any turn's; their lane lines are not shown (the check line says it)
 						if (e.type !== "usage") return;
+						addTurn(turn, e);
 						try {
 							appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? keyOf(shape.target), input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
 						} catch {
@@ -647,7 +651,15 @@ export class ThreadRunner {
 						}
 						emit(e);
 					};
-					const end = (n: number, v: { verdict: "pass" | "issues" | "cannot" | "unclear"; count?: number; report: string }) => emit({ type: "check", n, of: max, by: label, phase: "end", ...v });
+					// what each check turn used on its own (the lane's model turns), and what the whole loop used
+					let turn = noUsage();
+					const all = noUsage();
+					let checksMade = 0;
+					let fixesMade = 0;
+					const end = (n: number, v: { verdict: "pass" | "issues" | "cannot" | "unclear"; count?: number; report: string }) => {
+						addTally(all, turn);
+						emit({ type: "check", n, of: max, by: label, phase: "end", ...v, usage: turn });
+					};
 					let report = "";
 					for (let round = 1; !signal.aborted; round++) {
 						if (Date.now() - began > CHECK_MAX_MS) {
@@ -655,6 +667,8 @@ export class ThreadRunner {
 							break;
 						}
 						emit({ type: "check", n: round, of: max, by: label, phase: "start" });
+						turn = noUsage();
+						checksMade++;
 						const job: Job = {
 							id: `c${Date.now().toString(36)}${round}`,
 							label: `Pārbaude ${round}/${max}`,
@@ -694,7 +708,16 @@ export class ThreadRunner {
 						st.overflowed = null;
 						answer = "";
 						shape = shapeFor(shape.target);
-						await attempt(await historyFor(shape), shape);
+						const fixed = noUsage();
+						fixTally = fixed;
+						fixesMade++;
+						try {
+							await attempt(await historyFor(shape), shape);
+						} finally {
+							fixTally = null;
+							addTally(all, fixed);
+							emit({ type: "check", n: round, of: max, by: label, phase: "fixed", usage: fixed });
+						}
 						if (st.held) {
 							failed = true;
 							emit(st.held);
@@ -710,6 +733,8 @@ export class ThreadRunner {
 							break;
 						}
 					}
+					// one line for the whole loop: the checks and fixes made and what they used
+					if (checksMade) emit({ type: "check", n: checksMade, of: max, by: label, phase: "total", checks: checksMade, fixes: fixesMade, usage: all });
 				}
 				// the answer is final now: the "done" an agent with checks held back goes out with the last answer
 				if (heldDone && !failed && !signal.aborted) emit({ type: "done", text: answer });
