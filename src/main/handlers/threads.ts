@@ -47,6 +47,7 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 		"threads.rename": (threadId, projectId, title) => d.session.renameThread(threadId, projectId, title),
 		"threads.pin": (threadId, projectId, pinned) => d.session.pinThread(threadId, projectId, pinned),
 		"threads.reopen": (threadId, projectId) => d.session.reopenThread(threadId, projectId),
+		"threads.seen": (threadId, projectId) => d.session.seenThread(threadId, projectId),
 		"pause.set": (target, paused) => d.session.setHold(target, paused),
 		// a retry starts a run under the activity log's title like any send
 		"incidents.retry": (id) => d.session.retryIncident(id),

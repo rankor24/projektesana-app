@@ -154,7 +154,8 @@ export const settings: Record<string, string> = {
 	"Uz ko aģenti pārslēdzas, kad pakalpojumam ir limits vai pieteikšanās beigusies.": "What the agents switch to when the provider has a limit or the sign-in has expired.",
 	"Cik tokenu un naudas aģenta darbi ir izmantojuši, pa projektiem.": "How many tokens and how much money the agent's work has used, per project.",
 	"Komanda un prasmes": "Team and skills",
-	"Aģentu nodaļas un prasmju bibliotēka; paši aģenti tiek iestatīti Aģentu lapā.": "The agents' departments and the skills library; the agents themselves are set on the Agents page.",
+	"Aģentu nodaļas un paši aģenti (pievienot, pārdēvēt, pārkārtot, pārvilkt, iestatīt) un prasmju bibliotēka.": "The agents' departments and the agents themselves (add, rename, reorder, drag, set up) and the skills library.",
+	"Kopējie noteikumi, ko saņem katrs aģents, ir Aģentu lapā.": "The rules every agent gets are on the Agents page.",
 	"Aģentu ierobežojumi": "Agent limits",
 	"Cik aģenti drīkst strādāt reizē un cik tālu drīkst sarunāties savā starpā.": "How many agents may work at once and how far they may talk to each other.",
 	"Tavs vārds, saskarnes valoda un izskats.": "Your name, the interface language and the look.",
@@ -465,4 +466,5 @@ export const settings: Record<string, string> = {
 	"Nekas neatbilst.": "Nothing matches.",
 	"vārdi": "words",
 	"jēga": "meaning",
+	"nelasītas ziņas: {n}": "unread messages: {n}",
 };

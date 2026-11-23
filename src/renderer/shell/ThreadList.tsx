@@ -2,6 +2,9 @@
 // Phase C adds, at the top and in the menus: the Incidenti list (runs that failed, stalled or could not start, with Retry and Dismiss), a Full stop button, Pause / Resume in the
 // menu of every agent and department with a "paused" badge, and pinned threads first with a pin mark. The pause and incident rules are the coordinator's (agent/coordinator.ts);
 // this file only shows them and asks (OpenMausBot docs/pausing-bots.md puts the same switches in a bot's and a department's sidebar menu).
+// Unread: a thread with messages the user has not had open shows its title in bold with a small count, its agent a badge with the sum beside the dot, and a folded department
+// the sum of its agents (OpenMausBot src/components/SidebarThreadRow.tsx marks an unread thread with a bold title and a dot, SidebarSections.tsx the agent and section roll-ups).
+// The count is main's (threads-db.ts counts it, the seen mark is set by the chat when the thread is on screen); here it is only drawn.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
 import { DEPARTMENT_NAME_MAX, departmentOf, type Department } from "../../shared/departments";
@@ -31,6 +34,16 @@ const DOT: Record<ThreadState, string> = { idle: "idle", queued: "queued", runni
 
 export function StateDot({ state }: { state: ThreadState }) {
 	return <span className={`tdot ${DOT[state]}`} title={STATE_TEXT[state]} />;
+}
+
+/** The count of unread messages: a small round badge. Nothing for none. */
+export function UnreadBadge({ n, what }: { n: number; what: string }) {
+	if (n <= 0) return null;
+	return (
+		<span className="tl-unread" title={what} aria-label={what}>
+			{n > 99 ? "99+" : n}
+		</span>
+	);
 }
 
 const when = (iso: string) => new Date(iso).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -142,6 +155,8 @@ function PinMark() {
 function ThreadRow({ t, state, current, onSelect, onRename, onClose, onPin, onReopen }: { t: Thread; state: ThreadState; current: boolean; onSelect: () => void; onRename: (title: string) => void; onClose: () => void; onPin: (pinned: boolean) => void; onReopen: () => void }) {
 	const [renaming, setRenaming] = useState(false);
 	const busy = state === "running" || state === "queued" || state === "waiting-confirm";
+	// an archived thread does not nag
+	const unread = t.state === "closed" ? 0 : (t.unread ?? 0);
 	if (renaming) {
 		return (
 			<div className="tl-thread on">
@@ -164,10 +179,11 @@ function ThreadRow({ t, state, current, onSelect, onRename, onClose, onPin, onRe
 	if (t.state !== "closed") items.push({ label: tr("Arhivēt"), run: onClose, disabled: busy, title: busy ? tr("Nevar arhivēt, kamēr saruna strādā") : tr("Slēdz sarunu; pieraksts paliek") });
 	else items.push({ label: tr("Atjaunot"), run: onReopen, title: tr("Atver arhivēto sarunu atkal") });
 	return (
-		<div className={`tl-thread ${current ? "on" : ""} ${t.state === "closed" ? "closed" : ""}`} onClick={onSelect} onDoubleClick={() => setRenaming(true)} title={STATE_TEXT[state]}>
+		<div className={`tl-thread ${current ? "on" : ""} ${t.state === "closed" ? "closed" : ""} ${unread > 0 ? "unread" : ""}`} onClick={onSelect} onDoubleClick={() => setRenaming(true)} title={unread > 0 ? `${STATE_TEXT[state]} · ${tr("nelasītas ziņas: {n}", { n: unread })}` : STATE_TEXT[state]}>
 			<StateDot state={state} />
 			{t.pinned && t.state !== "closed" && <PinMark />}
 			<span className="tl-title">{t.title}</span>
+			<UnreadBadge n={unread} what={tr("nelasītas ziņas: {n}", { n: unread })} />
 			{t.state === "closed" ? (
 				<button className="ghost small tl-restore" onClick={(e) => (e.stopPropagation(), onReopen())} title={tr("Atver arhivēto sarunu atkal")}>
 					{tr("Atjaunot")}
@@ -336,6 +352,7 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 						{opened ? "▾" : "▸"}
 					</button>
 					<StateDot state={a.state} />
+					<UnreadBadge n={a.unread} what={tr("nelasītas ziņas: {n}", { n: a.unread })} />
 					<b className="tl-agent-name" onClick={() => !searching && tree.toggleOpened(a.id)} title={a.id}>
 						{a.name}
 					</b>
@@ -496,6 +513,7 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 											{tr("apturēta")}
 										</span>
 									)}
+									{folded && <UnreadBadge n={d.unread} what={tr("nelasītas ziņas: {n}", { n: d.unread })} />}
 									{folded && d.active > 0 && (
 										<>
 											<StateDot state={d.state} />

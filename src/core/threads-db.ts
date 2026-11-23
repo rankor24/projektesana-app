@@ -183,8 +183,8 @@ const SCHEMA = `
 	CREATE INDEX IF NOT EXISTS chunks_message ON chunks(message_id);
 `;
 
-/** The schema version this build writes (`PRAGMA user_version`). 1 = the first schema; 2 = threads.pinned (the user's pin). A step runs once, in order, and only when the file is below it. */
-export const SCHEMA_VERSION = 2;
+/** The schema version this build writes (`PRAGMA user_version`). 1 = the first schema; 2 = threads.pinned (the user's pin); 3 = threads.seen_msg (the last message the user had in front of them). A step runs once, in order, and only when the file is below it. */
+export const SCHEMA_VERSION = 3;
 
 /** Brings a file made by an older build up to `SCHEMA_VERSION`. The SCHEMA text above makes the tables of version 1; each later change is a step here. Idempotent: a column that is there is not added again. */
 export function migrate(db: DatabaseSync): void {
@@ -192,6 +192,12 @@ export function migrate(db: DatabaseSync): void {
 	// the search index (search/schema.ts) raises user_version too, so the column is looked for, not inferred from the number
 	const has = (db.prepare("PRAGMA table_info(threads)").all() as { name: string }[]).some((c) => c.name === "pinned");
 	if (!has) db.exec("ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+	// the seen mark is the id of the newest message the user has had open; what a file already holds when the column appears counts as seen, or every old conversation would light up at once
+	const hasSeen = (db.prepare("PRAGMA table_info(threads)").all() as { name: string }[]).some((c) => c.name === "seen_msg");
+	if (!hasSeen) {
+		db.exec("ALTER TABLE threads ADD COLUMN seen_msg INTEGER NOT NULL DEFAULT 0");
+		db.exec("UPDATE threads SET seen_msg = COALESCE((SELECT MAX(m.id) FROM messages m WHERE m.thread_id = threads.id), 0)");
+	}
 	if (version < SCHEMA_VERSION) db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
@@ -267,8 +273,13 @@ interface ThreadRow {
 	last_at: string;
 	runs: number;
 	pinned?: number;
+	/** the assistant's messages after the seen mark (counted by the query, not stored) */
+	unread?: number;
 }
-const toThread = (r: ThreadRow): Thread => ({ id: r.id, projectId: r.project_id, agent: r.agent, title: r.title, topic: r.topic, state: r.state as Thread["state"], startedBy: r.started_by, wave: r.wave, createdAt: r.created_at, lastAt: r.last_at, runs: Number(r.runs), ...(Number(r.pinned) === 1 ? { pinned: true } : {}) });
+const toThread = (r: ThreadRow): Thread => ({ id: r.id, projectId: r.project_id, agent: r.agent, title: r.title, topic: r.topic, state: r.state as Thread["state"], startedBy: r.started_by, wave: r.wave, createdAt: r.created_at, lastAt: r.last_at, runs: Number(r.runs), ...(Number(r.pinned) === 1 ? { pinned: true } : {}), ...(Number(r.unread) > 0 ? { unread: Number(r.unread) } : {}) });
+
+/** The thread columns and the count of unread messages: what the assistant wrote after the message the user last had open (compaction notes and the user's own lines do not count). */
+const THREAD_SELECT = "SELECT t.*, (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id AND m.id > t.seen_msg AND m.role = 'assistant' AND m.kind = 'text') AS unread FROM threads t";
 
 export class ThreadsDb {
 	private cache = new Map<string, StatementSync>();
@@ -356,6 +367,8 @@ export class ThreadsDb {
 				if (!this.insertThreadRow(t)) continue;
 				threads++;
 				for (const e of src.transcript(t.id)) (this.insertEntry(t.id, e), messages++);
+				// what the old files held was read long ago
+				this.markSeen(t.id);
 			}
 			this.stmt("INSERT INTO meta(key, value) VALUES (?, ?)").run(MIGRATED, JSON.stringify({ at: new Date().toISOString(), threads, messages }));
 			return { threads, messages };
@@ -367,6 +380,11 @@ export class ThreadsDb {
 	private insertThreadRow(t: Thread): boolean {
 		const r = this.stmt("INSERT OR IGNORE INTO threads (id, project_id, agent, title, topic, state, started_by, wave, created_at, last_at, runs, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t.id, t.projectId, t.agent, t.title, t.topic, t.state, t.startedBy, t.wave, t.createdAt, t.lastAt, t.runs, t.pinned ? 1 : 0);
 		return Number(r.changes) > 0;
+	}
+
+	/** The user has had the whole conversation in front of them: the seen mark moves to its newest message. */
+	private markSeen(id: string): void {
+		this.stmt("UPDATE threads SET seen_msg = COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0) WHERE id = ?").run(id, id);
 	}
 
 	private insertEntry(threadId: string, e: ChatEntry): void {
@@ -389,11 +407,13 @@ export class ThreadsDb {
 		this.transaction(() => {
 			this.insertThreadRow(t);
 			for (const e of seeded) this.insertEntry(t.id, e);
+			// the lines a new thread starts with are the old chat the user has read
+			if (seeded.length) this.markSeen(t.id);
 		});
 	}
 
 	get(id: string): Thread | null {
-		const r = this.stmt("SELECT * FROM threads WHERE id = ?").get(id) as ThreadRow | undefined;
+		const r = this.stmt(`${THREAD_SELECT} WHERE t.id = ?`).get(id) as ThreadRow | undefined;
 		return r ? toThread(r) : null;
 	}
 
@@ -401,13 +421,14 @@ export class ThreadsDb {
 	list(f: { agent?: string; open?: boolean }): Thread[] {
 		const where: string[] = [];
 		const args: string[] = [];
-		if (f.agent !== undefined) (where.push("agent = ?"), args.push(f.agent));
-		if (f.open) where.push("state <> 'closed'");
-		const sql = `SELECT * FROM threads${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY last_at DESC, id`;
+		if (f.agent !== undefined) (where.push("t.agent = ?"), args.push(f.agent));
+		if (f.open) where.push("t.state <> 'closed'");
+		const sql = `${THREAD_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY t.last_at DESC, t.id`;
 		return (this.db.prepare(sql).all(...args) as unknown as ThreadRow[]).map(toThread);
 	}
 
-	patch(id: string, p: Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">>): Thread | null {
+	/** `seen: true` moves the seen mark to the newest message (the user has the conversation open). */
+	patch(id: string, p: Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">> & { seen?: true }): Thread | null {
 		const set: string[] = [];
 		const args: (string | number | null)[] = [];
 		const col = { state: "state", title: "title", wave: "wave", lastAt: "last_at", runs: "runs", pinned: "pinned" } as const;
@@ -417,6 +438,7 @@ export class ThreadsDb {
 			args.push(k === "pinned" ? (p.pinned ? 1 : 0) : (p[k] as string | number | null));
 		}
 		if (set.length) this.db.prepare(`UPDATE threads SET ${set.join(", ")} WHERE id = ?`).run(...args, id);
+		if (p.seen) this.markSeen(id);
 		return this.get(id);
 	}
 

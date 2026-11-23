@@ -495,6 +495,8 @@ export interface ApiSpec {
 	"threads.pin": (threadId: string, projectId: string | null, pinned: boolean) => Thread;
 	/** Takes an archived conversation back (Atjaunot): idle again, its transcript as it was. */
 	"threads.reopen": (threadId: string, projectId: string | null) => Thread;
+	/** The user has the thread open: its unread messages count as read. Answers the thread with `unread` gone, and pushes it to the windows. */
+	"threads.seen": (threadId: string, projectId: string | null) => Thread;
 	/** Pauses or resumes an agent, a department or everything (a full stop). Pausing stops what the held agents are doing and the work they handed out; they start nothing new until resumed. Answers how many runs it stopped. */
 	"pause.set": (target: PauseTarget, paused: boolean) => { stopped: number };
 	/** Retry an incident (a run that failed, stalled or could not start): its thread carries on where it stopped. Refused after two retries in an hour. */
@@ -813,6 +815,7 @@ export const API_NAMES = [
 	"threads.rename",
 	"threads.pin",
 	"threads.reopen",
+	"threads.seen",
 	"pause.set",
 	"incidents.retry",
 	"incidents.dismiss",

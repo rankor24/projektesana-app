@@ -1032,3 +1032,14 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .esc-options { display: flex; flex-direction: column; gap: 4px; }
 .esc-option { display: flex; align-items: center; gap: 8px; text-align: left; white-space: normal; }
 .esc-option.recommended { border-color: var(--ok); }
+/* Unread (threads.seen): a thread with messages not yet opened shows its title bold with a small count; its agent and a folded department show the sum as the same round badge. */
+.tl-thread.unread .tl-title { font-weight: 700; color: var(--text); }
+.tl-unread { flex: none; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: var(--accent); color: var(--bg); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+/* Team editor in a narrow Settings window (panels/Agenti.tsx TeamEditor is also used there): one column of cards, the department header wraps, the agent dialog stacks its list above its page. */
+.ag-team { min-width: 0; }
+.st.narrow .ag-cards { grid-template-columns: 1fr; }
+.st.narrow .ag-dept-head select { max-width: 100%; }
+.st.narrow .modal-back { padding-top: 2vh; }
+.st.narrow .ag-dialog { width: 98vw; height: 94vh; }
+.st.narrow .ag-dialog-body { flex-direction: column; overflow: auto; }
+.st.narrow .ag-dialog-nav { width: auto; flex-direction: row; flex-wrap: wrap; }

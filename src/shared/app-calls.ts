@@ -66,6 +66,7 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"threads.rename": "never",
 	"threads.pin": "never",
 	"threads.reopen": "never",
+	"threads.seen": "run",
 	"pause.set": "never",
 	"incidents.retry": "never",
 	"incidents.dismiss": "never",
