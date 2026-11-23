@@ -23,6 +23,8 @@ import { readUi } from "../../shared/ui-instruction";
 import { runUi } from "../run-ui";
 import { bimcraft } from "../preview/IfcView";
 import { parseMention } from "../../shared/mention";
+import { parseEveryone } from "../../shared/everyone";
+import { BPV_ID } from "../../shared/departments";
 import { LaneBar } from "./Lane";
 import { ProcessStrip } from "./ProcessStrip";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
@@ -241,8 +243,10 @@ export function AgentDock() {
 			const focus = focusForSend(ui.get().focus, mode, ui.get().view);
 			const atts = files.map(({ name, mimeType, data, thumb }) => ({ name, mimeType, data, thumb }));
 			// "@ar …" names an agent: for another agent than this thread's, main routes it (`agent.send`) and the answer shows in that agent's thread
-			const m = parseMention(t, T.specs);
-			const here = m && viewThread && m.agent === viewThread.agent ? m : null;
+			// "@visi …" (a line to everyone) goes to BPV alone, always through main (it adds BPV's instruction)
+			const everyone = parseEveryone(t);
+			const m = everyone ? { agent: BPV_ID, text: everyone.text } : parseMention(t, T.specs);
+			const here = !everyone && m && viewThread && m.agent === viewThread.agent ? m : null;
 			if (m && !here) {
 				await call("agent.send", projectId, t, focus, atts);
 				setText("");

@@ -10,7 +10,7 @@ export interface ThreadDeps {
 	activity?: ActivityLog;
 }
 
-type K = `threads.${string}` | "queue.view" | "queue.pause" | "queue.resume" | "queue.resumeWave" | "waiting.list";
+type K = `threads.${string}` | "queue.view" | "queue.pause" | "queue.resume" | "queue.resumeWave" | "waiting.list" | "pause.set" | "incidents.retry" | "incidents.dismiss";
 
 /** Starts a run under the activity log's title: named by the run's id before the run starts, dropped again when the start is refused. */
 export async function titled(d: ThreadDeps, projectId: string | null, start: (onRunId: (runId: string, sent: string) => void) => Promise<{ runId: string | null; queued: boolean }>): Promise<{ runId: string | null; queued: boolean }> {
@@ -45,6 +45,12 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 			return exportThread(thread, entries, format === "md" ? "md" : "jsonl");
 		},
 		"threads.rename": (threadId, projectId, title) => d.session.renameThread(threadId, projectId, title),
+		"threads.pin": (threadId, projectId, pinned) => d.session.pinThread(threadId, projectId, pinned),
+		"threads.reopen": (threadId, projectId) => d.session.reopenThread(threadId, projectId),
+		"pause.set": (target, paused) => d.session.setHold(target, paused),
+		// a retry starts a run under the activity log's title like any send
+		"incidents.retry": (id) => d.session.retryIncident(id),
+		"incidents.dismiss": (id) => d.session.dismissIncident(id),
 		"queue.view": () => d.session.queueView(),
 		"queue.pause": () => d.session.pauseQueue(),
 		"queue.resume": () => d.session.resumeQueue(),

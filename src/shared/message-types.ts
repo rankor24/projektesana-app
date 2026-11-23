@@ -23,6 +23,8 @@ export interface Message {
 	state: "queued" | "delivered" | "failed" | "stopped";
 	task?: TaskEnvelope;
 	reply?: ReplyEnvelope;
+	/** the tool ceiling of the conversation that handed this out (chief-level.ts: it flows down): the receiving run never goes above it. Absent = the receiver's own. */
+	level?: "run" | "confirm";
 }
 
 export interface Topic {

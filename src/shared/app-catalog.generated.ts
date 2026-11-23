@@ -267,6 +267,45 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "Gives a thread a new title (1-80 characters); the conversation itself is not touched."
 	},
+	"threads.pin": {
+		"sig": "(threadId: string, projectId: string | null, pinned: boolean) => Thread",
+		"params": [
+			"threadId",
+			"projectId",
+			"pinned"
+		],
+		"doc": "Pins or unpins a thread: pinned threads are listed first in their agent's list."
+	},
+	"threads.reopen": {
+		"sig": "(threadId: string, projectId: string | null) => Thread",
+		"params": [
+			"threadId",
+			"projectId"
+		],
+		"doc": "Takes an archived conversation back (Atjaunot): idle again, its transcript as it was."
+	},
+	"pause.set": {
+		"sig": "(target: PauseTarget, paused: boolean) => { stopped: number }",
+		"params": [
+			"target",
+			"paused"
+		],
+		"doc": "Pauses or resumes an agent, a department or everything (a full stop). Pausing stops what the held agents are doing and the work they handed out; they start nothing new until resumed. Answers how many runs it stopped."
+	},
+	"incidents.retry": {
+		"sig": "(id: string) => { runId: string | null; queued: boolean }",
+		"params": [
+			"id"
+		],
+		"doc": "Retry an incident (a run that failed, stalled or could not start): its thread carries on where it stopped. Refused after two retries in an hour."
+	},
+	"incidents.dismiss": {
+		"sig": "(id: string) => void",
+		"params": [
+			"id"
+		],
+		"doc": "Drop an incident from the list without retrying it."
+	},
 	"agent.confirm": {
 		"sig": "(confirmId: string, allow: boolean) => void",
 		"params": [

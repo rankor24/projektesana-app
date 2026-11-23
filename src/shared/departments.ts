@@ -20,6 +20,8 @@ import type { AgentSpec } from "./agent-types.js";
 export interface Department {
 	id: string;
 	name: string;
+	/** the id of the agent that leads this department (hands out tasks inside it); absent = BPV does */
+	lead?: string;
 }
 
 /** The ids the process names (core/process-def.ts has the same `eks`; this file stays node-free, so it carries its own). */
@@ -168,7 +170,9 @@ export function checkDepartments(raw: unknown, specs: readonly Pick<AgentSpec, "
 		if (given && list.some((d) => d.id === given)) return { ok: false, error: `Nodaļas identifikators «${given}» atkārtojas.` };
 		// an id that is not in the saved list is a made-up one: the id of a new department comes from its name here
 		const id = given && current.some((d) => d.id === given) ? given : newDepartmentId(name, [...list.map((d) => d.id), ...current.map((d) => d.id)]);
-		list.push({ id, name });
+		// a department's lead is an agent id; the Aģenti page checks it names an agent of the department, this keeps what it saved
+		const lead = typeof r?.lead === "string" ? r.lead.trim() : "";
+		list.push({ id, name, ...(lead ? { lead } : {}) });
 	}
 	for (const gone of current.filter((d) => !list.some((x) => x.id === d.id))) {
 		const inside = specs.filter((s) => departmentOf(s) === gone.id).map((s) => s.id);

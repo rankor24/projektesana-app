@@ -34,6 +34,9 @@ export interface AgentSpec {
 	skills?: string[];
 	/** the department (shared/departments.ts) the agent is filed in: an id of the app's department list; absent = the default of its id (BD roles), "" = in none */
 	department?: string;
+	/** check before done: after this agent's final answer a checker turn reads it against the request (up to 3 checks and 2 fixes). `agent`: another agent checks; `provider` / `model`: a checker on that model;
+	 *  none given = another provider than this agent's (failover/plan.ts). Absent = no check. */
+	check?: { agent?: string; provider?: string; model?: string; maxChecks?: number };
 }
 
 /** Lower case, no diacritics, letters and digits only: "Ekspertīzes lasītājs" and "ekspertizeslasitajs" are the same. */

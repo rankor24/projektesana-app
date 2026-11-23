@@ -915,3 +915,19 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .drop-before::before { top: -1px; }
 .drop-after::after { bottom: -1px; }
 .tl-dept-head.drop-before, .tl-dept-head.drop-after { position: relative; }
+
+/* Phase C (Chief, pause, incidents, pins): the Full stop row and banner, the Incidenti block, the paused badge, the pin mark, an archived thread's Atjaunot, BPV's escalation options. */
+.tl-stoprow { margin: 2px 0 4px; }
+.tl-fullstop { border-color: var(--bad); color: var(--bad); }
+.tl-fullstop:hover { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.tl-banner { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 2px 0 6px; border: 1px solid var(--bad); border-radius: 8px; background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.tl-incidents { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; padding: 6px; border: 1px solid var(--warn); border-radius: 8px; }
+.incident .incident-detail { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow: auto; }
+.incident .incident-request { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-paused { flex: none; }
+.tl-pin { flex: none; color: var(--accent); }
+.tl-restore { flex: none; }
+.tl-agent-row:hover .tl-more { opacity: 1; }
+.esc-options { display: flex; flex-direction: column; gap: 4px; }
+.esc-option { display: flex; align-items: center; gap: 8px; text-align: left; white-space: normal; }
+.esc-option.recommended { border-color: var(--ok); }

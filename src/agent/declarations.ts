@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { estimateTextTokens } from "./context.js";
 import { mailDeclarations } from "./mail.js";
+import { taskDeclarations } from "./task-tools.js";
+import { BPV_ID } from "../shared/departments.js";
 import { PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIN_TOOL_LEVELS, ownTools, subagentDeclarations } from "./subagents.js";
 import { allTools, appLevels } from "./tools/defs.js";
@@ -30,8 +32,9 @@ let leadTokens: number | null = null;
 /** What the agent's requests carry as tool declarations: the lead's own, run_subagent, delegate and the mail tools; a specialist's are its
  *  read tools, its own tools and the mail tools (no helpers). */
 export function declarationTokens(spec: AgentSpec | null): number {
-	if (!spec) return (leadTokens ??= estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => !PROCESS_OWN_TOOLS.has(d.name)), ...subagentDeclarations(), ...mailDeclarations()])));
+	if (!spec) return (leadTokens ??= estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => !PROCESS_OWN_TOOLS.has(d.name)), ...subagentDeclarations(), ...mailDeclarations(), ...taskDeclarations(false)])));
 	const levelOf = makeLevelOf(MAIN_TOOL_LEVELS, appLevels(), REVIT_LEVELS);
 	const mine = new Set(ownTools(offered(appDeclarations().map((d) => d.name), levelOf), levelOf, new Set(), spec));
-	return estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => mine.has(d.name)), ...mailDeclarations()]));
+	// report_answer is every agent's; assign_task and escalate are BPV's (a department's lead has them too: counted when its settings are saved, not here)
+	return estimateTextTokens(JSON.stringify([...appDeclarations().filter((d) => mine.has(d.name)), ...mailDeclarations(), ...taskDeclarations(spec.id === BPV_ID)]));
 }

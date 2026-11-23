@@ -135,9 +135,11 @@ export interface LaneDeps {
 	failover?: Failover;
 	/** an agent's backup: its own, else the app-wide one; null for a helper without a spec = the run's agent's */
 	backupOf?(spec: AgentSpec | null): Target | null;
+	/** the words a job for this specialist is refused with while the user has it (or its department, or everything) paused; null = it may work (core/holds.ts). A pause also stops a lane that is running: its signal is its run's. */
+	held?(agentId: string): string | null;
 }
 
-interface Job {
+export interface Job {
 	id: string;
 	label: string;
 	agent?: string;
@@ -330,6 +332,9 @@ export function subagentTools(deps: LaneDeps): AgentTool<any>[] {
 			if (bad.length) {
 				return { content: [{ type: "text", text: `Nav speciālista: ${bad.map((b) => b.agent).join(", ")}. Ir: ${specs.map((s) => s.id).join(", ") || "(neviena)"}.` }], details: {}, isError: true };
 			}
+			// a paused specialist takes no new work: nothing is started, and the lead is told not to route around the pause
+			const stopped = params.jobs.map((j) => deps.held?.(findSpec(specs, j.agent)!.id)).filter((x): x is string => !!x);
+			if (stopped.length) return { content: [{ type: "text", text: [...new Set(stopped)].join("\n") }], details: {}, isError: true };
 			const jobs: Job[] = params.jobs.map((j) => {
 				const spec = findSpec(specs, j.agent)!;
 				const model = spec.model?.trim(); // as the run's modelFor does: a stray space in the settings is not part of the id

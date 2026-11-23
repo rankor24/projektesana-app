@@ -180,8 +180,21 @@ const SCHEMA = `
 		created_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS chunks_message ON chunks(message_id);
-	PRAGMA user_version = 1;
 `;
+
+/** The schema version this build writes (`PRAGMA user_version`). 1 = the first schema; 2 = threads.pinned (the user's pin). A step runs once, in order, and only when the file is below it. */
+export const SCHEMA_VERSION = 2;
+
+/** Brings a file made by an older build up to `SCHEMA_VERSION`. The SCHEMA text above makes the tables of version 1; each later change is a step here. Idempotent: a column that is there is not added again. */
+export function migrate(db: DatabaseSync): void {
+	const version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
+	if (version >= SCHEMA_VERSION) return;
+	if (version < 2) {
+		const has = (db.prepare("PRAGMA table_info(threads)").all() as { name: string }[]).some((c) => c.name === "pinned");
+		if (!has) db.exec("ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+	}
+	db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+}
 
 const MIGRATED = "migrated_from_files";
 
@@ -254,8 +267,9 @@ interface ThreadRow {
 	created_at: string;
 	last_at: string;
 	runs: number;
+	pinned?: number;
 }
-const toThread = (r: ThreadRow): Thread => ({ id: r.id, projectId: r.project_id, agent: r.agent, title: r.title, topic: r.topic, state: r.state as Thread["state"], startedBy: r.started_by, wave: r.wave, createdAt: r.created_at, lastAt: r.last_at, runs: Number(r.runs) });
+const toThread = (r: ThreadRow): Thread => ({ id: r.id, projectId: r.project_id, agent: r.agent, title: r.title, topic: r.topic, state: r.state as Thread["state"], startedBy: r.started_by, wave: r.wave, createdAt: r.created_at, lastAt: r.last_at, runs: Number(r.runs), ...(Number(r.pinned) === 1 ? { pinned: true } : {}) });
 
 export class ThreadsDb {
 	private cache = new Map<string, StatementSync>();
@@ -279,6 +293,7 @@ export class ThreadsDb {
 			db.exec("PRAGMA journal_mode = WAL");
 			db.exec("PRAGMA synchronous = NORMAL");
 			db.exec(SCHEMA);
+			migrate(db);
 			return new ThreadsDb(file, db);
 		} catch (e) {
 			try {
@@ -350,7 +365,7 @@ export class ThreadsDb {
 	// ---- the thread store's operations ----
 
 	private insertThreadRow(t: Thread): boolean {
-		const r = this.stmt("INSERT OR IGNORE INTO threads (id, project_id, agent, title, topic, state, started_by, wave, created_at, last_at, runs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t.id, t.projectId, t.agent, t.title, t.topic, t.state, t.startedBy, t.wave, t.createdAt, t.lastAt, t.runs);
+		const r = this.stmt("INSERT OR IGNORE INTO threads (id, project_id, agent, title, topic, state, started_by, wave, created_at, last_at, runs, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t.id, t.projectId, t.agent, t.title, t.topic, t.state, t.startedBy, t.wave, t.createdAt, t.lastAt, t.runs, t.pinned ? 1 : 0);
 		return Number(r.changes) > 0;
 	}
 
@@ -392,14 +407,14 @@ export class ThreadsDb {
 		return (this.db.prepare(sql).all(...args) as unknown as ThreadRow[]).map(toThread);
 	}
 
-	patch(id: string, p: Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs">>): Thread | null {
+	patch(id: string, p: Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">>): Thread | null {
 		const set: string[] = [];
 		const args: (string | number | null)[] = [];
-		const col = { state: "state", title: "title", wave: "wave", lastAt: "last_at", runs: "runs" } as const;
+		const col = { state: "state", title: "title", wave: "wave", lastAt: "last_at", runs: "runs", pinned: "pinned" } as const;
 		for (const k of Object.keys(col) as (keyof typeof col)[]) {
 			if (p[k] === undefined) continue;
 			set.push(`${col[k]} = ?`);
-			args.push(p[k] as string | number | null);
+			args.push(k === "pinned" ? (p.pinned ? 1 : 0) : (p[k] as string | number | null));
 		}
 		if (set.length) this.db.prepare(`UPDATE threads SET ${set.join(", ")} WHERE id = ?`).run(...args, id);
 		return this.get(id);

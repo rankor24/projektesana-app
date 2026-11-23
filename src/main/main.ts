@@ -197,6 +197,7 @@ const session = new AgentSession({
 		return `revīzija ${rev.id}${rev.diffFromPrev ? ` (+${rev.diffFromPrev.added} −${rev.diffFromPrev.removed} ~${rev.diffFromPrev.changed})` : ""}; atvērtie atradumi: ${r.open}`;
 	},
 	agents: () => settings.agentSpecs().specs,
+	departments: () => settings.departments().departments,
 	runsDir: join(appDir, "runs"),
 	chatDir: settings.chatDir(),
 	emit: (runId, event, meta) => {

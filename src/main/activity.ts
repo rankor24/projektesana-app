@@ -208,6 +208,28 @@ export class ActivityLog {
 				}
 				return;
 			}
+			case "check": {
+				// check before done: one line per check that goes running -> its verdict, and one for the fix turn that follows a check that found issues
+				const head = `Pārbaude ${e.n}/${e.of} — ${e.by}`;
+				if (e.phase === "start") {
+					// the fix of the check before has been made: its line closes
+					if (e.n > 1) this.line(r, "note", `Labots pēc pārbaudes ${e.n - 1}/${e.of}`, { step: `check-${e.n - 1}-fix`, status: "ok", tool: "check" });
+					this.line(r, "note", `${head}: lasa atbildi`, { step: `check-${e.n}`, status: "running", tool: "check" });
+				} else if (e.phase === "fix") this.line(r, "note", `Labo pēc pārbaudes ${e.n}/${e.of}`, { step: `check-${e.n}-fix`, status: "running", tool: "check" });
+				else {
+					const last = e.n >= e.of;
+					const text =
+						e.verdict === "pass"
+							? `${head}: kļūdu nav`
+							: e.verdict === "issues"
+								? `${head}: ${e.count ?? "?"} ${e.count === 1 ? "problēma" : "problēmas"}${last ? ", paliek atvērtas" : ", labo"}`
+								: e.verdict === "cannot"
+									? `${head}: nevar pārbaudīt, atbilde nodota nepārbaudīta`
+									: `${head}: pārbaudītāja atbilde nav skaidra, atbilde nodota nepārbaudīta`;
+					this.line(r, "note", text, { step: `check-${e.n}`, status: e.verdict === "pass" ? "ok" : e.verdict === "issues" ? "failed" : "stopped", tool: "check", ...(e.report ? { detail: e.report } : {}) });
+				}
+				return;
+			}
 			case "retry":
 				this.line(r, "note", `Savienojums pārtrūka (${oneLine(e.message, 80)}). Atkārto ${e.attempt}/${e.of}…`, { step: "retry", status: "running" });
 				return;

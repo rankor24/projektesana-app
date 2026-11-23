@@ -3,9 +3,10 @@
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { mayReach } from "../shared/departments.js";
+import { mayReach, type Department } from "../shared/departments.js";
 import type { Message, MessageKind, ReplyEnvelope, TaskEnvelope, Topic } from "../shared/message-types.js";
 import { DEFAULT_LIMITS, LEAD_ID, type Limits } from "../shared/thread-types.js";
+import { leadAssigns } from "./chief.js";
 import { newId } from "./model.js";
 import { EKS, LEADER } from "./process-def.js";
 import type { ProcessState } from "./process.js";
@@ -56,7 +57,7 @@ export const closedReason = (t: Topic): string => `Temats «${t.title}» jau ir 
  *  stage that is on, and not while a gate waits or the stage waits for the user; asks and replies between agents of the profile are free.
  *  The lead is a party only when the profile lists it. `answersOwnTopic` (R38): a reply on an open topic between its two parties passes the profile rule, so an agent
  *  that was asked something (before the profile was narrowed, say) can still answer; a new ask or task to or from an agent outside the profile stays refused. */
-function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState, answersOwnTopic: boolean): SendCheck | null {
+function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: string }, p: ProcessState, answersOwnTopic: boolean, lead: boolean): SendCheck | null {
 	// The ekspertīze wall (14.6, R7): nobody asks or tasks eks, whatever the profile; it asks authors (and, as the leader of S5, tasks them), and it answers only on a topic
 	// it is a party of. Replies to its own questions are the one way in. Code keyed on the id, since no spec of eks ships.
 	if (m.to === EKS && !answersOwnTopic) return refuse("acl", "Ekspertīzes aģentam raksta tikai atbildes uz tā jautājumiem.");
@@ -70,7 +71,8 @@ function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: 
 	if (p.stage === "done") return refuse("process", "Process ir pabeigts; uzdevumus vairs nedod.");
 	// the learning round after H7 has no stage of its own: the project leader runs it
 	const leader = p.stage === "mācības" ? "bpv" : LEADER[p.stage];
-	if (m.from !== leader) return refuse("process", `Procesa režīmā uzdevumus dod tikai stadijas vadītājs (${leader}).`);
+	// the stage's leader hands out tasks; so does a department's lead, inside its own department (phase C: a department lead, default BPV)
+	if (m.from !== leader && !lead) return refuse("process", `Procesa režīmā uzdevumus dod tikai stadijas vadītājs (${leader}) un nodaļas vadītājs savā nodaļā.`);
 	if (m.stage !== undefined && m.stage !== p.stage) return refuse("process", `Uzdevums ir stadijai ${m.stage}, bet pašlaik ir ${p.stage}.`);
 	if (p.escalated) return refuse("process", `Stadija ${p.escalated} eskalēta; gaida cilvēka lēmumu.`);
 	const gate = p.gates.find((g) => g.state === "waiting");
@@ -82,7 +84,7 @@ function processCheck(m: { from: string; to: string; kind: MessageKind; stage?: 
  *  `m.stage` is the stage a task is for; without it a task counts as meant for the stage that is on. */
 export function canSend(
 	m: { from: string; to: string; kind: MessageKind; topic: Topic | null; depth: number; iteration?: number; stage?: string },
-	c: { agents: readonly AgentSpec[]; limits: Limits; messages: readonly Message[]; process?: ProcessState | null },
+	c: { agents: readonly AgentSpec[]; limits: Limits; messages: readonly Message[]; process?: ProcessState | null; departments?: readonly Department[] },
 ): SendCheck {
 	if (m.from === m.to) return refuse("self", `Aģents «${m.from}» nevar sūtīt ziņu pats sev.`);
 
@@ -103,7 +105,7 @@ export function canSend(
 	}
 
 	if (c.process?.mode === "process") {
-		const r = processCheck(m, c.process, answersOwnTopic);
+		const r = processCheck(m, c.process, answersOwnTopic, !!c.departments && leadAssigns(m.from, m.to, c.agents, c.departments));
 		if (r) return r;
 	}
 
@@ -228,7 +230,8 @@ export function deliveryText(inbox: readonly Message[], topics: readonly Topic[]
 			const env = [m.task ? renderTask(m.task, m.to, iterations) : "", m.reply ? renderReply(m.reply) : ""].filter(Boolean).join("\n");
 			const text = m.text.trim();
 			const body = env ? (text && !env.includes(text) ? `${env}\n${text}` : env) : text;
-			return `${head}\n${body}`;
+			// a task is answered in the office's ATBILDE format, by the tool that posts it back to the one who handed it out
+			return `${head}\n${body}${m.task ? "\n[Atbildi ar report_answer.]" : ""}`;
 		})
 		.join("\n\n");
 }

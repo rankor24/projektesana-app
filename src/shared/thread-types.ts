@@ -19,6 +19,8 @@ export interface Thread {
 	createdAt: string;
 	lastAt: string;
 	runs: number;
+	/** pinned by the user: listed first in its agent's threads */
+	pinned?: boolean;
 }
 
 /** Who an event belongs to. The coordinator stamps it on every event of a run; the window uses it to route the event to a lane. */
@@ -81,6 +83,37 @@ export interface QueueView {
 	queued: QueueItem[];
 	paused: boolean;
 	waves: Wave[];
+	/** what the user paused (agents, departments, everything): these start nothing new until resumed */
+	held: HeldView;
+}
+
+/** Pause state as the window sees it. `all`: a full stop is on. Agent and department ids; a department's agents are held with it. */
+export interface HeldView {
+	agents: string[];
+	departments: string[];
+	all: boolean;
+}
+
+export const NOTHING_HELD: HeldView = { agents: [], departments: [], all: false };
+
+/** What the pause switches are aimed at. */
+export type PauseTarget = { kind: "agent" | "department"; id: string } | { kind: "all" };
+
+/** A run that did not finish, for the Incidenti list (core/incidents.ts). */
+export interface IncidentView {
+	id: string;
+	at: string;
+	projectId: string | null;
+	threadId: string;
+	agent: string;
+	what: "failed" | "stalled" | "not-started";
+	/** what the run said when it stopped */
+	detail: string;
+	/** the request the run was working on */
+	request: string;
+	/** how many times the user has retried this thread's incidents; the third is refused */
+	retries: number;
+	mayRetry: boolean;
 }
 
 /** One thing that waits for the user (Gaida tevi). Items of every project, not only the open one. `wave-paused`, `question` and `gate` are filled by 12.4, 12.3 and 14.3. */
@@ -93,5 +126,7 @@ export type WaitingItem =
 	/** a stage the process has escalated to the user (iteration limit): no gate waits, the user decides (14.8) */
 	| { kind: "escalated"; projectId: string; stage: string }
 	/** S5 is on and nobody has started the expert since the stage began: only the user opens eks's thread, so this line is the cue (R48) */
-	| { kind: "start-eks"; projectId: string };
+	| { kind: "start-eks"; projectId: string }
+	/** a run failed, stalled or could not start (core/incidents.ts): Retry or Dismiss */
+	| ({ kind: "incident" } & IncidentView);
 

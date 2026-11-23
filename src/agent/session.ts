@@ -15,8 +15,13 @@ import type { ClaudeRunOptions } from "./claude/run.js";
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
+import type { Department } from "../shared/departments.js";
 import { parseMention } from "../shared/mention.js";
-import { LEAD_ID, type QueueView, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
+import { LEAD_ID, type PauseTarget, type QueueView, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
+import { BPV_ID, DEFAULT_DEPARTMENTS } from "../shared/departments.js";
+import { parseEveryone, toEveryoneText } from "../shared/everyone.js";
+import { Holds } from "../core/holds.js";
+import { IncidentStore } from "../core/incidents.js";
 import { DEFAULT_AGENTS } from "./subagents.js";
 import { ThreadStore, knownProjects, threadsDir } from "../core/threads.js";
 import { Mailbox, mailDir } from "../core/messages.js";
@@ -46,6 +51,8 @@ export interface SessionDeps {
 	ctx: Omit<ToolCtx, "projectId" | "runDir" | "agent" | "thread">;
 	/** the specialists the agent may delegate to (task 8.15); the shipped ones when absent */
 	agents?: () => AgentSpec[];
+	/** the departments, in their order, with their leads: who may hand out tasks in a department (core/chief.ts) and the name in a pause refusal; none when absent */
+	departments?: () => Department[];
 	runsDir: string;
 	chatDir: string;
 	/** every event of a run; `meta` is the envelope the coordinator stamps (thread, agent, project, wave) */
@@ -96,8 +103,10 @@ export class AgentSession {
 			label: providerLabel,
 			log: (line) => console.warn(line),
 		});
-		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId), failover: this.failover });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))) });
+		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId), failover: this.failover, held: (agent) => this.coordinator.handoffRefusal(agent) });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))), holds: new Holds(join(d.ctx.appDir, "paused.json")), incidents: new IncidentStore(join(d.ctx.appDir, "incidents.json")), departments: () => d.departments?.() ?? DEFAULT_DEPARTMENTS });
+		// the stall watchdog: a run silent for 20 minutes is stopped and listed (core/incidents.ts)
+		this.coordinator.watch();
 	}
 
 	/** The coordinator answered eks's ask for the recipient: the question note closes. A project that cannot be read has no note to close. */
@@ -273,6 +282,24 @@ export class AgentSession {
 		return next;
 	}
 
+	/** Pins or unpins a thread: pinned ones are listed first in their agent's threads. */
+	pinThread(threadId: string, projectId: string | null, pinned: boolean): Thread {
+		const t = this.threadOf(threadId, projectId);
+		const next = this.threads(projectId).patch(t.id, { pinned: !!pinned });
+		this.d.onThread?.(next);
+		return next;
+	}
+
+	/** Takes an archived (closed) conversation back: idle again, its transcript as it was. Refused for one that is not archived. */
+	reopenThread(threadId: string, projectId: string | null): Thread {
+		const t = this.threadOf(threadId, projectId);
+		if (t.state !== "closed") throw new Error("Šī saruna nav arhivēta.");
+		if (t.agent !== LEAD_ID && !this.specs().some((s) => s.id === t.agent)) throw new Error(`Nav speciālista: ${t.agent}. Saruni neatjauno.`);
+		const next = this.threads(projectId).patch(t.id, { state: "idle" });
+		this.d.onThread?.(next);
+		return next;
+	}
+
 	threadHistory(threadId: string, projectId: string | null): ChatEntry[] {
 		return this.threads(projectId).transcript(this.threadOf(threadId, projectId).id);
 	}
@@ -293,6 +320,19 @@ export class AgentSession {
 		this.coordinator.resume();
 	}
 
+	/** Pause or resume one agent, one department, or everything (a full stop). Pausing stops what is running of what it holds; resuming starts what waited. */
+	setHold(target: PauseTarget, paused: boolean): { stopped: number } {
+		return this.coordinator.setHold(target, paused);
+	}
+
+	retryIncident(id: string): { runId: string | null; queued: boolean } {
+		return this.coordinator.retryIncident(id);
+	}
+
+	dismissIncident(id: string): void {
+		this.coordinator.dismissIncident(id);
+	}
+
 	/** A wave that stopped at a limit goes on, its counts from zero. */
 	resumeWave(wave: string): void {
 		this.coordinator.resumeWave(wave);
@@ -301,6 +341,14 @@ export class AgentSession {
 	/** The chat box: a text that starts with `@agent` goes to that agent's newest open thread in the project (one is opened when there is none),
 	 *  without the mention; any other text goes to the lead. `onRunId` hears the run's id and the text that was sent. */
 	async send(projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = [], onRunId?: (runId: string, sent: string) => void): Promise<{ runId: string | null; queued: boolean }> {
+		// "@visi …" goes to BPV alone (OpenMausBot: a line to everyone comes to the Chief, who decides whom it concerns); with no BPV in the team, to the lead as it is
+		const everyone = parseEveryone(text);
+		if (everyone) {
+			if (!everyone.text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
+			if (!this.specs().some((s) => s.id === BPV_ID)) return this.sendTo(this.leadOf(projectId), everyone.text, focus, attachments, onRunId);
+			const open = this.threads(projectId).list({ agent: BPV_ID, open: true })[0];
+			return this.sendTo(open ?? this.openThread(projectId, BPV_ID), toEveryoneText(everyone.text), focus, attachments, onRunId);
+		}
 		const m = parseMention(text, this.specs());
 		if (!m) return this.sendTo(this.leadOf(projectId), text, focus, attachments, onRunId);
 		// refused before a thread is opened for it

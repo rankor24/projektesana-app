@@ -2,13 +2,15 @@
 // Everything is pushed by main (threads.changed, queue.changed, waiting.changed, agent.event); the first read only fills what has not been pushed yet.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normRef, type AgentSpec } from "../../shared/agent-types";
-import { LEAD_ID, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
+import { LEAD_ID, type IncidentView, type PauseTarget, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
+import { EVERYONE_WORDS } from "../../shared/everyone";
+import { BPV_ID } from "../../shared/departments";
 import type { RunEvent } from "../../shared/types";
 import { call, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { tr } from "../i18n";
 
-const NO_QUEUE: QueueView = { running: [], queued: [], paused: false, waves: [] };
+const NO_QUEUE: QueueView = { running: [], queued: [], paused: false, waves: [], held: { agents: [], departments: [], all: false } };
 
 /** "Vadošais" for the lead, the specialist's name, or the bare id of one that was removed in Iestatījumi. */
 export function agentName(id: string, specs: readonly AgentSpec[]): string {
@@ -20,7 +22,10 @@ export function mentionOptions(text: string, specs: readonly AgentSpec[]): Agent
 	const m = /^\s*@(\S*)$/.exec(text);
 	if (!m) return [];
 	const q = normRef(m[1]);
-	return specs.filter((s) => !q || normRef(s.id).startsWith(q) || normRef(s.name).startsWith(q));
+	const own = specs.filter((s) => !q || normRef(s.id).startsWith(q) || normRef(s.name).startsWith(q));
+	// "@visi": a line to everyone goes to BPV alone (shared/everyone.ts), so it is offered when BPV is there
+	const everyone = specs.some((s) => s.id === BPV_ID) && (!q || EVERYONE_WORDS.some((w) => w.startsWith(q))) ? [{ id: "visi", name: tr("Visi — nonāk pie BPV"), description: tr("Rinda visiem nonāk pie BPV vienīgā: viņš izlemj, kam to nodot."), prompt: "", tools: [] } as AgentSpec] : [];
+	return [...own, ...everyone];
 }
 
 /** Newest first, the order main lists them in. */
@@ -221,5 +226,28 @@ export function useThreads(projectId: string | null) {
 		[projectId, add],
 	);
 
-	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close, rename };
+	const pin = useCallback(
+		async (id: string, pinned: boolean) => {
+			const p = projectId;
+			const t = await call("threads.pin", id, p, pinned);
+			if (current.current === p) add(t);
+		},
+		[projectId, add],
+	);
+	/** Takes an archived conversation back (Atjaunot). */
+	const reopen = useCallback(
+		async (id: string) => {
+			const p = projectId;
+			const t = await call("threads.reopen", id, p);
+			if (current.current === p) add(t);
+		},
+		[projectId, add],
+	);
+	const pause = useCallback((target: PauseTarget, paused: boolean) => call("pause.set", target, paused), []);
+	/** The run table, Gaida tevi and the pause state are main's; nothing is kept here but what it pushes. */
+	const incidents = useMemo(() => waiting.filter((w): w is Extract<WaitingItem, { kind: "incident" }> => w.kind === "incident") as (Extract<WaitingItem, { kind: "incident" }> & IncidentView)[], [waiting]);
+	const retry = useCallback((id: string) => call("incidents.retry", id), []);
+	const dismiss = useCallback((id: string) => call("incidents.dismiss", id), []);
+
+	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close, rename, pin, reopen, pause, incidents, retry, dismiss };
 }

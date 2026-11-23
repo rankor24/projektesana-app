@@ -16,7 +16,7 @@ import type { SkillInfo } from "./skill-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
-import type { QueueView, Thread, WaitingItem } from "./thread-types.js";
+import type { PauseTarget, QueueView, Thread, WaitingItem } from "./thread-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
 import type { PlanStep } from "./plan.js";
@@ -483,6 +483,16 @@ export interface ApiSpec {
 	"threads.export": (threadId: string, projectId: string | null, format: "jsonl" | "md") => { fileName: string; mime: string; text: string };
 	/** Gives a thread a new title (1-80 characters); the conversation itself is not touched. */
 	"threads.rename": (threadId: string, projectId: string | null, title: string) => Thread;
+	/** Pins or unpins a thread: pinned threads are listed first in their agent's list. */
+	"threads.pin": (threadId: string, projectId: string | null, pinned: boolean) => Thread;
+	/** Takes an archived conversation back (Atjaunot): idle again, its transcript as it was. */
+	"threads.reopen": (threadId: string, projectId: string | null) => Thread;
+	/** Pauses or resumes an agent, a department or everything (a full stop). Pausing stops what the held agents are doing and the work they handed out; they start nothing new until resumed. Answers how many runs it stopped. */
+	"pause.set": (target: PauseTarget, paused: boolean) => { stopped: number };
+	/** Retry an incident (a run that failed, stalled or could not start): its thread carries on where it stopped. Refused after two retries in an hour. */
+	"incidents.retry": (id: string) => { runId: string | null; queued: boolean };
+	/** Drop an incident from the list without retrying it. */
+	"incidents.dismiss": (id: string) => void;
 	"agent.confirm": (confirmId: string, allow: boolean) => void;
 	"agent.history": (projectId: string | null) => ChatEntry[];
 	"agent.reset": (projectId: string | null) => void;
@@ -755,6 +765,11 @@ export const API_NAMES = [
 	"threads.close",
 	"threads.export",
 	"threads.rename",
+	"threads.pin",
+	"threads.reopen",
+	"pause.set",
+	"incidents.retry",
+	"incidents.dismiss",
 	"agent.confirm",
 	"agent.history",
 	"agent.reset",

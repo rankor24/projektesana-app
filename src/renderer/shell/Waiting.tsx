@@ -1,10 +1,12 @@
 // Gaida tevi: everything that waits for an answer, of every project. A confirmation shows its batch and the agent; the restart question offers Turpināt / Atmest;
 // a gate shows its summary with Apstiprināt / Atgriezt (task 14.8); a question shows its text, opens the asking conversation and closes with an optional answer the agent hears;
-// S5 has a line that tells the user to open eks.
+// S5 has a line that tells the user to open eks. A run that failed, stalled or could not start is an incident card with Retry and Dismiss (the same row the conversations
+// panel lists under "Incidenti"); BPV's escalation question shows its options as buttons that fill the answer, the recommended one marked.
 import { useEffect, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
 import type { ExpertRemark } from "../../shared/expert-types";
 import { gateStage } from "../../shared/process-view";
+import { parseEscalation } from "../../shared/escalation";
 import type { WaitingItem } from "../../shared/waiting";
 import { call, errText } from "../bridge";
 import { agentName } from "./useThreads";
@@ -88,11 +90,51 @@ export function Waiting({ items, specs, projectId, onConfirm, onOpen }: Props) {
 						return <StartEksCard key={`s${w.projectId}`} w={w} current={w.projectId === projectId} onOpen={onOpen} />;
 					case "gate":
 						return <GateCard key={`g${w.projectId}${w.gate}${w.noteId}`} w={w} current={w.projectId === projectId} />;
+					case "incident":
+						return <IncidentRow key={w.id} i={w} specs={specs} projectId={projectId} onOpen={onOpen} onRetry={(id) => run(call("incidents.retry", id))} onDismiss={(id) => run(call("incidents.dismiss", id))} />;
 					case "escalated":
 						return <EscalatedCard key={`e${w.projectId}${w.stage}`} w={w} current={w.projectId === projectId} />;
 				}
 			})}
 			{err && <div className="err">{err}</div>}
+		</div>
+	);
+}
+
+const INCIDENT_WORD = { failed: tr("neizdevās"), stalled: tr("pārstāja darboties"), "not-started": tr("nevarēja sākties") } as const;
+
+/** One incident: which agent, what happened, what the run said and what it was asked, and Retry / Dismiss. Used in Gaida tevi and in the conversations panel (core/incidents.ts has the rules:
+ *  a thread is retried at most twice an hour, the third time the cause has to be fixed). Retry is main's (`incidents.retry`); the row goes when main says the list changed. */
+export function IncidentRow({ i, specs, projectId, onOpen, onRetry, onDismiss }: { i: Extract<WaitingItem, { kind: "incident" }>; specs: AgentSpec[]; projectId: string | null; onOpen: (threadId: string) => void; onRetry: (id: string) => void; onDismiss: (id: string) => void }) {
+	const here = i.projectId === projectId;
+	return (
+		<div className="confirm incident">
+			<div className="row small">
+				<b>{agentName(i.agent, specs)}</b>
+				<span className="badge bad">{INCIDENT_WORD[i.what]}</span>
+				{!here && <span className="badge warn">{i.projectId ?? tr("bez projekta")}</span>}
+				<span className="grow" />
+				{here && (
+					<button className="ghost small" onClick={() => onOpen(i.threadId)}>
+						{tr("Atvērt sarunu")}
+					</button>
+				)}
+			</div>
+			<div className="small incident-detail">{i.detail}</div>
+			{i.request && (
+				<div className="dim small incident-request" title={i.request}>
+					{tr("Prasība: {request}", { request: i.request })}
+				</div>
+			)}
+			<div className="row">
+				<button className="primary small" disabled={!i.mayRetry} onClick={() => onRetry(i.id)} title={i.mayRetry ? tr("Saruna turpina no vietas, kur apstājās") : tr("Šī saruna jau ir atkārtota divreiz stundas laikā: izlabo cēloni")}>
+					{tr("Atkārtot")}
+				</button>
+				<button className="small" onClick={() => onDismiss(i.id)} title={tr("Noņem no saraksta, neatkārtojot")}>
+					{tr("Noņemt")}
+				</button>
+				{i.retries > 0 && <span className="dim small">{tr("jau mēģināts: {n}", { n: i.retries })}</span>}
+			</div>
 		</div>
 	);
 }
@@ -176,6 +218,8 @@ function QuestionCard({ w, specs, current, onOpen }: { w: Extract<WaitingItem, {
 	const [answer, setAnswer] = useState("");
 	const [err, setErr] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	// BPV's escalation (process §8) carries its options in the body: they become buttons that fill the answer
+	const esc = body ? parseEscalation(body) : null;
 	useEffect(() => {
 		let live = true;
 		setBody(null);
@@ -219,6 +263,18 @@ function QuestionCard({ w, specs, current, onOpen }: { w: Extract<WaitingItem, {
 			</div>
 			<div>{w.title}</div>
 			{body === null ? <div className="dim small">{tr("lasa jautājumu…")}</div> : body && <pre>{body}</pre>}
+			{esc && (
+				<div className="esc-options">
+					<div className="dim small">{tr("BPV eskalācija ({reason}): izvēlies variantu vai uzraksti savu lēmumu", { reason: esc.reason })}</div>
+					{esc.options.map((o, k) => (
+						<button key={k} className={`esc-option ${esc.recommend === k + 1 ? "recommended" : ""}`} onClick={() => setAnswer(tr("Izvēlos variantu {n}: {text}", { n: k + 1, text: o }))} title={o}>
+							<b>{k + 1}</b> {o}
+							{esc.recommend === k + 1 && <span className="badge ok">{tr("BPV iesaka")}</span>}
+						</button>
+					))}
+					{esc.impact && <div className="dim small">{tr("Ietekme: {impact}", { impact: esc.impact })}</div>}
+				</div>
+			)}
 			<textarea className="gate-comment" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={tr("Atbilde (pēc izvēles): aģents to dzirdēs")} />
 			<div className="row">
 				<button disabled={busy} onClick={close}>{tr("Slēgt")}</button>

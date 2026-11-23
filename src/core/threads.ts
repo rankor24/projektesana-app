@@ -46,7 +46,7 @@ function atomicWrite(file: string, body: string) {
 	renameSync(tmp, file);
 }
 
-type Patch = Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs">>;
+type Patch = Partial<Pick<Thread, "state" | "title" | "wave" | "lastAt" | "runs" | "pinned">>;
 type Filter = { agent?: string; open?: boolean };
 
 /** The threads as the files keep them: the old store, now the fallback and the source of the one-time copy into the database. */

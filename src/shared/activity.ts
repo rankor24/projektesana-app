@@ -143,6 +143,9 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	coordinates_guide: { words: "Sagatavo koordināšu instrukciju", kind: "read" },
 	run_subagent: { words: "Dod uzdevumus palīgiem", kind: "other" },
 	delegate: { words: "Dod darbu speciālistiem", kind: "other" },
+	assign_task: { words: "Nodod uzdevumu aģentam", kind: "other" },
+	report_answer: { words: "Nosūta atbildi uz uzdevumu", kind: "other" },
+	escalate: { words: "Nodod lēmumu lietotājam", kind: "other" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {

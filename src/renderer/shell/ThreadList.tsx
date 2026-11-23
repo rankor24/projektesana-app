@@ -1,8 +1,11 @@
-// The agents and their conversations: the lead first, then departments → agents → threads (fold, drag, search, rename, archive). One dot shows what a thread is doing.
+// The agents and their conversations: the lead first, then departments → agents → threads (fold, drag, search, rename, archive, pin, take back). One dot shows what a thread is doing.
+// Phase C adds, at the top and in the menus: the Incidenti list (runs that failed, stalled or could not start, with Retry and Dismiss), a Full stop button, Pause / Resume in the
+// menu of every agent and department with a "paused" badge, and pinned threads first with a pin mark. The pause and incident rules are the coordinator's (agent/coordinator.ts);
+// this file only shows them and asks (OpenMausBot docs/pausing-bots.md puts the same switches in a bot's and a department's sidebar menu).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
-import { DEPARTMENT_NAME_MAX, type Department } from "../../shared/departments";
-import { LEAD_ID, type QueueView, type Thread, type ThreadState } from "../../shared/thread-types";
+import { DEPARTMENT_NAME_MAX, departmentOf, type Department } from "../../shared/departments";
+import { LEAD_ID, type HeldView, type PauseTarget, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
 import { agentName, liveState, useThreads } from "./useThreads";
 import { AGENT_DRAG_TYPE, DEPARTMENT_DRAG_TYPE, NO_DEPARTMENT, buildTree, dropPlace, interactive, moveDepartment, placeDepartment, planAgentDrop, sameDrop, stepAgent, unusedName, type AgentDrop, type AgentNode, type DropPlace } from "./sidebar-tree";
 import { useTreeState } from "./sidebar-state";
@@ -10,6 +13,7 @@ import { THREADS } from "../../shared/layout";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { windows } from "../windows";
+import { IncidentRow } from "./Waiting";
 import { locale, tr } from "../i18n";
 
 export const STATE_TEXT: Record<ThreadState, string> = {
@@ -124,8 +128,18 @@ function NameField({ value, label, max, onCommit, onCancel }: { value: string; l
 	);
 }
 
-/** One thread: its dot, title and time; double-click or the menu renames it, the menu archives it (closes it: the transcript stays, "Rādīt arhivētās" lists it). */
-function ThreadRow({ t, state, current, onSelect, onRename, onClose }: { t: Thread; state: ThreadState; current: boolean; onSelect: () => void; onRename: (title: string) => void; onClose: () => void }) {
+/** A small drawn pin: the mark of a pinned thread. */
+function PinMark() {
+	return (
+		<svg className="tl-pin" viewBox="0 0 24 24" width="12" height="12" aria-label={tr("Piesprausta")} role="img">
+			<path d="M9 3h6l-1 6 3 3v2h-5v7l-1 1-1-1v-7H5v-2l3-3z" fill="currentColor" />
+		</svg>
+	);
+}
+
+/** One thread: its dot, pin mark, title and time; double-click or the menu renames it, the menu pins it and archives it (closes it: the transcript stays, "Rādīt arhivētās" lists it,
+ *  and "Atjaunot" takes it back). */
+function ThreadRow({ t, state, current, onSelect, onRename, onClose, onPin, onReopen }: { t: Thread; state: ThreadState; current: boolean; onSelect: () => void; onRename: (title: string) => void; onClose: () => void; onPin: (pinned: boolean) => void; onReopen: () => void }) {
 	const [renaming, setRenaming] = useState(false);
 	const busy = state === "running" || state === "queued" || state === "waiting-confirm";
 	if (renaming) {
@@ -146,12 +160,21 @@ function ThreadRow({ t, state, current, onSelect, onRename, onClose }: { t: Thre
 		);
 	}
 	const items: MenuItem[] = [{ label: tr("Pārdēvēt"), run: () => setRenaming(true) }];
+	if (t.state !== "closed") items.push({ label: t.pinned ? tr("Atspraust") : tr("Piespraust"), run: () => onPin(!t.pinned), title: tr("Piespraustās sarunas ir aģenta sarakstā pirmās") });
 	if (t.state !== "closed") items.push({ label: tr("Arhivēt"), run: onClose, disabled: busy, title: busy ? tr("Nevar arhivēt, kamēr saruna strādā") : tr("Slēdz sarunu; pieraksts paliek") });
+	else items.push({ label: tr("Atjaunot"), run: onReopen, title: tr("Atver arhivēto sarunu atkal") });
 	return (
 		<div className={`tl-thread ${current ? "on" : ""} ${t.state === "closed" ? "closed" : ""}`} onClick={onSelect} onDoubleClick={() => setRenaming(true)} title={STATE_TEXT[state]}>
 			<StateDot state={state} />
+			{t.pinned && t.state !== "closed" && <PinMark />}
 			<span className="tl-title">{t.title}</span>
-			<span className="dim small">{when(t.lastAt)}</span>
+			{t.state === "closed" ? (
+				<button className="ghost small tl-restore" onClick={(e) => (e.stopPropagation(), onReopen())} title={tr("Atver arhivēto sarunu atkal")}>
+					{tr("Atjaunot")}
+				</button>
+			) : (
+				<span className="dim small">{when(t.lastAt)}</span>
+			)}
 			<RowMenu label={tr("Sarunas darbības")} items={items} />
 		</div>
 	);
@@ -175,13 +198,25 @@ interface Props {
 	/** the whole department list after an add, rename, reorder or removal */
 	onSaveDepartments: (list: Department[]) => Promise<unknown>;
 	onError: (message: string) => void;
+	/** pin or unpin a thread */
+	onPin: (id: string, pinned: boolean) => Promise<unknown>;
+	/** take an archived thread back */
+	onReopen: (id: string) => Promise<unknown>;
+	/** what the user paused, and the switches (an agent, a department, everything) */
+	held: HeldView;
+	onPause: (target: PauseTarget, paused: boolean) => Promise<unknown>;
+	/** the runs that failed, stalled or could not start, with Retry and Dismiss */
+	incidents: Extract<WaitingItem, { kind: "incident" }>[];
+	projectId: string | null;
+	onRetry: (id: string) => Promise<unknown>;
+	onDismiss: (id: string) => Promise<unknown>;
 }
 
 /** The conversations panel: departments (fold, remembered) → agents (fold, activity dot, "+" for a new conversation) → threads newest first (rename, archive), a search that narrows
  *  the tree, and drag: an agent to another department or place, a department to another place (Alt+Up / Alt+Down move one place from the keyboard).
  *  Ported from OpenMausBot (Apache-2.0) src/components/SidebarSections.tsx, SidebarSectionHeader.tsx, SidebarBotDrag.tsx, SidebarThreadRow.tsx; the rules are in sidebar-tree.ts, the
  *  remembered folds in sidebar-state.ts. */
-export function ThreadList({ threads, specs, departments, queue, current, onSelect, onNew, onClose, onRename, onMoveAgent, onSaveDepartments, onError }: Props) {
+export function ThreadList({ threads, specs, departments, queue, current, onSelect, onNew, onClose, onRename, onMoveAgent, onSaveDepartments, onError, onPin, onReopen, held, onPause, incidents, projectId, onRetry, onDismiss }: Props) {
 	const [query, setQuery] = useState("");
 	const [showClosed, setShowClosed] = useState(false);
 	const [naming, setNaming] = useState<{ kind: "new"; name: string } | { kind: "rename"; id: string } | null>(null);
@@ -249,6 +284,10 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 		const drags = live && movable;
 		const openN = a.threads.filter((t) => t.state !== "closed").length;
 		const mark = agentDrop?.kind === "row" && agentDrop.agentId === a.id ? `drop-${agentDrop.place}` : "";
+		// paused by itself, or by its department (a full stop is the banner at the top, not a badge on every row)
+		const own = held.agents.includes(a.id);
+		const byDept = !own && specs.some((s) => s.id === a.id && departmentOf(s) !== undefined && held.departments.includes(departmentOf(s)!));
+		const paused = own || byDept;
 		return (
 			<div key={a.id} className="tl-agent">
 				<div
@@ -306,7 +345,22 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 							{tr("noņemts")}
 						</span>
 					)}
+					{paused && (
+						<span className="badge warn tl-paused" title={byDept ? tr("Nodaļa ir apturēta: aģents nesāk jaunu darbu") : tr("Aģents ir apturēts: tas nesāk jaunu darbu, kamēr neatsāc")}>
+							{tr("apturēts")}
+						</span>
+					)}
 					<span className="grow" />
+					{!a.gone && a.id !== LEAD_ID && (
+						<RowMenu
+							label={tr("Aģenta darbības")}
+							items={[
+								own
+									? { label: tr("Atsākt aģentu"), run: () => void run(onPause({ kind: "agent", id: a.id }, false)), title: tr("Aģents atkal sāk darbu") }
+									: { label: tr("Apturēt aģentu"), run: () => void run(onPause({ kind: "agent", id: a.id }, true)), title: tr("Aptur tā darbu tūlīt un neļauj sākt jaunu, kamēr neatsāc") },
+							]}
+						/>
+					)}
 					{!a.gone && (
 						<button className="ghost small tl-new" title={tr("Jauna saruna")} aria-label={tr("Jauna saruna")} onClick={() => onNew(a.id)}>
 							+
@@ -316,7 +370,7 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 				{opened && (
 					<div className="tl-threads">
 						{a.threads.map((t) => (
-							<ThreadRow key={t.id} t={t} state={liveState(t, queue)} current={t.id === current} onSelect={() => onSelect(t.id)} onRename={(title) => void run(onRename(t.id, title))} onClose={() => onClose(t.id)} />
+							<ThreadRow key={t.id} t={t} state={liveState(t, queue)} current={t.id === current} onSelect={() => onSelect(t.id)} onRename={(title) => void run(onRename(t.id, title))} onClose={() => onClose(t.id)} onPin={(pinned) => void run(onPin(t.id, pinned))} onReopen={() => void run(onReopen(t.id))} />
 						))}
 						{a.threads.length === 0 && <div className="dim small tl-none">{tr("nav sarunu")}</div>}
 					</div>
@@ -338,6 +392,33 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 					onKeyDown={(e) => e.key === "Escape" && setQuery("")}
 				/>
 			</div>
+			{held.all ? (
+				<div className="tl-banner" role="status">
+					<b>{tr("Viss apturēts")}</b>
+					<span className="dim small">{tr("Nekas nesāk darbu, kamēr neatsāc.")}</span>
+					<span className="grow" />
+					<button className="primary small" onClick={() => void run(onPause({ kind: "all" }, false))}>
+						{tr("Atsākt visu")}
+					</button>
+				</div>
+			) : (
+				<div className="row tl-stoprow">
+					<button className="small tl-fullstop" onClick={() => void run(onPause({ kind: "all" }, true))} title={tr("Pilna apturēšana: aptur visus darbus, rindu, palīgus un apakšaģentus; nekas nesākas, kamēr neatsāc")}>
+						{tr("Pilna apturēšana")}
+					</button>
+				</div>
+			)}
+			{incidents.length > 0 && (
+				<div className="tl-incidents">
+					<div className="row small">
+						<b>{tr("Incidenti")}</b>
+						<span className="badge warn">{incidents.length}</span>
+					</div>
+					{incidents.map((i) => (
+						<IncidentRow key={i.id} i={i} specs={specs} projectId={projectId} onOpen={(id) => onSelect(id)} onRetry={(id) => void run(onRetry(id))} onDismiss={(id) => void run(onDismiss(id))} />
+					))}
+				</div>
+			)}
 			{view.lead && agentRow(view.lead, false)}
 			{view.departments.map((d) => {
 				const key = d.id ?? "";
@@ -410,6 +491,11 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 								>
 									<span className="tl-chev">{folded ? "▸" : "▾"}</span>
 									<span className="tl-dept-name">{d.name}</span>
+									{own && held.departments.includes(d.id!) && (
+										<span className="badge warn tl-paused" title={tr("Nodaļa ir apturēta: tās aģenti nesāk jaunu darbu")}>
+											{tr("apturēta")}
+										</span>
+									)}
 									{folded && d.active > 0 && (
 										<>
 											<StateDot state={d.state} />
@@ -423,6 +509,9 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 									label={tr("Nodaļas darbības")}
 									items={[
 										{ label: tr("Pārdēvēt"), run: () => setNaming({ kind: "rename", id: d.id! }) },
+										held.departments.includes(d.id!)
+											? { label: tr("Atsākt nodaļu"), run: () => void run(onPause({ kind: "department", id: d.id! }, false)), title: tr("Nodaļas aģenti atkal sāk darbu") }
+											: { label: tr("Apturēt nodaļu"), run: () => void run(onPause({ kind: "department", id: d.id! }, true)), title: tr("Aptur visu nodaļas darbu tūlīt un neļauj sākt jaunu, kamēr neatsāc") },
 										{ label: tr("Uz augšu"), run: () => reorderDepartments(moveDepartment(ids, d.id!, -1)), disabled: at <= 0 },
 										{ label: tr("Uz leju"), run: () => reorderDepartments(moveDepartment(ids, d.id!, 1)), disabled: at < 0 || at >= ids.length - 1 },
 										{
@@ -560,6 +649,14 @@ export function ThreadsWindow() {
 						})
 					}
 					onError={setErr}
+					onPin={T.pin}
+					onReopen={T.reopen}
+					held={T.queue.held}
+					onPause={T.pause}
+					incidents={T.incidents}
+					projectId={projectId}
+					onRetry={T.retry}
+					onDismiss={T.dismiss}
 				/>
 			)}
 		</div>
