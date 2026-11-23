@@ -177,4 +177,10 @@ export const part7: Record<string, string> = {
 	"Grafiks pieder projektam: atver projektu.": "The schedule belongs to a project: open a project.",
 	"Viss projekts": "Whole project",
 	"Rādīt visu projektu logā": "Fit the whole project in the window",
+	"Tuvināt": "Zoom",
+	"Tālināt (Ctrl + ritenis)": "Zoom out (Ctrl + wheel)",
+	"Tuvināt (Ctrl + ritenis)": "Zoom in (Ctrl + wheel)",
+	"Rādīt šodienu vidū": "Show today in the middle",
+	"Velc tukšu vietu, lai pārbīdītu; Ctrl + ritenis tuvina; Shift + ritenis bīda sāņus": "Drag an empty place to pan; Ctrl + wheel zooms; Shift + wheel pans sideways",
+	"velc: pārbīdīt · Ctrl + ritenis: tuvināt": "drag: pan · Ctrl + wheel: zoom",
 };

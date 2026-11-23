@@ -1,12 +1,14 @@
-// The Gantt of the Schedule page: the whole project on one date axis. The six BIM stages as bars (the one the project is in
-// is blue; a stage the contract does not include is dim), the deliveries as ◆ on their stage (hollow = planned, green = sent,
-// red = late), the TN and approval clocks as thin bars, the tasks as bars (a task that lasts has a start and an end), and a red
+// The Gantt of the Schedule page: the whole project on one date axis. The six BIM stages as bars, one colour per stage (the stage
+// the project is in is outlined; a stage the contract does not include is dim), the deliveries as ◇ planned / ◆ sent on their stage
+// (red = late), the TN and approval clocks as thin bars, the tasks as bars (a task that lasts has a start and an end), and a red
 // line for today. Click a bar to edit it, click empty track to add a task on that day (BIM Crew's popup, TaskPopup), drag a task
-// to move it or drag its edge to change its first or last day. Everything is read from the project's own stores (the same
-// stage timeline as Pārskats, the tasks of Grafiks); the only things written here are tasks and the stages' dates.
-import { useEffect, useMemo, useRef, useState } from "react";
+// to move it or drag its edge to change its first or last day. The view: drag empty space to pan, Ctrl + wheel to zoom at the
+// pointer, Shift + wheel (or the scroll bar) to pan sideways, "Viss projekts" to fit everything in the window. Everything is read
+// from the project's own stores (the same stage timeline as Pārskats, the tasks of Grafiks); the only things written here are
+// tasks and the stages' dates.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BimStage, Task } from "../../core/model";
-import { dateAtIndex, dayIndex, dragSpan, ganttAxis, monthTicks, spanPatch, stageSpan, taskSpan, weekLines, ZOOMS, type Axis, type DragEdge, type Span, type Zoom } from "../../shared/gantt";
+import { dateAtIndex, dayIndex, dragSpan, ganttAxis, monthTicks, spanPatch, stageSpan, taskSpan, weekLines, ZOOMS, type Axis, type DragEdge, type Span } from "../../shared/gantt";
 import { call, errText } from "../bridge";
 import { Err, useLoad } from "../ui";
 import { windows } from "../windows";
@@ -15,46 +17,62 @@ import { TaskPopup, type PopupTarget } from "./TaskPopup";
 import { tr } from "../i18n";
 
 const LABEL_W = 210;
-const ZOOM_KEY = "projektesana:gantt-zoom";
+const ZOOM_KEY = "projektesana:gantt-view";
+const MIN_DW = 0.8;
+const MAX_DW = 80;
+const clampDw = (n: number) => Math.min(MAX_DW, Math.max(MIN_DW, n));
 const MONTH_NAMES = [tr("janvāris"), tr("februāris"), tr("marts"), tr("aprīlis"), tr("maijs"), tr("jūnijs"), tr("jūlijs"), tr("augusts"), tr("septembris"), tr("oktobris"), tr("novembris"), tr("decembris")];
-type View = Zoom | "fit";
-const VIEWS: View[] = ["fit", "year", "quarter", "month", "week"];
-const VIEW_LABEL: Record<View, string> = { fit: tr("Viss projekts"), year: tr("Gads"), quarter: tr("Ceturksnis"), month: tr("Mēnesis"), week: tr("Nedēļa") };
+/** the view: the whole project in the window, or a number of pixels per day */
+type View = "fit" | number;
+const PRESETS: { view: View; label: string }[] = [
+	{ view: "fit", label: tr("Viss projekts") },
+	{ view: ZOOMS.year, label: tr("Gads") },
+	{ view: ZOOMS.quarter, label: tr("Ceturksnis") },
+	{ view: ZOOMS.month, label: tr("Mēnesis") },
+	{ view: ZOOMS.week, label: tr("Nedēļa") },
+];
 
-/** the whole project fits the window until the user picks a zoom (then that one is remembered) */
-function readZoom(): View {
+/** the whole project fits the window until the user picks another view (then that one is remembered) */
+function readView(): View {
 	try {
 		const z = localStorage.getItem(ZOOM_KEY);
-		return z && (z === "fit" || z in ZOOMS) ? (z as View) : "fit";
+		const n = Number(z);
+		return z && z !== "fit" && Number.isFinite(n) ? clampDw(n) : "fit";
 	} catch {
 		return "fit";
 	}
 }
 
+/** what to do to the scroll position once the new scale is drawn: show today in the middle, or keep a day under the pointer */
+type Pending = { kind: "today" } | { kind: "anchor"; day: number; cx: number };
+
 export function Gantt({ projectId }: { projectId: string }) {
 	const dash = useLoad(() => call("projects.dashboard", projectId), [projectId]);
 	const todos = useLoad<Task[]>(() => call("todos.list", projectId), [projectId]);
 	const dates = useLoad(() => call("stages.dates", projectId), [projectId]);
-	const [zoom, setZoomState] = useState<View>(readZoom);
+	const [view, setViewState] = useState<View>(readView);
 	const [width, setWidth] = useState(0);
 	const [showDone, setShowDone] = useState(false);
 	const [popup, setPopup] = useState<PopupTarget | null>(null);
 	const [stagePop, setStagePop] = useState<{ stage: BimStage; x: number; y: number } | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const scroller = useRef<HTMLDivElement>(null);
-	const scrolledFor = useRef<string>("");
-	const setZoom = (z: View) => {
-		setZoomState(z);
+	const pending = useRef<Pending | null>({ kind: "today" });
+	const panned = useRef(false);
+	const geo = useRef<{ axis: Axis; today: string; dw: number } | null>(null);
+	const setView = (v: View, p: Pending | null = { kind: "today" }) => {
+		pending.current = p;
+		setViewState(v);
 		try {
-			localStorage.setItem(ZOOM_KEY, z);
+			localStorage.setItem(ZOOM_KEY, String(v));
 		} catch {
 			// not remembered
 		}
 	};
 
 	const timeline = dash.data?.timeline;
-	// the width of the window, for "whole project"
 	const ready = !!timeline;
+	// the width of the window, for "whole project"
 	useEffect(() => {
 		const el = scroller.current;
 		if (!el) return;
@@ -82,13 +100,77 @@ export function Gantt({ projectId }: { projectId: string }) {
 		];
 		return { stages, clocks, tasks, undated, axis: ganttAxis(days, timeline.today) };
 	}, [timeline, dates.data, todos.data, showDone]);
+	// "whole project": the axis (the first to the last date, a margin each side) is squeezed to the window
+	const dw = !model ? 0 : view === "fit" ? Math.max(MIN_DW, (width - LABEL_W - 4) / model.axis.days) : clampDw(view);
+	if (model && timeline) geo.current = { axis: model.axis, today: timeline.today, dw };
+
+	// after a new scale is drawn: today in the middle, or the day that was under the pointer still under it
+	useLayoutEffect(() => {
+		const el = scroller.current;
+		const g = geo.current;
+		const p = pending.current;
+		if (!el || !g || !p || g.dw <= 0 || el.clientWidth === 0) return;
+		pending.current = null;
+		if (p.kind === "anchor") el.scrollLeft = Math.max(0, LABEL_W + p.day * g.dw - p.cx);
+		else el.scrollLeft = view === "fit" ? 0 : Math.max(0, LABEL_W + dayIndex(g.axis, g.today) * g.dw - (el.clientWidth + LABEL_W) / 2);
+	}, [dw, ready, view]);
+
+	/** zoom to `next` px/day keeping the day under `cx` (a position inside the window) where it is */
+	const zoomAt = (next: number, cx: number) => {
+		const el = scroller.current;
+		const g = geo.current;
+		if (!el || !g) return;
+		const n = clampDw(next);
+		if (n === g.dw) return;
+		setView(n, { kind: "anchor", day: (el.scrollLeft + cx - LABEL_W) / g.dw, cx });
+	};
+	const zoomBy = (f: number) => {
+		const el = scroller.current;
+		if (el) zoomAt((geo.current?.dw ?? 7) * f, LABEL_W + (el.clientWidth - LABEL_W) / 2);
+	};
+	// Ctrl + wheel zooms at the pointer (a listener of its own: a React wheel handler cannot cancel the page's own zoom)
+	useEffect(() => {
+		const el = scroller.current;
+		if (!el) return;
+		const wheel = (e: WheelEvent) => {
+			if (!(e.ctrlKey || e.metaKey)) return;
+			e.preventDefault();
+			const g = geo.current;
+			if (g) zoomAt(g.dw * Math.exp(-e.deltaY * 0.0015), e.clientX - el.getBoundingClientRect().left);
+		};
+		el.addEventListener("wheel", wheel, { passive: false });
+		return () => el.removeEventListener("wheel", wheel);
+	});
+	/** drag on empty space pans (both ways); a click that did not move still adds a task there */
+	const panStart = (e: React.MouseEvent) => {
+		const el = scroller.current;
+		if (!el || e.button !== 0 || (e.target as HTMLElement).closest("button, .gtask-bar, .gantt-label, .gantt-group, a, input, label")) return;
+		const x0 = e.clientX;
+		const y0 = e.clientY;
+		const l0 = el.scrollLeft;
+		const t0 = el.scrollTop;
+		panned.current = false;
+		// the sheet over the page goes up only once the drag is a pan, so a plain click still reaches the track
+		const follow = followMouse(
+			(ev) => {
+				if (!panned.current && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 4) return;
+				if (!panned.current) follow.cover();
+				panned.current = true;
+				el.scrollLeft = l0 - (ev.clientX - x0);
+				el.scrollTop = t0 - (ev.clientY - y0);
+			},
+			() => {
+				// the click that follows a pan is not a click on the track
+				if (panned.current) setTimeout(() => (panned.current = false), 0);
+			},
+			{ cursor: "grabbing", cover: false },
+		);
+	};
 
 	if (dash.error) return <Err error={dash.error} />;
 	if (!timeline || !model) return <div className="dim small" style={{ padding: 12 }}>{tr("lasa grafiku…")}</div>;
 	const { axis } = model;
 	const today = timeline.today;
-	// "whole project": the axis (the first to the last date, a margin each side) is squeezed to the window; the least is 1.5 px a day
-	const dw = zoom === "fit" ? Math.max(1.5, (width - LABEL_W - 4) / axis.days) : ZOOMS[zoom];
 	const trackW = axis.days * dw;
 	const x = (iso: string) => dayIndex(axis, iso) * dw;
 	const span = (s: Span) => ({ left: x(s.start), width: (dayIndex(axis, s.end) - dayIndex(axis, s.start) + 1) * dw });
@@ -98,26 +180,22 @@ export function Gantt({ projectId }: { projectId: string }) {
 		dash.reload();
 	};
 
-	// the page opens with today in the middle of the screen; a change of zoom does the same
-	const key = `${zoom}:${projectId}`;
-	if (scrolledFor.current !== key) {
-		scrolledFor.current = key;
-		requestAnimationFrame(() => {
-			const el = scroller.current;
-			if (el) el.scrollLeft = zoom === "fit" ? 0 : Math.max(0, LABEL_W + dayIndex(axis, today) * dw - el.clientWidth / 2);
-		});
-	}
-
+	const goToday = () => {
+		const el = scroller.current;
+		if (view === "fit") return setView(ZOOMS.quarter);
+		if (el) el.scrollTo({ left: Math.max(0, LABEL_W + dayIndex(axis, today) * dw - (el.clientWidth + LABEL_W) / 2), behavior: "smooth" });
+	};
 	const dateAt = (e: React.MouseEvent) => {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		return dateAtIndex(axis, Math.max(0, Math.min(axis.days - 1, Math.floor((e.clientX - r.left) / dw))));
 	};
 	const addAt = (e: React.MouseEvent) => {
-		if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("gantt-today")) return;
+		if (panned.current || (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("gantt-today"))) return;
 		setStagePop(null);
 		setPopup({ mode: "create", projectId, date: dateAt(e), x: e.clientX, y: e.clientY });
 	};
 	const openStage = (stage: BimStage, e: React.MouseEvent) => {
+		if (panned.current) return;
 		setPopup(null);
 		setStagePop({ stage, x: e.clientX, y: e.clientY });
 	};
@@ -133,18 +211,21 @@ export function Gantt({ projectId }: { projectId: string }) {
 		<div className="gantt">
 			<div className="gantt-bar">
 				<span className="seg" role="group" aria-label={tr("Mērogs")}>
-					{VIEWS.map((z) => (
-						<button key={z} className={zoom === z ? "on" : ""} onClick={() => setZoom(z)} title={z === "fit" ? tr("Rādīt visu projektu logā") : undefined}>
-							{VIEW_LABEL[z]}
+					{PRESETS.map((p) => (
+						<button key={p.label} className={view === p.view ? "on" : ""} onClick={() => setView(p.view)} title={p.view === "fit" ? tr("Rādīt visu projektu logā") : undefined}>
+							{p.label}
 						</button>
 					))}
 				</span>
-				<button
-					onClick={() => {
-						const el = scroller.current;
-						if (el) el.scrollTo({ left: Math.max(0, LABEL_W + dayIndex(axis, today) * dw - el.clientWidth / 2), behavior: "smooth" });
-					}}
-				>
+				<span className="seg" role="group" aria-label={tr("Tuvināt")}>
+					<button onClick={() => zoomBy(1 / 1.4)} title={tr("Tālināt (Ctrl + ritenis)")} aria-label={tr("Tālināt (Ctrl + ritenis)")}>
+						−
+					</button>
+					<button onClick={() => zoomBy(1.4)} title={tr("Tuvināt (Ctrl + ritenis)")} aria-label={tr("Tuvināt (Ctrl + ritenis)")}>
+						+
+					</button>
+				</span>
+				<button onClick={goToday} title={tr("Rādīt šodienu vidū")}>
 					{tr("Šodien")}
 				</button>
 				<button
@@ -166,18 +247,19 @@ export function Gantt({ projectId }: { projectId: string }) {
 						{tr("{n} bez datuma", { n: model.undated })}
 					</span>
 				)}
+				<span className="small dim" title={tr("Velc tukšu vietu, lai pārbīdītu; Ctrl + ritenis tuvina; Shift + ritenis bīda sāņus")}>{tr("velc: pārbīdīt · Ctrl + ritenis: tuvināt")}</span>
 				<span className="gantt-key small dim">
 					<span className="gk-mark">◇</span> {tr("nodevums")} <span className="gk-mark">◆</span> {tr("nosūtīts")} <span className="gk-mark late">◇</span> {tr("kavējas")} <span className="gk-line" /> {tr("šodien")}
 				</span>
 			</div>
 			{err && <div className="err" style={{ margin: "0 10px" }}>{err}</div>}
-			<div className="gantt-scroll" ref={scroller}>
+			<div className="gantt-scroll" ref={scroller} onMouseDown={panStart}>
 				<div className="gantt-inner" style={{ width: LABEL_W + trackW }}>
 					<Axis axis={axis} dw={dw} />
 					<div className="gantt-group">{tr("Stadijas un nodevumi")}</div>
 					{model.stages.map((s, n) => (
-						<div key={s.stage} className={`gantt-row stage ${s.current ? "cur" : ""}`} style={{ "--sc": `var(--st${n})` } as React.CSSProperties}>
-							<div className="gantt-label stage" title={s.inContract ? undefined : tr("stadija nav līgumā")} style={s.inContract ? undefined : { opacity: 0.6 }}>
+						<div key={s.stage} className={`gantt-row gst ${s.current ? "cur" : ""}`} style={{ "--sc": `var(--st${n})` } as React.CSSProperties}>
+							<div className="gantt-label gst" title={s.inContract ? undefined : tr("stadija nav līgumā")} style={s.inContract ? undefined : { opacity: 0.6 }}>
 								<i className="gdot" />
 								{s.stage}
 								{s.current && <span className="chip"> {tr("tagad")}</span>}

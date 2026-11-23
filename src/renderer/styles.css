@@ -785,7 +785,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .gk-mark { color: var(--info); }
 .gk-mark.late { color: var(--bad); }
 .gk-line { display: inline-block; width: 2px; height: 12px; background: var(--bad); }
-.gantt-scroll { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--border); position: relative; }
+.gantt-scroll { user-select: none; flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--border); position: relative; }
 .gantt-inner { position: relative; min-height: 100%; }
 .gantt-axis { position: sticky; top: 0; z-index: 4; display: flex; background: var(--panel); border-bottom: 1px solid var(--border-strong); height: 40px; }
 .gantt-group { position: sticky; left: 0; width: 210px; box-sizing: border-box; padding: 8px 10px 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; z-index: 2; }
@@ -804,10 +804,10 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .gantt-hint { position: absolute; left: 10px; top: 8px; font-size: 11px; color: var(--muted); pointer-events: none; }
 /* a stage: one colour per stage (the row's dot, tint and bar); the current one is outlined and bold; hatched when its dates come from
    deliveries; dim when the contract does not include it */
-.gantt-row.stage { background: color-mix(in srgb, var(--sc) 7%, transparent); }
-.gantt-row.stage.cur { background: color-mix(in srgb, var(--sc) 16%, transparent); }
-.gantt-label.stage { border-left: 4px solid var(--sc); font-weight: 500; }
-.gantt-row.stage.cur .gantt-label.stage { font-weight: 700; }
+.gantt-row.gst { background: color-mix(in srgb, var(--sc) 7%, transparent); }
+.gantt-row.gst.cur { background: color-mix(in srgb, var(--sc) 16%, transparent); }
+.gantt-label.gst { border-left: 4px solid var(--sc); font-weight: 500; background: color-mix(in srgb, var(--sc) 12%, var(--panel)); }
+.gantt-row.gst.cur .gantt-label.gst { font-weight: 700; }
 .gdot { width: 9px; height: 9px; border-radius: 50%; background: var(--sc); flex: none; }
 .gstage { position: absolute; top: 5px; height: 22px; box-sizing: border-box; border: 1px solid var(--sc); border-radius: 4px; background: var(--sc); color: #0b1220; font-size: 11px; font-weight: 600; padding: 0 7px; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; display: flex; align-items: center; gap: 6px; }
 .gstage em { font-style: normal; font-weight: 400; opacity: 0.75; }
