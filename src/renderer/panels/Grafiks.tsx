@@ -9,6 +9,7 @@ import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { Gantt } from "./Gantt";
+import { Routines } from "./Rutinas";
 import { TaskPopup, type PopupTarget } from "./TaskPopup";
 import { windows } from "../windows";
 import { tr } from "../i18n";
@@ -20,10 +21,10 @@ const DAYNAME = [tr("pirmdiena"), tr("otrdiena"), tr("trešdiena"), tr("ceturtdi
 
 export function Grafiks() {
 	const { projectId } = useUi();
-	const [tab, setTab] = useState<"gantt" | "month" | "week" | "tasks">(projectId ? "gantt" : "month");
+	const [tab, setTab] = useState<"gantt" | "month" | "week" | "tasks" | "routines">(projectId ? "gantt" : "month");
 	const [scope, setScope] = useState<"project" | "all">("project");
 	const [cursor, setCursor] = useState(todayLocal());
-	if (!projectId && scope === "project") return <Empty title={tr("nav projekta")}>{tr("Atver projektu panelī Projekts vai skaties visus projektus.")}<div><button onClick={() => setScope("all")}>{tr("Visi projekti")}</button></div></Empty>;
+	if (!projectId && scope === "project") return <Empty title={tr("nav projekta")}>{tr("Atver projektu panelī Projekts vai skaties visus projektus.")}<div className="row"><button onClick={() => setScope("all")}>{tr("Visi projekti")}</button><button onClick={() => (setScope("all"), setTab("routines"))} title={tr("Rutīnas, kas nepieder projektam")}>{tr("Rutīnas")}</button></div></Empty>;
 	return (
 		<div className="fill-col">
 			<div className="tabs">
@@ -31,11 +32,12 @@ export function Grafiks() {
 				<button className={tab === "month" ? "on" : ""} onClick={() => setTab("month")}>{tr("Mēnesis")}</button>
 				<button className={tab === "week" ? "on" : ""} onClick={() => setTab("week")}>{tr("Nedēļa")}</button>
 				<button className={tab === "tasks" ? "on" : ""} disabled={!projectId} onClick={() => setTab("tasks")}>{tr("Uzdevumi")}</button>
+				<button className={tab === "routines" ? "on" : ""} onClick={() => setTab("routines")} title={tr("Aģenta darbi pēc grafika: katru pirmdienu, katra mēneša 1. datumā…")}>{tr("Rutīnas")}</button>
 				<span className="grow" />
 				<button className={scope === "project" ? "on" : ""} disabled={!projectId} onClick={() => setScope("project")}>{projectId ?? tr("projekts")}</button>
 				<button className={scope === "all" ? "on" : ""} onClick={() => setScope("all")}>{tr("Visi projekti")}</button>
 			</div>
-			{tab === "gantt" ? projectId ? <Gantt projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Grafiks pieder projektam: atver projektu.")}</Empty> : tab === "tasks" ? projectId ? <Tasks projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Uzdevumi pieder projektam: atver projektu.")}</Empty> : <Days projectId={projectId} scope={scope} tab={tab as "month" | "week"} cursor={cursor} setCursor={setCursor} />}
+			{tab === "routines" ? <Routines projectId={projectId} /> : tab === "gantt" ? projectId ? <Gantt projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Grafiks pieder projektam: atver projektu.")}</Empty> : tab === "tasks" ? projectId ? <Tasks projectId={projectId} /> : <Empty title={tr("nav projekta")}>{tr("Uzdevumi pieder projektam: atver projektu.")}</Empty> : <Days projectId={projectId} scope={scope} tab={tab as "month" | "week"} cursor={cursor} setCursor={setCursor} onRoutine={() => setTab("routines")} />}
 		</div>
 	);
 }
@@ -44,7 +46,7 @@ function chipClass(i: GrafikItem): string {
 	return `gchip ${i.kind} ${i.level ?? ""} ${i.done ? "done" : ""} ${i.proposed ? "proposed" : ""}`;
 }
 
-function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string | null; scope: "project" | "all"; tab: "month" | "week"; cursor: string; setCursor: (d: string) => void }) {
+function Days({ projectId, scope, tab, cursor, setCursor, onRoutine }: { projectId: string | null; scope: "project" | "all"; tab: "month" | "week"; cursor: string; setCursor: (d: string) => void; onRoutine: () => void }) {
 	const year = Number(cursor.slice(0, 4));
 	const month = Number(cursor.slice(5, 7));
 	const grid = monthGrid(year, month);
@@ -75,12 +77,14 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 		if (projectId && !(e.target as HTMLElement).closest(".gchip")) setPopup({ mode: "create", projectId, date, x: e.clientX, y: e.clientY });
 	};
 	const go = (i: GrafikItem) => {
+		// a routine's chip opens the Rutīnas tab (a whole-app routine has no project to switch to)
+		if (i.kind === "routine") return onRoutine();
 		ui.setProject(i.projectId);
 		if (i.open) windows.open(i.open.panel, i.open.filter);
 	};
 	const Chip = ({ i }: { i: GrafikItem }) => (
 		<div className={chipClass(i)} title={`${i.projectId}: ${i.title}`} onClick={(e) => (e.stopPropagation(), openItem(i, e))}>
-			{scope === "all" && <b>{i.projectId} </b>}
+			{scope === "all" && i.projectId && <b>{i.projectId} </b>}
 			{i.title}
 		</div>
 	);
@@ -93,7 +97,7 @@ function Days({ projectId, scope, tab, cursor, setCursor }: { projectId: string 
 				<button onClick={() => step(1)}>›</button>
 				<button className="ghost" onClick={() => setCursor(today)}>{tr("Šodien")}</button>
 				<span className="grow" />
-				<span className="gkey small dim"><span className="gchip planned">{tr("nodevums")}</span> <span className="gchip sent">{tr("nosūtīts")}</span> <span className="gchip clock">{tr("termiņš")}</span> <span className="gchip task">{tr("uzdevums")}</span></span>
+				<span className="gkey small dim"><span className="gchip planned">{tr("nodevums")}</span> <span className="gchip sent">{tr("nosūtīts")}</span> <span className="gchip clock">{tr("termiņš")}</span> <span className="gchip task">{tr("uzdevums")}</span> <span className="gchip routine">{tr("rutīna")}</span></span>
 			</div>
 			{err && <div className="err" style={{ margin: "0 10px" }}>{err}</div>}
 			{items.error ? <Err error={items.error} /> : null}
@@ -158,7 +162,7 @@ function DayPanel({ projectId, day, items, showProject, onChanged, onError, onGo
 				<div key={i.id} className="gline">
 					{i.taskId ? <input type="checkbox" checked={!!i.done} disabled={i.proposed} onChange={() => toggle(i)} title={i.proposed ? tr("Piedāvājumu vispirms pieņem sadaļā Uzdevumi") : undefined} /> : <span className={chipClass(i)} style={{ width: 8, height: 8, padding: 0, borderRadius: 4 }} />}
 					<span className={`grow ${i.done ? "dim" : ""} ${i.open ? "click" : ""}`} style={{ textDecoration: i.done ? "line-through" : undefined }} onClick={() => i.open && onGo(i)}>
-						{showProject && <Badge tone="dim">{i.projectId}</Badge>} {i.title}
+						{showProject && i.projectId && <Badge tone="dim">{i.projectId}</Badge>} {i.title}
 					</span>
 					{i.proposed && <Badge tone="info">{tr("piedāvāts")}</Badge>}
 					{i.level === "bad" && !i.done && <Badge tone="bad">{tr("kavējas")}</Badge>}

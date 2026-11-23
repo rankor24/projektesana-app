@@ -24,6 +24,7 @@ import type { Target } from "./failover/plan.js";
 import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
+import { SELF_TOOL_NAMES } from "./tools/self-tools.js";
 import { lookupPiModel, type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
 import { catalogProvider } from "./claude/provider.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
@@ -106,7 +107,9 @@ export function specialistTools(listed: readonly string[], levelOf: LevelOf, rev
 /** What the agent's own thread may use: `specialistTools` and, for `bpv` and `eks`, their process tools (R35). A lane (`delegate`) uses `specialistTools`, so it never has them. */
 export function ownTools(listed: readonly string[], levelOf: LevelOf, revitTools: ReadonlySet<string>, spec: AgentSpec, cap: Level = SPECIALIST_CAP): string[] {
 	const process = (PROCESS_TOOLS_OF[spec.id] ?? []).filter((n) => listed.includes(n) && levelOf(n) !== "never" && LEVEL_RANK[levelOf(n)] <= LEVEL_RANK[cap]);
-	return [...specialistTools(listed, levelOf, revitTools, spec, cap), ...process];
+	// memory, role, skill-draft and routine tools are every agent's own (tools/self-tools.ts); a lane never gets them, a thread of its own does, at its own level (the gate asks for a confirm one)
+	const self = listed.filter((n) => SELF_TOOL_NAMES.has(n) && levelOf(n) !== "never");
+	return [...new Set([...specialistTools(listed, levelOf, revitTools, spec, cap), ...self, ...process])];
 }
 
 export interface LaneDeps {

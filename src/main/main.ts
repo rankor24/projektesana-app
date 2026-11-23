@@ -35,6 +35,7 @@ import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
 import { startAgentBridge } from "./agent-bridge.js";
 import { PageRenderer } from "./offscreen.js";
+import { RoutineService } from "./routines-scheduler.js";
 
 const here = import.meta.dirname; // dist/main
 const dataDir = app.isPackaged ? join(process.resourcesPath, "data") : join(here, "..", "..", "data");
@@ -240,7 +241,20 @@ const engine = new ProjectEngine({
 	modelRooms: async () => (revit.configured() ? (await revitRead.rooms(revit)).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.uniqueId })) : undefined),
 });
 
+// Routines (Grafiks → Rutīnas): the timer that starts an agent's run at the routine's time, only while the app runs; the same service answers the page's calls
+const routines = new RoutineService({
+	appDir,
+	projectsDir: settings.projectsDir(),
+	projectIds: () => registry.list().map((p) => p.id),
+	agents: () => settings.agentSpecs().specs,
+	session,
+	store: (id) => registry.store(id),
+	changed: (projectId, what) => emit("data.changed", { projectId, what }),
+	log,
+});
+
 const handlers = createHandlers({
+	routines,
 	skillsDir,
 	bimcraftApp: join(resourcesDir, "bimcraft", "app"),
 	engine,
@@ -275,6 +289,8 @@ const handlers = createHandlers({
 	openUrl,
 });
 registerIpc(handlers, log);
+routines.start();
+app.on("will-quit", () => routines.stop());
 // the agent's way into every call of the app and to page images (main/agent-bridge.ts); each agent run's tools server gets its
 // address and token (agent/tools/context.ts ctxEnv)
 void startAgentBridge({ handlers, registry, renderer: pageRenderer })

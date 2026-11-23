@@ -143,6 +143,16 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	coordinates_guide: { words: "Sagatavo koordināšu instrukciju", kind: "read" },
 	run_subagent: { words: "Dod uzdevumus palīgiem", kind: "other" },
 	delegate: { words: "Dod darbu speciālistiem", kind: "other" },
+	// memory, self-improvement and the app problem log (agent/tools/memory.ts, self.ts, routines.ts): a change to itself is a visible line of the run card
+	memory_read: { words: "Lasa savu atmiņu", kind: "read" },
+	memory_write: { words: "Raksta savā atmiņā", kind: "write" },
+	memory_write_office: { words: "Raksta biroja atmiņā", kind: "write" },
+	edit_own_role: { words: "Maina savu lomu", kind: "write" },
+	draft_skill: { words: "Sagatavo prasmes melnrakstu", kind: "write" },
+	report_app_issue: { words: "Ziņo par lietotnes problēmu", kind: "write" },
+	routine_list: { words: "Skatās rutīnas", kind: "read" },
+	routine_create: { words: "Piedāvā rutīnu", kind: "write" },
+	routine_change: { words: "Maina rutīnu", kind: "write" },
 };
 
 export const KIND_LABEL: Record<ActKind | "thinking", string> = {
@@ -248,6 +258,19 @@ export function toolLine(name: string, detail: string | undefined, title: (sourc
 			break;
 		case "open_panel":
 			target = str(field(detail, "name"));
+			break;
+		case "memory_read":
+			target = str(field(detail, "scope"));
+			break;
+		case "memory_write":
+		case "memory_write_office": {
+			const what = str(field(detail, "text")) || str(field(detail, "find"));
+			target = `${str(field(detail, "action"))} · ${oneLine(what, 50)}`;
+			break;
+		}
+		case "edit_own_role":
+		case "draft_skill":
+			target = str(field(detail, "name")) ? `${str(field(detail, "name"))} — ${oneLine(str(field(detail, "reason")), 50)}` : oneLine(str(field(detail, "reason")), 60);
 			break;
 		default: {
 			// the first short text the input carries, e.g. a requirement's text or a note's title

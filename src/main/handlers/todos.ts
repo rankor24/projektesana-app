@@ -1,5 +1,7 @@
 // Tasks and the grafiks (task 8.5). The user's to-do list for a project, and the days it and the project's dates fill.
+import { join } from "node:path";
 import type { Registry } from "../../core/registry.js";
+import { routineGrafikItems } from "../../core/routines.js";
 import { grafikItems } from "../../core/grafiks.js";
 import { readStageDates, setStageDates } from "../../core/stage-dates.js";
 import { addTask, removeTask, updateTask } from "../../core/tasks.js";
@@ -7,7 +9,7 @@ import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 
 type K = "todos.list" | "todos.add" | "todos.update" | "todos.remove" | "stages.dates" | "stages.setDates" | "grafiks.items";
 
-export function todoHandlers(d: { registry: Registry; emit<E extends EventName>(event: E, payload: EventSpec[E]): void }): Pick<Handlers, K> {
+export function todoHandlers(d: { registry: Registry; /** the app data folder: the routines of the whole app sit in it */ settings?: { dir: string }; emit<E extends EventName>(event: E, payload: EventSpec[E]): void }): Pick<Handlers, K> {
 	const changed = (id: string) => d.emit("data.changed", { projectId: id, what: ["tasks"] });
 	const today = () => new Date().toISOString().slice(0, 10);
 	return {
@@ -34,7 +36,9 @@ export function todoHandlers(d: { registry: Registry; emit<E extends EventName>(
 		},
 		"grafiks.items": (scope, projectId, from, to) => {
 			const ids = scope === "all" ? d.registry.list().map((p) => p.id) : projectId ? [projectId] : [];
-			return ids.flatMap((id) => grafikItems(d.registry.store(id), from, to, today()));
+			const items = ids.flatMap((id) => grafikItems(d.registry.store(id), from, to, today()));
+			// the routines of the whole app (no project) show with the whole-app view
+			return scope === "all" && d.settings ? [...items, ...routineGrafikItems(join(d.settings.dir, "routines.json"), null, from, to)] : items;
 		},
 	};
 }

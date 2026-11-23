@@ -25,6 +25,8 @@ import type { RelayMsg } from "./popout.js";
 import type { PlanDoc } from "../core/model.js";
 import type { ProcessState } from "../core/process.js";
 import type { Depth, DocType, Stage } from "../core/process-def.js";
+import type { AppIssue, AppIssueStatus, MemoryFileInfo, MemoryFileText, MemoryKind, SelfChange } from "./memory-types.js";
+import type { RoutineInput, RoutineOccurrence, RoutinePreview, RoutineRow } from "./routine-types.js";
 
 
 export interface AppInfo {
@@ -680,6 +682,29 @@ export interface ApiSpec {
 	"todos.remove": (id: string, taskId: string) => void;
 	/** what falls on each day from `from` to `to`: planned and sent deliveries, clock ends, tasks; of one project or of all */
 	"grafiks.items": (scope: "project" | "all", projectId: string | null, from: string, to: string) => GrafikItem[];
+	/** Routines (Grafiks → Rutīnas): an agent + an instruction + a schedule, of one project or (projectId null) of the whole app */
+	"routines.list": (projectId: string | null) => RoutineRow[];
+	/** timing in words or a cron expression → the checked expression, its sentence and the next three runs; nothing is saved */
+	"routines.preview": (when: string, tz?: string) => RoutinePreview;
+	"routines.save": (projectId: string | null, input: RoutineInput) => RoutineRow;
+	"routines.setPaused": (projectId: string | null, routineId: string, paused: boolean) => RoutineRow;
+	"routines.remove": (projectId: string | null, routineId: string) => void;
+	/** starts the routine's agent now, as a run of its own; the answer is the thread it opened */
+	"routines.runNow": (projectId: string | null, routineId: string) => { thread: string };
+	/** the days a project's routines (and the whole app's) run, from "from" to "to", for the calendar */
+	"routines.occurrences": (projectId: string | null, from: string, to: string) => RoutineOccurrence[];
+	/** the agents' Markdown memory (Atmiņa → Aģentu atmiņa): every file with who keeps it and how much of it a run starts with */
+	"memoryMd.list": () => MemoryFileInfo[];
+	"memoryMd.read": (kind: MemoryKind, id: string) => MemoryFileText;
+	/** the user's edit of a memory file; expectedHash is the hash that was read, so a write by an agent meanwhile is not covered */
+	"memoryMd.write": (kind: MemoryKind, id: string, text: string, expectedHash: string) => MemoryFileText;
+	/** what agents changed in themselves (memory, role text, skill drafts), newest first, with the text before and after */
+	"selfChanges.list": () => SelfChange[];
+	/** puts the text from before a change back; → what it did */
+	"selfChanges.undo": (changeId: string) => string;
+	/** problems with the app itself that agents reported (report_app_issue), newest first */
+	"appIssues.list": () => AppIssue[];
+	"appIssues.setStatus": (issueId: string, status: AppIssueStatus) => AppIssue;
 	"files.roots": (id: string) => FileRoot[];
 	"files.list": (id: string, root: FileRoot["key"], rel: string) => FileList;
 	"files.search": (id: string, root: FileRoot["key"], q: string) => FileList;
@@ -891,6 +916,20 @@ export const API_NAMES = [
 	"stages.dates",
 	"stages.setDates",
 	"grafiks.items",
+	"routines.list",
+	"routines.preview",
+	"routines.save",
+	"routines.setPaused",
+	"routines.remove",
+	"routines.runNow",
+	"routines.occurrences",
+	"memoryMd.list",
+	"memoryMd.read",
+	"memoryMd.write",
+	"selfChanges.list",
+	"selfChanges.undo",
+	"appIssues.list",
+	"appIssues.setStatus",
 	"files.roots",
 	"files.list",
 	"files.search",

@@ -9,6 +9,7 @@ import type { OfficeMemory } from "../core/office-memory.js";
 import { LEAD_FIXED_MAX, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentSpec } from "../shared/agent-types.js";
 import { mayReach, ownDepartmentFirst } from "../shared/departments.js";
 import { LEAD_ID } from "../shared/thread-types.js";
+import { memoryText } from "./memory-md.js";
 import { estimateTextTokens } from "./context.js";
 import { LEADER, PROCESS_OWN_TOOLS, STAGES, stageCard } from "../core/process-def.js";
 import { STATUS_MAX } from "../core/process.js";
@@ -237,7 +238,7 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
 /** What every request of this agent starts with. The lead (`spec` null): SYSTEM_PROMPT, mail lines, user line, Revit rules, roster, the skills list.
  *  A specialist: the shared rules, its role file (or prompt), RULES, the mail lines, the user line, Revit rules only with a Revit tool, its roster,
  *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
-export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
+function standingBase(spec: AgentSpec | null, d: StandingDeps): string {
 	// the lead's process text is empty unless it is in the profile (the caller decides), so a co-work text stays byte for byte what it was
 	if (!spec) return [SYSTEM_PROMPT, APP_MAP, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? ((d.roleText?.id === spec.id ? d.roleText.text : readRole(d.appDir, spec.id)) ?? "").trim() : "";
@@ -246,6 +247,12 @@ export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
 	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? MAIL_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+}
+
+/** The standing text and, at its end, the agent's memory (agent/memory-md.ts): the one call this file makes into the Markdown memory. It sits last so a memory that changes
+ *  costs only the tail of the prompt cache. The pointer line to memory_* and report_app_issue is always there; the files only when they exist. */
+export function standingFor(spec: AgentSpec | null, d: StandingDeps): string {
+	return [standingBase(spec, d), memoryText(spec, d.appDir)].join("\n\n");
 }
 
 /** What a run adds to an agent's standing text later, at its largest: the office knowledge (KNOWLEDGE_MAX characters) and, in process mode, a status of STATUS_MAX characters
