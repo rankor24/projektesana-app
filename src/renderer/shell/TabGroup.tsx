@@ -8,6 +8,10 @@ import { WINDOW_TITLE, useWindows, windows } from "../windows";
 import { tabRects, track } from "./drag";
 import { tr } from "../i18n";
 
+/** Widths (px) at which the comment tools' window changes shape: colours in threes, then the header in a row with a wrapped grid of tools. */
+const SLIM_MID = 100;
+const SLIM_WIDE = 140;
+
 export function TabGroup({
 	group,
 	render,
@@ -68,8 +72,25 @@ export function TabGroup({
 	}, [own, group.tabs.length]);
 	// the comment tools alone in a window: the strip is as slim as their icon column (no title, the buttons stacked)
 	const slim = group.tabs.length === 1 && group.tabs[0] === TOOLS;
+	// the slim window adapts to the size the user gives it (a container query would make the group a containing block for the
+	// comment boxes, which are fixed to the screen): data-tier is "xs" (a column), "s" (colours in threes) or "m" (header in a row, tools wrap, colours in a row)
+	const tg = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const el = tg.current;
+		if (!slim || !el || typeof ResizeObserver === "undefined") return;
+		const set = (w: number) => {
+			el.dataset.tier = w >= SLIM_WIDE ? "m" : w >= SLIM_MID ? "s" : "xs";
+		};
+		set(el.clientWidth);
+		const ro = new ResizeObserver((e) => set(e[0]?.contentRect.width ?? el.clientWidth));
+		ro.observe(el);
+		return () => {
+			ro.disconnect();
+			delete el.dataset.tier;
+		};
+	}, [slim]);
 	return (
-		<div className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
+		<div ref={tg} className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
 			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? undefined : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
 				{/* the slim strip is all buttons: this grip is the part that moves the window (or drags the column off its edge) */}
 				{slim && (

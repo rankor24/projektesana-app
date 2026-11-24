@@ -313,3 +313,21 @@ He wrote: "Why agent asking to write notes? it should be allowed freely in proje
 | **Test** `test/21.1-free-writes.test.ts` (8 tests: what is free, what is not, own files, `edit_file`, links that lead out, the gate's batch, default without the lift). |
 
 **Not done / his call:** `run_command` still asks even when it only touches the project folder (a command can do anything). If he also wants the agent's own notes to be freely overwritable when the file is one of the office's `.md`/`.txt` files, that is a one-line change (`freeWrite` ignoring the "agent made it" check; the old text is still kept in the backups). **Not checked live.** `npm run typecheck` and the full test run could not run in the cloud session (no installed packages, the npm registry is blocked): the new test ran from a scratch build with `zod` and the text readers stubbed, on Linux; the Windows-only parts (drive letters, upper/lower case of paths, junctions) were reasoned, not run.
+
+## 2026-11-24: Comment tools window adapts to its shape (version 2.10.2)
+
+His words: "Comment Tool window - can you make more dynamic so if changes to wide format, all header buttons arrange horizontally? and if wide
+enough tools buttons can arrange to fit better." (screenshots: the floating tools window, a tall slim one, and a short wide one that only
+showed the header and two tools with a scrollbar.)
+
+This builds on §8 (a compact vertical column of icons); it does not undo it: narrow stays exactly the column he asked for, three times.
+
+| Window width (its own, not the screen's) | Now (`TabGroup.tsx` sets `data-tier` from a ResizeObserver; rules in `styles.css`, `.tg-slim[data-tier]`) |
+|---|---|
+| under 100 px (the edge column, a slim float) | As before: window buttons stacked, one column of icons, colours two per row. |
+| 100 – 139 px | Header still stacked; the icons wrap two or more per row; colours three per row. |
+| 140 px and wider | Header: the grip on the left, the window buttons (to column, float, pop out, minimise) in one row on the right. Tools wrap into a grid as many per row as fit (centred, groups separated by a line); the six colours sit in one row. The page's open comments (💬) follow the tools in the grid (it no longer sticks to the bottom). |
+
+The window stays resizable from every edge and corner; the shape follows the width as it is dragged. The width is measured with a
+ResizeObserver, not a CSS container query, because a container would become the containing block of the comment box and the comment list
+(they are fixed to the screen) and move them. **Not checked live** (his rule): typecheck and the focused tests run on his PC, see the release note.

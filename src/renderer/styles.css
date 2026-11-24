@@ -696,10 +696,11 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .cmp-pick-item .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* the comment tool bar (X1, M2): a window; a row of tools when it is wide, a column when it is narrow (the plan's purple bar) */
-/* Comment tools: one column of icon buttons at every width and place (edge column, floating, docked); names in the tooltips */
+/* Comment tools: a column of icon buttons while narrow (edge column, slim float, side dock); names in the tooltips. Given room (TabGroup sets
+   data-tier on .tg-slim from the window's own width) the header buttons sit in a row and the tools and colours wrap into a grid. */
 .ctool-win { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
 .ctool-empty { padding: 10px 6px; font-size: 11px; }
-.ctool-col { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; min-height: 100%; box-sizing: border-box; }
+.ctool-col { position: relative; display: flex; flex-flow: row wrap; justify-content: center; align-content: flex-start; align-items: center; gap: 2px; padding: 6px 4px; min-height: 100%; box-sizing: border-box; }
 .ctool-ab { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 40px; }
 .ctool-ab button { padding: 1px 0; font-size: 11px; }
 .ctool-ab button.on { background: #8e6bbf; color: #fff; border-color: #8e6bbf; }
@@ -709,12 +710,14 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .ctool:disabled { opacity: 0.4; cursor: default; }
 .ctool-icon { font-size: 17px; line-height: 1; }
 .ctool-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; font-size: 9.5px; line-height: 14px; font-weight: 700; text-align: center; color: #fff; background: #8e6bbf; }
-.ctool-sep { flex: none; width: 28px; height: 1px; margin: 4px 0; background: var(--border); }
-.ctool-colours { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 2px 0; }
+.ctool-sep { flex: none; width: calc(100% - 12px); height: 1px; margin: 4px 6px; background: var(--border); }
+.ctool-colours { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 2px 0; }
+.tg-slim[data-tier="s"] .ctool-colours { grid-template-columns: repeat(3, auto); }
+.tg-slim[data-tier="m"] .ctool-colours { grid-template-columns: repeat(6, auto); }
 .ctool-swatch { width: 16px; height: 16px; padding: 0; border: 2px solid transparent; border-radius: 50%; }
 .ctool-swatch.on { border-color: var(--text); box-shadow: 0 0 0 1px var(--bg); }
-.ctool-col > .grow { display: block; flex: 1; }
-.ctool-err { padding: 2px; font-size: 10px; word-break: break-word; }
+.ctool-col > .grow { display: none; }
+.ctool-err { flex: 0 0 100%; padding: 2px; font-size: 10px; word-break: break-word; }
 /* the comment tools alone in a floating window: no title tab, the window buttons stacked so the strip is as slim as the column */
 .tg-slim .tg-strip { flex-direction: column; align-items: stretch; min-height: 0; padding: 4px 0 2px; cursor: grab; }
 .tg-slim .tg-tabs { display: none; }
@@ -759,6 +762,11 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .tg-edge .tg-tabs { display: none; }
 .tg-edge .tg-buttons { flex: 1; justify-content: center; border-left: none; padding: 0 2px; }
 .tg-edge .tg-buttons button { width: 26px; height: 26px; }
+/* the comment tools' window given room (data-tier "m", set by TabGroup from its width): the grip and the window buttons share one row */
+.tg-slim[data-tier="m"] .tg-strip { flex-direction: row; align-items: center; padding: 2px 4px; }
+.tg-slim[data-tier="m"] .tg-grip { flex: 1; height: 24px; margin: 0; justify-content: flex-start; padding-left: 6px; }
+.tg-slim[data-tier="m"] .tg-buttons { flex: none; flex-direction: row; align-self: center; justify-content: flex-end; gap: 2px; }
+.tg-slim[data-tier="m"] .tg-buttons button { width: 28px; height: 24px; }
 
 /* B4: a split the user drags (full page beside a file, the viewer's two panes) */
 .split-handle { flex: none; position: relative; z-index: 5; background: var(--border); }
