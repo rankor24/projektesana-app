@@ -200,7 +200,7 @@ export interface RoleQuestion {
 export interface InventoryTable {
 	sourceId: string;
 	title: string;
-	rows: { floor: string; no: string; name: string; area: number; height: number | null; page: number }[];
+	rows: { id: string; floor: string; no: string; name: string; area: number; height: number | null; page: number }[];
 	totals: { floor: string; stated: number; sum: number; ok: boolean }[];
 	unread: { page: number; line: string }[];
 	/** "teksts" / "skenēts": read by code from a text layer / from a scan (OCR, often wrong); "labots": corrected rows */
@@ -538,6 +538,12 @@ export interface ApiSpec {
 	/** The agent's search_project, for the Avoti page: passages with their citation. */
 	"search.query": (id: string, query: string, kind?: SearchKind, limit?: number) => SearchResult;
 	"rooms.table": (id: string) => InventoryTable[];
+	/** Deletes rooms from a document's inventory: the row ids from rooms.table, or "all" for the whole table. The table becomes a correction (labots), so re-reading the document does not bring them back; rooms.restore is the way back. */
+	"rooms.delete": (id: string, sourceId: string, rowIds: string[] | "all") => { removed: number; left: number };
+	/** Changes fields of one room of a document's inventory (row id from rooms.table): floor, no, name, area, height, page. */
+	"rooms.update": (id: string, sourceId: string, rowId: string, patch: { floor?: string; no?: string; name?: string; area?: number; height?: number | null; page?: number }) => void;
+	/** Drops a document's corrections and deletions: its inventory is what code reads from the document again. */
+	"rooms.restore": (id: string, sourceId: string) => void;
 	"facts.list": (id: string) => Fact[];
 	"deliveries.list": (id: string) => Delivery[];
 	"deliveries.prepare": (id: string, deliveryId: string) => { open: number };
@@ -845,6 +851,9 @@ export const API_NAMES = [
 	"search.reindex",
 	"search.query",
 	"rooms.table",
+	"rooms.delete",
+	"rooms.update",
+	"rooms.restore",
 	"facts.list",
 	"deliveries.list",
 	"deliveries.prepare",

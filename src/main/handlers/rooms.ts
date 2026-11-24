@@ -3,9 +3,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkWrite } from "../../core/guard.js";
 import type { Registry } from "../../core/registry.js";
-import type { Handlers } from "../../shared/api.js";
+import type { EventName, EventSpec, Handlers } from "../../shared/api.js";
 import { totalsCheck } from "../../sources/extract/kl.js";
-import { inventoryTables } from "../../sources/room-table.js";
+import { deleteRooms, editRoom, inventoryTables, setCorrectedRooms, withRowIds } from "../../sources/room-table.js";
 import { writeXlsx } from "../../sources/export/xlsx.js";
 import { geometryCsv, pdfGeometry } from "../../sources/extract/kl-geometry.js";
 import { sourceBytes } from "../../sources/bytes.js";
@@ -13,9 +13,10 @@ import { sourceBytes } from "../../sources/bytes.js";
 export interface RoomsDeps {
 	registry: Registry;
 	openPath(p: string): Promise<string>;
+	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 }
 
-type K = "rooms.table" | "rooms.exportXlsx" | "rooms.geometry" | "rooms.geometryCsv";
+type K = "rooms.table" | "rooms.delete" | "rooms.update" | "rooms.restore" | "rooms.exportXlsx" | "rooms.geometry" | "rooms.geometryCsv";
 
 export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 	return {
@@ -34,9 +35,22 @@ export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 			await d.openPath(g.path);
 			return g.path;
 		},
+		"rooms.delete": async (id, sourceId, rowIds) => {
+			const r = await deleteRooms(d.registry.store(id), sourceId, rowIds, "user");
+			d.emit("data.changed", { projectId: id, what: ["rooms", "findings"] });
+			return { removed: r.removed, left: r.left };
+		},
+		"rooms.update": async (id, sourceId, rowId, patch) => {
+			await editRoom(d.registry.store(id), sourceId, rowId, patch, "user");
+			d.emit("data.changed", { projectId: id, what: ["rooms", "findings"] });
+		},
+		"rooms.restore": (id, sourceId) => {
+			setCorrectedRooms(d.registry.store(id), sourceId, null, "user");
+			d.emit("data.changed", { projectId: id, what: ["rooms", "findings"] });
+		},
 		"rooms.table": async (id) => {
 			const tables = await inventoryTables(d.registry.store(id));
-			return tables.map(({ sourceId, title, table: t, state, correctedBy }) => ({ sourceId, title, rows: t.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread, state, ...(correctedBy ? { correctedBy } : {}) }));
+			return tables.map(({ sourceId, title, table: t, state, correctedBy }) => ({ sourceId, title, rows: withRowIds(t.rows).map((r) => ({ id: r.id, floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread, state, ...(correctedBy ? { correctedBy } : {}) }));
 		},
 		"rooms.exportXlsx": async (id, sourceId) => {
 			const store = d.registry.store(id);

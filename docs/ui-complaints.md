@@ -188,3 +188,17 @@ He asked: "Add Department view as tab in Agent page. and Edit Agent page so its 
 | Changing agent or tab with unsaved changes asks first. |
 
 **Not checked live** (his rule).
+
+## 2026-11-24: Telpas — delete wrong rooms, agent edits and deletes rooms
+
+He asked: "add ability to select multiple rooms and delete them, have to allow agent to edit/delete existing rooms in app, it says it cant." (The agent's answer on screen: the app has no way to delete rows from the Rooms table; it offered only to change the role of the two source documents the wrong rooms came from.)
+
+| Done (not built into a numbered version yet) |
+|---|
+| Telpas → Inventarizācija: a checkbox on each room row and one in the header (select all). A shift-click ticks the run between two rows. With rooms ticked a line shows «Atlasītas N telpas» with «Dzēst atlasītās» (asks first) and «Noņemt atlasi». Clicking a row elsewhere still opens the source page. |
+| A deleted room is gone from the table, the comparison with the model, the checks and the Excel export. The table becomes a correction (the «labots» tag): the document is not read again over it, so **deleted rooms do not come back when the document is re-extracted**. «Atjaunot no dokumenta» (asks first) drops all corrections and deletions of that document. If every room is deleted, the empty table stays listed so it can be restored. |
+| The agent's full rewrite (`set_inventory_rooms`) leaves out rooms that were deleted earlier and says how many it skipped, so it cannot quietly put the same wrong rooms back; `clear: true` forgets the deletions. |
+| Agent: `list_rooms` now gives each room an `id`. New tools `delete_inventory_rooms` (ids or all, waits for the user's click) and `edit_inventory_room` (floor, no, name, area, height, page of one room; the agent's own change). The calls `rooms.delete` (click), `rooms.update` and `rooms.restore` are also open to the agent through `app_confirm` / `app_change`. |
+| The rooms check no longer reports every model room as missing when all inventory rooms were deleted: it is skipped, as with no table. |
+
+**Not done:** editing a room by hand on the screen (only the agent edits rooms); deleting from the Telpas page's plan view (another change is working on that view). **Not checked live** (his rule).

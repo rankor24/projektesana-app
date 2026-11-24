@@ -7,7 +7,7 @@ import { GLOBAL_TITLE, PAGES } from "../shared/pages.js";
 const CALLS: Record<string, string> = {
 	parskats: "projects.dashboard, facts.*, findings.*",
 	grafiks: "grafiks.items, stages.*, todos.*, timeline.clocks, clocks.*, deliveries.setPlanned/addPlanned; cilne Rutīnas: routines.* (rīki routine_list/create/change)",
-	telpas: "rooms.* (inventarizācija, salīdzinājums ar modeli); labot telpas: set_inventory_rooms",
+	telpas: "rooms.* (inventarizācija, salīdzinājums ar modeli); labot telpas: set_inventory_rooms (visu tabulu), edit_inventory_room (vienu telpu), delete_inventory_rooms (dzēst)",
 	prasibas: "requirements.*, findings.*, facts.*, expert.* (Ekspertīze)",
 	avoti: "sources.* (loma: sources.setRole); lapu redzēt: view_page; Meklēšanas indekss: search.* (meklē ar search_project)",
 	faili: "files.roots/list/search/open",

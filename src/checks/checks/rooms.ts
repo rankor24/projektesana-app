@@ -99,8 +99,9 @@ export const roomsCheck: Check = {
 	run: async ({ store, modelRooms }) => {
 		if (!modelRooms) return { results: [], skipped: "nav savienojuma ar Revit" };
 		const tables = await inventoryTables(store);
-		if (!tables.length) return { results: [], skipped: "inventarizācijas telpu tabula nav atrasta" };
 		const inv = tables.flatMap((t) => t.table.rows.map((r) => ({ floor: r.floor, no: r.no, name: r.name, area: r.area })));
+		// no table, or every room of the tables deleted: nothing to compare (not "every model room is missing")
+		if (!inv.length) return { results: [], skipped: "inventarizācijas telpu tabula nav atrasta" };
 		const { diffs } = compareRooms(inv, modelRooms);
 		const results: CheckResult[] = diffs.map((d) => ({
 			key: `${d.kind}:${d.no}`,
