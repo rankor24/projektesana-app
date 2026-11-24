@@ -16,6 +16,7 @@ import type { SkillInfo } from "./skill-types.js";
 import type { ExpertRemark, ExpertSummary, ImportResult, RemarkState, ReviewSource } from "./expert-types.js";
 import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
+import type { LogEntry, LogNotice, LogRun } from "./agent-log.js";
 import type { AppSettingChange, AppSettingEvent } from "./app-settings.js";
 import type { PauseTarget, QueueView, Thread, WaitingItem } from "./thread-types.js";
 import type { SearchKind, SearchResult, SearchStatus } from "./search-types.js";
@@ -512,6 +513,12 @@ export interface ApiSpec {
 	"agent.compact": (projectId: string | null) => { before: number; after: number };
 	/** The activity lines main still keeps (all projects, oldest first), for a window that opened or reloaded mid-run. */
 	"activity.recent": () => Activity[];
+	/** The agent log (Žurnāls): the runs that have a log, newest first. A project id (or null) keeps only that project's runs; none = every project. */
+	"agentlog.runs": (projectId?: string | null) => LogRun[];
+	/** One run's whole log: every entry in order, with the system text, the prompt, the reasoning, each tool call with its arguments and answer, errors and timings. Secrets are masked. */
+	"agentlog.read": (runId: string) => LogEntry[];
+	/** One run's log as a file: Markdown for a person or JSONL (one entry per line); saving it is the window's job. */
+	"agentlog.export": (runId: string, format: "md" | "jsonl") => { fileName: string; mime: string; text: string };
 	"projects.list": () => ProjectRow[];
 	/** the dashboard: per project the stage, next delivery, open findings, closest clock, last scan and why it needs attention (task 8.4) */
 	"projects.summaries": () => ProjectSummary[];
@@ -832,6 +839,9 @@ export const API_NAMES = [
 	"agent.measureFile",
 	"agent.compact",
 	"activity.recent",
+	"agentlog.runs",
+	"agentlog.read",
+	"agentlog.export",
 	"projects.list",
 	"projects.summaries",
 	"projects.dashboard",
@@ -1036,9 +1046,11 @@ export interface EventSpec {
 	"search.progress": SearchStatus;
 	/** What the agent or the folder scan is doing, as a line a person reads (shared/activity.ts). */
 	activity: Activity;
+	/** A new or changed line of an agent run's log (the Žurnāls panel follows a run live). */
+	"agentlog.entry": LogNotice;
 }
 
 export type EventName = keyof EventSpec;
-export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "appSettings.changed", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "search.progress", "activity", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
+export const EVENT_NAMES = ["data.changed", "agent.event", "agent.login", "appSettings.changed", "layout.changed", "layout.popped", "layout.relay", "scan.progress", "search.progress", "activity", "agentlog.entry", "threads.changed", "queue.changed", "waiting.changed"] as const satisfies readonly EventName[];
 
 export type Handlers = { [K in ApiName]: (...args: Parameters<ApiSpec[K]>) => ReturnType<ApiSpec[K]> | Promise<ReturnType<ApiSpec[K]>> };

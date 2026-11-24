@@ -8,6 +8,7 @@ import { part4 } from "./en/part4";
 import { part5 } from "./en/part5";
 import { part6 } from "./en/part6";
 import { part7 } from "./en/part7";
+import { log } from "./en/log";
 
 registerEn(core);
 registerEn(settings);
@@ -18,4 +19,5 @@ registerEn(part4);
 registerEn(part5);
 registerEn(part6);
 registerEn(part7);
+registerEn(log);
 export { tr, trDyn, getLang, setLang, locale, LANGS } from "../../shared/i18n";

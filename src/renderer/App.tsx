@@ -28,6 +28,7 @@ import { Iestatijumi } from "./panels/Iestatijumi";
 import { ChangesToast } from "./panels/settings/ChangesToast";
 import { AgentiPage } from "./panels/AgentiPage";
 import { Prasmes } from "./panels/Prasmes";
+import { AgentLog } from "./panels/AgentLog";
 import { Projekts } from "./panels/Projekts";
 import { Avoti } from "./panels/Avoti";
 import { Faili } from "./panels/Faili";
@@ -106,6 +107,7 @@ function PanelBody({ id, filter }: { id: PanelId; filter?: string }) {
 	if (id === "iestatijumi") return <Iestatijumi />;
 	if (id === "prasmes") return <Prasmes />;
 	if (id === "agenti") return <AgentiPage />;
+	if (id === "zurnals") return <AgentLog filter={filter} />;
 	if (id === "projekts") return <Projekts />;
 	if (id === "faili") return <Faili />;
 	if (id === "grafiks") return <Grafiks />;

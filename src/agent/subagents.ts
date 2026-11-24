@@ -26,7 +26,8 @@ import { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
 import { SELF_TOOL_NAMES } from "./tools/self-tools.js";
 import { lookupPiModel, type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
-import { catalogProvider } from "./claude/provider.js";
+import { catalogProvider, isClaudeSub } from "./claude/provider.js";
+import type { LogLane, LogStart } from "../shared/agent-log.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
 // ---- levels -------------------------------------------------------------------------------------------------------------------
@@ -129,6 +130,8 @@ export interface LaneDeps {
 	ownerPrefix?: string;
 	/** the main run's event sink */
 	emit(e: RunEvent): void;
+	/** the agent log: what a lane started with and every event of its own run (its tool calls and answers, not only the one-line steps `emit` gets) */
+	log?: { start(lane: LogLane, info: LogStart): void; event(lane: LogLane, e: RunEvent): void };
 	maxParallel(): number;
 	specs(): AgentSpec[];
 	maxTurns?: number;
@@ -224,6 +227,9 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 		toolErrors = 0;
 		const named = modelName(t);
 		try {
+			const lane: LogLane = { id: job.id, label: job.label, ...(job.agent ? { agent: job.agent } : {}) };
+			const mcp = deps.mcpFor(job.allowed, job.agentId);
+			deps.log?.start(lane, { provider: t.provider || (deps.base.provider ?? ""), model: t.model || (deps.base.modelId ?? ""), ...(t.effort ? { effort: t.effort } : {}), engine: isClaudeSub(t.provider || (deps.base.provider ?? "")) ? "claude" : "pi", system: job.system ?? "", prompt: job.task, tools: Object.values(mcp).flatMap((m) => [...m.allow]), history: 0 });
 			await deps.run({
 				...deps.base,
 				provider: t.provider || undefined,
@@ -231,13 +237,15 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 				effort: (t.effort || undefined) as PiEffort | undefined,
 				prompt: job.task,
 				systemPrompt: job.system,
-				mcp: deps.mcpFor(job.allowed, job.agentId),
+				mcp,
 				signal,
 				maxTurns: deps.maxTurns ?? 40,
 				history: [],
 				beforeToolCall: before,
 				afterToolCall: after,
 				onEvent: (e) => {
+					// its usage reaches the log through `emit` below (it counts in the run's totals); the rest is the lane's own story
+					if (e.type !== "usage") deps.log?.event(lane, e);
 					if (e.type === "done") answer = e.text;
 					else if (e.type === "error") {
 						error = e.message;

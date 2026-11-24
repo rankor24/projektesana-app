@@ -71,6 +71,10 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"incidents.retry": "confirm",
 	"incidents.dismiss": "confirm",
 	"activity.recent": "read",
+	// the agent log is the user's debug view: whole prompts and tool answers, large and not for the agent's own context
+	"agentlog.runs": "never",
+	"agentlog.read": "never",
+	"agentlog.export": "never",
 	"projects.list": "read",
 	"projects.summaries": "read",
 	"projects.dashboard": "read",

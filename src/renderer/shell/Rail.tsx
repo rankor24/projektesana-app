@@ -2,7 +2,7 @@
 // tooltip; Iestatījumi and the collapse button at the bottom. BIM Crew shell/NavRail.tsx is the model.
 import { useState } from "react";
 import { groupOf, THREADS } from "../../shared/layout";
-import { railGroups } from "../../shared/pages";
+import { LOG_PANEL, railGroups } from "../../shared/pages";
 import { useWindows, windows } from "../windows";
 import { tr } from "../i18n";
 import { Icon, PAGE_ICON } from "../icons";
@@ -55,6 +55,11 @@ export function Rail() {
 				<button className={`rail-item ${page === "agenti" ? "on" : ""}`} title={tr("Aģenti — saraksts, lomas, ierobežojumi")} onClick={() => windows.go("agenti")}>
 					<span className="rail-icon"><Icon name="bot" /></span>
 					{!collapsed && <span>{tr("Aģenti")}</span>}
+				</button>
+				{/* the agent log opens in the right panel like the lists, whatever page is open */}
+				<button className={`rail-item ${groupOf(layout, LOG_PANEL) ? "on" : ""}`} title={tr("Žurnāls — viss, ko aģents dara un saņem")} onClick={() => windows.toggleLog()}>
+					<span className="rail-icon"><Icon name="terminal" /></span>
+					{!collapsed && <span>{tr("Žurnāls")}</span>}
 				</button>
 				<button className={`rail-item ${page === "iestatijumi" ? "on" : ""}`} title={tr("Iestatījumi")} onClick={() => windows.go("iestatijumi")}>
 					<span className="rail-icon"><Icon name="sliders" /></span>

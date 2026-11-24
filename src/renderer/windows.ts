@@ -6,7 +6,7 @@
 // the model (WindowState / WindowMode); here every window is in a tab group that floats or docks on one of four sides.
 import { useSyncExternalStore } from "react";
 import * as L from "../shared/layout";
-import { defaultLayout, LIST_DOCK_SIZE, migrateToolsColumn, pageById, resolveOpen, START_PAGE, TOOLS_COLUMN } from "../shared/pages";
+import { defaultLayout, LIST_DOCK_SIZE, LOG_DOCK_SIZE, LOG_PANEL, migrateToolsColumn, pageById, resolveOpen, START_PAGE, TOOLS_COLUMN } from "../shared/pages";
 import { popIdOf } from "../shared/popout";
 import { call, on } from "./bridge";
 import { tr } from "./i18n";
@@ -31,6 +31,7 @@ export const PANEL_TITLE: Record<PanelId, string> = {
 	iestatijumi: tr("Iestatījumi"),
 	prasmes: tr("Prasmes"),
 	agenti: tr("Aģenti"),
+	zurnals: tr("Žurnāls"),
 };
 export const WINDOW_TITLE: Record<string, string> = {
 	...PANEL_TITLE,
@@ -175,6 +176,7 @@ export const windows = {
 	go(name: string, filter?: string) {
 		// a pop-out has no pages: the main window goes there
 		if (POP_ID) return void call("layout.relay", { t: "go", name, ...(filter !== undefined ? { filter } : {}) }).catch(() => undefined);
+		if (name === LOG_PANEL) return windows.openLog(filter);
 		const t = resolveOpen(name, filter);
 		if (!t || !t.page) return windows.openWindow(name, filter);
 		const def = pageById(t.page)!;
@@ -185,6 +187,21 @@ export const windows = {
 			if (!L.groupOf(state.layout, def.id)) op((l, v) => L.dock(L.open(l, def.id, v), def.id, "right", v, { size: LIST_DOCK_SIZE }));
 			op((l, v) => L.open(l, def.id, v, t.filter));
 		}
+	},
+	/**
+	 * The agent log opens like a list page, in the right panel as a tab, but it is no page: the page the user is on stays. One the user floated or moved
+	 * elsewhere is only brought to the front where it is. `filter`: a run id, or `thread:<id>` for the newest run of a thread.
+	 */
+	openLog(filter?: string) {
+		if (!L.groupOf(state.layout, LOG_PANEL)) op((l, v) => L.dock(L.open(l, LOG_PANEL, v), LOG_PANEL, "right", v, { size: LOG_DOCK_SIZE }));
+		// the time makes the same ask (the chat's button, again) count again after the user has picked another run
+		op((l, v) => L.open(l, LOG_PANEL, v, filter ? `${filter.replace(/@\d+$/, "")}@${Date.now()}` : undefined));
+	},
+	/** The rail's item and the chat's button: a second click on the log that is the tab in front of the right panel closes it. */
+	toggleLog() {
+		const g = L.groupOf(state.layout, LOG_PANEL);
+		if (g && g.place.kind === "dock" && !g.place.collapsed && g.active === LOG_PANEL) return op((l) => L.close(l, LOG_PANEL));
+		windows.openLog();
 	},
 	/**
 	 * A click on a rail item. A list that is the tab in front in the right panel closes on a second click (the other tabs stay);

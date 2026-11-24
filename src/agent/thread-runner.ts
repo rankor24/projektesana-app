@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type IncidentView, type Thread } from "../shared/thread-types.js";
+import { LEAD_ID, type IncidentView, type RunMeta, type Thread } from "../shared/thread-types.js";
 import type { CheckUsage, RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
 import { compactMessages, type Complete } from "./compact.js";
@@ -246,6 +246,8 @@ export class ThreadRunner {
 		// the lane dependencies of the latest attempt (its model, its tools, its locks): what a check turn runs with
 		let lastLaneDeps: LaneDeps | null = null;
 		let batchOpen = false;
+		// who this run is, for the agent log
+		const logMeta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId, wave: i.wave };
 		// the run's end frees whatever its tool calls or its Revit batch still hold, whatever way it ends
 		try {
 			try {
@@ -544,6 +546,7 @@ export class ThreadRunner {
 						locks: locks.forProject(projectId),
 						ownerPrefix: owner,
 						emit: handle,
+						log: this.d.agentLog ? { start: (lane, info) => this.d.agentLog!.start(runId, logMeta, info, lane), event: (lane, e) => this.d.agentLog!.event(runId, e, undefined, lane) } : undefined,
 						maxParallel: () => this.d.settings().maxParallelAgents,
 						specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
 						// a paused specialist is not handed work (holds.ts): the lead is told not to route around the pause
@@ -555,6 +558,9 @@ export class ThreadRunner {
 					// send_message and close_topic, and for every agent report_answer; BPV and a department's lead also assign_task and escalate
 					const mail = md ? [...mailTools(md), ...taskTools(md, { chief: chiefOf(md) })] : [];
 					const extraTools = [...lanes, ...mail];
+					const systemPrompt = h.length ? standing : withEarlier(seeded, seed.earlier);
+					// the agent log: what this attempt sends (the model, the system text, the prompt, the tools); everything that comes back arrives as events
+					this.d.agentLog?.start(runId, logMeta, { provider, model: modelId, engine: claude ? "claude" : "pi", ...(effort ? { effort } : {}), system: systemPrompt, prompt, tools: [...Object.values(mcp).flatMap((m) => [...m.allow]), ...extraTools.map((t) => t.name)], history: h.length, ...(resume ? { resumed: true } : {}), ...(retried ? { backup: true } : {}), ...(turnImages.length ? { images: turnImages.length } : {}) });
 					await engine({
 						runtime: rt,
 						provider,
@@ -562,7 +568,7 @@ export class ThreadRunner {
 						effort,
 						prompt,
 						images: turnImages,
-						systemPrompt: h.length ? standing : withEarlier(seeded, seed.earlier),
+						systemPrompt,
 						mcp,
 						signal,
 						beforeToolCall,

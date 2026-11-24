@@ -50,12 +50,13 @@ export const PAGES: PageDef[] = [
 ];
 
 /** Windows that belong to no page: the project list (the switcher in the top bar) and the settings. */
-export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi", "prasmes", "agenti"];
+export const GLOBAL_PANELS: PanelName[] = ["projekts", "iestatijumi", "prasmes", "agenti", "zurnals"];
 export const GLOBAL_TITLE: Record<string, { title: string; hint: string }> = {
 	projekts: { title: "Projekti", hint: "projektu saraksts, nolasīšana" },
 	iestatijumi: { title: "Iestatījumi", hint: "ceļi, modelis, Revit" },
 	prasmes: { title: "Prasmes", hint: "biroja prasmju bibliotēka, aģentiem" },
 	agenti: { title: "Aģenti", hint: "aģentu saraksts, lomas, ierobežojumi" },
+	zurnals: { title: "Žurnāls", hint: "viss, ko aģents dara un saņem, pilnā tekstā" },
 };
 export const START_PAGE: PanelName = "parskats";
 
@@ -68,6 +69,9 @@ export const FULL_PAGE_CHAT = 340;
 const PAGE_PANEL_SIZE = 480;
 /** the right panel the list pages stack in (Faili, Avoti, Prasības, Telpas, Normatīvi, Atmiņa: one tab each) */
 export const LIST_DOCK_SIZE = 520;
+/** the agent log: a global panel that docks in the same right panel as the list pages (windows.openLog), wider because a transcript is */
+export const LOG_PANEL: PanelName = "zurnals";
+export const LOG_DOCK_SIZE = 680;
 export const MATRIX_SIZE = 300;
 
 const NOMINAL: Vp = { w: 1600, h: 900 };
