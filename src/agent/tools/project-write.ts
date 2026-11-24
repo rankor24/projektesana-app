@@ -10,6 +10,9 @@ import { isInside } from "../../core/guard.js";
 import { readJson, writeAtomic } from "../../core/safe-file.js";
 import type { ToolCtx } from "./context.js";
 
+/** The part of the tool context this file reads, so the gate can call it before a run directory or agent exists. */
+type WriteCtx = Pick<ToolCtx, "projectId" | "projectsDir" | "appDir">;
+
 /** The tools whose confirm level is lifted when `freeWrite` says so, and the argument that names the file they write. */
 const WRITES: Record<string, "path" | "to"> = { write_file: "path", edit_file: "path", copy_file: "to" };
 
@@ -19,7 +22,7 @@ const DEVICE = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
 const LEDGER_MAX = 5000;
 
 /** The open project's folder (the office project folder), or null without a project. */
-export function projectRoot(ctx: ToolCtx): string | null {
+export function projectRoot(ctx: WriteCtx): string | null {
 	if (!ctx.projectId) return null;
 	const root = (JSON.parse(readFileSync(join(ctx.projectsDir, ctx.projectId, "project.json"), "utf8")) as { root?: unknown }).root;
 	return typeof root === "string" && root ? root : null;
@@ -27,9 +30,9 @@ export function projectRoot(ctx: ToolCtx): string | null {
 
 const key = (p: string) => (process.platform === "win32" ? p.toLowerCase() : p);
 
-const ledgerFile = (ctx: ToolCtx) => join(ctx.appDir, "agent-files", `${ctx.projectId}.json`);
+const ledgerFile = (ctx: WriteCtx) => join(ctx.appDir, "agent-files", `${ctx.projectId}.json`);
 
-function ledger(ctx: ToolCtx): string[] {
+function ledger(ctx: WriteCtx): string[] {
 	const v = readJson<unknown[]>(ledgerFile(ctx), Array.isArray);
 	return (v ?? []).filter((x): x is string => typeof x === "string");
 }
@@ -54,7 +57,7 @@ function realPath(p: string): string {
 }
 
 /** The real path of a file inside the project folder, or null when it is not a path the agent may write without asking. */
-function inProject(ctx: ToolCtx, raw: string): string | null {
+function inProject(ctx: WriteCtx, raw: string): string | null {
 	const root = projectRoot(ctx);
 	if (!root || raw.includes("\0")) return null;
 	const target = isAbsolute(raw) ? resolve(raw) : resolve(root, raw);
@@ -71,7 +74,7 @@ function inProject(ctx: ToolCtx, raw: string): string | null {
 }
 
 /** True when this call writes a text note inside the project folder and needs no click: a file that is new, or one the agent made earlier. */
-export function freeWrite(ctx: ToolCtx, tool: string, args: unknown): boolean {
+export function freeWrite(ctx: WriteCtx, tool: string, args: unknown): boolean {
 	const field = WRITES[tool];
 	if (!field) return false;
 	const raw = (args as Record<string, unknown> | null | undefined)?.[field];
@@ -89,7 +92,7 @@ export function freeWrite(ctx: ToolCtx, tool: string, args: unknown): boolean {
 }
 
 /** Remembers a file the agent created (not one it overwrote), so rewriting it later needs no click. Never throws. */
-export function recordCreated(ctx: ToolCtx, file: string): void {
+export function recordCreated(ctx: WriteCtx, file: string): void {
 	try {
 		if (!ctx.projectId) return;
 		const real = inProject(ctx, file);
