@@ -570,7 +570,12 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .floor-strip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .floor-chip.on { background: var(--elev2); border-color: var(--accent); }
 .floor-chip.bad { border-color: var(--bad); }
-.tile-plan { position: relative; flex: 1; min-height: 160px; margin: 8px; }
+.tile-plan { position: relative; flex: 1; min-height: 160px; margin: 8px; overflow: hidden; cursor: grab; user-select: none; }
+.tile-plan.dragging, .tile-plan.dragging .tile { cursor: grabbing; }
+.plan-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.plan-find { width: 190px; max-width: 100%; }
+.plan-zoom { display: inline-flex; align-items: center; gap: 4px; }
+.plan-zoom .dim { min-width: 38px; text-align: center; }
 .tile { position: absolute; box-sizing: border-box; border: 2px solid; padding: 2px 4px; overflow: hidden; cursor: pointer; border-radius: 3px; }
 .tile.model-only { border-style: dashed; }
 .tile:hover { filter: brightness(1.15); }

@@ -2,13 +2,15 @@
 // the comparison with the rooms of the open Revit model (3.2). A row click selects the room in Revit (one Select call).
 // Task 9.10: as a sidebar it is the room list with the floor totals and "Atvērt kā lapu"; as a page (telpaslapa) the canvas is
 // the floor strip with each floor's sum check and the tile plan of the picked floor (rooms coloured by their difference), the
-// differences and the inventory a group docked on the right, INV Area at the bottom.
+// differences and the inventory a group docked on the right, INV Area at the bottom. The plan pans and zooms (wheel at the
+// pointer, drag or middle button) and has a room search, a status filter and a sort order.
 import { useEffect, useRef, useState } from "react";
 import type { InvAreaRow, InventoryTable, RoomCompareRow } from "../../shared/api";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
 import { windows } from "../windows";
-import { DIFF_LABEL, DIFF_TONE, floorStrip, pickFloor, planRooms, tiles, type DiffKind } from "../../shared/rooms-plan";
+import { DIFF_LABEL, DIFF_TONE, filterRooms, floorStrip, kindsPresent, NO_FILTER, pickFloor, planRooms, sortRooms, tiles, type DiffKind, type PlanFilter, type SortKey, type StatusFilter } from "../../shared/rooms-plan";
+import { clampView, HOME, MAX_ZOOM, MIN_ZOOM, panBy, place, wheelPixels, wheelZoomFactor, zoomAt, type View } from "../../shared/pan-zoom";
 import { commentSubject } from "../comment-subject";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { locale, tr } from "../i18n";
@@ -65,15 +67,68 @@ export function TelpasPlan() {
 	const cmp = useLoad<RoomCompareRow | null>(() => (projectId ? call("rooms.compare", projectId) : Promise.resolve(null)), [projectId]);
 	const [floor, setFloor] = useState<string | null>(null);
 	const [err, setErr] = useState<string | null>(null);
-	const box = useRef<HTMLDivElement>(null);
+	// the plan's box is only on screen once the tables are read, so the element is state (a plain ref was empty when the effects ran)
+	const [box, setBox] = useState<HTMLDivElement | null>(null);
 	const [size, setSize] = useState({ w: 600, h: 360 });
+	const [view, setView] = useState<View>(HOME);
+	const [sort, setSort] = useState<SortKey>("area-desc");
+	const [filter, setFilter] = useState<PlanFilter>(NO_FILTER);
+	const [dragging, setDragging] = useState(false);
+	const live = useRef({ view, size });
+	live.current = { view, size };
+	/** set the view and note it at once: wheel ticks come faster than the page redraws, so each must start from the last tick, not the last drawing */
+	const show = (v: View) => {
+		live.current.view = v;
+		setView(v);
+	};
+	const moved = useRef(false);
 	useEffect(() => {
-		const el = box.current;
-		if (!el) return;
-		const ro = new ResizeObserver(() => setSize({ w: Math.max(200, el.clientWidth), h: Math.max(160, el.clientHeight) }));
-		ro.observe(el);
+		if (!box) return;
+		const fit = () => setSize({ w: Math.max(200, box.clientWidth), h: Math.max(160, box.clientHeight) });
+		fit();
+		const ro = new ResizeObserver(fit);
+		ro.observe(box);
 		return () => ro.disconnect();
-	}, []);
+	}, [box]);
+	// the view stays inside the plan when the plan changes size
+	useEffect(() => show(clampView(live.current.view, size.w, size.h)), [size]);
+	// the wheel zooms at the pointer (a listener of its own: a React wheel handler cannot cancel the page's own zoom)
+	useEffect(() => {
+		if (!box) return;
+		const wheel = (e: WheelEvent) => {
+			e.preventDefault();
+			const { view: v, size: z } = live.current;
+			const r = box.getBoundingClientRect();
+			show(zoomAt(v, v.k * wheelZoomFactor(wheelPixels(e.deltaY, e.deltaMode)), e.clientX - r.left, e.clientY - r.top, z.w, z.h));
+		};
+		box.addEventListener("wheel", wheel, { passive: false });
+		return () => box.removeEventListener("wheel", wheel);
+	}, [box]);
+	/** drag with the left button pans (a click that did not move still picks the room); the middle button pans from anywhere */
+	const panStart = (e: React.MouseEvent) => {
+		if (e.button !== 0 && e.button !== 1) return;
+		const middle = e.button === 1;
+		if (middle) e.preventDefault();
+		const x0 = e.clientX;
+		const y0 = e.clientY;
+		const from = live.current.view;
+		moved.current = false;
+		const move = (ev: MouseEvent) => {
+			if (!moved.current && !middle && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 4) return;
+			if (!moved.current) setDragging(true);
+			moved.current = true;
+			const z = live.current.size;
+			show(panBy(from, ev.clientX - x0, ev.clientY - y0, z.w, z.h));
+		};
+		const up = () => {
+			window.removeEventListener("mousemove", move);
+			window.removeEventListener("mouseup", up);
+			setDragging(false);
+		};
+		window.addEventListener("mousemove", move);
+		window.addEventListener("mouseup", up);
+	};
+	const zoomBy = (f: number) => show(zoomAt(live.current.view, live.current.view.k * f, size.w / 2, size.h / 2, size.w, size.h));
 	if (!projectId) return <Empty title={tr("nav projekta")}>{tr("Atver projektu.")}</Empty>;
 	if (tables.error) return <Err error={tables.error} />;
 	const t = tables.data ?? [];
@@ -82,13 +137,20 @@ export function TelpasPlan() {
 	const cur = pickFloor(strip, floor);
 	if (tables.loading && !tables.data) return <div className="dim small" style={{ padding: 12 }}>{tr("lasa telpu tabulas…")}</div>;
 	if (!cur) return <Empty title={tr("no data")}>{tr("Īpašuma dokumentos telpu eksplikācija nav atrasta.")}</Empty>;
-	const rooms = planRooms(t, diffs, cur);
+	const all = planRooms(t, diffs, cur);
+	const kinds = kindsPresent(all);
+	// a status the picked floor does not have shows everything rather than an empty plan nobody can explain
+	const f: PlanFilter = filter.status !== "all" && filter.status !== "diffs" && filter.status !== "ok" && !kinds.includes(filter.status) ? { ...filter, status: "all" } : filter;
+	const rooms = sortRooms(filterRooms(all, f), sort);
 	const tl = tiles(rooms, size.w, size.h);
+	const shownArea = Math.round(rooms.reduce((s, r) => s + r.area, 0) * 10) / 10;
+	const filtered = f.text.trim() !== "" || f.status !== "all";
+	const pick = (id: string) => (setFloor(id), show(HOME));
 	return (
 		<div className="fill-col">
 			<div className="floor-strip">
 				{strip.map((c) => (
-					<button key={c.floor} className={`floor-chip ${cur === c.floor ? "on" : ""} ${c.ok ? "" : "bad"}`} onClick={() => setFloor(c.floor)} title={c.stated !== null ? tr("dokumentā {stated} m², rindu summa {sum} m²", { stated: c.stated, sum: c.sum }) : tr("rindu summa {sum} m²", { sum: c.sum })}>
+					<button key={c.floor} className={`floor-chip ${cur === c.floor ? "on" : ""} ${c.ok ? "" : "bad"}`} onClick={() => pick(c.floor)} title={c.stated !== null ? tr("dokumentā {stated} m², rindu summa {sum} m²", { stated: c.stated, sum: c.sum }) : tr("rindu summa {sum} m²", { sum: c.sum })}>
 						<b>{tr("{floor}. st.", { floor: c.floor })}</b> {c.ok ? "✓" : `${c.sum} ≠ ${c.stated}`}
 						<span className="dim small"> {tr("· {rooms} telpas", { rooms: c.rooms })}{c.diffs ? tr(" · {diffs} atšķ.", { diffs: c.diffs }) : ""}</span>
 					</button>
@@ -97,25 +159,57 @@ export function TelpasPlan() {
 				{cmp.data && cmp.data.state !== "ok" && <span className="dim small" title={cmp.data.message}>{tr("modeļa nav: {state}", { state: cmp.data.state })}</span>}
 				<button className="small" onClick={() => cmp.reload()}>{tr("Salīdzināt vēlreiz")}</button>
 			</div>
+			<div className="plan-bar">
+				<input type="search" className="plan-find" value={filter.text} placeholder={tr("Meklēt telpu pēc Nr. vai nosaukuma")} onChange={(e) => (setFilter({ ...f, text: e.target.value }), show(HOME))} />
+				<select value={f.status} title={tr("Kuras telpas rādīt")} onChange={(e) => (setFilter({ ...f, status: e.target.value as StatusFilter }), show(HOME))}>
+					<option value="all">{tr("Visas telpas")}</option>
+					<option value="diffs">{tr("Ar atšķirībām")}</option>
+					<option value="ok">{tr("Bez atšķirībām")}</option>
+					{kinds.map((k) => (
+						<option key={k} value={k}>{KIND[k]}</option>
+					))}
+				</select>
+				<select value={sort} title={tr("Telpu kārtība plānā")} onChange={(e) => (setSort(e.target.value as SortKey), show(HOME))}>
+					<option value="area-desc">{tr("Platība ↓")}</option>
+					<option value="area-asc">{tr("Platība ↑")}</option>
+					<option value="no">{tr("Pēc Nr.")}</option>
+					<option value="name">{tr("Pēc nosaukuma")}</option>
+					<option value="diff">{tr("Atšķirības vispirms")}</option>
+				</select>
+				{filtered && <button className="small ghost" onClick={() => (setFilter(NO_FILTER), show(HOME))}>{tr("Notīrīt filtru")}</button>}
+				<span className="dim small">{tr("{shown} / {total} telpas · {area} m²", { shown: rooms.length, total: all.length, area: shownArea.toLocaleString(locale()) })}</span>
+				<span className="grow" />
+				<span className="plan-zoom" title={tr("Ritenis tuvina uz kursoru; velc (vai vidējā poga), lai pārbīdītu")}>
+					<button className="small" onClick={() => zoomBy(1 / 1.5)} disabled={view.k <= MIN_ZOOM}>−</button>
+					<span className="small dim">{Math.round(view.k * 100)}%</span>
+					<button className="small" onClick={() => zoomBy(1.5)} disabled={view.k >= MAX_ZOOM}>+</button>
+					<button className="small" onClick={() => show(HOME)} disabled={view.k === 1}>{tr("Viss plāns")}</button>
+				</span>
+			</div>
 			{err && <div className="err">{err}</div>}
-			<div className="tile-plan" ref={box}>
+			<div className={`tile-plan ${dragging ? "dragging" : ""}`} ref={setBox} onMouseDown={panStart}>
+				{rooms.length === 0 && <Empty title={tr("Neviena telpa neatbilst filtram")} />}
 				{tl.map((x) => {
+					const p = place(view, x);
+					// only the tiles that show in the window are drawn: at high zoom most of the plan is outside it
+					if (p.left > size.w || p.top > size.h || p.left + p.width < 0 || p.top + p.height < 0) return null;
 					const tone = x.room.diff ? DIFF_TONE[x.room.diff as DiffKind] : "ok";
 					return (
 						<div
 							key={x.room.no}
 							className={`tile ${tone} ${x.room.modelOnly ? "model-only" : ""}`}
-							style={{ left: x.x, top: x.y, width: x.w, height: x.h, background: `color-mix(in srgb, ${TONE_VAR[tone]} ${tone === "ok" ? 14 : 30}%, var(--panel))`, borderColor: TONE_VAR[tone] }}
+							style={{ ...p, borderWidth: p.width < 24 || p.height < 24 ? 1 : 2, background: `color-mix(in srgb, ${TONE_VAR[tone]} ${tone === "ok" ? 14 : 30}%, var(--panel))`, borderColor: TONE_VAR[tone] }}
 							title={tr("{no} {name} · {area} m²{v}", { no: x.room.no, name: x.room.name, area: x.room.area, v: x.room.diff ? ` · ${DIFF_LABEL[x.room.diff as DiffKind]}` : "" })}
 							onClick={() => {
+								if (moved.current) return; // the mouse went up after a pan, not after a click
 								commentSubject.pick({ thing: "room", no: x.room.no, floor: cur }, `telpa ${x.room.no}`);
 								ui.focusAdd({ kind: "room", id: x.room.no, label: `telpa ${x.room.no}${x.room.diff ? `: ${DIFF_LABEL[x.room.diff as DiffKind]}` : ""}`, data: { floor: cur, name: x.room.name, area: x.room.area, diff: x.room.diff } });
 								if (x.room.modelId) call("revit.select", [Number(x.room.modelId)]).catch((e) => setErr(errText(e)));
 							}}
 						>
-							<b>{x.room.no}</b>
-							{x.w > 70 && x.h > 38 && <div className="small">{x.room.name}</div>}
-							{x.w > 70 && x.h > 54 && <div className="small dim">{tr("{area} m²", { area: x.room.area })}</div>}
+							{p.width > 22 && p.height > 16 && <b>{x.room.no}</b>}
+							{p.width > 70 && p.height > 38 && <div className="small">{x.room.name}</div>}
+							{p.width > 70 && p.height > 54 && <div className="small dim">{tr("{area} m²", { area: x.room.area })}</div>}
 						</div>
 					);
 				})}

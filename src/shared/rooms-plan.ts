@@ -106,6 +106,51 @@ export function planRooms(tables: InventoryTable[], diffs: Diff[], floor: string
 	return rooms.sort((a, b) => b.area - a.area || a.no.localeCompare(b.no, "lv", { numeric: true }));
 }
 
+/** How the plan orders its rooms: the layout fills row by row from the first room, so the order decides where each one sits. */
+export type SortKey = "area-desc" | "area-asc" | "no" | "name" | "diff";
+export const SORT_KEYS: SortKey[] = ["area-desc", "area-asc", "no", "name", "diff"];
+/** Which rooms the plan shows: all, those with any difference, those without, or those with one kind of difference. */
+export type StatusFilter = "all" | "diffs" | "ok" | DiffKind;
+export interface PlanFilter {
+	/** matches the room number or the name, any case */
+	text: string;
+	status: StatusFilter;
+}
+export const NO_FILTER: PlanFilter = { text: "", status: "all" };
+
+const byNo = (a: PlanRoom, b: PlanRoom) => a.no.localeCompare(b.no, "lv", { numeric: true });
+
+/** The rooms in the order asked for; ties fall back to the number, so the order is always the same for the same rooms. */
+export function sortRooms(rooms: PlanRoom[], key: SortKey): PlanRoom[] {
+	const rank = (r: PlanRoom) => (r.diff ? WORST.indexOf(r.diff) : WORST.length);
+	const cmp: Record<SortKey, (a: PlanRoom, b: PlanRoom) => number> = {
+		"area-desc": (a, b) => b.area - a.area,
+		"area-asc": (a, b) => a.area - b.area,
+		no: byNo,
+		name: (a, b) => a.name.localeCompare(b.name, "lv"),
+		diff: (a, b) => rank(a) - rank(b) || b.area - a.area,
+	};
+	return [...rooms].sort((a, b) => cmp[key](a, b) || byNo(a, b));
+}
+
+/** The rooms that pass the filter. */
+export function filterRooms(rooms: PlanRoom[], f: PlanFilter): PlanRoom[] {
+	const q = f.text.trim().toLocaleLowerCase("lv");
+	return rooms.filter((r) => {
+		if (q && !r.no.toLocaleLowerCase("lv").includes(q) && !r.name.toLocaleLowerCase("lv").includes(q)) return false;
+		if (f.status === "all") return true;
+		if (f.status === "diffs") return r.diff !== null;
+		if (f.status === "ok") return r.diff === null;
+		return r.diff === f.status;
+	});
+}
+
+/** The kinds of difference these rooms have, worst first: what the status filter can offer for this floor. */
+export function kindsPresent(rooms: PlanRoom[]): DiffKind[] {
+	const have = new Set(rooms.map((r) => r.diff).filter((d): d is DiffKind => d !== null));
+	return WORST.filter((k) => have.has(k));
+}
+
 export interface Tile {
 	room: PlanRoom;
 	x: number;

@@ -203,3 +203,23 @@ He asked: "Add Department view as tab in Agent page. and Edit Agent page so its 
 | Changing agent or tab with unsaved changes asks first. |
 
 **Not checked live** (his rule).
+
+## 2026-11-24: Telpas plan — pan, zoom, sort, filter
+
+His words: "To this Room view should also add pan/zoom and add sorting filtering options" (with a screenshot of the floor plan: small rooms
+are unreadable). He did not say which sort or filter options; the ones below were picked by the session from the room data, for him to confirm.
+
+| Need | Now (`src/renderer/panels/Telpas.tsx` `TelpasPlan`, `src/shared/pan-zoom.ts`, `src/shared/rooms-plan.ts`) |
+|---|---|
+| Zoom | The wheel zooms at the pointer (no Ctrl needed: the plan has nothing to scroll). Same wheel steps as Grafiks. «−» «+» zoom at the centre, «Viss plāns» goes back to the whole floor. 100 % to 6000 %. Text stays the same size, so a small room shows its number, name and area once it has grown big enough. |
+| Pan | Drag anywhere on the plan, or the middle button; a click that did not move still picks the room. The plan never leaves its box (no empty space). |
+| Search | A box for room number or name. |
+| Filter | All rooms · with differences · without differences · one kind of difference (only the kinds the floor has). The plan is laid out again for the rooms left, so a small room grows. «Notīrīt filtru» and a "shown / total rooms · m²" count. |
+| Sort | Area large → small (as before), small → large, by number, by name, differences first. The order decides where each room sits in the layout. |
+| Floor / filter / sort change | The view goes back to the whole plan. |
+
+Also fixed: the plan's size was only watched when the tables were already loaded on the first drawing, otherwise it stayed 600 × 360.
+
+**Not checked live** (his rule). The maths (pan, zoom, filter, sort) is covered by test 9.10 (`test/9.10-rooms-plan-view.test.ts`).
+`npm run typecheck` and the i18n test could not run in the cloud session (no installed packages, the npm registry is blocked); the new
+strings were checked against the English dictionary by script. Not tried in the app: the page's other floor-plan windows (differences, inventory).
