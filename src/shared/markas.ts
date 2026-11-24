@@ -125,17 +125,17 @@ export function parseMarkas(text: string): { codes: string[]; unknown: string[] 
 // ---- who owns which marka -------------------------------------------------------------------------------------------------------------------------
 
 /** The markas of each BD role agent, from the user's team description (docs/BD 00_README, column «Sadaļas»), keyed by the agent's id like
- *  `DEFAULT_DEPARTMENT_OF`; the user's ruling of 2026-11-24 on top: DVP, DOP, SC and SCB go with GP (so DOP moved from AR to the landscape architect), HB, HI, SP and UN go to UK.
+ *  `DEFAULT_DEPARTMENT_OF`; the user's ruling of 2026-11-24 on top: DVP, DOP, SC, SCB and KT go with GP (so DOP moved from AR to the landscape architect), TAA and IS go to BK (they may also arrive as input data: `POSSIBLY_INPUT_MARKAS`), HB, HI, SP and UN go to UK.
  *  A list of the person's own choice (`AgentSpec.markas`) wins; an agent with another id has none. FF, GI, TI and ZP are input data (`INPUT_MARKAS`), no agent's;
- *  IS, KT and TAA are still nobody's (asked). */
+ *  Every other annex row has an owner. */
 export const DEFAULT_MARKAS_OF: Readonly<Record<string, readonly string[]>> = {
 	bpv: ["SA"],
 	ar: ["UR", "VI", "AMI", "AA", "AR", "IN", "TN", "IE", "VAP"],
-	aa: ["GP", "TS-L", "DVP", "DOP", "SC", "SCB"],
+	aa: ["GP", "TS-L", "DVP", "DOP", "SC", "SCB", "KT"],
 	cd: ["TS-CD"],
 	ak: ["BAA"],
 	ea: ["ES-P", "LCA", "LCC"],
-	bk: ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK"],
+	bk: ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK", "TAA", "IS"],
 	uk: ["UK", "UKT", "LKT", "DT", "HB", "HI", "SP", "UN"],
 	avk: ["AVK-A", "AVK-V", "AVK-K", "AAT", "DN", "SM", "SAT"],
 	ga: ["GA", "GAT"],
@@ -148,6 +148,9 @@ export const DEFAULT_MARKAS_OF: Readonly<Record<string, readonly string[]>> = {
 
 /** Input data, not design sections: surveys and the land boundary plan come in with the brief, BPV requests them (the user, 2026-11-24). No agent holds them. */
 export const INPUT_MARKAS: readonly string[] = ["FF", "GI", "TI", "ZP"];
+
+/** Held by an agent but often arriving as input data (the user: TAA and IS can be input data, but BK usually does it): the lead is told both. */
+export const POSSIBLY_INPUT_MARKAS: readonly string[] = ["TAA", "IS"];
 
 /** The markas of an agent: its own list when it has one (`[]` = none, the person took them away), else the default of its id. */
 export function markasOf(spec: Pick<AgentSpec, "id" | "markas">): readonly string[] {
@@ -252,7 +255,7 @@ export function markasText(spec: Pick<AgentSpec, "id" | "markas"> | null, specs:
 			RULE_LINES,
 			`Pielikuma markas (kods nosaukums): ${rows}.`,
 			`Kuram aģentam kura marka (aģents: markas):\n${ownerLines(specs)}`,
-			`Izejas datu markas (${INPUT_MARKAS.join(", ")}): tas nav aģenta darbs, ievaddatus pieprasa BPV.`,
+			`Izejas datu markas (${INPUT_MARKAS.join(", ")}): tas nav aģenta darbs, ievaddatus pieprasa BPV. ${POSSIBLY_INPUT_MARKAS.join(", ")} var būt arī izejas dati, bet parasti tās dara BK.`,
 			un.length ? `Markas bez aģenta: ${un.join(", ")}: jautā cilvēkam, kas tās ņem.` : "",
 		]
 			.filter(Boolean)

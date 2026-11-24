@@ -55,8 +55,8 @@ test("codes as typed: case, spaces and dashes are forgiven, the rest is refused"
 
 test("the BD roles hold the markas of docs/BD 00_README; every default code is a known marka and each annex row has at most the owners the README gives", () => {
 	for (const [id, codes] of Object.entries(DEFAULT_MARKAS_OF)) for (const c of codes) assert.ok(markaByCode(c), `${id}: ${c}`);
-	assert.deepEqual(markasOf(spec("bk")), ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK"]);
-	assert.deepEqual(markasOf(spec("aa")), ["GP", "TS-L", "DVP", "DOP", "SC", "SCB"], "the user: DVP, DOP, SC, SCB go with GP");
+	assert.deepEqual(markasOf(spec("bk")), ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK", "TAA", "IS"], "TAA and IS: BK usually does it (they may also be input data)");
+	assert.deepEqual(markasOf(spec("aa")), ["GP", "TS-L", "DVP", "DOP", "SC", "SCB", "KT"], "the user: DVP, DOP, SC, SCB, KT go with GP");
 	assert.deepEqual(markasOf(spec("uk")), ["UK", "UKT", "LKT", "DT", "HB", "HI", "SP", "UN"]);
 	assert.ok(!markasOf(spec("ar")).includes("DOP"), "DOP moved from AR to GP");
 	assert.deepEqual(markasOf(spec("eks")), [], "the expertise holds none: it reads every section");
@@ -68,13 +68,17 @@ test("the BD roles hold the markas of docs/BD 00_README; every default code is a
 	const team = Object.keys(DEFAULT_MARKAS_OF).map((id) => spec(id));
 	assert.deepEqual(ownersOfMarka("ess-vn", team), ["ess"]);
 	assert.deepEqual(ownersOfMarka("DVP", team), ["aa"]);
-	assert.deepEqual(ownersOfMarka("TAA", team), [], "an annex row nobody holds (asked)");
+	assert.deepEqual(ownersOfMarka("TAA", team), ["bk"]);
+	assert.deepEqual(ownersOfMarka("IS", team), ["bk"]);
+	// every annex row has an owner or is input data
+	const held = new Set(team.flatMap((t) => [...markasOf(t)]));
+	assert.deepEqual(MARKAS.filter((m) => !held.has(m.code)).map((m) => m.code), ["FF", "GI", "TI", "ZP"]);
 	assert.deepEqual(ownersOfMarka("GI", team), [], "input data: BPV requests it");
 });
 
 test("a skill group belongs to the markas of the agent its folder number names", () => {
 	const team = ["bpv", "ar", "bk"].map((id) => spec(id));
-	assert.deepEqual(markasOfSkillGroup("07-buvkonstrukcijas", team), ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK"]);
+	assert.deepEqual(markasOfSkillGroup("07-buvkonstrukcijas", team), ["BK", "DZK", "MK", "KK", "MUK", "SK", "PK", "TAA", "IS"]);
 	assert.deepEqual(markasOfSkillGroup("07-buvkonstrukcijas", [spec("bk", { markas: ["BK"] })]), ["BK"], "the person's own list wins");
 	assert.deepEqual(markasOfSkillGroup("01-buvprojekta-vaditajs", team), ["SA"]);
 	assert.deepEqual(markasOfSkillGroup("00-kopigie", team), [], "the common skills belong to nobody");
@@ -122,11 +126,14 @@ test("the agents' standing text: every agent has the rule; the lead the whole an
 	assert.match(lead, /LBN 202-18/);
 	assert.match(lead, /likumi\.lv\/ta\/id\/301303/);
 	for (const m of MARKAS) assert.ok(lead.includes(`${m.code} ${m.name}`), m.code);
-	assert.match(lead, /- bk: BK, DZK, MK, KK, MUK, SK, PK/);
-	assert.match(lead, /Markas bez aģenta: .*\bTAA\b/, "the annex rows nobody holds are named: the person says who takes them");
+	assert.match(lead, /- bk: BK, DZK, MK, KK, MUK, SK, PK, TAA/);
+	assert.match(lead, /TAA, IS var būt arī izejas dati/);
+	assert.match(lead, /Markas bez aģenta: .*\bAAT\b/, "with only some agents, the annex rows nobody holds are named: the person says who takes them");
 	assert.match(lead, /Izejas datu markas \(FF, GI, TI, ZP\)/);
 	assert.doesNotMatch(lead, /Markas bez aģenta: .*\bGI\b/);
-	assert.doesNotMatch(lead, /Markas bez aģenta: .*\bAR\b/);
+	assert.doesNotMatch(lead, /Markas bez aģenta: .*\bBK\b/);
+	const all = markasText(null, Object.keys(DEFAULT_MARKAS_OF).map((id) => spec(id)));
+	assert.doesNotMatch(all, /Markas bez aģenta/, "with the whole team nothing is left without an agent");
 	const bk = markasText(team[2], team);
 	assert.match(bk, /Tavas markas: BK Būvkonstrukcijas; DZK Dzelzsbetona konstrukcijas/);
 	assert.match(bk, /- uk: UK, UKT, LKT, DT/);
