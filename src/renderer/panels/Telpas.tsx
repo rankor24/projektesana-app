@@ -337,6 +337,40 @@ function Inventory({ projectId }: { projectId: string }) {
 
 function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: string; onErr: (e: string) => void }) {
 	const sum = Math.round(t.rows.reduce((s, r) => s + r.area, 0) * 100) / 100;
+	// the rooms ticked for deleting (by row id); a shift-click ticks the run between two rows
+	const [sel, setSel] = useState<Set<string>>(new Set());
+	const [anchor, setAnchor] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
+	useEffect(() => {
+		// after a reload keep only the rooms that are still there
+		const ids = new Set(t.rows.map((r) => r.id));
+		setSel((p) => (p.size && [...p].some((x) => !ids.has(x)) ? new Set([...p].filter((x) => ids.has(x))) : p));
+	}, [t.rows]);
+	const allOn = t.rows.length > 0 && t.rows.every((r) => sel.has(r.id));
+	const tick = (id: string, on: boolean, range: boolean) => {
+		const next = new Set(sel);
+		const ids = range && anchor ? (() => {
+			const a = t.rows.findIndex((r) => r.id === anchor);
+			const b = t.rows.findIndex((r) => r.id === id);
+			return a < 0 || b < 0 ? [id] : t.rows.slice(Math.min(a, b), Math.max(a, b) + 1).map((r) => r.id);
+		})() : [id];
+		for (const x of ids) on ? next.add(x) : next.delete(x);
+		setSel(next);
+		setAnchor(id);
+	};
+	const remove = (ids: string[]) => {
+		if (!ids.length || busy) return;
+		if (!window.confirm(tr("Dzēst {n} telpas no šīs tabulas? Dzēstās telpas neatgriežas, kad dokumentu nolasa vēlreiz; «Atjaunot no dokumenta» tās atgriež.", { n: ids.length }))) return;
+		setBusy(true);
+		call("rooms.delete", projectId, t.sourceId, ids.length === t.rows.length ? "all" : ids)
+			.then(() => setSel(new Set()))
+			.catch((e) => onErr(errText(e)))
+			.finally(() => setBusy(false));
+	};
+	const restore = () => {
+		if (!window.confirm(tr("Atjaunot tabulu tādu, kādu to nolasa no dokumenta? Visi labojumi un dzēsumi šim dokumentam pazudīs."))) return;
+		call("rooms.restore", projectId, t.sourceId).then(() => setSel(new Set())).catch((e) => onErr(errText(e)));
+	};
 	return (
 		<div>
 			<div className="row">
@@ -366,11 +400,24 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 				<div className="row small">
 					<Badge tone="ok">{t.correctedBy === "agent" ? tr("labojis aģents") : tr("labots")}</Badge>
 					<span className="dim">{tr("Šīs rindas aizstāj no dokumenta nolasītās visur: salīdzinājumā ar modeli un pārbaudēs.")}</span>
+					<span className="grow" />
+					<button className="small" onClick={restore}>{tr("Atjaunot no dokumenta")}</button>
 				</div>
 			)}
+			{sel.size > 0 && (
+				<div className="row small">
+					<b>{tr("Atlasītas {n} telpas", { n: sel.size })}</b>
+					<button className="small danger" disabled={busy} onClick={() => remove([...sel])}>{tr("Dzēst atlasītās")}</button>
+					<button className="small ghost" onClick={() => setSel(new Set())}>{tr("Noņemt atlasi")}</button>
+				</div>
+			)}
+			{t.rows.length === 0 && t.state === "labots" && <div className="dim small">{tr("Visas šī dokumenta telpas ir izdzēstas.")}</div>}
 			<table>
 				<thead>
 					<tr>
+						<th style={{ width: 24 }}>
+							<input type="checkbox" checked={allOn} disabled={!t.rows.length} title={tr("Atlasīt visas")} onChange={(e) => setSel(e.target.checked ? new Set(t.rows.map((r) => r.id)) : new Set())} />
+						</th>
 						<th>{tr("Stāvs")}</th>
 						<th>{tr("Nr.")}</th>
 						<th>{tr("Nosaukums")}</th>
@@ -380,8 +427,11 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 					</tr>
 				</thead>
 				<tbody>
-					{t.rows.map((r, i) => (
-						<tr key={i} className="click" onClick={() => (ui.show({ kind: "source", sourceId: t.sourceId, page: r.page }), commentSubject.pick({ thing: "room", no: r.no, floor: String(r.floor) }, `telpa ${r.no}`))}>
+					{t.rows.map((r) => (
+						<tr key={r.id} className={`click ${sel.has(r.id) ? "sel" : ""}`} onClick={() => (ui.show({ kind: "source", sourceId: t.sourceId, page: r.page }), commentSubject.pick({ thing: "room", no: r.no, floor: String(r.floor) }, `telpa ${r.no}`))}>
+							<td onClick={(e) => e.stopPropagation()}>
+								<input type="checkbox" checked={sel.has(r.id)} onChange={() => undefined} onClick={(e) => tick(r.id, !sel.has(r.id), e.shiftKey)} />
+							</td>
 							<td>{r.floor}</td>
 							<td>{r.no}</td>
 							<td>{r.name}</td>

@@ -497,6 +497,33 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 			"id"
 		]
 	},
+	"rooms.delete": {
+		"sig": "(id: string, sourceId: string, rowIds: string[] | \"all\") => { removed: number; left: number }",
+		"params": [
+			"id",
+			"sourceId",
+			"rowIds"
+		],
+		"doc": "Deletes rooms from a document's inventory: the row ids from rooms.table, or \"all\" for the whole table. The table becomes a correction (labots), so re-reading the document does not bring them back; rooms.restore is the way back."
+	},
+	"rooms.update": {
+		"sig": "(id: string, sourceId: string, rowId: string, patch: { floor?: string; no?: string; name?: string; area?: number; height?: number | null; page?: number }) => void",
+		"params": [
+			"id",
+			"sourceId",
+			"rowId",
+			"patch"
+		],
+		"doc": "Changes fields of one room of a document's inventory (row id from rooms.table): floor, no, name, area, height, page."
+	},
+	"rooms.restore": {
+		"sig": "(id: string, sourceId: string) => void",
+		"params": [
+			"id",
+			"sourceId"
+		],
+		"doc": "Drops a document's corrections and deletions: its inventory is what code reads from the document again."
+	},
 	"facts.list": {
 		"sig": "(id: string) => Fact[]",
 		"params": [

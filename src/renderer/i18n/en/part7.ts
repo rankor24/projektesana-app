@@ -201,4 +201,12 @@ export const part7: Record<string, string> = {
 	"Vēl nav aģentu": "No agents yet",
 	"Izvēlies aģentu, lai to labotu": "Select an agent to edit",
 	"+ Jauns aģents": "+ New agent",
+	"Dzēst {n} telpas no šīs tabulas? Dzēstās telpas neatgriežas, kad dokumentu nolasa vēlreiz; «Atjaunot no dokumenta» tās atgriež.": "Delete {n} rooms from this table? Deleted rooms do not come back when the document is read again; “Restore from document” brings them back.",
+	"Atjaunot tabulu tādu, kādu to nolasa no dokumenta? Visi labojumi un dzēsumi šim dokumentam pazudīs.": "Restore the table as it is read from the document? All corrections and deletions for this document will be lost.",
+	"Atjaunot no dokumenta": "Restore from document",
+	"Atlasītas {n} telpas": "{n} rooms selected",
+	"Dzēst atlasītās": "Delete selected",
+	"Noņemt atlasi": "Clear selection",
+	"Atlasīt visas": "Select all",
+	"Visas šī dokumenta telpas ir izdzēstas.": "All rooms of this document are deleted.",
 };

@@ -9,7 +9,7 @@ import { addClock, addPlannedDelivery, DELIVERY_KINDS, setPlannedDate, setSource
 import { editRemark } from "../../core/expertise.js";
 import { clockOf, type ClockItem } from "../../rules/clocks.js";
 import { DOC_ROLES } from "../../sources/roles.js";
-import { setCorrectedRooms } from "../../sources/room-table.js";
+import { deleteRooms, editRoom, setCorrectedRooms } from "../../sources/room-table.js";
 import { storeOf } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -24,6 +24,8 @@ export const PLANNING_TOOL_DATA: Record<string, string[]> = {
 	set_source_role: ["sources", "roles"],
 	expert_edit: ["expertise", "findings"],
 	set_inventory_rooms: ["rooms", "findings"],
+	delete_inventory_rooms: ["rooms", "findings"],
+	edit_inventory_room: ["rooms", "findings"],
 };
 
 export const planningTools: ToolDef[] = [
@@ -41,8 +43,46 @@ export const planningTools: ToolDef[] = [
 		},
 		run: (ctx, a) => {
 			if (!a.clear && !a.rows?.length) throw new Error("Vajag rows (visas dokumenta telpas) vai clear: true.");
-			const n = setCorrectedRooms(storeOf(ctx), a.sourceId, a.clear ? null : a.rows!.map((r) => ({ ...r, height: r.height ?? null })), "agent");
-			return { ok: true, sourceId: a.sourceId, rooms: a.clear ? "atpakaļ pie koda nolasītā" : n };
+			const r = setCorrectedRooms(storeOf(ctx), a.sourceId, a.clear ? null : a.rows!.map((r) => ({ ...r, height: r.height ?? null })), "agent");
+			return {
+				ok: true,
+				sourceId: a.sourceId,
+				rooms: a.clear ? "atpakaļ pie koda nolasītā" : r.rooms,
+				...(r.skipped ? { skippedDeleted: r.skipped, note: `${r.skipped} telpas netika ierakstītas: tās lietotājs vai aģents jau dzēsa. Ja tās vajag, pajautā lietotājam un izmanto clear: true.` } : {}),
+			};
+		},
+	}),
+	tool({
+		name: "delete_inventory_rooms",
+		level: "confirm",
+		description:
+			"Delete wrong rooms from a property document's room table (the Telpas panel, comparison with the model, checks): the ids of the rows (list_rooms gives each room's id), or all: true for the whole table of that document. Waits for the user's click. The deleted rooms stay deleted when the document is read again; the Telpas panel's «Atjaunot no dokumenta» (or set_inventory_rooms with clear: true) brings the document's own rows back. To fix a room instead of removing it use edit_inventory_room.",
+		input: { sourceId: z.string(), rowIds: z.array(z.string()).optional().describe("room ids from list_rooms"), all: z.boolean().optional() },
+		run: async (ctx, a) => {
+			if (!a.all && !a.rowIds?.length) throw new Error("Vajag rowIds (telpu id no list_rooms) vai all: true.");
+			const r = await deleteRooms(storeOf(ctx), a.sourceId, a.all ? "all" : a.rowIds!, "agent");
+			return { ok: true, sourceId: a.sourceId, removed: r.removed, left: r.left, ...(r.unknown.length ? { unknownIds: r.unknown } : {}) };
+		},
+	}),
+	tool({
+		name: "edit_inventory_room",
+		level: "run",
+		description:
+			"Change one room of a property document's room table (id from list_rooms): any of floor, no, name, area (m²), height (m, null clears), page. The other rooms stay. Use it for a wrong name, area or number, after checking the page (view_page); say what you changed and why.",
+		input: {
+			sourceId: z.string(),
+			roomId: z.string().describe("the room's id from list_rooms"),
+			floor: z.string().optional(),
+			no: z.string().optional(),
+			name: z.string().optional(),
+			area: z.number().positive().optional(),
+			height: z.number().positive().nullable().optional(),
+			page: z.number().int().min(1).optional(),
+		},
+		run: async (ctx, a) => {
+			const { sourceId, roomId, ...patch } = a;
+			const r = await editRoom(storeOf(ctx), sourceId, roomId, patch, "agent");
+			return { ok: true, sourceId, room: r };
 		},
 	}),
 	tool({
