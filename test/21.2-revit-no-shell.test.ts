@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { syncAddins } from "../src/revit/addin-install.ts";
+import { mergeRegistry, syncAddins } from "../src/revit/addin-install.ts";
 import { allTools, appLevels } from "../src/agent/tools/defs.ts";
 import { Gate, makeLevelOf, neverByArgs, revitShellBlock, type ConfirmRequest } from "../src/agent/tools/levels.ts";
 import { MODEL_SNIPPETS } from "../src/agent/tools/revit-model.ts";
@@ -105,4 +105,31 @@ test("21.2 the add-in follows the app: placed when missing or another version, l
 	// no Revit of that year on the PC and no add-in there yet: nothing is placed
 	const other = tmp("pj-appdata2-");
 	assert.deepEqual(syncAddins(bundled, backups, other, tmp("pj-pf2-")), []);
+});
+
+test("21.2 an update switches on the commands the user's list lacks, and keeps their own choices", () => {
+	const cmd = (commandName: string, enabled = true) => ({ commandName, enabled });
+	const m = mergeRegistry({ Commands: [cmd("a", false), cmd("b")], settings: { port: 9000 } }, { Commands: [cmd("a"), cmd("b"), cmd("open_view"), cmd("list_views")], settings: { port: 8080 } });
+	assert.deepEqual(m.added, ["open_view", "list_views"]);
+	assert.deepEqual(m.registry.Commands?.map((c) => [c.commandName, c.enabled]), [["a", false], ["b", true], ["open_view", true], ["list_views", true]], "their off switch on a stays off");
+	assert.deepEqual(m.registry.settings, { port: 9000 }, "their settings stay");
+	assert.deepEqual(mergeRegistry({ Commands: [cmd("a")] }, { Commands: [cmd("a")], settings: { port: 8080 } }).registry.settings, { port: 8080 }, "settings only when they had none");
+
+	// through the real copy: the installed list gets the new commands, nothing else changes
+	const bundled = tmp("pj-bundle-");
+	const appData = tmp("pj-appdata-");
+	const programFiles = tmp("pj-pf-");
+	mkdirSync(join(programFiles, "Autodesk", "Revit 2026"), { recursive: true });
+	const plugin = join(bundled, "addins", "2026", "revit_mcp_plugin");
+	mkdirSync(join(plugin, "Commands"), { recursive: true });
+	writeFileSync(join(bundled, "addins", "2026", "mcp-servers-for-revit.addin"), "<a/>");
+	writeFileSync(join(plugin, "plugin.dll"), "v1");
+	writeFileSync(join(plugin, "Commands", "commandRegistry.json"), JSON.stringify({ Commands: [cmd("a"), cmd("open_view")] }));
+	const installedPlugin = join(appData, "Autodesk", "Revit", "Addins", "2026", "revit_mcp_plugin");
+	mkdirSync(join(installedPlugin, "Commands"), { recursive: true });
+	writeFileSync(join(installedPlugin, "Commands", "commandRegistry.json"), JSON.stringify({ Commands: [cmd("a", false)] }));
+	const log = syncAddins(bundled, join(tmp("pj-bk-"), "b"), appData, programFiles);
+	assert.match(log.join(" | "), /open_view/, "the log says which commands were switched on");
+	const after = JSON.parse(readFileSync(join(installedPlugin, "Commands", "commandRegistry.json"), "utf8"));
+	assert.deepEqual(after.Commands.map((c: { commandName: string; enabled: boolean }) => [c.commandName, c.enabled]), [["a", false], ["open_view", true]]);
 });

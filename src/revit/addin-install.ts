@@ -31,6 +31,21 @@ export function addinStatus(bundled: string | null, appData = appDataDir()): Add
 	return years.map((year) => ({ year, available: shipped.includes(year), installed: installed.includes(year) }));
 }
 
+export interface CommandRegistry {
+	Commands?: { commandName: string; [k: string]: unknown }[];
+	settings?: unknown;
+	[k: string]: unknown;
+}
+
+const readJson = (file: string): CommandRegistry => JSON.parse(readFileSync(file, "utf8").replace(/^﻿/, "")) as CommandRegistry;
+
+/** The user's command list (their on/off choices and settings) plus the shipped commands it does not have yet; the same rule as merge-registry.mjs of the Revit MCP bundle. */
+export function mergeRegistry(kept: CommandRegistry, shipped: CommandRegistry): { registry: CommandRegistry; added: string[] } {
+	const have = new Set((kept.Commands ?? []).map((c) => c.commandName));
+	const fresh = (shipped.Commands ?? []).filter((c) => !have.has(c.commandName));
+	return { registry: { ...kept, Commands: [...(kept.Commands ?? []), ...fresh], ...(kept.settings || !shipped.settings ? {} : { settings: shipped.settings }) }, added: fresh.map((c) => c.commandName) };
+}
+
 /** Copies the shipped add-in of each year. Returns what was done, one line per year; throws a clear message when Revit holds the files. */
 export function installAddins(bundled: string | null, years: string[], backupDir: string, appData = appDataDir()): string[] {
 	if (!bundled) throw new Error("Revit MCP nav iekļauts šajā lietotnes versijā.");
@@ -53,6 +68,15 @@ export function installAddins(bundled: string | null, years: string[], backupDir
 			const registry = join(plugin, "Commands", "commandRegistry.json");
 			cpSync(join(from, PLUGIN), plugin, { recursive: true, filter: (p) => !(p.endsWith("commandRegistry.json") && existsSync(registry)) });
 			cpSync(join(from, MANIFEST), join(to, MANIFEST));
+			// …but a command this add-in ships and the user's list lacks is added (enabled), or an update could never switch on a new command
+			const shippedRegistry = join(from, PLUGIN, "Commands", "commandRegistry.json");
+			if (existsSync(registry) && existsSync(shippedRegistry)) {
+				const merged = mergeRegistry(readJson(registry), readJson(shippedRegistry));
+				if (merged.added.length) {
+					writeFileSync(registry, JSON.stringify(merged.registry, null, 2), "utf8");
+					log.push(`Revit ${y}: jaunas komandas ieslēgtas: ${merged.added.join(", ")}`);
+				}
+			}
 			writeFileSync(join(plugin, STAMP), pluginStamp(join(from, PLUGIN)), "utf8");
 		} catch (e) {
 			const code = (e as NodeJS.ErrnoException).code;

@@ -249,16 +249,18 @@ export const revitModelTools: ToolDef[] = [
 	tool({
 		name: "revit_list_views",
 		level: "run",
-		description: "The open Revit model's views with their ids: floor plans, schedules, sheets, 3D, sections, elevations (kind, default all; nameContains narrows). Use it to find the id of a view or schedule before revit_open_view, revit_get_schedule or revit_set_schedule_filter. Never use a shell for this.",
-		input: { kind: z.enum(VIEW_KINDS).default("all"), nameContains: z.string().default("") },
-		run: async (_ctx, { kind, nameContains }) => runSnippet(revit(), MODEL_SNIPPETS.listViews, [kind, nameContains]),
+		description: "The views of the active Revit model (or of another open or linked model: `model`, a part of its name, revit_list_models shows them) with their ids: floor plans, schedules, sheets, 3D, sections, elevations (kind, default all; nameContains narrows). Use it to find the id of a view or schedule before revit_open_view, revit_get_schedule or revit_set_schedule_filter. Never use a shell for this.",
+		input: { kind: z.enum(VIEW_KINDS).default("all"), nameContains: z.string().default(""), model: z.string().optional() },
+		// with `model` (another open or linked model) the add-in's own list_views answers; without it the active model, as before
+		run: async (_ctx, { kind, nameContains, model }) => (model ? JSON.parse(await revit().call("list_views", { model, kind, nameContains })) : runSnippet(revit(), MODEL_SNIPPETS.listViews, [kind, nameContains])),
 	}),
 	tool({
 		name: "revit_open_view",
 		level: "run",
-		description: "Open a view in Revit (a floor plan, schedule, sheet or 3D view) by viewId or by exact name — the same as double-clicking it in the project browser. It changes what Revit shows, not the model. This is the way to open a view: never click through Revit's windows with a script. Check with get_current_view_info after.",
-		input: { viewId: z.string().optional(), name: z.string().optional() },
+		description: "Open a view in Revit (a floor plan, schedule, sheet or 3D view) by viewId or by exact name — the same as double-clicking it in the project browser. It changes what Revit shows, not the model. This is the way to open a view: never click through Revit's windows with a script. Check with get_current_view_info after. A view that lives in another open model (revit_list_models, then revit_list_views model=…) needs `model`: that model is made the active one first, then the view opens; `model` alone only switches the model.",
+		input: { viewId: z.string().optional(), name: z.string().optional(), model: z.string().optional() },
 		run: async (_ctx, a) => {
+			if (a.model) return JSON.parse(await revit().call("open_view", { model: a.model, viewId: a.viewId, name: a.viewId ? undefined : a.name }));
 			pickOne(a, "skatu");
 			return runSnippet(revit(), MODEL_SNIPPETS.openView, [a.viewId ?? "", a.viewId ? "" : (a.name ?? "")]);
 		},
