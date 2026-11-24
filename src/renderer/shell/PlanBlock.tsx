@@ -1,8 +1,8 @@
 // The checklist on top of the chat input (task 9.2, redrawn): "Uzdevumi 2/4". The agent writes the steps with update_plan, the user
 // ticks, edits (double click), drags, adds and removes them and his version wins. It folds to one line with the step in work.
-// Proposed tasks (8.5) show in the same list with Pieņemt / Noraidīt. The quick note (it becomes an Atmiņa note) moved to
+// The queue's controls (Darbi, Pauzēt rindu, Apturēt visu) sit at the right end of the same row (`aside`). Proposed tasks (8.5) show in the same list with Pieņemt / Noraidīt. The quick note (it becomes an Atmiņa note) moved to
 // the Telpa tab: NoteBox below. BIM Crew reference: Chat.tsx (the plan block above the input).
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { NoteType, Task } from "../../core/model";
 import { addStep, editText, moveStep, planProgress, removeStep, setState, STATE_LABEL, tick, type PlanStep } from "../../shared/plan";
 import { call, errText } from "../bridge";
@@ -14,7 +14,7 @@ const NOTE_TYPE: Record<NoteType, string> = { decision: tr("lēmums"), answer: t
 const MARK: Record<PlanStep["state"], IconName> = { todo: "circle", doing: "circleProgress", done: "circleCheck", blocked: "alert" };
 const newStepId = () => `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export function PlanBlock({ projectId }: { projectId: string | null }) {
+export function PlanBlock({ projectId, aside }: { projectId: string | null; aside?: ReactNode }) {
 	/** null = follows the content: folded while there is nothing in the list, open as soon as there is */
 	const [fold, setFold] = useState<boolean | null>(null);
 	const [err, setErr] = useState<string | null>(null);
@@ -60,6 +60,7 @@ export function PlanBlock({ projectId }: { projectId: string | null }) {
 					{folded && prog.doing && <span className="tasks-doing">· {prog.doing.text}</span>}
 					{proposed.length > 0 && <span className="chip">{tr("{length} gaida", { length: proposed.length })}</span>}
 				</button>
+				{aside}
 				<button className="icon-btn" title={tr("Pievienot uzdevumu")} aria-label={tr("Pievienot uzdevumu")} onClick={openAdd}>
 					<Icon name="plus" />
 				</button>

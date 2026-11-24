@@ -185,6 +185,8 @@ export function useThreads(projectId: string | null, opts: { markSeen?: boolean 
 	const confirm = useCallback((id: string, allow: boolean) => call("agent.confirm", id, allow), []);
 	/** The chat's confirm line is settled once main's list no longer has it (answered here or in Gaida tevi, or its run ended). Never before the list showed it once. */
 	const settled = (id: string) => seen.current.has(id) && !waiting.some((w) => w.kind === "confirm" && w.id === id);
+	/** a confirmation that Gaida tevi shows right now, waiting for the user's answer */
+	const pending = (id: string) => waiting.some((w) => w.kind === "confirm" && w.id === id);
 	const reload = useCallback(() => {
 		const p = projectId;
 		call("threads.list", p)
@@ -272,5 +274,5 @@ export function useThreads(projectId: string | null, opts: { markSeen?: boolean 
 	const retry = useCallback((id: string) => call("incidents.retry", id), []);
 	const dismiss = useCallback((id: string) => call("incidents.dismiss", id), []);
 
-	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close, rename, pin, reopen, pause, incidents, retry, dismiss };
+	return { threads, queue, waiting, specs, lead, lanes, elsewhere, settled, pending, confirm, reload, selId, viewId, viewThread, leadPath, viewKey: `${projectId}|${selId}`, select, open, close, rename, pin, reopen, pause, incidents, retry, dismiss };
 }
