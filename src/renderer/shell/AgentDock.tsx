@@ -362,6 +362,8 @@ export function AgentDock() {
 			onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
 		/>
 	);
+	// why the conversation on screen waits (its own lane carries the reason); null reads as plain "queued"
+	const queuedWhy = T.lanes.find((l) => l.threadId === viewId && l.state === "queued")?.why ?? null;
 	const lastRun = [...lines].reverse().find((l): l is Extract<Line, { kind: "run" }> => l.kind === "run")?.runId ?? null;
 	return (
 		<aside
