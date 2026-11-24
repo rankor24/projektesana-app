@@ -33,6 +33,7 @@ import { closeEksQuestions } from "./mail.js";
 import { LockRegistry } from "./locks.js";
 import { Coordinator, type SystemPost } from "./coordinator.js";
 import { ThreadRunner, type Conversation } from "./thread-runner.js";
+import type { AgentLog } from "../core/agent-log.js";
 
 export interface ToolServer extends McpLaunchSpec {
 	/** every tool name the server may list; the gate's level table filters what is offered */
@@ -54,6 +55,8 @@ export interface SessionDeps {
 	/** the departments, in their order, with their leads: who may hand out tasks in a department (core/chief.ts) and the name in a pause refusal; none when absent */
 	departments?: () => Department[];
 	runsDir: string;
+	/** the agent log: what each run starts with (system text, prompt, tools); its events come through `emit`. Absent in tests that do not look at it. */
+	agentLog?: AgentLog;
 	chatDir: string;
 	/** every event of a run; `meta` is the envelope the coordinator stamps (thread, agent, project, wave) */
 	emit: (runId: string, event: RunEvent, meta: RunMeta) => void;

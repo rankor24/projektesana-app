@@ -394,6 +394,9 @@ export function AgentDock() {
 					<b>{tr("Aģents")}</b>
 					<span className="badge dim" title={tr("Revit MCP")}>{tr("Revit:")} {st?.revit ?? "…"}</span>
 					<span className="grow" />
+					<button className="icon-btn" title={tr("Atvērt aģenta žurnālu: viss, ko aģents dara un saņem")} aria-label={tr("Žurnāls")} onClick={() => windows.openLog(viewId ? `thread:${viewId}` : undefined)}>
+						<Icon name="terminal" />
+					</button>
 					{/* the ring and compaction are the lead's conversation; another thread has no meter of its own yet */}
 					{ctx.data && leadPath && <ContextRing c={ctx.data} busy={!!runId || compacting} compacting={compacting} onCompact={compactNow} draft={draftCost} />}
 					{leadPath && (

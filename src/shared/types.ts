@@ -5,9 +5,10 @@ export type RunEvent =
 	| { type: "text"; text: string }
 	| { type: "thinking"; text: string }
 	| { type: "turn"; n: number }
-	| { type: "tool"; name: string; detail?: string; id?: string }
-	/** `chars` = the tool's whole answer (output is cut for display); it is what the answer costs the context. */
-	| { type: "tool_result"; name: string; ok: boolean; detail?: string; id?: string; output?: string; chars?: number }
+	/** `detail` = the arguments cut for display; `input` = the whole arguments, only when they were cut. For the agent log: main strips it before the window sees the event (shared/agent-log.ts). */
+	| { type: "tool"; name: string; detail?: string; id?: string; input?: string }
+	/** `chars` = the tool's whole answer (output is cut for display); it is what the answer costs the context. `full` = the whole answer, only when `output` was cut; for the agent log, stripped like `input` above. */
+	| { type: "tool_result"; name: string; ok: boolean; detail?: string; id?: string; output?: string; chars?: number; full?: string }
 	/** The conversation is being summarized because it reached the model's limit; `after` is estimated. */
 	| { type: "compact"; phase: "start" | "done" | "failed"; before: number; after?: number; message?: string }
 	/** A `confirm` tool is waiting for the user; `batch` names what will run. */

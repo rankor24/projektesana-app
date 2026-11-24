@@ -116,7 +116,8 @@ export function claudeEvents(m: SDKMessage, st: ClaudeState): RunEvent[] {
 			} else if (c.type === "tool_use") {
 				const name = toolNameOf(c.name);
 				st.names.set(c.id, name);
-				emit({ type: "tool", name, id: c.id, detail: JSON.stringify(c.input ?? {}).slice(0, INPUT_MAX) });
+				const input = JSON.stringify(c.input ?? {});
+				emit({ type: "tool", name, id: c.id, detail: input.slice(0, INPUT_MAX), ...(input.length > INPUT_MAX ? { input } : {}) });
 			}
 		}
 		if (ms.said.trim()) st.last = ms.said;
@@ -130,7 +131,7 @@ export function claudeEvents(m: SDKMessage, st: ClaudeState): RunEvent[] {
 			const full = resultText(c.content);
 			const text = full.slice(0, OUTPUT_MAX);
 			const bad = c.is_error === true;
-			emit({ type: "tool_result", name: st.names.get(c.tool_use_id) ?? "", id: c.tool_use_id, ok: !bad, detail: bad ? text : undefined, output: text, chars: full.length });
+			emit({ type: "tool_result", name: st.names.get(c.tool_use_id) ?? "", id: c.tool_use_id, ok: !bad, detail: bad ? text : undefined, output: text, chars: full.length, ...(full.length > OUTPUT_MAX ? { full } : {}) });
 		}
 	} else if (m.type === "system") {
 		if (m.subtype === "api_retry") emit({ type: "retry", attempt: m.attempt, of: m.max_retries, delayMs: m.retry_delay_ms, message: String(m.error ?? "error") });

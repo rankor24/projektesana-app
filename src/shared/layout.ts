@@ -11,7 +11,7 @@ export const SIDES = ["left", "right", "top", "bottom"] as const;
 export type Side = (typeof SIDES)[number];
 
 /** Everything that can be a window. Panels first; the viewer's side panels (9.3); the chat. */
-export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa", "iestatijumi", "prasmes", "agenti"] as const;
+export const PANEL_IDS = ["projekts", "parskats", "faili", "grafiks", "avoti", "prasibas", "telpas", "nodevumi", "atmina", "versijas", "koordinacija", "normativi", "telpaslapa", "iestatijumi", "prasmes", "agenti", "zurnals"] as const;
 export const VIEWER_PANEL_IDS = ["viewer.props", "viewer.tree", "viewer.ifcmeta", "viewer.filemeta", "viewer.comments"] as const;
 export const COORD_PANEL_IDS = ["coord.matrix", "coord.reference", "coord.lines"] as const;
 export const VERS_PANEL_IDS = ["vers.list", "vers.models", "vers.sheets", "vers.revit"] as const;

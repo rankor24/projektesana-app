@@ -1,0 +1,66 @@
+/* The agent log panel (panels/AgentLog.tsx): the run list and the transcript, side by side when the panel is wide and one above the other
+   in the narrow right panel. Kind colours use the app's tokens, so both themes work. */
+.alog { display: flex; flex: 1; min-width: 0; min-height: 0; height: 100%; background: var(--panel); }
+.alog.narrow { flex-direction: column; }
+.alog.wide { flex-direction: row; }
+
+.alog-runs { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.alog-runs-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex: none; }
+.alog-runs-head select { margin-left: auto; font-size: 12px; padding: 2px 6px; }
+.alog-runs-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.alog-run { display: flex; flex-direction: column; gap: 2px; align-items: stretch; text-align: left; width: 100%; border: none; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; padding: 6px 10px; }
+.alog-run:hover { background: var(--elev2); }
+.alog-run.on { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.alog-run-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.alog-run-span { margin-left: auto; }
+.alog-run-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.alog-run-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alog-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
+.alog-dot.st-ok { background: var(--ok); }
+.alog-dot.st-failed { background: var(--bad); }
+.alog-dot.st-stopped { background: var(--warn); }
+.alog-bad { color: var(--bad); }
+
+.alog-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.alog-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); flex: none; }
+.alog-search { flex: 1 1 140px; min-width: 120px; }
+.alog-groups { display: flex; flex-wrap: wrap; gap: 4px; }
+.alog-chip { cursor: pointer; font-size: 11.5px; padding: 1px 8px; }
+.alog-chip.off { opacity: 0.45; text-decoration: line-through; }
+.alog-chip.on { border-color: var(--border-strong); }
+.alog-chip.g-prompt.on { color: var(--info); }
+.alog-chip.g-reasoning.on { color: var(--warn); }
+.alog-chip.g-answer.on { color: var(--ok); }
+.alog-chip.g-error.on { color: var(--bad); }
+.alog-actions { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.alog-follow { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); }
+.alog-sub { padding: 4px 10px; border-bottom: 1px solid var(--border); flex: none; overflow-wrap: anywhere; }
+.alog-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; font-size: 12px; }
+.alog-pad { padding: 8px 12px; }
+.alog-foot { padding: 3px 10px; border-top: 1px solid var(--border); flex: none; }
+
+.alog-e { border-left: 3px solid transparent; padding: 0 6px 0 4px; }
+.alog-e.lane { margin-left: 14px; border-left-color: var(--border-strong); }
+.alog-e.k-thinking { border-left-color: var(--warn); }
+.alog-e.k-text { border-left-color: var(--ok); }
+.alog-e.k-prompt, .alog-e.k-system { border-left-color: var(--info); }
+.alog-e.k-tool, .alog-e.k-result { border-left-color: var(--border-strong); }
+.alog-e.k-error, .alog-e.k-retry, .alog-e.failed { border-left-color: var(--bad); }
+.alog-h { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 0; flex-wrap: wrap; }
+.alog-h.can { cursor: pointer; }
+.alog-h.can:hover { background: var(--elev2); }
+.alog-caret { width: 10px; flex: none; color: var(--muted); }
+.alog-t { font-family: var(--mono, ui-monospace, Consolas, monospace); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.alog-kind { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--dim); min-width: 74px; }
+.alog-kind.k-thinking { color: var(--warn); }
+.alog-kind.k-text { color: var(--ok); }
+.alog-kind.k-error, .alog-kind.k-retry { color: var(--bad); }
+.alog-kind.k-prompt, .alog-kind.k-system { color: var(--info); }
+.alog-lane { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.alog-title { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.alog-copy { opacity: 0; margin-left: auto; }
+.alog-h:hover .alog-copy, .alog-copy:focus-visible { opacity: 1; }
+.alog-body { padding: 0 0 4px 20px; }
+.alog-pre { margin: 2px 0; padding: 6px 8px; background: var(--elev); border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; font-family: var(--mono, ui-monospace, Consolas, monospace); font-size: 11.5px; color: var(--text); }
+.alog-e.k-thinking .alog-pre { color: var(--dim); font-style: italic; }
+.alog-e.k-error .alog-pre, .alog-e.failed .alog-pre { color: var(--bad); }

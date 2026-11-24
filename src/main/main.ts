@@ -16,6 +16,8 @@ import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
 import { ActivityLog } from "./activity.js";
+import { AgentLog } from "../core/agent-log.js";
+import { forWindow } from "../shared/agent-log.js";
 import { TASKS } from "../agent/tasks.js";
 import { makeLevelOf } from "../agent/tools/levels.js";
 import { appLevels } from "../agent/tools/defs.js";
@@ -124,6 +126,9 @@ const activity = new ActivityLog({
 	templates: TASKS,
 });
 
+// The agent log (Žurnāls): every event of every run and what each run started with, in full and with secrets masked, for the log panel.
+const agentLog = new AgentLog({ runsDir: join(appDir, "runs"), send: (n) => emit("agentlog.entry", n) });
+
 // pi loads on first use (about 1.4 s to import), so the window opens at once.
 let piRuntime: Promise<PiRuntime> | null = null;
 const pi = () =>
@@ -229,10 +234,14 @@ const session = new AgentSession({
 	agents: () => settings.agentSpecs().specs,
 	departments: () => settings.departments().departments,
 	runsDir: join(appDir, "runs"),
+	agentLog,
 	chatDir: settings.chatDir(),
 	emit: (runId, event, meta) => {
-		activity.event(runId, event, meta);
-		emit("agent.event", { runId, event, ...meta });
+		// the log keeps the whole arguments and answers; the dock and the activity lines get the cut copies
+		agentLog.event(runId, event, meta);
+		const slim = forWindow(event);
+		activity.event(runId, slim, meta);
+		emit("agent.event", { runId, event: slim, ...meta });
 	},
 	onHolds: () => emit("data.changed", { projectId: null, what: ["agent"] }),
 	onThread: (thread) => {
@@ -311,6 +320,7 @@ const handlers = createHandlers({
 	dataDir,
 	session,
 	activity,
+	agentLog,
 	pi,
 	claude: claudeAccount,
 	emit,

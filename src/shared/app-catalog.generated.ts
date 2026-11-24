@@ -370,6 +370,28 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		"params": [],
 		"doc": "The activity lines main still keeps (all projects, oldest first), for a window that opened or reloaded mid-run."
 	},
+	"agentlog.runs": {
+		"sig": "(projectId?: string | null) => LogRun[]",
+		"params": [
+			"projectId"
+		],
+		"doc": "The agent log (Žurnāls): the runs that have a log, newest first. A project id (or null) keeps only that project's runs; none = every project."
+	},
+	"agentlog.read": {
+		"sig": "(runId: string) => LogEntry[]",
+		"params": [
+			"runId"
+		],
+		"doc": "One run's whole log: every entry in order, with the system text, the prompt, the reasoning, each tool call with its arguments and answer, errors and timings. Secrets are masked."
+	},
+	"agentlog.export": {
+		"sig": "(runId: string, format: \"md\" | \"jsonl\") => { fileName: string; mime: string; text: string }",
+		"params": [
+			"runId",
+			"format"
+		],
+		"doc": "One run's log as a file: Markdown for a person or JSONL (one entry per line); saving it is the window's job."
+	},
 	"projects.list": {
 		"sig": "() => ProjectRow[]",
 		"params": []

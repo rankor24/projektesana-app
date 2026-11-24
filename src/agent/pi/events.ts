@@ -84,11 +84,12 @@ export function piEvents(ev: AgentEvent, st: PiState): RunEvent[] {
 		}
 	} else if (ev.type === "tool_execution_start") {
 		st.names.set(ev.toolCallId, ev.toolName);
-		emit({ type: "tool", name: ev.toolName, id: ev.toolCallId, detail: JSON.stringify(ev.args ?? {}).slice(0, INPUT_MAX) });
+		const input = JSON.stringify(ev.args ?? {});
+		emit({ type: "tool", name: ev.toolName, id: ev.toolCallId, detail: input.slice(0, INPUT_MAX), ...(input.length > INPUT_MAX ? { input } : {}) });
 	} else if (ev.type === "tool_execution_end") {
 		const full = resultText(ev.result);
 		const text = full.slice(0, OUTPUT_MAX);
-		emit({ type: "tool_result", name: st.names.get(ev.toolCallId) ?? ev.toolName, id: ev.toolCallId, ok: !ev.isError, detail: ev.isError ? text : undefined, output: text, chars: full.length });
+		emit({ type: "tool_result", name: st.names.get(ev.toolCallId) ?? ev.toolName, id: ev.toolCallId, ok: !ev.isError, detail: ev.isError ? text : undefined, output: text, chars: full.length, ...(full.length > OUTPUT_MAX ? { full } : {}) });
 	} else if (ev.type === "agent_end") {
 		if (!st.errored) emit({ type: "done", text: st.last });
 	}
