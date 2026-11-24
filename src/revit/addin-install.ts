@@ -2,9 +2,10 @@
 // Install-RevitMCP.ps1 of the Revit MCP bundle makes: <APPDATA>\Autodesk\Revit\Addins\<year>\{mcp-servers-for-revit.addin, revit_mcp_plugin\}.
 // The server itself needs no install (the app starts it from its own folder); the add-in is what makes Revit answer.
 // Nothing is deleted: an existing plugin folder is copied to a backup first, and the user's commandRegistry.json is kept.
-import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 export interface AddinYear {
 	year: string;
@@ -52,6 +53,7 @@ export function installAddins(bundled: string | null, years: string[], backupDir
 			const registry = join(plugin, "Commands", "commandRegistry.json");
 			cpSync(join(from, PLUGIN), plugin, { recursive: true, filter: (p) => !(p.endsWith("commandRegistry.json") && existsSync(registry)) });
 			cpSync(join(from, MANIFEST), join(to, MANIFEST));
+			writeFileSync(join(plugin, STAMP), pluginStamp(join(from, PLUGIN)), "utf8");
 		} catch (e) {
 			const code = (e as NodeJS.ErrnoException).code;
 			if (code === "EBUSY" || code === "EPERM" || code === "EACCES") throw new Error(`Revit ${y}: faili ir aizņemti. Aizver Revit un mēģini vēlreiz.`);
@@ -60,4 +62,55 @@ export function installAddins(bundled: string | null, years: string[], backupDir
 		log.push(`Revit ${y}: spraudnis ielikts (${plugin}). Restartē Revit.`);
 	}
 	return log;
+}
+
+// ---- keeping the add-in in step with the app ----------------------------------------------------------------------------------------------------
+
+const STAMP = ".projektesana-stamp";
+
+/** A fingerprint of the shipped plugin folder (names and contents, the user's commandRegistry.json left out): changes whenever the app ships another add-in. */
+export function pluginStamp(dir: string): string {
+	const h = createHash("sha1");
+	const walk = (d: string) => {
+		for (const n of readdirSync(d).sort()) {
+			const f = join(d, n);
+			if (statSync(f).isDirectory()) walk(f);
+			else if (n !== "commandRegistry.json") {
+				h.update(relative(dir, f).replace(/\\/g, "/"));
+				h.update(readFileSync(f));
+			}
+		}
+	};
+	walk(dir);
+	return h.digest("hex");
+}
+
+/** The Revit years this PC has: Revit's own program folder (the standard install path), or an add-in already placed for that year. */
+export function revitYears(appData = appDataDir(), programFiles = process.env.ProgramFiles || "C:\\Program Files"): string[] {
+	const fromProgram = existsSync(join(programFiles, "Autodesk")) ? readdirSync(join(programFiles, "Autodesk")).map((n) => /^Revit (\d{4})$/.exec(n)?.[1]).filter((y): y is string => !!y) : [];
+	const fromAddins = existsSync(addinsRoot(appData)) ? readdirSync(addinsRoot(appData)).filter((y) => /^\d{4}$/.test(y)) : [];
+	return [...new Set([...fromProgram, ...fromAddins])].sort();
+}
+
+/**
+ * At the app's start (and after an update): puts the add-in this app ships into each Revit year of this PC whose installed copy is not the same one (no stamp, or another stamp),
+ * so the Revit MCP in Revit is always the one the app was built with, with no click. Nothing is deleted (installAddins backs the old plugin up). A year whose files Revit holds is
+ * left for the next start and named in the result. Returns one line per year it acted on; an empty list = already in step.
+ */
+export function syncAddins(bundled: string | null, backupDir: string, appData = appDataDir(), programFiles?: string): string[] {
+	if (!bundled) return [];
+	const out: string[] = [];
+	for (const year of revitYears(appData, programFiles)) {
+		const shipped = join(bundled, "addins", year);
+		if (!existsSync(join(shipped, MANIFEST)) || !existsSync(join(shipped, PLUGIN))) continue;
+		const stamp = pluginStamp(join(shipped, PLUGIN));
+		const mark = join(addinsRoot(appData), year, PLUGIN, STAMP);
+		if (existsSync(mark) && readFileSync(mark, "utf8").trim() === stamp) continue;
+		try {
+			out.push(...installAddins(bundled, [year], backupDir, appData));
+		} catch (e) {
+			out.push(`Revit ${year}: spraudnis nav atjaunots (${(e as Error).message})`);
+		}
+	}
+	return out;
 }

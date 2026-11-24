@@ -14,7 +14,8 @@ export const REVIT_RULES = `Revit noteikumi:
 4. Nekad nepārbūvē to, ko lietotājs ir izlabojis: pirms izmaiņām nolasi esošo (get_current_view_elements, get_selected_elements); ja elements ir, maini to tikai tad, ja lietotājs to lūdz.
 5. Izmaiņas notiek tikai darba kopijā (<nosaukums>_WORK.rvt projekta datu mapē); lietotājs apstiprina katru partiju.
 6. Pēc katras partijas lietotne fiksē revīziju un palaiž telpu pārbaudi pret inventarizāciju; atradumus labo nākamajā partijā.
-7. Vienības: mm. Līmeņu augstumi no inventarizācijas vai lietotāja; ja nav datu, jautā.`;
+7. Vienības: mm. Līmeņu augstumi no inventarizācijas vai lietotāja; ja nav datu, jautā.
+8. Revit nekad nevadi ar komandrindu (run_command): ne UI automatizācija, ne Revit process — tāda komanda tiek noraidīta, un lietotājs to neatļauj. Ko Revit MCP rīki nedara, to dara revit_* rīki: revit_list_views un revit_open_view (skata atvēršana), revit_get_view_settings un revit_set_view_settings (kāpēc kaut kas skatā nav redzams: kategorijas, veidne, diapazons, crop), revit_get_schedule un revit_set_schedule_filter, revit_list_models un revit_read_parameters (arī no cita atvērta vai piesaistīta modeļa), revit_set_parameter. Ja vajadzīgā rīka tomēr nav, pasaki lietotājam, kas trūkst; neapej ar komandrindu.`;
 
 export const skillTools: ToolDef[] = [
 		tool({

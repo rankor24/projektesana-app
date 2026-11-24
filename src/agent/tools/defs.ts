@@ -16,6 +16,7 @@ import { generalTools } from "./general.js";
 import { planTools } from "./plan.js";
 import { coordinationTools } from "./coordination.js";
 import { revitCommandTools } from "./revit-commands.js";
+import { revitModelTools } from "./revit-model.js";
 import { requirementTools } from "./requirements.js";
 import { checkTools } from "./checks.js";
 import { viewerTools } from "./viewer.js";
@@ -41,7 +42,7 @@ export const focusTools: ToolDef[] = [
 ];
 
 export function allTools(): ToolDef[] {
-	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...documentTools, ...expertTools, ...processTools, ...viewerTools, ...pinTools, ...todoTools, ...planningTools, ...appTools, ...appSettingsTools, ...generalTools, ...planTools, ...coordinationTools, ...skillTools, ...revitCommandTools, ...conversationTools, ...memoryTools, ...selfTools, ...routineTools, ...searchTools];
+	return [...focusTools, ...sourceTools, ...projectTools, ...requirementTools, ...checkTools, ...deliveryTools, ...documentTools, ...expertTools, ...processTools, ...viewerTools, ...pinTools, ...todoTools, ...planningTools, ...appTools, ...appSettingsTools, ...generalTools, ...planTools, ...coordinationTools, ...skillTools, ...revitCommandTools, ...revitModelTools, ...conversationTools, ...memoryTools, ...selfTools, ...routineTools, ...searchTools];
 }
 
 /** Level table of the app's own tools, for the gate. */

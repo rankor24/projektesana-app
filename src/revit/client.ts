@@ -45,7 +45,7 @@ export function bundledRevitLaunch(dir = bundledDir): RevitLaunch | null {
 	return { serverJs, node: existsSync(node) ? node : null, source: "iekļauts" };
 }
 
-/** The installer's standard location (Revit-MCP-Node in the user's local app data). */
+/** The standard install of the Revit MCP bundle (Revit-MCP-Node in the user's local app data): used only when the app has no server of its own. */
 export function defaultRevitLaunch(localAppData = localAppDataDir()): RevitLaunch | null {
 	const base = join(localAppData, "Revit-MCP-Node");
 	const serverJs = defaultServerJs(localAppData);
@@ -56,7 +56,8 @@ export function defaultRevitLaunch(localAppData = localAppDataDir()): RevitLaunc
 
 export function resolveRevitLaunch(settings: { revitServerJs: string | null; revitNode: string | null }): RevitLaunch | null {
 	if (settings.revitServerJs) return existsSync(settings.revitServerJs) ? { serverJs: settings.revitServerJs, node: settings.revitNode && existsSync(settings.revitNode) ? settings.revitNode : null, source: "iestatījumi" } : null;
-	return defaultRevitLaunch() ?? bundledRevitLaunch();
+	// the server shipped inside the app first (2026-11-24): it is the version this app's tools and add-in were made for; an older Revit-MCP-Node install next to it no longer wins
+	return bundledRevitLaunch() ?? defaultRevitLaunch();
 }
 
 /** The MCP launch spec (for the agent run and for the app's own client). */

@@ -8,6 +8,7 @@ import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path
 import { z } from "zod";
 import { extractBytes, TEXT_FORMATS } from "../../sources/text/index.js";
 import type { ToolCtx } from "./context.js";
+import { revitShellBlock } from "./levels.js";
 import { recordCreated, projectRoot } from "./project-write.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -239,10 +240,13 @@ export const generalTools: ToolDef[] = [
 		name: "run_command",
 		level: "confirm",
 		description:
-			"Run a PowerShell command on the PC and get its output (2 minutes at most): convert files, call a program, check something the app's tools do not. Never delete folders. Waits for the user's click, who sees the command. cwd: a folder (default the open project's folder).",
+			"Run a PowerShell command on the PC and get its output (2 minutes at most): convert files, call a program, check something the app's tools do not. Never delete folders. NEVER for Revit: no clicking in its windows (UI automation), no starting, stopping or inspecting its process — such a command is refused. Revit work goes through the Revit MCP tools and the revit_* tools. Waits for the user's click, who sees the command. cwd: a folder (default the open project's folder).",
 		input: { command: z.string().min(1), cwd: z.string().optional() },
 		run: (ctx, a) =>
-			new Promise((ok) => {
+			new Promise((ok, fail) => {
+				// the gate refuses these before the user is asked (levels.ts neverByArgs); this is the same rule where the command would run
+				const blocked = revitShellBlock(a.command);
+				if (blocked) return fail(new Error(blocked));
 				const cwd = abs(ctx, a.cwd || ".");
 				execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", a.command], { cwd, timeout: 120_000, maxBuffer: 8_000_000, windowsHide: true }, (err, stdout, stderr) => {
 					ok({ exitCode: err ? ((err as { code?: number }).code ?? 1) : 0, stdout: cut(String(stdout), 30_000), ...(stderr ? { stderr: cut(String(stderr), 10_000) } : {}), ...(err && (err as { killed?: boolean }).killed ? { note: "apturēts pēc 2 minūtēm" } : {}) });

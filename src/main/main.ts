@@ -27,7 +27,8 @@ import { popTitle } from "../shared/popout.js";
 import { Registry } from "../core/registry.js";
 import { snapshotAppData } from "../core/safe-file.js";
 import { ProjectEngine } from "./engine.js";
-import { RevitClient, defaultServerJs, launchSpec, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
+import { RevitClient, defaultServerJs, launchSpec, localAppDataDir, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
+import { syncAddins } from "../revit/addin-install.js";
 import { revitRead } from "../revit/commands.js";
 import { revitExport } from "../revit/exports.js";
 import { captureRevision, isWorkCopy } from "../revit/revision.js";
@@ -270,6 +271,12 @@ const pageRenderer = new PageRenderer(join(here, "..", "renderer"));
 const ocr = new Ocr(join(resourcesDir, "tessdata"));
 
 setBundledRevitDir(join(resourcesDir, "revit-mcp"));
+// the add-in in Revit is the one this app ships: put in place at the first start after the setup or an update, no click (Revit open = the next start)
+try {
+	for (const line of syncAddins(bundledRevitDir(), join(localAppDataDir(), "Projektesana", "revit-backups", new Date().toISOString().replace(/[:.]/g, "-")))) log(`revit add-in: ${line}`);
+} catch (e) {
+	log(`revit add-in: sync failed: ${(e as Error).message}`);
+}
 const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.execPath);
 {
 	// one line per start: what this process sees when it looks for the Revit MCP server
