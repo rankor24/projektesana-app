@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AGENT_CHECKS_MAX, ROLE_MAX, SPECIALIST_FIXED_MAX, type AgentMcpServer, type AgentSpec, type AgentSpecRow, type AgentToolRow } from "../../shared/agent-types";
 import type { ProviderRow } from "../../shared/api";
 import { departmentOf, type Department } from "../../shared/departments";
+import { ALL_MARKAS, markasOf, parseMarkas } from "../../shared/markas";
 import type { SkillInfo } from "../../shared/skill-types";
 import { call, errText } from "../bridge";
 import { locale, tr } from "../i18n";
@@ -120,6 +121,8 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 	const [skillQuery, setSkillQuery] = useState("");
 	const [lead, setLead] = useState(false);
 	const [dirty, setDirty] = useState(false);
+	/** the Markas field as typed (null = show the saved list): kept while it holds a word that is no marka, so nothing is dropped unseen */
+	const [markasDraft, setMarkasDraft] = useState<string | null>(null);
 	const patch = (p: Partial<Draft>) => {
 		setA((x) => ({ ...x, ...p }));
 		setDirty(true);
@@ -158,6 +161,7 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 	const save = async () => {
 		setErr(null);
 		if (!ID_OK.test(a.id)) return setErr(tr("Identifikators: mazie burti, cipari un domuzīme, 2–31 zīmes (piem. dokumenti)."));
+		if (markasDraft !== null && parseMarkas(markasDraft).unknown.length) return setErr(tr("Nav LBN 202-18 marka: {list}", { list: parseMarkas(markasDraft).unknown.join(", ") }));
 		setBusy(true);
 		try {
 			// a role file is written first: saving the spec checks that the file of an agent with roleFile exists
@@ -324,6 +328,32 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 							))}
 						</select>
 						<span className="small dim">{tr("Pēc noklusējuma raksta visu projektēšanas nodaļu aģentiem un BPV; Kvalitāte (EKS) ir atsevišķi (skat. «Drīkst rakstīt» zemāk).")}</span>
+					</label>
+					<label className="row">
+						<span className="ag-label">{tr("Markas")}</span>
+						<input
+							className="grow mono"
+							list="lbn-202-markas"
+							value={markasDraft ?? markasOf(a).join(", ")}
+							placeholder="AR, BK, AVK-A"
+							onChange={(e) => {
+								setMarkasDraft(e.target.value);
+								patch({ markas: parseMarkas(e.target.value).codes });
+							}}
+							onBlur={() => markasDraft !== null && parseMarkas(markasDraft).unknown.length === 0 && setMarkasDraft(null)}
+						/>
+						<datalist id="lbn-202-markas">
+							{ALL_MARKAS.map((m) => (
+								<option key={m.code} value={m.code}>
+									{m.name}
+								</option>
+							))}
+						</datalist>
+						<span className="small dim">
+							{markasDraft !== null && parseMarkas(markasDraft).unknown.length
+								? tr("Nav LBN 202-18 marka: {list}", { list: parseMarkas(markasDraft).unknown.join(", ") })
+								: tr("LBN 202-18 pielikuma markas, ko aģents raksta; tās rāda zīme blakus aģenta vārdam sarunu panelī un tās zina visi aģenti.")}
+						</span>
 					</label>
 					<label className="row">
 						<span className="ag-label" />

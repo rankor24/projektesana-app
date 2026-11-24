@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { OfficeMemory } from "../core/office-memory.js";
 import { AGENT_CHECKS_MAX, LEAD_FIXED_MAX, MCP_NAME, ROLE_MAX, SHARED_MAX, SPECIALIST_FIXED_MAX, type AgentMcpServer, type AgentSpec } from "../shared/agent-types.js";
 import { mayReach, ownDepartmentFirst } from "../shared/departments.js";
+import { markasText, parseMarkas } from "../shared/markas.js";
 import { LEAD_ID } from "../shared/thread-types.js";
 import { memoryText } from "./memory-md.js";
 import { estimateTextTokens } from "./context.js";
@@ -168,6 +169,13 @@ export function validateSpec(
 	if (r.department !== undefined) {
 		if (typeof r.department !== "string" || (r.department.trim() && !/^[a-z0-9-]{1,40}$/.test(r.department.trim()))) return { ok: false, error: "Nodaļa: nodaļas identifikators vai tukšs." };
 		spec.department = r.department.trim();
+	}
+	// the markas are codes of the LBN 202-18 annex (or the office's own, shared/markas.ts); `[]` is kept: the person took them away
+	if (r.markas !== undefined) {
+		if (!Array.isArray(r.markas) || r.markas.some((m) => typeof m !== "string")) return { ok: false, error: "Markas: saraksts ar LBN 202-18 marku kodiem (piem. AR, BK, AVK-A)." };
+		const parsed = parseMarkas((r.markas as string[]).join(","));
+		if (parsed.unknown.length) return { ok: false, error: `Markas: nezināma marka ${parsed.unknown.join(", ")}. Kodi ir LBN 202-18 pielikumā (piem. AR, BK, UK, AVK-A).` };
+		spec.markas = parsed.codes;
 	}
 	if (r.skills !== undefined) {
 		if (!Array.isArray(r.skills)) return { ok: false, error: "skills: saraksts ar prasmju nosaukumiem." };
@@ -334,13 +342,13 @@ export function rosterFor(spec: AgentSpec | null, specs: readonly AgentSpec[]): 
  *  its own skills (those it names that are ready, synced or the office's), then knowledge, the process card and the status. A `lane` text has no RULES, mail lines or roster. */
 function standingBase(spec: AgentSpec | null, d: StandingDeps): string {
 	// the lead's process text is empty unless it is in the profile (the caller decides), so a co-work text stays byte for byte what it was
-	if (!spec) return [SYSTEM_PROMPT, APP_MAP, MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	if (!spec) return [SYSTEM_PROMPT, APP_MAP, markasText(null, d.specs), MAIL_RULES, userLine(d.userName), REVIT_RULES, rosterFor(null, d.specs), skillsText(d.skills.filter((s) => s.origin === "synced"), LEAD_SKILL_DESC_MAX), d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 	const role = spec.roleFile ? ((d.roleText?.id === spec.id ? d.roleText.text : readRole(d.appDir, spec.id)) ?? "").trim() : "";
 	const own = role ? [role, spec.prompt].filter(Boolean).join("\n\n") : spec.prompt;
 	const hasRevit = spec.tools.some((n) => (d.revitTools ? d.revitTools.has(n) : Object.hasOwn(REVIT_LEVELS, n)));
 	const skills = skillsFor(spec, d.skills);
 	const talk = !d.lane;
-	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? MAIL_RULES : "", talk && d.chief ? CHIEF_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
+	return [(d.sharedText ?? readShared(d.appDir)).trim(), own, talk ? RULES.trim() : "", APP_MAP, talk ? markasText(spec, d.specs) : "", talk ? MAIL_RULES : "", talk && d.chief ? CHIEF_RULES : "", userLine(d.userName), hasRevit ? REVIT_RULES : "", talk ? rosterFor(spec, d.specs) : "", skills.length ? skillsText(skills) : "", d.knowledge, d.processCard ?? "", d.status ?? ""].filter(Boolean).join("\n\n");
 }
 
 /** The standing text and, at its end, the agent's memory (agent/memory-md.ts): the one call this file makes into the Markdown memory. It sits last so a memory that changes

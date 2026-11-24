@@ -64,6 +64,26 @@ export const DEFAULT_DEPARTMENT_OF: Readonly<Record<string, string>> = {
 	eks: KVALITATE_ID,
 };
 
+/** The role number of a team file or skill group («02-arhitekts», `skilli\02-arhitekts`) → the agent id (agent/team-import.ts reads the folder with it). */
+export const TEAM_IDS: Readonly<Record<string, string>> = {
+	"01": "bpv",
+	"02": "ar",
+	"03": "aa",
+	"04": "cd",
+	"05": "ak",
+	"06": "ea",
+	"07": "bk",
+	"08": "uk",
+	"09": "avk",
+	"10": "ga",
+	"11": "el",
+	"12": "ess",
+	"13": "ud",
+	"14": "mel",
+	"15": "tam",
+	"16": "eks",
+};
+
 export const DEPARTMENT_NAME_MAX = 60;
 export const DEPARTMENTS_MAX = 40;
 

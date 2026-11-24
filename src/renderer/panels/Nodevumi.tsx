@@ -2,11 +2,12 @@
 // Revit sheets, IFC, TN and approvals) is filled with the agent in a staging folder; then the user's three clicks:
 // Sagatavot (checks) → Kopēt uz 1.4_Nodevumi (shows the exact target first) → Atzīmēt kā nosūtītu. Past deliveries read from
 // 1.4_Nodevumi and planned ones sit below; the TN and approval clocks too.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BIM_STAGES, type Delivery, type Finding } from "../../core/model";
 import type { ClockRow } from "../../shared/api";
 import type { ChecklistGroup, ChecklistRow, CopyPlan, RowStatus } from "../../shared/nodevums";
 import { validName, type RenameMode, type RenameResult, type RenameRow } from "../../shared/rename";
+import { markaByCode, markaOfDeliveryFile, markasOfDelivery } from "../../shared/markas";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
 import { windows } from "../windows";
@@ -487,6 +488,8 @@ function HistoryRow({ d, projectId, blocking, onStart, onChanged, onErr }: { d: 
 	const act = (p: Promise<unknown>) => p.then(onChanged).catch((e) => onErr(errText(e)));
 	const last = d.checksRun[d.checksRun.length - 1];
 	const planned = d.id.startsWith("plan_");
+	// the LBN 202-18 marka of each file: its sheet number, its name, or the folder it sits in (shared/markas.ts)
+	const byMarka = useMemo(() => markasOfDelivery(d.items), [d.items]);
 	return (
 		<div className="confirm" style={{ borderColor: d.sent ? "var(--ok)" : "var(--border)" }}>
 			<div className="row">
@@ -516,11 +519,26 @@ function HistoryRow({ d, projectId, blocking, onStart, onChanged, onErr }: { d: 
 				/>
 			</div>
 			{open && d.items.length > 0 && (
+				<div className="row small dim" style={{ flexWrap: "wrap", gap: 4, padding: "4px 0" }}>
+					<span>{tr("Markas (LBN 202-18):")}</span>
+					{byMarka.counts.map((m) => (
+						<Badge key={m.code} tone="info" title={markaByCode(m.code)?.name}>
+							{m.code} · {m.files}
+						</Badge>
+					))}
+					{byMarka.none > 0 && <Badge tone="warn" title={tr("Faili, kuru numurā, nosaukumā vai mapē nav markas")}>{tr("bez markas · {n}", { n: byMarka.none })}</Badge>}
+				</div>
+			)}
+			{open && d.items.length > 0 && (
 				<table>
 					<tbody>
 						{d.items.map((i) => (
 							<tr key={i.file}>
 								<td className="mono small">{i.sheetNo ?? <Badge tone="warn">{tr("nav Nr.")}</Badge>}</td>
+								<td className="small">{(() => {
+									const code = markaOfDeliveryFile(i);
+									return code ? <Badge tone="info" title={markaByCode(code)?.name}>{code}</Badge> : null;
+								})()}</td>
 								<td>{i.title}</td>
 								<td className="dim small mono">{fileName(i.file)}</td>
 							</tr>

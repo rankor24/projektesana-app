@@ -209,4 +209,11 @@ export const part7: Record<string, string> = {
 	"Noņemt atlasi": "Clear selection",
 	"Atlasīt visas": "Select all",
 	"Visas šī dokumenta telpas ir izdzēstas.": "All rooms of this document are deleted.",
+	"Markas": "Marks",
+	"Nav LBN 202-18 marka: {list}": "Not an LBN 202-18 mark: {list}",
+	"LBN 202-18 pielikuma markas, ko aģents raksta; tās rāda zīme blakus aģenta vārdam sarunu panelī un tās zina visi aģenti.": "The LBN 202-18 annex marks (markas) this agent writes; shown as a pill beside the agent's name in the conversations panel, and known to every agent.",
+	"papildu marka": "own mark",
+	"Markas (LBN 202-18):": "Marks (LBN 202-18):",
+	"Faili, kuru numurā, nosaukumā vai mapē nav markas": "Files with no mark in their number, name or folder",
+	"bez markas · {n}": "no mark · {n}",
 };

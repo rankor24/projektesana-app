@@ -38,6 +38,8 @@ export interface AgentSpec {
 	skills?: string[];
 	/** the department (shared/departments.ts) the agent is filed in: an id of the app's department list; absent = the default of its id (BD roles), "" = in none */
 	department?: string;
+	/** the LBN 202-18 markas this agent writes (shared/markas.ts codes: AR, BK, AVK-A …); absent = the default of its id (`DEFAULT_MARKAS_OF`, the BD roles), [] = none */
+	markas?: string[];
 	/** check before done (docs/BD adoption plan, "Check before done"): who reads this agent's finished answer against the request before it is handed on. `agent` = another agent of
 	 *  the list, else `provider` + `model` = a model of its own (another provider than the author's by default, set here); `maxChecks` = the most checks a task gets (1-3).
 	 *  Absent = no check. This file only holds and validates the fields; the logic that runs the check is the runner's. */

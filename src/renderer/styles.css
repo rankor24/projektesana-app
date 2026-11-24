@@ -908,6 +908,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .tl-agent-row[draggable="true"] { cursor: grab; }
 .tl-agent-row:hover { background: var(--elev); }
 .tl-agent-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-weight: 600; }
+.tl-marka { flex: none; font-size: 10.5px; line-height: 16px; letter-spacing: 0.02em; cursor: default; }
 .tl-fold, .tl-new, .tl-more { padding: 0 6px; line-height: 18px; }
 .tl-fold { width: 20px; padding: 0; color: var(--muted); border: none; }
 .tl-threads { display: flex; flex-direction: column; gap: 1px; padding-left: 26px; }
