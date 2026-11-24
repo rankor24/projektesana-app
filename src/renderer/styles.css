@@ -221,7 +221,11 @@ tr.click:hover td { background: var(--elev); }
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { width: 100%; resize: none; border: 0; outline: 0; border-radius: 0; background: transparent; padding: 10px 12px 4px; line-height: 1.45; }
 .composer-attach { padding: 8px 12px 0; }
-.composer-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px; }
+.composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 8px 8px; }
+/* the model sits in the bar's empty middle; it gives way (ellipsis) before the buttons do */
+.model-chip { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reasoning-btn { flex: none; color: var(--muted); }
+.reasoning-btn.hidden { color: var(--dim); }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; background: transparent; border-color: transparent; border-radius: 8px; color: var(--dim); }
 .icon-btn:hover { color: var(--text); background: var(--elev2); border-color: transparent; }
 .send-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -235,8 +239,8 @@ tr.click:hover td { background: var(--elev); }
 
 /* the checklist (Uzdevumi): the agent's steps plus the user's own, one compact block on top of the composer */
 .tasks { border-bottom: 1px solid var(--border); }
-.tasks-head { display: flex; align-items: center; min-height: 36px; padding-right: 6px; }
-.tasks-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; background: transparent; border: 0; border-radius: 0; text-align: left; }
+.tasks-head { display: flex; align-items: center; flex-wrap: wrap; min-height: 36px; padding-right: 6px; }
+.tasks-toggle { flex: 1 1 140px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; background: transparent; border: 0; border-radius: 0; text-align: left; }
 .tasks-toggle:hover { background: transparent; }
 .tasks-toggle .ic { color: var(--muted); transition: transform 0.12s; }
 .tasks.folded .tasks-toggle .ic { transform: rotate(-90deg); }
@@ -617,6 +621,8 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .room-time { flex: none; }
 .room-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .chat[hidden] { display: none; }
+/* Darbi, the wave, Pauzēt rindu and Apturēt visu: the right end of the Uzdevumi row; wraps under it when the dock is narrow */
+.lanes-head { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; padding: 2px 0; }
 .run-lanes { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; border-top: 1px solid var(--border); }
 .run-lane { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--elev); cursor: pointer; min-width: 0; }
 .run-lane:hover { border-color: var(--border-strong); }

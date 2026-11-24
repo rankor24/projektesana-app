@@ -72,7 +72,8 @@ export function StatusStrip() {
 						{app ? (
 							<button className="ghost small" onClick={() => windows.open("projekts")}>{tr("Projekts")}</button>
 						) : (
-							!end && (
+							// the open project's runs are stopped from the chat (the composer's Apturēt, the rows of Darbi); only a run elsewhere has no button there
+							!end && other && (
 								<button className="small" onClick={() => void call("agent.stop")}>
 									{tr("Apturēt")}</button>
 							)

@@ -237,3 +237,22 @@ He asked: "add ability to select multiple rooms and delete them, have to allow a
 | The rooms check no longer reports every model room as missing when all inventory rooms were deleted: it is skipped, as with no table. |
 
 **Not done:** editing a room by hand on the screen (only the agent edits rooms); deleting from the Telpas page's plan view (another change is working on that view). **Not checked live** (his rule).
+
+## 2026-11-24: Chat panel — decluttered (items 1–8 of his list)
+
+He wrote (screenshots with red boxes): "1. Move model selector in chat 2. Agent name is visible below, remove 3. conversations is in sidebar, remove button 4. Lead Agent Thinking - absolutely usesless waste of space that is duplicated at the bottom too? 5. Stop button already exists 6. Why duplicated and stacked? we have full width, can be assigned to different sides. 7. Confirm cards duplicate when asking? fix that 8. Want to see Reasoning/Thinking (collapsible as option) 9. Need to have some debug or log view where can see ALL that agent does and receives like full verbose transcript in Claude." Item 9 is another change's work, not this one.
+
+How the session read each item (the readings are the session's; he can correct them):
+
+| # | Done (not built into a numbered version yet) |
+|---|---|
+| 1 | The model button («ChatGPT / Codex · gpt-… · pieslēgts») moved from the header to the message box's bar, in the empty space after «Skats: Auto / Manuāli» (the blue arrow). It reads «provider · model»; «· nav pieslēgts» is added, in red, only when not signed in (the tooltip has the full state). It still opens Iestatījumi. Long names are cut with «…» before the buttons are pushed. `AgentDock.tsx`. |
+| 2 | The line under the header with the agent name and thread title is gone for the lead's chat (the name is on every run card). In another agent's thread the line stays, because nothing else says whose thread it is: **the session's choice, not his**. `ThreadPanel` in `ThreadList.tsx`. |
+| 3 | The «Sarunas» button is gone from the chat (the sidebar has «Sarunas»). |
+| 4 | The row «Vadošais aģents domā…» is gone: the thread on screen no longer gets a row in the jobs list (`LaneRows`). Other agents' running or queued threads keep their rows with their own «Apturēt». The bottom status bar stays as it was. |
+| 5 | The row's second «Apturēt» went with item 4. The bottom status bar's «Apturēt» now shows only for a run of **another project**; for the open project, stopping is the message box's «Apturēt» (and «Apturēt visu» in the jobs controls). **The session's reading of item 5**: his red box was on the bottom bar. |
+| 6 | The jobs controls (**Darbi: N**, the wave, «Pauzēt rindu», «Apturēt visu») are no longer a row of their own: they sit at the right end of the «Uzdevumi» row, so the two share one line (`LaneHead` in `Lane.tsx` passed to `PlanBlock` as `aside`). In a narrow dock they wrap under «Uzdevumi» instead of being cut. |
+| 7 | An approval waiting for an answer shows **once**, in «Gaida tevi» above the chat. The chat line for it is hidden while «Gaida tevi» shows it and appears when it is answered (allowed / rejected, or answered elsewhere). `useThreads` has `pending(id)`. If another change that folds answered cards is merged too, the two fit (this one only decides when the line is drawn). |
+| 8 | The model's reasoning already was a «Domā» step in the run card; it only could not be switched. New button in the message box's bar, **«Domāšana: sakļauta / atvērta / paslēpta»** (click to go round): *sakļauta* = as before (each a line, the one being written open); *atvērta* = every reasoning step open; *paslēpta* = no reasoning steps in the run card. Kept per computer (`src/renderer/reasoning-pref.ts`, localStorage), not in Iestatījumi. |
+
+**Not done:** item 9. Reasoning is shown only if the model sends it (the ChatGPT / Codex provider may send little or none). **Not checked live** (his rule). `npm run typecheck` and the i18n test could not run in the cloud session (no installed packages); every `tr()` string was checked against the English dictionary by script, and the files were compiled for syntax only.

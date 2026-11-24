@@ -16,7 +16,6 @@ import { useTreeState } from "./sidebar-state";
 import { THREADS } from "../../shared/layout";
 import { call, errText } from "../bridge";
 import { ui, useUi } from "../state";
-import { windows } from "../windows";
 import { IncidentRow } from "./Waiting";
 import { locale, tr } from "../i18n";
 
@@ -609,22 +608,18 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 }
 
 /**
- * The chat's header line: which conversation the chat shows, and a button that opens the list as a window of its own.
- * BIM Crew keeps the history out of the chat (a separate "Chat history" panel); an expanded list here pushed the chat out
- * of the dock. This line never grows.
+ * The chat's header line for another agent's conversation: whose it is and its title. The lead's chat has no such line, and the
+ * list of conversations is the sidebar's (Sarunas), not a button here. This line never grows.
  */
 export function ThreadPanel({ current, threads, specs, queue }: { threads: Thread[]; specs: AgentSpec[]; queue: QueueView; current: string | null }) {
 	const t = threads.find((x) => x.id === current);
-	const open = threads.filter((x) => x.state !== "closed").length;
+	if (!t) return null;
 	return (
 		<div className="threads-line">
-			{t && <StateDot state={liveState(t, queue)} />}
-			<span className="threads-now" title={t ? `${agentName(t.agent, specs)} · ${t.title}` : undefined}>
-				{t ? `${agentName(t.agent, specs)} · ${t.title}` : tr("vadošais aģents")}
+			<StateDot state={liveState(t, queue)} />
+			<span className="threads-now" title={`${agentName(t.agent, specs)} · ${t.title}`}>
+				{agentName(t.agent, specs)} · {t.title}
 			</span>
-			<button className="small" onClick={() => windows.toggleThreads()} title={tr("Visas sarunas: katram aģentam savas, jauna saruna, slēgšana")}>
-				☰ {tr("Sarunas")}{open > 1 ? ` (${open})` : ""}
-			</button>
 		</div>
 	);
 }

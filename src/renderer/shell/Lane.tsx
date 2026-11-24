@@ -26,38 +26,42 @@ export function Lane({ lane, specs, onOpen, onStop }: { lane: LaneItem; specs: A
 	);
 }
 
-interface BarProps {
-	lanes: LaneItem[];
-	specs: AgentSpec[];
+interface HeadProps {
+	/** running and queued threads of the open project */
+	count: number;
 	paused: boolean;
-	/** the open project's current wave, shown beside Stop */
+	/** the open project's current wave, shown beside Pauzēt */
 	wave: Wave | null;
 	/** running or queued in other projects */
 	elsewhere: number;
-	onOpen: (threadId: string) => void;
-	onStop: (threadId: string) => void;
 	onStopAll: () => void;
 	onTogglePause: () => void;
 }
 
-/** Shown only while something runs, waits in the queue, or the queue is paused: an idle window has no strip. */
-export function LaneBar({ lanes, specs, paused, wave, elsewhere, onOpen, onStop, onStopAll, onTogglePause }: BarProps) {
-	if (lanes.length === 0 && elsewhere === 0 && !paused) return null;
+/** The queue's own controls, drawn at the right end of the Uzdevumi row. Shown only while something runs, waits in the queue, or the queue is paused: an idle window has none. */
+export function LaneHead({ count, paused, wave, elsewhere, onStopAll, onTogglePause }: HeadProps) {
+	if (count === 0 && elsewhere === 0 && !paused) return null;
+	return (
+		<div className="lanes-head small">
+			<span className="dim">{tr("Darbi:")}</span>
+			<b>{count}</b>
+			{elsewhere > 0 && <span className="dim">{tr("· citos projektos {elsewhere}", { elsewhere: elsewhere })}</span>}
+			{paused && <span className="badge warn">{tr("rinda apturēta")}</span>}
+			{wave && <span className={`small ${wave.paused ? "badge warn" : "dim"}`}>{waveLine(wave)}</span>}
+			<button className="small" onClick={onTogglePause} title={paused ? tr("Rindā gaidošie darbi sāks darbu") : tr("Kas jau strādā, turpina; jauni darbi gaida")}>
+				{paused ? tr("Turpināt rindu") : tr("Pauzēt rindu")}
+			</button>
+			<button className="small danger" onClick={onStopAll} disabled={count === 0 && elsewhere === 0} title={tr("Aptur visus darbus, arī citos projektos")}>
+				{tr("Apturēt visu")}</button>
+		</div>
+	);
+}
+
+/** One row for each running or queued thread other than the one on screen (that one has its run card and the composer's Apturēt). */
+export function LaneRows({ lanes, specs, onOpen, onStop }: { lanes: LaneItem[]; specs: AgentSpec[]; onOpen: (threadId: string) => void; onStop: (threadId: string) => void }) {
+	if (lanes.length === 0) return null;
 	return (
 		<div className="run-lanes">
-			<div className="row lanes-head small">
-				<span className="dim">{tr("Darbi:")}</span>
-				<b>{lanes.length}</b>
-				{elsewhere > 0 && <span className="dim">{tr("· citos projektos {elsewhere}", { elsewhere: elsewhere })}</span>}
-				{paused && <span className="badge warn">{tr("rinda apturēta")}</span>}
-				<span className="grow" />
-				{wave && <span className={`small ${wave.paused ? "badge warn" : "dim"}`}>{waveLine(wave)}</span>}
-				<button className="small" onClick={onTogglePause} title={paused ? tr("Rindā gaidošie darbi sāks darbu") : tr("Kas jau strādā, turpina; jauni darbi gaida")}>
-					{paused ? tr("Turpināt rindu") : tr("Pauzēt rindu")}
-				</button>
-				<button className="small danger" onClick={onStopAll} disabled={lanes.length === 0 && elsewhere === 0} title={tr("Aptur visus darbus, arī citos projektos")}>
-					{tr("Apturēt visu")}</button>
-			</div>
 			{lanes.map((l) => (
 				<Lane key={`${l.threadId}:${l.state}`} lane={l} specs={specs} onOpen={onOpen} onStop={onStop} />
 			))}

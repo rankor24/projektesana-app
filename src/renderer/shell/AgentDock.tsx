@@ -25,7 +25,7 @@ import { bimcraft } from "../preview/IfcView";
 import { parseMention } from "../../shared/mention";
 import { parseEveryone } from "../../shared/everyone";
 import { BPV_ID } from "../../shared/departments";
-import { LaneBar } from "./Lane";
+import { LaneHead, LaneRows } from "./Lane";
 import { ProcessStrip } from "./ProcessStrip";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
@@ -33,6 +33,7 @@ import { agentName, mentionOptions, useThreads } from "./useThreads";
 import { Waiting } from "./Waiting";
 import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
+import { cycleReasoning, REASONING_LABEL, useReasoning } from "../reasoning-pref";
 
 type Line =
 	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
@@ -53,6 +54,7 @@ export function AgentDock() {
 	const sendFocus = useMemo(() => focusForSend(focus, mode, view), [focus, mode, view]);
 	const status = useLoad<AgentStatus>(() => call("agent.status"), []);
 	const tasks = useLoad(() => call("tasks.list"), []);
+	const reasoning = useReasoning();
 	const [lines, setLines] = useState<Line[]>([]);
 	const [runId, setRunId] = useState<string | null>(null);
 	const [text, setText] = useState("");
@@ -355,6 +357,17 @@ export function AgentDock() {
 				})()
 			: null;
 	const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
+	// Darbi, the queue's pause and Apturēt visu: the right end of the Uzdevumi row (there only while something runs, waits or is paused)
+	const jobsHead = (
+		<LaneHead
+			count={T.lanes.length}
+			paused={T.queue.paused}
+			wave={currentWave(T.queue.waves, T.queue.running, projectId)}
+			elsewhere={T.elsewhere}
+			onStopAll={stopAll}
+			onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
+		/>
+	);
 	const lastRun = [...lines].reverse().find((l): l is Extract<Line, { kind: "run" }> => l.kind === "run")?.runId ?? null;
 	return (
 		<aside
@@ -379,13 +392,6 @@ export function AgentDock() {
 			<div className="agent-head">
 				<div className="row">
 					<b>{tr("Aģents")}</b>
-					{st ? (
-						<button className={`chip ${st.signedIn ? "" : "bad"}`} onClick={() => windows.open("iestatijumi")} title={st.reason}>
-							{st.providerLabel} · {st.model} · {st.signedIn ? tr("pieslēgts") : tr("nav pieslēgts")}
-						</button>
-					) : (
-						<span className="dim small">…</span>
-					)}
 					<span className="badge dim" title={tr("Revit MCP")}>{tr("Revit:")} {st?.revit ?? "…"}</span>
 					<span className="grow" />
 					{/* the ring and compaction are the lead's conversation; another thread has no meter of its own yet */}
@@ -422,7 +428,8 @@ export function AgentDock() {
 						</>
 					)}
 				</div>
-				<ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} />
+				{/* the lead's chat needs no name line (its name is on every run card); another agent's thread says whose it is */}
+				{viewThread && viewThread.agent !== "lead" && <ThreadPanel threads={T.threads} specs={T.specs} queue={T.queue} current={viewId} />}
 			</div>
 			<ProcessStrip projectId={projectId} />
 			<TeamOffer specs={T.specs} onDone={T.reload} />
@@ -461,7 +468,8 @@ export function AgentDock() {
 						) : (
 							<div key={l.runId} className="dim small">{l.queued ? tr("Gaida rindā") : tr("strādā…")}</div>
 						)
-					) : (
+					) : l.kind === "confirm" && !l.answered && T.pending(l.id) ? null : (
+						// a card that waits for an answer shows once, in Gaida tevi above the chat; it joins the chat when answered
 						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
 					),
 				)}
@@ -477,17 +485,8 @@ export function AgentDock() {
 					onClose={() => setNotice(null)}
 				/>
 			)}
-			<LaneBar
-				lanes={T.lanes}
-				specs={T.specs}
-				paused={T.queue.paused}
-				wave={currentWave(T.queue.waves, T.queue.running, projectId)}
-				elsewhere={T.elsewhere}
-				onOpen={T.select}
-				onStop={stopLane}
-				onStopAll={stopAll}
-				onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
-			/>
+			{/* the thread on screen is not a row: its run card, Gaida tevi and the composer's Apturēt already say it */}
+			<LaneRows lanes={T.lanes.filter((l) => l.threadId !== viewId)} specs={T.specs} onOpen={T.select} onStop={stopLane} />
 			<div className="chat-input">
 				{/* only the warning stays by the message; the full count of what it adds is in the context popover */}
 				{leadPath && draftCost?.over && (
@@ -499,7 +498,7 @@ export function AgentDock() {
 				{blind && <div className="attach-warn small">{tr("Modelis {model} neredz attēlus — Iestatījumos izvēlies citu modeli vai noņem attēlu.", { model: st?.model })}</div>}
 				<MentionPop options={options} active={Math.min(pick, options.length - 1)} onPick={choose} />
 				<div className="composer">
-					<PlanBlock projectId={projectId} />
+					<PlanBlock projectId={projectId} aside={jobsHead} />
 					{(pending.length > 0 || reading > 0) && (
 						<div className="attach-strip composer-attach">
 							{pending.map((p) => (
@@ -558,7 +557,20 @@ export function AgentDock() {
 							<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>{tr("Auto")}</button>
 							<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>{tr("Manuāli")}</button>
 						</div>
+						{st ? (
+							<button
+								className={`chip model-chip ${st.signedIn ? "" : "bad"}`}
+								onClick={() => windows.open("iestatijumi")}
+								title={`${st.providerLabel} · ${st.model} · ${st.signedIn ? tr("pieslēgts") : tr("nav pieslēgts")}${st.reason ? `\n${st.reason}` : ""}`}
+							>
+								{st.providerLabel} · {st.model}
+								{st.signedIn ? "" : ` · ${tr("nav pieslēgts")}`}
+							</button>
+						) : null}
 						<span className="grow" />
+						<button className={`ghost small reasoning-btn ${reasoning}`} title={tr("Modeļa domāšana sarunā: paslēpta, sakļauta (atveras tikai tā, kas top) vai atvērta")} onClick={cycleReasoning}>
+							{tr("Domāšana:")} {REASONING_LABEL[reasoning]}
+						</button>
 						{runId ? (
 							<button className="stop-btn" onClick={stop}>
 								<Icon name="square" size={12} />
