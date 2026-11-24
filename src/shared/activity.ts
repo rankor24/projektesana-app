@@ -76,6 +76,8 @@ export interface Activity {
 	chars?: number;
 	/** the line belongs to a helper or specialist working beside the run (task 8.15) */
 	lane?: { id: string; label: string };
+	/** kind "start": the text is a task template's label, not the person's own words (the run card may title itself with it; with the person's words it would repeat the message above it) */
+	template?: boolean;
 }
 
 /** The app's own tools: what each one is called on screen, and what kind of step it is. */
@@ -293,11 +295,17 @@ export const thinkingLine = (text: string) => oneLine(text.replace(/[*_`#]+/g, "
 /** Streamed answer text is shown in the chat; here only how much has been written. */
 export const answerLine = (chars: number) => `Raksta atbildi — ${chars.toLocaleString("lv-LV")} zīmes`;
 
+/** The label of the task template this text is (or starts with); null when it is the person's own words. */
+export function templateOf(prompt: string, templates: readonly { label: string; text: string }[] = []): string | null {
+	const t = prompt.trim();
+	return templates.find((x) => t === x.text.trim() || t.startsWith(x.text.trim()))?.label ?? null;
+}
+
 /** The run's title: the task template's label when the text is one of them, else the first line of what was asked. */
 export function taskTitle(prompt: string, templates: readonly { label: string; text: string }[] = []): string {
 	const t = prompt.trim();
-	const tpl = templates.find((x) => t === x.text.trim() || t.startsWith(x.text.trim()));
-	if (tpl) return tpl.label;
+	const tpl = templateOf(prompt, templates);
+	if (tpl) return tpl;
 	const line = t.split("\n").find((l) => l.trim()) ?? "";
 	return oneLine(line, 90) || "Uzdevums";
 }

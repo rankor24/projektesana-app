@@ -20,6 +20,7 @@ import {
 	oneLine,
 	sourceIdOf,
 	taskTitle,
+	templateOf,
 	thinkingLine,
 	toolLine,
 	type ActKind,
@@ -287,7 +288,7 @@ export class ActivityLog {
 		const r: Run = { id: runId, project: p?.projectId ?? meta?.projectId ?? null, calls: new Map(), anonymous: 0, block: null, summary: { steps: 0, listed: null, sources: [], changes: noChanges() }, titles: null, readOk: new Set(), ended: false, ...(meta ? { meta: { agent: meta.agent, threadId: meta.threadId } } : {}) };
 		this.runs.set(runId, r);
 		this.prune();
-		this.line(r, "start", p ? taskTitle(p.prompt, this.d.templates) : "Uzdevums", { detail: p?.prompt });
+		this.line(r, "start", p ? taskTitle(p.prompt, this.d.templates) : "Uzdevums", { detail: p?.prompt, ...(p && templateOf(p.prompt, this.d.templates) ? { template: true } : {}) });
 		return r;
 	}
 

@@ -79,10 +79,15 @@ export interface Wave {
 	paused: null | "runs" | "cost";
 }
 
+/** Why a queued item is not running yet. `cap`: `active` runs already use the `cap` slots (Iestatījumi → Aģenti, parallel agents). */
+export type WaitReason = { kind: "paused" } | { kind: "held" } | { kind: "wave" } | { kind: "thread" } | { kind: "cap"; active: number; cap: number };
+
 /** What the window sees of the run table and the queue; sent as `queue.changed` on every change. */
 export interface QueueView {
 	running: Running[];
 	queued: QueueItem[];
+	/** the reason each queued item waits, by item id (an item nothing holds has none) */
+	why: Record<string, WaitReason>;
 	paused: boolean;
 	waves: Wave[];
 	/** what the user paused (agents, departments, everything): these start nothing new until resumed */

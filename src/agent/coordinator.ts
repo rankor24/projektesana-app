@@ -18,7 +18,7 @@ import { IncidentStore, STALL_MS, isStalled } from "../core/incidents.js";
 import { levelOfMessages, mayHandleIncidentOf, type Level } from "../core/chief.js";
 import { BPV_ID, departmentOf, DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
 import type { ThreadStore } from "../core/threads.js";
-import { loadQueue, pickNext, saveQueue, waveCheck, type QueueItem, type Running } from "../core/queue.js";
+import { loadQueue, pickNext, saveQueue, waitReason, waveCheck, type QueueItem, type Running, type WaitReason } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
 import type { ConfirmRequest } from "./tools/levels.js";
 import type { ThreadRunner } from "./thread-runner.js";
@@ -234,7 +234,17 @@ export class Coordinator {
 	}
 
 	view(): QueueView {
-		return { running: this.running(), queued: [...this.queue], paused: this.paused, waves: this.liveWaves(), held: this.holds.view() };
+		const running = this.running();
+		const cap = this.d.settings().maxParallelAgents;
+		// read only: asking the reason must not pause a wave (`waveBlocked` does that when a start is tried)
+		const blocked = (q: QueueItem): "held" | "wave" | null => (this.heldNow(q.agent) !== null ? "held" : this.waves.get(q.wave)?.paused ? "wave" : null);
+		const why: Record<string, WaitReason> = {};
+		for (const q of this.queue) {
+			if (q.state !== "queued") continue;
+			const r = waitReason(q, running, Number.isFinite(cap) ? cap : 1, this.paused, blocked);
+			if (r) why[q.id] = r;
+		}
+		return { running, queued: [...this.queue], why, paused: this.paused, waves: this.liveWaves(), held: this.holds.view() };
 	}
 
 	/** Everything that waits for the user, of every project: open confirmations first, then the gates of process mode, then the questions in Atmiņa, then the unanswered restart. */

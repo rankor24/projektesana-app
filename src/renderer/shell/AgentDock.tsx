@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { groupRuns, isRunning } from "../../shared/activity";
 import { useActivity } from "../activity";
 import { RunCard } from "./RunCard";
+import { apply, startChatStreams, streamedLines, type Line } from "./chat-lines";
 import { PlanBlock } from "./PlanBlock";
 import { attachBus } from "../attach-bus";
 import { Icon } from "../icons";
@@ -13,7 +14,6 @@ import { Markdown } from "./Markdown";
 import { effectiveMode, focusForSend } from "../../shared/view-context";
 import type { AgentStatus, ChatAttachmentRef, ContextInfo } from "../../shared/api";
 import { fmtTokens } from "../../shared/tokens";
-import type { RunEvent } from "../../shared/types";
 import { ACCEPT, pastedFiles, readAttachment, sizeText, type Pending } from "../attach";
 import { call, errText, on } from "../bridge";
 import { ui, useUi } from "../state";
@@ -25,7 +25,7 @@ import { bimcraft } from "../preview/IfcView";
 import { parseMention } from "../../shared/mention";
 import { parseEveryone } from "../../shared/everyone";
 import { BPV_ID } from "../../shared/departments";
-import { LaneHead, LaneRows } from "./Lane";
+import { LaneHead, LaneRows, whyText } from "./Lane";
 import { ProcessStrip } from "./ProcessStrip";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
@@ -35,17 +35,8 @@ import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
 import { cycleReasoning, REASONING_LABEL, useReasoning } from "../reasoning-pref";
 
-type Line =
-	| { kind: "user"; text: string; attachments?: ChatAttachmentRef[] }
-	| { kind: "assistant"; text: string; thinking?: string }
-	/** the run card of one run: its steps come from the activity feed */
-	| { kind: "run"; runId: string; queued?: boolean }
-	| { kind: "compact"; phase: "start" | "done" | "failed" | "past"; text: string; summary?: string }
-	| { kind: "confirm"; id: string; tool: string; batch: string; answered?: boolean; allow?: boolean }
-	| { kind: "error"; text: string }
-	| { kind: "retry"; text: string };
-
 export function AgentDock() {
+	startChatStreams();
 	const { projectId, focus, view, viewChoice } = useUi();
 	const T = useThreads(projectId, { markSeen: true });
 	const { selId, viewId, viewThread, leadPath, viewKey } = T;
@@ -175,7 +166,10 @@ export function AgentDock() {
 		const [id] = going;
 		runRef.current = id;
 		setRunId(id);
-		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, { kind: "run", runId: id }]));
+		// what the run streamed while this conversation was not on screen comes back with its card. It is read here, in the same step that sets
+		// `runRef`: an event after this point reaches the line list through `apply`, one before it is in the buffer, so no text is doubled or lost.
+		const streamed = streamedLines(id);
+		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, { kind: "run", runId: id }, ...streamed]));
 	}, [runs, loadedFor, viewKey, viewId]);
 
 	useEffect(
@@ -469,7 +463,7 @@ export function AgentDock() {
 						runs.get(l.runId) ? (
 							<RunCard key={l.runId} lines={runs.get(l.runId)!} latest={l.runId === lastRun} />
 						) : (
-							<div key={l.runId} className="dim small">{l.queued ? tr("Gaida rindā") : tr("strādā…")}</div>
+							<div key={l.runId} className="dim small">{l.queued ? whyText(queuedWhy) : tr("strādā…")}</div>
 						)
 					) : l.kind === "confirm" && !l.answered && T.pending(l.id) ? null : (
 						// a card that waits for an answer shows once, in Gaida tevi above the chat; it joins the chat when answered
@@ -589,45 +583,6 @@ export function AgentDock() {
 			</div>
 		</aside>
 	);
-}
-
-function apply(ls: Line[], e: RunEvent): Line[] {
-	const last = ls[ls.length - 1];
-	switch (e.type) {
-		case "text":
-			if (last?.kind === "assistant") return [...ls.slice(0, -1), { ...last, text: last.text + e.text }];
-			return [...ls, { kind: "assistant", text: e.text }];
-		case "thinking":
-		case "tool":
-		case "tool_result":
-			// shown in the run card, from the activity feed
-			return ls;
-		case "compact": {
-			// one line per compaction: "start" opens it, "done" / "failed" replace it
-			const line: Line =
-				e.phase === "start"
-					? { kind: "compact", phase: "start", text: tr("Saruna ir {tokens} tokenu — saspiež vecāko daļu…", { tokens: fmtTokens(e.before) }) }
-					: e.phase === "done"
-						? { kind: "compact", phase: "done", text: `Saruna saspiesta: ${fmtTokens(e.before)} → ≈${fmtTokens(e.after ?? 0)} tokeni` }
-						: { kind: "compact", phase: "failed", text: tr("Saspiešana neizdevās, darbs turpinās bez tās: {message}", { message: e.message ?? "" }) };
-			return last?.kind === "compact" && last.phase === "start" ? [...ls.slice(0, -1), line] : [...ls, line];
-		}
-		case "confirm":
-			return [...ls, { kind: "confirm", id: e.id, tool: e.tool, batch: e.batch }];
-		case "retry": {
-			// one line per run of restarts: the next attempt replaces the previous one
-			const line: Line = { kind: "retry", text: tr("Savienojums pārtrūka ({message}). Atkārto {attempt}/{of} pēc {s} s…", { message: e.message, attempt: e.attempt, of: e.of, s: Math.round(e.delayMs / 1000) }) };
-			return last?.kind === "retry" ? [...ls.slice(0, -1), line] : [...ls, line];
-		}
-		case "error":
-			return [...ls, { kind: "error", text: e.message }];
-		case "done":
-			// the streamed text is already shown; a provider that does not stream sends the whole answer here
-			if (last?.kind === "assistant" || !e.text) return ls;
-			return [...ls, { kind: "assistant", text: e.text }];
-		default:
-			return ls;
-	}
 }
 
 function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, allow: boolean) => void }) {

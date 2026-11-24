@@ -239,7 +239,10 @@ export class ThreadRunner {
 		const projectId = thread.projectId;
 		const emit = i.emit;
 		const owner = `run:${runId}`;
+		// two conversations of one agent run side by side: the label says which one holds Revit or a write lock
+		const opened = new Date(thread.createdAt);
 		const label = spec ? spec.name : "galvenais aģents";
+		const holder = `${label} (saruna «${thread.title}»${Number.isNaN(opened.getTime()) ? "" : ` ${opened.toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit" })}`})`;
 		let answer = "";
 		let confirmedBatches = 0;
 		let failed = false;
@@ -276,7 +279,7 @@ export class ThreadRunner {
 				// One Revit takes one MCP connection: a run that would be offered a Revit tool takes the seat, and with it gets the Revit server. Without it
 				// the run has no Revit server and no Revit tool, and its prompt says who has Revit. The run's finally frees the seat.
 				let seatLine = "";
-				if (plan.revit && (plan.own ? [...plan.own] : plan.listed).some((n) => plan.revitTools.has(n)) && !this.d.locks.takeSeat(owner, label)) {
+				if (plan.revit && (plan.own ? [...plan.own] : plan.listed).some((n) => plan.revitTools.has(n)) && !this.d.locks.takeSeat(owner, holder)) {
 					seatLine = `Revit šobrīd lieto ${this.d.locks.seatLabel() ?? "cits aģents"}; Revit darbu atstāj vai jautā lietotājam.`;
 					plan = planFor(null);
 				}
@@ -316,7 +319,7 @@ export class ThreadRunner {
 						// a confirmed Revit batch stays whole: other agents' Revit calls wait until it ends
 						if (hasRevit) {
 							try {
-								this.d.locks.beginBatch(owner, label);
+								this.d.locks.beginBatch(owner, holder);
 								batchOpen = true;
 							} catch (e) {
 								emit({ type: "error", engine: "pi", message: `Partija noraidīta: ${(e as Error).message}` });
@@ -355,7 +358,7 @@ export class ThreadRunner {
 					if (MAIN_TOOLS.has(ctx.toolCall.name)) return undefined;
 					const key = lockKeyOf(ctx.toolCall.name, levelOf(ctx.toolCall.name), revitTools);
 					if (!key) return undefined;
-					const got = await locks.acquire(projectId, key, owner, ctx.toolCall.id, sig ?? signal, label);
+					const got = await locks.acquire(projectId, key, owner, ctx.toolCall.id, sig ?? signal, holder);
 					return got.ok ? undefined : { block: true, reason: got.reason };
 				};
 				const afterToolCall = async (ctx: { toolCall: { id: string } }) => {

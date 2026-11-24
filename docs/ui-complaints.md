@@ -331,3 +331,32 @@ This builds on §8 (a compact vertical column of icons); it does not undo it: na
 The window stays resizable from every edge and corner; the shape follows the width as it is dragged. The width is measured with a
 ResizeObserver, not a CSS container query, because a container would become the containing block of the comment box and the comment list
 (they are fixed to the screen) and move them. **Not checked live** (his rule): typecheck and the focused tests run on his PC, see the release note.
+
+## 2026-11-24: Parallel chats stayed "Queued"; a streamed answer lost its start; the run card repeated his message (version 2.10.3)
+
+His words: "Why paralel chat not working and staying in queue?" (screenshot: a second Lead agent conversation, «Saruna» 16:01, showed only "Queued" while «Saruna» 15:47 was answering; Jobs: 2.)
+And: "When i was switching chat sessions, it was responding, so i see only part of the response that was generated only when i opened chat page." (screenshot: the answer began in the middle of a sentence, while the Žurnāls log had it whole.)
+
+And: "Why my message duplicated in response task?" (screenshot: under his message bubble the run card was titled with the same words.)
+
+**Cause of the repeated message.** The run card's title was the first line of what was asked (`taskTitle`, 90 characters), which for a message typed in the chat is the message bubble right above it.
+
+**Cause of the queue.** `pickNext` (`src/core/queue.ts`) skipped any queued item whose **agent** was already running in the same project, not only one whose
+own conversation was running. All Lead agent conversations are the same agent, so the second one waited until the first ended. That rule came with the first queue
+(phase 11, "one run per agent") and was never needed for safety: the run's state is per conversation (history, model, context are keyed by thread id), the write
+locks are keyed by run, and the one Revit has its own seat.
+
+| Done in 2.10.3 | |
+|---|---|
+| Two conversations of one agent now run side by side. A conversation that is itself still answering still refuses a second message from the user (it never piles up unseen). | `pickNext` |
+| The slot limit stays (Iestatījumi → Aģenti, "parallel agents", default 3; a run waiting for an approval holds no slot). | `maxParallelAgents` |
+| **Why something waits is shown**, in the chat ("Queued" line) and in the other-conversations row: the queue is paused, the agent is paused, the wave hit its limit, the conversation is still answering, or "Waiting for a free slot: 3 of 3 agents are working (Settings → Agents)". | `waitReason`, `QueueView.why`, `whyText` in `Lane.tsx` |
+| **Revit is still one connection.** A run that is offered Revit tools takes the seat; a second run at the same time starts **without** Revit tools and its prompt says who has Revit. The holder is now named with its conversation (agent, title, time) instead of just "Lead agent", in that prompt and in the write-lock messages. | `thread-runner.ts` |
+| **Streamed text is kept per run, whatever is on screen** (`shell/chat-lines.ts`): one window-wide listener builds each run's chat lines from its first event; coming back to a conversation whose run went on, the dock puts the whole text back with the run card instead of starting from the first event after the return. The buffer of a run is dropped when it ends (the saved history has the answer from then). | `chat-lines.ts`, `AgentDock.tsx` |
+| The row «Lead agent thinking… Stop» in the screenshot was **not** the conversation on screen (that one has no row since 2.10.0): it was the other, running conversation. Such rows stay (they are how another chat is reached and stopped) but now name the conversation and its time, so two chats of one agent can be told apart. | `Lane.tsx` |
+
+| The run card is titled with a task template's label when the run came from one, else «Uzdevums». His words are no longer the title; they stay one click away under «Uzdevums aģentam» in the card. The bottom status strip still shows the first line (it is not next to the message). | `template` on the start line (`shared/activity.ts`, `main/activity.ts`), `RunCard.tsx` |
+
+**Not changed / his call.** The Revit seat is taken for a whole run, even when the run never calls a Revit tool; a second Lead chat that needs Revit while the first holds the
+seat is told to ask him. Taking the seat only at the first Revit call would fix that, but the Revit server is chosen when the run starts; say if he wants it.
+**Test** `test/21.2-parallel-chats.test.ts`. **Not checked live** (his rule).
