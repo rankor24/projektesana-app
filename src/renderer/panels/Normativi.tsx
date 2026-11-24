@@ -19,6 +19,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 	const lib = useLoad<LibraryRow[]>(() => call("library.list"), []);
 	const app = useLoad(() => (projectId ? call("library.applicable", projectId) : Promise.resolve(null)), [projectId]);
 	const [open, setOpen] = useState(true);
+	const [openApp, setOpenApp] = useState(true);
 	const [url, setUrl] = useState("");
 	const [cat, setCat] = useState<LibraryCategory>("mk");
 	const [busy, setBusy] = useState<string | null>(null);
@@ -108,13 +109,13 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 						</>
 					)}
 					{projectId && (
-						<tr className="group-head">
+						<tr className="group-head click" onClick={() => setOpenApp(!openApp)}>
 							<td colSpan={5}>
-								{tr("Piemērojamie normatīvi")} <span className="dim">{tr("· pēc apstiprinātiem profila faktiem")}{app.data ? tr(" · saraksts sastādīts {readOn}", { readOn: app.data.readOn }) : ""}</span>
+								{openApp ? "▾" : "▸"} {tr("Piemērojamie normatīvi")} <span className="dim">{tr("· pēc apstiprinātiem profila faktiem")}{app.data ? tr(" · saraksts sastādīts {readOn}", { readOn: app.data.readOn }) : ""}</span>
 							</td>
 						</tr>
 					)}
-					{projectId && app.error ? (
+					{projectId && openApp && app.error ? (
 						<tr>
 							<td colSpan={5}>
 								<Err error={app.error} />
@@ -122,6 +123,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 						</tr>
 					) : null}
 					{projectId &&
+						openApp &&
 						rows
 							.filter((r) => showOut || r.state !== "neattiecas")
 							.map((r) => (
@@ -178,7 +180,7 @@ export function Normativi({ projectId }: { projectId: string | null }) {
 									</tr>
 								</Fragment>
 							))}
-					{projectId && app.data && (
+					{projectId && openApp && app.data && (
 						<tr>
 							<td colSpan={5} className="dim small">
 								{out.length > 0 && (

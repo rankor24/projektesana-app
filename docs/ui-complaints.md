@@ -237,3 +237,14 @@ He asked: "add ability to select multiple rooms and delete them, have to allow a
 | The rooms check no longer reports every model room as missing when all inventory rooms were deleted: it is skipped, as with no table. |
 
 **Not done:** editing a room by hand on the screen (only the agent edits rooms); deleting from the Telpas page's plan view (another change is working on that view). **Not checked live** (his rule).
+
+## 2026-11-24: Avoti → Normatīvi — "Piemērojamie normatīvi" collapsible
+
+He asked: "Make Applicable Regulations also collapsible like Regulations."
+
+| Done (not built into a numbered version yet) |
+|---|
+| The «Piemērojamie normatīvi» (Applicable regulations) header is now a click target with the same ▾ / ▸ toggle as the «Normatīvi» (library) header. Closed, the header stays and its rows, the load error and the «Rādīt neattiecīgos» / not-read footer are hidden. It starts open. |
+| Same behaviour as the library section: plain per-open state in the panel (`Normativi.tsx`), **not remembered** between openings — the library section does not remember its state either, so nothing was added for one. |
+
+No new strings (the arrows are not translated text). **Not checked live** (his rule). `npm run typecheck` and the i18n test could not run in the cloud session (npm registry blocked, no installed packages); the change is three conditions and one `useState` in an existing file.
