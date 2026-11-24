@@ -237,3 +237,15 @@ He asked: "add ability to select multiple rooms and delete them, have to allow a
 | The rooms check no longer reports every model room as missing when all inventory rooms were deleted: it is skipped, as with no table. |
 
 **Not done:** editing a room by hand on the screen (only the agent edits rooms); deleting from the Telpas page's plan view (another change is working on that view). **Not checked live** (his rule).
+
+## 2026-11-24: Chat — answered approvals fold to one line
+
+He asked: "When commands asking approved/declined also add small button to collapse them down smaller." (Screenshot: several «Apstiprini partiju: run_command / write_file» cards stayed full size after «atbildēts», each with the whole batch text.)
+
+| Done (not built into a numbered version yet) |
+|---|
+| An approval card (`ConfirmLine` in `src/renderer/shell/AgentDock.tsx`) now has a small ▾ / ▸ button at its right end. |
+| **Waiting for an answer:** open, as before (batch text and «Atļaut» / «Noraidīt»). **Answered** (allowed, rejected, or answered elsewhere): it folds by itself to one line: «Apstiprini partiju: <tool>» and the answer badge. Chosen by the session, not by him: old approvals are history, and the batch is one click away. |
+| The button opens or folds any card, answered or not. A card he opened or folded by hand stays as he left it; it does not re-fold when the answer arrives. The fold state is not saved when the chat is reloaded: answered cards come back folded. |
+
+**Not checked live** (his rule). `npm run typecheck` and the i18n test could not run in the cloud session (packages are not installed); the one new string («Izvērst» → "Expand") was added to the English dictionary, «Sakļaut» already existed.

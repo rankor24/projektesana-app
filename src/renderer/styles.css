@@ -215,6 +215,11 @@ tr.click:hover td { background: var(--elev); }
 .tool pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: var(--bg); padding: 6px; border-radius: 4px; }
 .confirm { border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .confirm pre { white-space: pre-wrap; max-height: 180px; overflow: auto; margin: 0; }
+.confirm-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.confirm-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confirm-fold { flex: none; width: 22px; height: 22px; padding: 0; line-height: 1; background: transparent; border-color: transparent; color: var(--dim); }
+.confirm-fold:hover { color: var(--text); background: var(--elev2); }
+.confirm.folded { padding: 3px 6px 3px 10px; border-color: var(--border-strong); }
 /* composer: the checklist, the message and the buttons are one block pinned to the bottom of the dock */
 .chat-input { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
 .composer { display: flex; flex-direction: column; background: var(--elev); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; }

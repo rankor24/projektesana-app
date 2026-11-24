@@ -655,25 +655,41 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 				{l.summary ? <pre>{l.summary}</pre> : null}
 			</details>
 		);
-	if (l.kind === "confirm")
-		return (
-			<div className="confirm">
-				<div>
-					<b>{tr("Apstiprini partiju:")}</b> {l.tool}
-				</div>
-				<pre>{l.batch}</pre>
-				{l.answered ? (
-					<span className={`badge ${l.allow === undefined ? "dim" : l.allow ? "ok" : "bad"}`}>{l.allow === undefined ? tr("atbildēts") : l.allow ? tr("atļauts") : tr("noraidīts")}</span>
-				) : (
-					<div className="row">
-						<button className="primary" onClick={() => onAnswer(l.id, true)}>{tr("Atļaut")}</button>
-						<button onClick={() => onAnswer(l.id, false)}>{tr("Noraidīt")}</button>
-					</div>
-				)}
-			</div>
-		);
+	if (l.kind === "confirm") return <ConfirmLine l={l} onAnswer={onAnswer} />;
 	if (l.kind === "retry") return <div className="retry">{l.text}</div>;
 	return <div className="err">{l.text}</div>;
+}
+
+/**
+ * The batch approval card. Waiting for an answer it is open (the batch and Atļaut / Noraidīt); once answered it shrinks to one line,
+ * the tool and the answer, so old approvals do not fill the chat. The chevron opens or closes it either way; a choice made by hand stays.
+ */
+function ConfirmLine({ l, onAnswer }: { l: Extract<Line, { kind: "confirm" }>; onAnswer: (id: string, allow: boolean) => void }) {
+	const [pick, setPick] = useState<boolean | null>(null);
+	const open = pick ?? !l.answered;
+	const badge = l.answered ? (
+		<span className={`badge ${l.allow === undefined ? "dim" : l.allow ? "ok" : "bad"}`}>{l.allow === undefined ? tr("atbildēts") : l.allow ? tr("atļauts") : tr("noraidīts")}</span>
+	) : null;
+	return (
+		<div className={`confirm${open ? "" : " folded"}`}>
+			<div className="confirm-head">
+				<span className="confirm-title">
+					<b>{tr("Apstiprini partiju:")}</b> {l.tool}
+				</span>
+				{!open && badge}
+				<button className="confirm-fold" title={open ? tr("Sakļaut") : tr("Izvērst")} aria-label={open ? tr("Sakļaut") : tr("Izvērst")} aria-expanded={open} onClick={() => setPick(!open)}>
+					{open ? "▾" : "▸"}
+				</button>
+			</div>
+			{open && <pre>{l.batch}</pre>}
+			{open && (l.answered ? badge : (
+				<div className="row">
+					<button className="primary" onClick={() => onAnswer(l.id, true)}>{tr("Atļaut")}</button>
+					<button onClick={() => onAnswer(l.id, false)}>{tr("Noraidīt")}</button>
+				</div>
+			))}
+		</div>
+	);
 }
 
 type Draft = NonNullable<ContextInfo["draft"]> & { files: number; total: number; over: boolean };
