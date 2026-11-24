@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
 import { DEPARTMENT_NAME_MAX, departmentOf, type Department } from "../../shared/departments";
+import { markaPill, markasOf } from "../../shared/markas";
 import { LEAD_ID, type HeldView, type PauseTarget, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
 import { agentName, liveState, useThreads } from "./useThreads";
 import { AGENT_DRAG_TYPE, DEPARTMENT_DRAG_TYPE, NO_DEPARTMENT, buildTree, dropPlace, interactive, moveDepartment, placeDepartment, planAgentDrop, sameDrop, stepAgent, unusedName, type AgentDrop, type AgentNode, type DropPlace } from "./sidebar-tree";
@@ -294,6 +295,17 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 		else if (departments.find((d) => d.id === n.id)?.name !== name) void run(onSaveDepartments(departments.map((d) => (d.id === n.id ? { ...d, name } : d))));
 	};
 
+	/** The LBN 202-18 marka pill of a specialist (nothing for the lead, an agent with none, or a removed one). */
+	const markaPillOf = (id: string) => {
+		const spec = specs.find((s) => s.id === id);
+		const pill = spec ? markaPill(markasOf(spec), tr("papildu marka")) : null;
+		return pill ? (
+			<span className="badge info tl-marka" title={pill.title}>
+				{pill.text}
+			</span>
+		) : null;
+	};
+
 	/** One agent: its row (fold, dot, name, count, "+") and, opened, its threads. `movable`: the row may be dragged (an agent of a department; not the lead, not a removed one). */
 	const agentRow = (a: AgentNode, movable: boolean) => {
 		const opened = searching || tree.state.opened.includes(a.id);
@@ -356,6 +368,7 @@ export function ThreadList({ threads, specs, departments, queue, current, onSele
 					<b className="tl-agent-name" onClick={() => !searching && tree.toggleOpened(a.id)} title={a.id}>
 						{a.name}
 					</b>
+					{markaPillOf(a.id)}
 					{openN > 0 && <span className="dim small">{openN}</span>}
 					{a.gone && (
 						<span className="badge dim" title={tr("Speciālists ir noņemts Iestatījumos")}>

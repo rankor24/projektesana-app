@@ -4,6 +4,7 @@
 // outside the app (in any editor, in the office's skills folder); the page re-reads it when "Atjaunot" is pressed. The page decides nothing itself: the state and
 // the refusals come from main.
 import { useState } from "react";
+import { markaPill, markasOfSkillGroup } from "../../shared/markas";
 import type { SkillInfo } from "../../shared/skill-types";
 import { call, errText } from "../bridge";
 import { Badge, Empty, Err, useLoad } from "../ui";
@@ -37,6 +38,15 @@ export function Prasmes() {
 	const skills = lib.data ?? [];
 	const specs = agents.data?.specs ?? [];
 	const current = specs.find((s) => s.id === agent);
+	/** the LBN 202-18 marka pill of a role group of skills: the markas of the agent the folder number names (shared/markas.ts) */
+	const groupMarka = (group: string) => {
+		const pill = markaPill(markasOfSkillGroup(group, specs), tr("papildu marka"));
+		return pill ? (
+			<span className="badge info" style={{ marginLeft: 6 }} title={pill.title}>
+				{pill.text}
+			</span>
+		) : null;
+	};
 	const ticks = picked ?? current?.skills ?? [];
 	const office = skills.filter((s) => s.origin === "office");
 	const drafts = office.filter((s) => s.state === "draft").length;
@@ -126,6 +136,7 @@ export function Prasmes() {
 					<div key={g.group}>
 						<div className="section-title">
 							{g.group} <span className="dim small">({g.skills.length})</span>
+							{groupMarka(g.group)}
 						</div>
 						{g.skills.map((s) => (
 							<div key={s.name} className="confirm">

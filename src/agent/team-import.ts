@@ -11,28 +11,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
-import { DEFAULT_DEPARTMENT_OF, type Department } from "../shared/departments.js";
+import { DEFAULT_DEPARTMENT_OF, TEAM_IDS, type Department } from "../shared/departments.js";
 import { frontMatter } from "./skills.js";
 
-/** The role number of a file name → the agent id. */
-export const TEAM_IDS: Readonly<Record<string, string>> = {
-	"01": "bpv",
-	"02": "ar",
-	"03": "aa",
-	"04": "cd",
-	"05": "ak",
-	"06": "ea",
-	"07": "bk",
-	"08": "uk",
-	"09": "avk",
-	"10": "ga",
-	"11": "el",
-	"12": "ess",
-	"13": "ud",
-	"14": "mel",
-	"15": "tam",
-	"16": "eks",
-};
+/** The role number of a file name → the agent id (shared/departments.ts: the window needs it too, to tell which agent a skill group belongs to). */
+export { TEAM_IDS };
 
 export interface TeamRole {
 	id: string;
