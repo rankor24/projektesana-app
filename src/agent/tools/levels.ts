@@ -56,9 +56,11 @@ export class Gate {
 	private pending = new WeakMap<object, Promise<boolean>>();
 	private n = 0;
 
+	/** `free` lifts a confirm call that needs no click for what it was asked to do (project-write.ts: a text note inside the project folder). */
 	constructor(
 		private levelOf: LevelOf,
 		private ask: (req: ConfirmRequest) => Promise<boolean>,
+		private free: (tool: string, args: unknown) => boolean = () => false,
 	) {}
 
 	before = async (ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
@@ -68,13 +70,14 @@ export class Gate {
 		const argNever = neverByArgs(name, ctx.args ?? ctx.toolCall.arguments);
 		if (argNever) return { block: true, reason: argNever };
 		if (level !== "confirm") return undefined;
+		if (this.free(name, ctx.args ?? ctx.toolCall.arguments)) return undefined;
 		const msg = ctx.assistantMessage as object;
 		let ok = this.answered.get(msg);
 		if (ok === undefined) {
 			let p = this.pending.get(msg);
 			if (!p) {
 				const batch = ctx.assistantMessage.content
-					.filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall" && this.levelOf(c.name) === "confirm")
+					.filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall" && this.levelOf(c.name) === "confirm" && !this.free(c.name, c.arguments))
 					.map((c) => ({ tool: c.name, args: c.arguments }));
 				p = this.ask({ id: `c${++this.n}`, batch });
 				this.pending.set(msg, p);
