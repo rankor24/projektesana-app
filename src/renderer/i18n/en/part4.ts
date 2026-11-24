@@ -129,6 +129,7 @@ export const part4: Record<string, string> = {
 	"domāšana": "thinking",
 	"Apstiprini partiju:": "Confirm the batch:",
 	"atbildēts": "answered",
+	"Izvērst": "Expand",
 	"atļauts": "allowed",
 	"Atļaut": "Allow",
 	"Konteksta logs {v} tokenu; saspiešana sākas pie {v2}": "Context window {v} tokens; compaction starts at {v2}",
