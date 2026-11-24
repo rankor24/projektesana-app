@@ -134,6 +134,21 @@ milestones. Calendar should be more usable like bim-crew, clicking adding tasks.
 
 **Not checked live:** the look and feel in the running app (I do not drive his app); the maths, data and checks are covered by tests 9.19 and 8.5.
 
+### 6.1 Grafiks mouse navigation (2026-11-24, not yet built into a release)
+
+His words: "Improve Grafik navigation so it pans/zooms with mouse and edits". Nothing more was said; what follows is what the
+code now does, written by the session, not his rulings. BIM Crew's own timeline was not read (its folder was not reachable
+from the cloud session), so the wheel rules below are a proposal for him to confirm.
+
+| Need | Now (`src/renderer/panels/Gantt.tsx`, `src/shared/gantt.ts`) |
+|---|---|
+| Zoom with the wheel, at the pointer | Ctrl + wheel anywhere, or the plain wheel over the date ruler. Fast wheel ticks no longer jitter: each tick counts from the zoom already asked for, not from the last drawing (test 19.1). A pinch step is scaled up. |
+| Pan | Drag an empty place (as before); the middle button pans from anywhere, over bars too; Shift + wheel and a trackpad swipe sideways (browser's own). The plain wheel over the rows scrolls them, and pans sideways when there is nothing to scroll up or down (it did nothing before). |
+| Edit tasks | Drag a bar to move it, drag its ends to change the first / last day (as before). New: the dates show beside the pointer while dragging, the window scrolls when the pointer reaches its left or right side, and a save that fails puts the bar back (before it stayed where it was dropped). |
+| Edit stages | New: a stage bar with dates of its own moves and resizes the same way (saves through `stages.setDates`). A hatched bar (drawn from deliveries, no dates set) is not draggable: click it to enter dates. |
+
+**Not checked live:** the feel in the running app. `npm run typecheck` and the i18n test could not run in the cloud session (the npm registry is blocked there); `test/19.1-gantt-view.test.ts` ran.
+
 ## 7. Versions, Revit files, Settings (2026-11-20, version 2.6.6)
 
 His words: "Why Versions for sheets not proposing same as Models proposing list of IFC from folders? DWG and PDF should be checked

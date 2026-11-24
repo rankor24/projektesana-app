@@ -181,8 +181,8 @@ export const part7: Record<string, string> = {
 	"Tālināt (Ctrl + ritenis)": "Zoom out (Ctrl + wheel)",
 	"Tuvināt (Ctrl + ritenis)": "Zoom in (Ctrl + wheel)",
 	"Rādīt šodienu vidū": "Show today in the middle",
-	"Velc tukšu vietu, lai pārbīdītu; Ctrl + ritenis tuvina; Shift + ritenis bīda sāņus": "Drag an empty place to pan; Ctrl + wheel zooms; Shift + wheel pans sideways",
-	"velc: pārbīdīt · Ctrl + ritenis: tuvināt": "drag: pan · Ctrl + wheel: zoom",
+	"Velc tukšu vietu vai spied vidējo pogu, lai pārbīdītu; Ctrl + ritenis (vai ritenis uz datumu joslas) tuvina; Shift + ritenis bīda sāņus; joslu velc, lai mainītu datumus": "Drag an empty place or press the middle button to pan; Ctrl + wheel (or the wheel on the date ruler) zooms; Shift + wheel pans sideways; drag a bar to change its dates",
+	"velc: pārbīdīt · Ctrl + ritenis: tuvināt · joslu velc: datumi": "drag: pan · Ctrl + wheel: zoom · drag a bar: dates",
 	// the BD team offer above the chat (shell/TeamOffer.tsx)
 	"BD komanda vēl nav lietotnē": "The BD team is not in the app yet",
 	"Lietotnē ir {n} aģenti. BD komanda ir 16 lomu aģenti 8 nodaļās (BPV vada, EKS pārbauda). Importē tos no mapes ar lomu failiem 01_….md … 16_….md un mapi skilli.": "The app has {n} agents. The BD team is 16 role agents in 8 departments (BPV leads, EKS checks). Import them from the folder with the role files 01_….md … 16_….md and the skilli folder.",

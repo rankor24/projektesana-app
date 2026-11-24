@@ -109,3 +109,29 @@ export function dragSpan(span: Span, delta: number, edge: DragEdge): Span {
 export function spanPatch(s: Span): { start: string | null; due: string } {
 	return { start: s.start === s.end ? null : s.start, due: s.end };
 }
+
+/**
+ * The day (a fraction) under a point of the window after a zoom was asked for but not yet drawn. While the page still shows
+ * `shownDw` px/day, a pending anchor says "day `day` is at window x `at`", so the day under `cx` is that, moved by the distance
+ * in days. Wheel ticks arrive faster than the page redraws; counting from the scroll position of the last drawing made each
+ * tick start from a stale view and the bars jittered under the pointer.
+ */
+export function dayUnder(anchor: { day: number; cx: number } | null, shownDw: number, cx: number, scrollLeft: number, labelW: number): number {
+	return anchor ? anchor.day + (cx - anchor.cx) / shownDw : (scrollLeft + cx - labelW) / shownDw;
+}
+
+/** A wheel tick as pixels: lines and pages (a mouse set to scroll by lines) count as 16 and 400 pixels. */
+export function wheelPixels(deltaY: number, deltaMode: number): number {
+	return deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+}
+
+/** The factor one wheel tick zooms by (up = bigger): a mouse notch (about 100 px) is about 16%; the small steps of a pinch are scaled up so they keep up with the fingers. */
+export function wheelZoomFactor(pixels: number): number {
+	return Math.exp(-pixels * (Math.abs(pixels) < 40 ? 0.01 : 0.0015));
+}
+
+/** The text on a bar while it is dragged: its dates and how many days it lasts. */
+export function spanLabel(s: Span): string {
+	const n = dayNo(s.end) - dayNo(s.start) + 1;
+	return s.start === s.end ? s.start : `${s.start} → ${s.end} · ${n} d`;
+}

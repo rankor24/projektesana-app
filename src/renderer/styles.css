@@ -837,6 +837,9 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .gh-l { left: 0; }
 .gh-r { right: 0; }
 .gh:hover { background: rgba(255, 255, 255, 0.35); }
+.gstage.stored { cursor: grab; }
+.gstage .gh { width: 8px; }
+.gantt-drag-tip { position: fixed; z-index: 2147483647; pointer-events: none; padding: 3px 8px; border-radius: 4px; background: var(--elev2); border: 1px solid var(--border-strong); color: var(--text); font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
 
 /* the small task window (panels/TaskPopup.tsx): opens where you clicked, like BIM Crew's task editor */
 .task-popup { position: fixed; z-index: 2000; box-sizing: border-box; max-height: calc(100vh - 16px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); }

@@ -2,13 +2,15 @@
 // the project is in is outlined; a stage the contract does not include is dim), the deliveries as ◇ planned / ◆ sent on their stage
 // (red = late), the TN and approval clocks as thin bars, the tasks as bars (a task that lasts has a start and an end), and a red
 // line for today. Click a bar to edit it, click empty track to add a task on that day (BIM Crew's popup, TaskPopup), drag a task
-// to move it or drag its edge to change its first or last day. The view: drag empty space to pan, Ctrl + wheel to zoom at the
-// pointer, Shift + wheel (or the scroll bar) to pan sideways, "Viss projekts" to fit everything in the window. Everything is read
-// from the project's own stores (the same stage timeline as Pārskats, the tasks of Grafiks); the only things written here are
-// tasks and the stages' dates.
+// to move it or drag its edge to change its first or last day; a stage bar with dates of its own moves and resizes the same way.
+// While a bar is dragged its dates show beside the pointer and the page follows when the pointer reaches the window's edge. The
+// view: drag empty space (or press the middle button anywhere) to pan; Ctrl + wheel, or the wheel over the date ruler, zooms at
+// the pointer; the wheel scrolls the rows, and sideways when there is nothing to scroll up or down; Shift + wheel (or the scroll
+// bar) pans sideways; "Viss projekts" fits everything in the window. Everything is read from the project's own stores (the same
+// stage timeline as Pārskats, the tasks of Grafiks); the only things written here are tasks and the stages' dates.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BimStage, Task } from "../../core/model";
-import { dateAtIndex, dayIndex, dragSpan, ganttAxis, monthTicks, spanPatch, stageSpan, taskSpan, weekLines, ZOOMS, type Axis, type DragEdge, type Span } from "../../shared/gantt";
+import { dateAtIndex, dayIndex, dayUnder, dragSpan, ganttAxis, monthTicks, spanLabel, spanPatch, stageSpan, taskSpan, weekLines, wheelPixels, wheelZoomFactor, ZOOMS, type Axis, type DragEdge, type Span } from "../../shared/gantt";
 import { call, errText } from "../bridge";
 import { Err, useLoad } from "../ui";
 import { windows } from "../windows";
@@ -59,9 +61,12 @@ export function Gantt({ projectId }: { projectId: string }) {
 	const scroller = useRef<HTMLDivElement>(null);
 	const pending = useRef<Pending | null>({ kind: "today" });
 	const panned = useRef(false);
+	// the scale asked for while the last zoom is not drawn yet (wheel ticks come faster than the page redraws)
+	const want = useRef<number | null>(null);
 	const geo = useRef<{ axis: Axis; today: string; dw: number } | null>(null);
 	const setView = (v: View, p: Pending | null = { kind: "today" }) => {
 		pending.current = p;
+		want.current = null;
 		setViewState(v);
 		try {
 			localStorage.setItem(ZOOM_KEY, String(v));
@@ -111,40 +116,56 @@ export function Gantt({ projectId }: { projectId: string }) {
 		const p = pending.current;
 		if (!el || !g || !p || g.dw <= 0 || el.clientWidth === 0) return;
 		pending.current = null;
+		want.current = null;
 		if (p.kind === "anchor") el.scrollLeft = Math.max(0, LABEL_W + p.day * g.dw - p.cx);
 		else el.scrollLeft = view === "fit" ? 0 : Math.max(0, LABEL_W + dayIndex(g.axis, g.today) * g.dw - (el.clientWidth + LABEL_W) / 2);
 	}, [dw, ready, view]);
 
-	/** zoom to `next` px/day keeping the day under `cx` (a position inside the window) where it is */
+	/** zoom to `next` px/day keeping the day under `cx` (a position inside the window) where it is, also across several ticks before a redraw */
 	const zoomAt = (next: number, cx: number) => {
 		const el = scroller.current;
 		const g = geo.current;
 		if (!el || !g) return;
+		const shown = want.current ?? g.dw;
 		const n = clampDw(next);
-		if (n === g.dw) return;
-		setView(n, { kind: "anchor", day: (el.scrollLeft + cx - LABEL_W) / g.dw, cx });
+		if (n === shown) return;
+		const p = pending.current;
+		const day = dayUnder(p && p.kind === "anchor" ? p : null, shown, cx, el.scrollLeft, LABEL_W);
+		setView(n, { kind: "anchor", day, cx });
+		want.current = n;
 	};
 	const zoomBy = (f: number) => {
 		const el = scroller.current;
-		if (el) zoomAt((geo.current?.dw ?? 7) * f, LABEL_W + (el.clientWidth - LABEL_W) / 2);
+		if (el) zoomAt((want.current ?? geo.current?.dw ?? 7) * f, LABEL_W + (el.clientWidth - LABEL_W) / 2);
 	};
-	// Ctrl + wheel zooms at the pointer (a listener of its own: a React wheel handler cannot cancel the page's own zoom)
+	// The wheel (a listener of its own: a React wheel handler cannot cancel the page's own zoom). Ctrl + wheel, or the wheel over
+	// the date ruler, zooms at the pointer; the wheel over the rows scrolls them, and when there is nothing to scroll up or down
+	// it pans sideways instead of doing nothing. Shift + wheel and a trackpad's sideways swipe are the browser's own.
 	useEffect(() => {
 		const el = scroller.current;
 		if (!el) return;
 		const wheel = (e: WheelEvent) => {
-			if (!(e.ctrlKey || e.metaKey)) return;
-			e.preventDefault();
 			const g = geo.current;
-			if (g) zoomAt(g.dw * Math.exp(-e.deltaY * 0.0015), e.clientX - el.getBoundingClientRect().left);
+			if (!g) return;
+			const px = wheelPixels(e.deltaY, e.deltaMode);
+			if (e.ctrlKey || e.metaKey || (e.target as HTMLElement).closest(".gantt-axis")) {
+				e.preventDefault();
+				zoomAt((want.current ?? g.dw) * wheelZoomFactor(px), e.clientX - el.getBoundingClientRect().left);
+			} else if (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollHeight <= el.clientHeight + 1) {
+				e.preventDefault();
+				el.scrollLeft += px;
+			}
 		};
 		el.addEventListener("wheel", wheel, { passive: false });
 		return () => el.removeEventListener("wheel", wheel);
 	});
-	/** drag on empty space pans (both ways); a click that did not move still adds a task there */
+	/** drag on empty space pans (both ways); a click that did not move still adds a task there. The middle button pans from anywhere, bars and buttons too. */
 	const panStart = (e: React.MouseEvent) => {
 		const el = scroller.current;
-		if (!el || e.button !== 0 || (e.target as HTMLElement).closest("button, .gtask-bar, .gantt-label, .gantt-group, a, input, label")) return;
+		const middle = e.button === 1;
+		if (!el || (e.button !== 0 && !middle)) return;
+		if (!middle && (e.target as HTMLElement).closest("button, .gtask-bar, .gantt-label, .gantt-group, a, input, label")) return;
+		if (middle) e.preventDefault();
 		const x0 = e.clientX;
 		const y0 = e.clientY;
 		const l0 = el.scrollLeft;
@@ -153,7 +174,7 @@ export function Gantt({ projectId }: { projectId: string }) {
 		// the sheet over the page goes up only once the drag is a pan, so a plain click still reaches the track
 		const follow = followMouse(
 			(ev) => {
-				if (!panned.current && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 4) return;
+				if (!panned.current && !middle && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 4) return;
 				if (!panned.current) follow.cover();
 				panned.current = true;
 				el.scrollLeft = l0 - (ev.clientX - x0);
@@ -194,15 +215,20 @@ export function Gantt({ projectId }: { projectId: string }) {
 		setStagePop(null);
 		setPopup({ mode: "create", projectId, date: dateAt(e), x: e.clientX, y: e.clientY });
 	};
-	const openStage = (stage: BimStage, e: React.MouseEvent) => {
+	const openStage = (stage: BimStage, e: { clientX: number; clientY: number }) => {
 		if (panned.current) return;
 		setPopup(null);
 		setStagePop({ stage, x: e.clientX, y: e.clientY });
 	};
-	const shift = (t: Task, s: Span) =>
+	// true when saved; false puts the bar back where it was
+	const shift = (t: Task, s: Span): Promise<boolean> =>
 		call("todos.update", projectId, t.id, spanPatch(s))
-			.then(() => (setErr(null), reload()))
-			.catch((e) => (setErr(errText(e)), reload()));
+			.then(() => (setErr(null), reload(), true))
+			.catch((e) => (setErr(errText(e)), reload(), false));
+	const shiftStage = (stage: BimStage, s: Span): Promise<boolean> =>
+		call("stages.setDates", projectId, stage, { start: s.start, end: s.end })
+			.then(() => (setErr(null), reload(), true))
+			.catch((e) => (setErr(errText(e)), reload(), false));
 
 	const todayLine = <div className="gantt-today" style={{ left: x(today) + dw / 2 }} title={tr("šodien {today}", { today })} />;
 	const trackStyle = { width: trackW, backgroundSize: `${7 * dw}px 100%` };
@@ -247,7 +273,7 @@ export function Gantt({ projectId }: { projectId: string }) {
 						{tr("{n} bez datuma", { n: model.undated })}
 					</span>
 				)}
-				<span className="small dim" title={tr("Velc tukšu vietu, lai pārbīdītu; Ctrl + ritenis tuvina; Shift + ritenis bīda sāņus")}>{tr("velc: pārbīdīt · Ctrl + ritenis: tuvināt")}</span>
+				<span className="small dim" title={tr("Velc tukšu vietu vai spied vidējo pogu, lai pārbīdītu; Ctrl + ritenis (vai ritenis uz datumu joslas) tuvina; Shift + ritenis bīda sāņus; joslu velc, lai mainītu datumus")}>{tr("velc: pārbīdīt · Ctrl + ritenis: tuvināt · joslu velc: datumi")}</span>
 				<span className="gantt-key small dim">
 					<span className="gk-mark">◇</span> {tr("nodevums")} <span className="gk-mark">◆</span> {tr("nosūtīts")} <span className="gk-mark late">◇</span> {tr("kavējas")} <span className="gk-line" /> {tr("šodien")}
 				</span>
@@ -266,18 +292,8 @@ export function Gantt({ projectId }: { projectId: string }) {
 							</div>
 							<div className="gantt-track" style={trackStyle} onClick={(e) => e.target === e.currentTarget && openStage(s.stage, e)} title={s.span ? undefined : tr("Klikšķis: ievadīt stadijas datumus")}>
 								{todayLine}
-								{s.span && (
-									<button
-										className={`gstage ${s.current ? "cur" : ""} ${s.span.stored ? "" : "derived"} ${s.inContract ? "" : "off"}`}
-										style={span(s.span)}
-										title={`${s.stage}: ${s.span.start} → ${s.span.end}${s.span.stored ? "" : ` (${tr("no nodevumiem; klikšķis: ievadīt datumus")})`}`}
-										onClick={(e) => (e.stopPropagation(), openStage(s.stage, e))}
-									>
-										<span>{s.stage}</span>
-										<em>{s.span.start.slice(5)} → {s.span.end.slice(5)}</em>
-									</button>
-								)}
-								{!s.span && <span className="gantt-hint">{tr("nav datumu · klikšķis, lai ievadītu")}</span>}
+								{s.span && <StageBar stage={s.stage} current={s.current} inContract={s.inContract} span={s.span} axis={axis} dw={dw} scroller={scroller} onOpen={(cx, cy) => openStage(s.stage, { clientX: cx, clientY: cy })} onShift={(sp) => shiftStage(s.stage, sp)} />}
+									{!s.span && <span className="gantt-hint">{tr("nav datumu · klikšķis, lai ievadītu")}</span>}
 								{s.marks.map((m) => (
 									<button key={m.id} className={`gmark ${m.late ? "late" : ""} ${m.sent ? "sent" : ""}`} style={{ left: x(m.date) + dw / 2 }} title={`${m.label} · ${m.date}${m.sent ? ` · ${tr("nosūtīts")}` : m.late ? ` · ${tr("kavējas")}` : ` · ${tr("plānots")}`}`} onClick={(e) => (e.stopPropagation(), windows.go("nodevumi", m.id))}>
 										<i>{m.sent ? "◆" : "◇"}</i>
@@ -313,7 +329,8 @@ export function Gantt({ projectId }: { projectId: string }) {
 									dw={dw}
 									today={today}
 									onOpen={(cx, cy) => setPopup({ mode: "edit", projectId, task: t, x: cx, y: cy })}
-									onShift={(s) => void shift(t, s)}
+									scroller={scroller}
+									onShift={(s) => shift(t, s)}
 								/>
 							</div>
 						</div>
@@ -383,49 +400,17 @@ function Axis({ axis, dw }: { axis: Axis; dw: number }) {
 }
 
 /** A task as a bar: red when it is late, dashed while it is the agent's proposal, struck through when done; moves and resizes by drag. */
-function TaskBar({ task, span, axis, dw, today, onOpen, onShift }: { task: Task; span: Span; axis: Axis; dw: number; today: string; onOpen: (x: number, y: number) => void; onShift: (s: Span) => void }) {
+function TaskBar({ task, span, axis, dw, today, scroller, onOpen, onShift }: { task: Task; span: Span; axis: Axis; dw: number; today: string; scroller: React.RefObject<HTMLDivElement | null>; onOpen: (x: number, y: number) => void; onShift: (s: Span) => Promise<boolean> }) {
 	const el = useRef<HTMLDivElement>(null);
-	const place = (s: Span) => ({ left: dayIndex(axis, s.start) * dw, width: (dayIndex(axis, s.end) - dayIndex(axis, s.start) + 1) * dw });
-	const shown = place(span);
 	const late = task.state === "open" && span.end < today;
-	const down = (e: React.MouseEvent, edge: DragEdge) => {
-		if (e.button !== 0) return;
-		e.preventDefault();
-		e.stopPropagation();
-		const x0 = e.clientX;
-		const canDrag = task.state !== "proposed";
-		let delta = 0;
-		let moved = false;
-		const apply = (s: Span) => {
-			const p = place(s);
-			if (el.current) {
-				el.current.style.left = `${p.left}px`;
-				el.current.style.width = `${p.width}px`;
-			}
-		};
-		followMouse(
-			(ev) => {
-				const dx = ev.clientX - x0;
-				if (!canDrag || (!moved && Math.abs(dx) < 4)) return;
-				moved = true;
-				delta = Math.round(dx / dw);
-				apply(dragSpan(span, delta, edge));
-			},
-			(ev) => {
-				if (!moved) return onOpen(ev.clientX, ev.clientY);
-				if (delta === 0) return apply(span);
-				onShift(dragSpan(span, delta, edge));
-			},
-			{ cursor: edge === "move" ? "grabbing" : "ew-resize" },
-		);
-	};
+	const down = (e: React.MouseEvent, edge: DragEdge) => dragBar(e, { el, scroller, axis, dw, span, edge, canDrag: task.state !== "proposed", onOpen, onShift });
 	const done = task.state === "done";
 	const one = span.start === span.end;
 	return (
 		<div
 			ref={el}
 			className={`gtask-bar p-${task.priority ?? "normal"} ${late ? "late" : ""} ${done ? "done" : ""} ${task.state === "proposed" ? "proposed" : ""} ${one ? "one" : ""}`}
-			style={shown}
+			style={placeSpan(axis, dw, span)}
 			title={`${task.title}\n${span.start === span.end ? span.start : `${span.start} → ${span.end}`}${task.assignee ? `\n${task.assignee}` : ""}${late ? `\n${tr("kavējas")}` : ""}`}
 			onMouseDown={(e) => down(e, "move")}
 		>
@@ -438,6 +423,108 @@ function TaskBar({ task, span, axis, dw, today, onOpen, onShift }: { task: Task;
 			)}
 			{task.state !== "proposed" && !one && <i className="gh gh-r" onMouseDown={(e) => down(e, "end")} />}
 		</div>
+	);
+}
+
+/** A stage as a bar. With dates of its own it moves and resizes by drag like a task, a click opens the dates. A bar drawn from the stage's deliveries is no date anyone set, so it only opens the popup. */
+function StageBar({ stage, current, inContract, span, axis, dw, scroller, onOpen, onShift }: { stage: BimStage; current: boolean; inContract: boolean; span: Span & { stored: boolean }; axis: Axis; dw: number; scroller: React.RefObject<HTMLDivElement | null>; onOpen: (x: number, y: number) => void; onShift: (s: Span) => Promise<boolean> }) {
+	const el = useRef<HTMLButtonElement>(null);
+	const down = (e: React.MouseEvent, edge: DragEdge) => {
+		if (span.stored) dragBar(e, { el, scroller, axis, dw, span, edge, canDrag: true, onOpen, onShift });
+	};
+	const one = span.start === span.end;
+	return (
+		<button
+			ref={el}
+			className={`gstage ${current ? "cur" : ""} ${span.stored ? "stored" : "derived"} ${inContract ? "" : "off"}`}
+			style={placeSpan(axis, dw, span)}
+			title={`${stage}: ${span.start} → ${span.end}${span.stored ? "" : ` (${tr("no nodevumiem; klikšķis: ievadīt datumus")})`}`}
+			onMouseDown={(e) => down(e, "move")}
+			onClick={(e) => {
+				// a mouse press is handled on mouse-down/up (dragBar); this is the keyboard (Enter, Space) and a derived bar's click
+				if (e.detail === 0 || !span.stored) onOpen(e.clientX, e.clientY);
+			}}
+		>
+			{span.stored && !one && <i className="gh gh-l" onMouseDown={(e) => down(e, "start")} />}
+			<span>{stage}</span>
+			<em>{span.start.slice(5)} → {span.end.slice(5)}</em>
+			{span.stored && !one && <i className="gh gh-r" onMouseDown={(e) => down(e, "end")} />}
+		</button>
+	);
+}
+
+const placeSpan = (axis: Axis, dw: number, s: Span) => ({ left: dayIndex(axis, s.start) * dw, width: (dayIndex(axis, s.end) - dayIndex(axis, s.start) + 1) * dw });
+
+/**
+ * A mouse press on a bar or one of its edges: a click opens it, a drag moves the bar or the edge by whole days. While it is
+ * dragged the dates show beside the pointer, and the window scrolls when the pointer is near its left or right side (the bar
+ * follows by the days scrolled too). A drop saves; if the save fails the bar goes back.
+ */
+function dragBar(
+	e: React.MouseEvent,
+	o: { el: React.RefObject<HTMLElement | null>; scroller: React.RefObject<HTMLDivElement | null>; axis: Axis; dw: number; span: Span; edge: DragEdge; canDrag: boolean; onOpen: (x: number, y: number) => void; onShift: (s: Span) => Promise<boolean> },
+) {
+	if (e.button !== 0) return;
+	e.preventDefault();
+	e.stopPropagation();
+	const sc = o.scroller.current;
+	const x0 = e.clientX;
+	const scroll0 = sc?.scrollLeft ?? 0;
+	let last = { x: x0, y: e.clientY };
+	let delta = 0;
+	let moved = false;
+	let tip: HTMLDivElement | null = null;
+	let timer: ReturnType<typeof setInterval> | undefined;
+	const apply = (s: Span) => {
+		const p = placeSpan(o.axis, o.dw, s);
+		if (o.el.current) {
+			o.el.current.style.left = `${p.left}px`;
+			o.el.current.style.width = `${p.width}px`;
+		}
+	};
+	const update = () => {
+		const dx = last.x - x0 + ((sc?.scrollLeft ?? 0) - scroll0);
+		delta = Math.round(dx / o.dw);
+		const s = dragSpan(o.span, delta, o.edge);
+		apply(s);
+		if (!tip) {
+			tip = document.createElement("div");
+			tip.className = "gantt-drag-tip";
+			document.body.appendChild(tip);
+		}
+		tip.textContent = spanLabel(s);
+		tip.style.left = `${last.x + 14}px`;
+		tip.style.top = `${last.y + 18}px`;
+	};
+	// the window follows the pointer at its sides (the left side starts after the label column)
+	const edgeScroll = () => {
+		if (!sc) return;
+		const r = sc.getBoundingClientRect();
+		const zone = 48;
+		const left = r.left + LABEL_W + zone;
+		const right = r.right - zone;
+		const v = last.x > right ? Math.min(28, (last.x - right) / 2 + 2) : last.x < left ? -Math.min(28, (left - last.x) / 2 + 2) : 0;
+		if (!v) return;
+		const before = sc.scrollLeft;
+		sc.scrollLeft += v;
+		if (sc.scrollLeft !== before) update();
+	};
+	followMouse(
+		(ev) => {
+			last = { x: ev.clientX, y: ev.clientY };
+			if (!o.canDrag || (!moved && Math.abs(ev.clientX - x0) < 4)) return;
+			if (!moved) timer = setInterval(edgeScroll, 16);
+			moved = true;
+			update();
+		},
+		(ev) => {
+			clearInterval(timer);
+			tip?.remove();
+			if (!moved) return o.onOpen(ev.clientX, ev.clientY);
+			if (delta === 0) return apply(o.span);
+			void o.onShift(dragSpan(o.span, delta, o.edge)).then((ok) => ok || apply(o.span));
+		},
+		{ cursor: o.edge === "move" ? "grabbing" : "ew-resize" },
 	);
 }
 
