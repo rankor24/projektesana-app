@@ -2,7 +2,7 @@
 // Everything is pushed by main (threads.changed, queue.changed, waiting.changed, agent.event); the first read only fills what has not been pushed yet.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normRef, type AgentSpec } from "../../shared/agent-types";
-import { LEAD_ID, type IncidentView, type PauseTarget, type QueueView, type Thread, type ThreadState, type WaitingItem } from "../../shared/thread-types";
+import { LEAD_ID, type IncidentView, type PauseTarget, type QueueView, type Thread, type ThreadState, type WaitingItem, type WaitReason } from "../../shared/thread-types";
 import { EVERYONE_WORDS } from "../../shared/everyone";
 import { BPV_ID } from "../../shared/departments";
 import type { RunEvent } from "../../shared/types";
@@ -10,7 +10,7 @@ import { call, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { tr } from "../i18n";
 
-const NO_QUEUE: QueueView = { running: [], queued: [], paused: false, waves: [], held: { agents: [], departments: [], all: false } };
+const NO_QUEUE: QueueView = { running: [], queued: [], why: {}, paused: false, waves: [], held: { agents: [], departments: [], all: false } };
 
 /** "Vadošais" for the lead, the specialist's name, or the bare id of one that was removed in Iestatījumi. */
 export function agentName(id: string, specs: readonly AgentSpec[]): string {
@@ -66,6 +66,10 @@ export interface LaneItem {
 	title: string;
 	state: "running" | "queued" | "waiting-confirm";
 	step: string | null;
+	/** when the conversation was opened: two chats of one agent are told apart by it */
+	at: string | null;
+	/** why a queued item waits (null: running, or nothing holds it) */
+	why: WaitReason | null;
 }
 
 /** `markSeen`: this is the window that shows the chat, so the thread on screen counts as read (threads.seen); the list window leaves it alone. */
@@ -175,8 +179,9 @@ export function useThreads(projectId: string | null, opts: { markSeen?: boolean 
 	/** Running and queued threads of the open project, running first. A queued item that was stopped is not a lane. */
 	const lanes = useMemo<LaneItem[]>(() => {
 		const title = (id: string) => threads.find((t) => t.id === id)?.title ?? "";
-		const run = queue.running.filter((r) => r.projectId === projectId).map((r): LaneItem => ({ threadId: r.threadId, agent: r.agent, title: title(r.threadId), state: r.waitingConfirm ? "waiting-confirm" : "running", step: steps[r.threadId] ?? null }));
-		const wait = queue.queued.filter((q) => q.state === "queued" && q.projectId === projectId).map((q): LaneItem => ({ threadId: q.threadId, agent: q.agent, title: title(q.threadId), state: "queued", step: null }));
+		const at = (id: string) => threads.find((t) => t.id === id)?.createdAt ?? null;
+		const run = queue.running.filter((r) => r.projectId === projectId).map((r): LaneItem => ({ threadId: r.threadId, agent: r.agent, title: title(r.threadId), at: at(r.threadId), why: null, state: r.waitingConfirm ? "waiting-confirm" : "running", step: steps[r.threadId] ?? null }));
+		const wait = queue.queued.filter((q) => q.state === "queued" && q.projectId === projectId).map((q): LaneItem => ({ threadId: q.threadId, agent: q.agent, title: title(q.threadId), at: at(q.threadId), why: queue.why?.[q.id] ?? null, state: "queued", step: null }));
 		return [...run, ...wait];
 	}, [queue, threads, steps, projectId]);
 	/** work going on in other projects: the lanes show the open one only, but Apturēt visu stops these too */

@@ -1,10 +1,10 @@
 // The run queue as plain data: who may start next, and how it is kept on disk. No timers, no runs.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Limits, QueueItem, Running, Wave } from "../shared/thread-types.js";
+import type { Limits, QueueItem, Running, Wave, WaitReason } from "../shared/thread-types.js";
 
 // The shapes live in shared/thread-types.ts (the window imports them and must not reach node:fs through this file).
-export type { QueueItem, Running, Wave };
+export type { QueueItem, Running, Wave, WaitReason };
 
 /** Has the wave reached a limit: `runs` when it has started `runsPerWave` runs, `cost` when `waveCost` is set and spent; null while it may start more. Runs are named first. */
 export function waveCheck(w: Wave, l: Limits): null | "runs" | "cost" {
@@ -13,21 +13,27 @@ export function waveCheck(w: Wave, l: Limits): null | "runs" | "cost" {
 	return null;
 }
 
-/** The oldest queued item whose thread is not running, whose agent is not running in that project, while fewer than `cap` runs are not waiting for a confirmation.
- *  `blocked` names items that must wait for now (a paused wave's); the pick goes on to the next. It is asked only of items that could otherwise start. */
+/** The oldest queued item whose thread is not running, while fewer than `cap` runs are not waiting for a confirmation.
+ *  Two conversations of one agent (two Lead agent chats) run side by side: what they share is guarded where it is used (the write locks, the one Revit seat), not here.
+ *  `blocked` names items that must wait for now (a paused agent's, a paused wave's); the pick goes on to the next. It is asked only of items that could otherwise start. */
 export function pickNext(queue: QueueItem[], running: Running[], cap: number, paused: boolean, blocked?: (q: QueueItem) => boolean): QueueItem | null {
 	if (paused) return null;
 	// A run parked on a confirmation does not hold a slot: the user may be away for hours.
 	const active = running.filter((r) => !r.waitingConfirm).length;
 	if (active >= Math.max(1, cap)) return null;
-	return (
-		queue.find(
-			(q) =>
-				q.state === "queued" &&
-				!running.some((r) => r.threadId === q.threadId || (r.agent === q.agent && r.projectId === q.projectId)) &&
-				!blocked?.(q),
-		) ?? null
-	);
+	return queue.find((q) => q.state === "queued" && !running.some((r) => r.threadId === q.threadId) && !blocked?.(q)) ?? null;
+}
+
+/** Why a queued item is not running: the whole queue is paused, its agent is paused, its wave hit a limit, its own conversation is still answering,
+ *  or all `cap` slots are taken. Same order `pickNext` checks them in. null = nothing holds it (it starts at the next pick). */
+export function waitReason(q: QueueItem, running: Running[], cap: number, paused: boolean, blocked?: (q: QueueItem) => "held" | "wave" | null): WaitReason | null {
+	if (paused) return { kind: "paused" };
+	const b = blocked?.(q);
+	if (b) return { kind: b };
+	if (running.some((r) => r.threadId === q.threadId)) return { kind: "thread" };
+	const active = running.filter((r) => !r.waitingConfirm).length;
+	if (active >= Math.max(1, cap)) return { kind: "cap", active, cap: Math.max(1, cap) };
+	return null;
 }
 
 function isItem(v: unknown): v is QueueItem {

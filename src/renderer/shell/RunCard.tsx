@@ -207,7 +207,8 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 		>
 			<summary className="run-head">
 				{running ? <span className="pulse" /> : end?.kind === "error" ? <span className="bad-mark">✗</span> : <span className="ok-mark">✓</span>}
-				<span className="run-title">{start?.text ?? tr("Uzdevums")}</span>
+				{/* the person's own words are the message bubble above the card: the card is titled with a template's label, else "Uzdevums" (the words stay under "Uzdevums aģentam") */}
+				<span className="run-title">{start?.template ? start.text : tr("Uzdevums")}</span>
 				<span className="dim small run-meta">
 					{clock(lines[0].at).slice(0, 5)} · {summary?.steps ?? 0} {tr("soļi · {took}", { took: duration(took) })}</span>
 				{summary?.usage && (

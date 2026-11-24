@@ -1,17 +1,43 @@
 // One collapsed row per running or queued thread of the open project, with its last step and a stop button; above them the queue's own controls.
 import type { AgentSpec } from "../../shared/agent-types";
-import type { Wave } from "../../shared/thread-types";
+import type { WaitReason, Wave } from "../../shared/thread-types";
 import { waveLine } from "../../shared/wave";
 import { StateDot } from "./ThreadList";
 import { agentName, type LaneItem } from "./useThreads";
 import { tr } from "../i18n";
 
+/** Why a queued item waits, in words. null (nothing holds it, it starts at the next pick) reads as plain "queued". */
+export function whyText(r: WaitReason | null | undefined): string {
+	if (!r) return tr("Gaida rindā");
+	switch (r.kind) {
+		case "paused":
+			return tr("Gaida: rinda ir apturēta (Turpināt rindu)");
+		case "held":
+			return tr("Gaida: šis aģents ir apturēts (Atsākt)");
+		case "wave":
+			return tr("Gaida: vilnis sasniedza robežu (Turpināt)");
+		case "thread":
+			return tr("Gaida: šī saruna vēl atbild");
+		case "cap":
+			return tr("Gaida brīvu vietu: strādā {active} no {cap} aģentiem (Iestatījumi → Aģenti)", { active: r.active, cap: r.cap });
+	}
+}
+
+/** "15:47": when a conversation was opened, to tell two chats of one agent apart. */
+export function openedAt(iso: string | null): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export function Lane({ lane, specs, onOpen, onStop }: { lane: LaneItem; specs: AgentSpec[]; onOpen: (threadId: string) => void; onStop: (threadId: string) => void }) {
-	const step = lane.state === "queued" ? tr("gaida rindā") : (lane.step ?? tr("strādā…"));
+	const step = lane.state === "queued" ? whyText(lane.why) : (lane.step ?? tr("strādā…"));
+	const when = openedAt(lane.at);
 	return (
 		<div className="run-lane" onClick={() => onOpen(lane.threadId)} title={lane.title}>
 			<StateDot state={lane.state} />
 			<b>{agentName(lane.agent, specs)}</b>
+			<span className="small dim">{[lane.title, when].filter(Boolean).join(" ")}</span>
 			<span className="run-lane-step small dim">{step}</span>
 			<span className="grow" />
 			<button

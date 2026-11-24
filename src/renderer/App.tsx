@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { ProjectRow } from "../shared/api";
 import { call, on } from "./bridge";
 import { AgentDock } from "./shell/AgentDock";
+import { startChatStreams } from "./shell/chat-lines";
 import { Rail } from "./shell/Rail";
 import { CommentTools } from "./shell/CommentTools";
 import { commentSubject } from "./comment-subject";
@@ -179,6 +180,8 @@ function runRelay(m: RelayMsg) {
 }
 
 export function App() {
+	// every run's streamed lines are kept from its first event, whatever is on screen (the dock reads them when it comes back to a run)
+	useEffect(() => startChatStreams(), []);
 	useEffect(() => on("data.changed", () => ui.bump()), []);
 	useEffect(() => on("layout.relay", ({ msg }) => runRelay(msg)), []);
 	useEffect(() => {
