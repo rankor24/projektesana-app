@@ -9,6 +9,8 @@
 // Ported from OpenMausBot (Apache-2.0): the grouped layout and the drag rules are SidebarSections.tsx / SidebarSectionHeader.tsx / SidebarBotDrag.tsx as src/renderer/shell/ThreadList.tsx
 // already took them (the rules are in shell/sidebar-tree.ts, used here as they are); the agent dialog is src/components/BotSettingsDialog.tsx (AgentDialog.tsx).
 // Adapted: this page lists agents with their settings, not conversations, and a department has an optional lead (the agent that assigns inside it; BPV when none).
+// On the Agents page this tree is the «Nodaļas» tab and «Labot» / «+ aģents» open the agent in the «Aģenti» tab beside the list (`onOpen`, AgentBrowser.tsx); in Settings,
+// which has no room for a list and an editor side by side, they open the dialog.
 import { useEffect, useMemo, useState, type HTMLAttributes } from "react";
 import { SHARED_MAX, type AgentSpec, type AgentSpecRow, type TeamImportReport } from "../../shared/agent-types";
 import type { ProviderRow } from "../../shared/api";
@@ -18,12 +20,18 @@ import { Badge, Err, useLoad } from "../ui";
 import { locale, tr } from "../i18n";
 import { windows } from "../windows";
 import { AGENT_DRAG_TYPE, DEPARTMENT_DRAG_TYPE, dropPlace, moveDepartment, placeDepartment, planAgentDrop, sameDrop, unusedName, type AgentDrop, type DropPlace } from "../shell/sidebar-tree";
-import { AgentDialog, EMPTY_DRAFT, type Draft } from "./AgentDialog";
+import { AgentAvatar, AgentDialog, EMPTY_DRAFT, type Draft } from "./AgentDialog";
 
 const nf = (n: number) => n.toLocaleString(locale()).replace(/ /g, " ");
 
+/** The colour of a department: the app's six stage colours in department order, the muted text colour for agents in none. Used for the avatars. */
+export function deptHue(deptId: string | undefined, departments: readonly Department[]): string {
+	const at = deptId ? departments.findIndex((d) => d.id === deptId) : -1;
+	return at < 0 ? "var(--muted)" : `var(--st${at % 6})`;
+}
+
 /** The rules every agent gets (agents\_kopejie.md). Saved on its own: it is a file, not part of the specs. */
-function SharedRules({ onSaved }: { onSaved: () => void }) {
+export function SharedRules({ onSaved }: { onSaved: () => void }) {
 	const [saved, setSaved] = useState<string | null>(null);
 	const [text, setText] = useState("");
 	const [err, setErr] = useState<string | null>(null);
@@ -122,10 +130,11 @@ function ImportReport({ r, names, onClose }: { r: TeamImportReport; names: Map<s
 }
 
 /** One agent's card. */
-function Card({ a, deptLead, provider, model, backup, drag }: { a: AgentSpecRow; deptLead: boolean; provider: string; model: string; backup: string; drag: HTMLAttributes<HTMLDivElement> }) {
+function Card({ a, deptLead, provider, model, backup, hue, drag }: { a: AgentSpecRow; deptLead: boolean; provider: string; model: string; backup: string; hue: string; drag: HTMLAttributes<HTMLDivElement> }) {
 	return (
 		<div className="ag-card" {...drag}>
 			<div className="row">
+				<AgentAvatar id={a.id} name={a.name} hue={hue} />
 				<b className="grow ag-card-name">{a.name || tr("(bez nosaukuma)")}</b>
 				{deptLead && (
 					<Badge tone="info" title={tr("Nodaļas vadītājs")}>
@@ -152,8 +161,12 @@ function Card({ a, deptLead, provider, model, backup, drag }: { a: AgentSpecRow;
 	);
 }
 
-/** The team editor: import, departments with their agents (drag, lead, add, rename, reorder, remove when empty), the agent cards and the agent dialog. `onChanged` tells the host that something was saved. */
-export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
+/** What «Labot» or «+ aģents» asks the host to show: an agent, or a new one in a department ("" = in none). */
+export type AgentOpen = { id: string } | { newIn: string };
+
+/** The team editor: import, departments with their agents (drag, lead, add, rename, reorder, remove when empty), the agent cards and the agent dialog. `onChanged` tells the host that something was saved.
+ *  `onOpen`: the host shows the agent itself (the Agents page, beside its list); without it the agent dialog opens here. */
+export function TeamEditor({ onChanged, onOpen }: { onChanged?: () => void; onOpen?: (o: AgentOpen) => void }) {
 	const view = useLoad(() => call("agents.list"), []);
 	const providers = useLoad<ProviderRow[]>(() => call("agent.providers"), []);
 	const settings = useLoad(() => call("settings.get"), []);
@@ -258,6 +271,7 @@ export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 					deptLead={deptLead}
 					provider={providerLabel(a.provider)}
 					model={modelLabel(a.provider, a.model)}
+					hue={deptHue(departmentOf(a), departments)}
 					backup={a.backup ? `${providerLabel(a.backup.provider)} · ${modelLabel(a.backup.provider, a.backup.model)}` : tr("nav")}
 					drag={{
 						draggable: true,
@@ -286,7 +300,7 @@ export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 						},
 					}}
 				/>
-				<button className="small ag-edit" onClick={() => setOpen({ agent: { ...a }, isNew: false })}>
+				<button className="small ag-edit" onClick={() => (onOpen ? onOpen({ id: a.id }) : setOpen({ agent: { ...a }, isNew: false }))}>
 					{tr("Labot")}
 				</button>
 			</div>
@@ -412,7 +426,7 @@ export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 									</button>
 								</>
 							)}
-							<button className="ghost small" onClick={() => setOpen({ agent: { ...EMPTY_DRAFT, department: d ? d.id : "" }, isNew: true })}>
+							<button className="ghost small" onClick={() => (onOpen ? onOpen({ newIn: d ? d.id : "" }) : setOpen({ agent: { ...EMPTY_DRAFT, department: d ? d.id : "" }, isNew: true }))}>
 								{tr("+ aģents")}
 							</button>
 						</div>
@@ -470,6 +484,7 @@ export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 					providers={providers.data ?? []}
 					appProvider={settings.data?.provider ?? ""}
 					appModel={settings.data?.model ?? ""}
+					hue={deptHue(departmentOf(open.agent), departments)}
 					onClose={() => setOpen(null)}
 					onSaved={reload}
 				/>
@@ -478,8 +493,8 @@ export function TeamEditor({ onChanged }: { onChanged?: () => void }) {
 	);
 }
 
-/** The Agents page body: the number of parallel helpers, what delegation means, the rules every agent gets, then the team editor. */
-export function Agenti() {
+/** How many helpers may work at once, and what delegation means: the top of the Agents page's «Noteikumi» tab. */
+export function ParallelHelpers() {
 	const view = useLoad(() => call("agents.list"), []);
 	const v = view.data;
 	const [err, setErr] = useState<string | null>(null);
@@ -509,8 +524,6 @@ export function Agenti() {
 				</div>
 			)}
 			<div className="dim small">{tr("Speciālistiem aģents var uzdot darbu (delegate). Viņi nevar redzēt sarunu un nevar palaist citus aģentus. Rīkus, kuriem vajag tavu apstiprinājumu, var dot tikai speciālistam ar līmeni «apstiprina lietotājs». Izmaiņas nodevuma mapē un projekta datos viņi veic pa vienam, lai nesadurtos.")}</div>
-			<SharedRules onSaved={() => view.reload()} />
-			<TeamEditor onChanged={() => view.reload()} />
 		</div>
 	);
 }

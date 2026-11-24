@@ -172,3 +172,19 @@ narrower than 280 px, so a floated tool bar was always the wide labelled row. Hi
 | Once, on start: tools floating (or minimised from floating) go back to the column beside the chat. Tools docked on a side stay there. |
 
 **Not checked live** (his rule). Layout rules: test 9.17.
+
+## 2026-11-24: Agents page
+
+He asked: "Add Department view as tab in Agent page. and Edit Agent page so its Bim-crew and MousBot like".
+
+| Done in 2.8.2 |
+|---|
+| The Agents page has three tabs, the app's usual tab row: Aģenti, Nodaļas, Noteikumi. The tab and the agent on screen are remembered while the app runs. |
+| Aģenti is BIM Crew's agents page (AgentsArtifact.tsx): the list on the left (grouped by department, search, «+»), the chosen agent's settings beside it in the page, Saglabāt / Atcelt / Izņemt on top. Nothing chosen: «Izvēlies aģentu» with «+ Jauns aģents» (and the BD import while the team is missing). |
+| The editor has OpenMausBot's bot panel on top (bot-panel/PanelShell.tsx): a hero with the agent's letters on its department's colour, its name, what it does, department · provider · model, then pill tabs for the sections (Loma, Vispārīgi, Modelis un rezerve, Rīki, Sazināšanās, Prasmes, MCP, Pārbaude). Tools and skills are chips that light when chosen. |
+| Nodaļas is the team by department (drag, lead, order, rename, the import); «Labot» and «+ aģents» open the agent in the Aģenti tab. |
+| Noteikumi: parallel helpers, the rules every agent gets, the Skills link, the limits. |
+| Below 720 px (the page docked as a side panel) one column: the list, or the editor with «‹ Aģenti». Settings → Aģenti keeps the dialog (no room for two columns there). |
+| Changing agent or tab with unsaved changes asks first. |
+
+**Not checked live** (his rule).

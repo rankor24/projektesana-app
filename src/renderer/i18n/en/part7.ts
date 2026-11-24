@@ -193,4 +193,12 @@ export const part7: Record<string, string> = {
 	"Izlaisti: {list}.": "Skipped: {list}.",
 	"Mapē nav lomu: {list}.": "Roles missing from the folder: {list}.",
 	"Labi": "OK",
+	// the Agents page tabs and its list + editor (panels/AgentiPage.tsx, AgentBrowser.tsx)
+	"Noteikumi": "Rules",
+	"Komanda pa nodaļām: velc aģentu uz citu nodaļu vai vietu, velc nodaļu augstāk vai zemāk; «Labot» atver aģentu cilnē Aģenti.": "The team by department: drag an agent to another department or place, drag a department up or down; «Edit» opens the agent in the Agents tab.",
+	"Nesaglabātās izmaiņas tiks zaudētas. Turpināt?": "Unsaved changes will be lost. Continue?",
+	"Meklēt aģentu": "Search agents",
+	"Vēl nav aģentu": "No agents yet",
+	"Izvēlies aģentu, lai to labotu": "Select an agent to edit",
+	"+ Jauns aģents": "+ New agent",
 };

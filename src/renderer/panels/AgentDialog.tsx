@@ -5,7 +5,7 @@
 // fields (IdentitySection, ModelSection, PermissionsSection, the skills card, CheckWorkSetting) and one Save that applies the whole form. Adapted: OpenMausBot saves each field
 // as it is changed; here a change is kept in the dialog until Saglabāt, because a role text and the spec are two writes (the file first, then agents.save, which checks the
 // file exists and measures the standing context). Left out: the bot's phone apps, memory and routines sections (other phases).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AGENT_CHECKS_MAX, ROLE_MAX, SPECIALIST_FIXED_MAX, type AgentMcpServer, type AgentSpec, type AgentSpecRow, type AgentToolRow } from "../../shared/agent-types";
 import type { ProviderRow } from "../../shared/api";
 import { departmentOf, type Department } from "../../shared/departments";
@@ -40,6 +40,16 @@ function Counter({ n, max }: { n: number; max: number }) {
 	return (
 		<span className={`counter ${n > max ? "bad" : ""}`}>
 			{nf(n)} / {nf(max)}
+		</span>
+	);
+}
+
+/** The two or three letters of an agent (its id: BPV, AR, UK) on its department's colour: OpenMausBot's bot avatar, BIM Crew's icon in the list. */
+export function AgentAvatar({ id, name, hue, big }: { id: string; name: string; hue?: string; big?: boolean }) {
+	const code = (id || name.split(/\s+/).map((w) => w[0] ?? "").join("") || "?").slice(0, 3).toUpperCase();
+	return (
+		<span className={`ag-avatar ${big ? "big" : ""}`} style={hue ? ({ "--ag-hue": hue } as CSSProperties) : undefined} aria-hidden="true">
+			{code}
 		</span>
 	);
 }
@@ -93,9 +103,15 @@ interface Props {
 	onClose: () => void;
 	/** after a save that went through: the page reloads */
 	onSaved: () => void;
+	/** in the page beside the agent list instead of a dialog over it */
+	inline?: boolean;
+	/** the colour of the agent's department (a CSS colour), for its avatar */
+	hue?: string;
+	/** told when the form gets or loses unsaved changes, so the page can ask before it shows another agent */
+	onDirty?: (dirty: boolean) => void;
 }
 
-export function AgentDialog({ agent, isNew, all, departments, tools, providers, appProvider, appModel, onClose, onSaved }: Props) {
+export function AgentDialog({ agent, isNew, all, departments, tools, providers, appProvider, appModel, onClose, onSaved, inline, hue, onDirty }: Props) {
 	const [a, setA] = useState<Draft>(agent);
 	const [section, setSection] = useState<Section>("role");
 	const [err, setErr] = useState<string | null>(null);
@@ -124,6 +140,7 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 			live = false;
 		};
 	}, [agent.id]);
+	useEffect(() => onDirty?.(dirty), [dirty]);
 	const dept = departmentOf(a) ?? "";
 	useEffect(() => {
 		setLead(!!agent.id && departments.find((d) => d.id === departmentOf(agent))?.lead === agent.id);
@@ -235,10 +252,368 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 	}, [skills, skillQuery]);
 	const chosenSkills = new Set(a.skills ?? []);
 
+	const pane = (
+		<div className="ag-dialog-pane">
+			{section === "role" && (
+				<>
+					<div className="row">
+						<span className="small dim grow">
+							{tr("Loma (agents\\")}
+							{a.id || tr("<id>")}
+							{tr(".md): kā šis aģents strādā un kādā balsī runā")}
+						</span>
+						<Counter n={roleLen} max={ROLE_MAX} />
+						<button className="small ghost" disabled={!a.id || !ID_OK.test(a.id)} title={a.id ? tr("Nolasa .md failu un ieraksta to kā lomas tekstu") : tr("Vispirms ieraksti identifikatoru")} onClick={importRole}>
+							{tr("Importēt .md")}
+						</button>
+					</div>
+					<textarea
+						className="ag-role"
+						value={a.role ?? ""}
+						disabled={!a.id && !a.name}
+						placeholder={a.id ? tr("Lomas teksts (var palikt tukšs, ja aģentam pietiek ar zemāko norādījumu)") : tr("Vispirms ieraksti nosaukumu un identifikatoru (Vispārīgi)")}
+						onChange={(e) => patch({ role: e.target.value, roleDirty: true })}
+					/>
+					<label>
+						<div className="small dim">{tr("Papildu norādījums (īss; ja lomas teksta nav, tas ir viss norādījums)")}</div>
+						<textarea style={{ width: "100%", minHeight: 60 }} value={a.prompt} onChange={(e) => patch({ prompt: e.target.value })} />
+					</label>
+					<div className="small">
+						{tr("Pastāvīgais konteksts:")}{" "}
+						{a.fixedTokens === undefined ? (
+							<span className="dim">{tr("tiks izmērīts pēc saglabāšanas")}</span>
+						) : (
+							<b style={a.fixedTokens > SPECIALIST_FIXED_MAX ? { color: "var(--bad)" } : undefined}>{tr("{fixedTokens} tokeni", { fixedTokens: nf(a.fixedTokens) })}</b>
+						)}{" "}
+						{tr("(bez Revit rīku aprakstiem)")}
+						{a.fixedTokens !== undefined && a.fixedTokens > SPECIALIST_FIXED_MAX && <span style={{ color: "var(--bad)" }}> {tr("— pāri {v}, saglabāt nevarēs", { v: nf(SPECIALIST_FIXED_MAX) })}</span>}
+						{dirty && a.fixedTokens !== undefined && <span className="dim"> {tr("(pēc pēdējās saglabāšanas)")}</span>}
+					</div>
+				</>
+			)}
+
+			{section === "general" && (
+				<>
+					<label className="row">
+						<span className="ag-label">{tr("Nosaukums")}</span>
+						<input className="grow" value={a.name} onChange={(e) => patch({ name: e.target.value, ...(isNew && (a.id === "" || a.id === slug(a.name)) ? { id: slug(e.target.value) } : {}) })} />
+					</label>
+					<label className="row">
+						<span className="ag-label">{tr("Identifikators")}</span>
+						<input className="grow mono" value={a.id} readOnly={!isNew} title={isNew ? "" : tr("Esoša aģenta identifikators nav maināms: pie tā ir sarunas un lomas fails")} onChange={(e) => patch({ id: e.target.value })} />
+					</label>
+					<label className="row">
+						<span className="ag-label">{tr("Kam paredzēts")}</span>
+						<input className="grow" value={a.description} placeholder={tr("viena rinda: pēc tās aģents izvēlas speciālistu")} onChange={(e) => patch({ description: e.target.value })} />
+					</label>
+					<label className="row">
+						<span className="ag-label">{tr("Nodaļa")}</span>
+						<select
+							value={dept}
+							onChange={(e) => {
+								patch({ department: e.target.value });
+								setLead(false);
+							}}
+						>
+							<option value="">{tr("bez nodaļas")}</option>
+							{dept && !departments.some((x) => x.id === dept) && <option value={dept}>{dept}</option>}
+							{departments.map((x) => (
+								<option key={x.id} value={x.id}>
+									{x.name}
+								</option>
+							))}
+						</select>
+						<span className="small dim">{tr("Pēc noklusējuma raksta visu projektēšanas nodaļu aģentiem un BPV; Kvalitāte (EKS) ir atsevišķi (skat. «Drīkst rakstīt» zemāk).")}</span>
+					</label>
+					<label className="row">
+						<span className="ag-label" />
+						<input type="checkbox" checked={lead} disabled={!departments.some((x) => x.id === dept)} onChange={(e) => (setLead(e.target.checked), setDirty(true))} />
+						<span>{tr("Šīs nodaļas vadītājs")}</span>
+						<span className="small dim">{tr("Vadītājs uzdod darbus savā nodaļā un uztur tās atmiņu; bez vadītāja to dara BPV. Katrai nodaļai ir viens.")}</span>
+					</label>
+				</>
+			)}
+
+			{section === "model" && (
+				<>
+					<label className="row">
+						<span className="ag-label">{tr("Pakalpojums")}</span>
+						<select value={a.provider ?? ""} onChange={(e) => patch({ provider: e.target.value || undefined, model: undefined, effort: "" })}>
+							<option value="">{tr("kā iestatījumos")}</option>
+							{a.provider && !providers.some((p) => p.id === a.provider) && <option value={a.provider}>{a.provider}</option>}
+							{providers.map((p) => (
+								<option key={p.id} value={p.id}>
+									{p.label}
+									{p.configured ? "" : tr(" (nav pieslēgts)")}
+								</option>
+							))}
+						</select>
+					</label>
+					<div className="row">
+						<label className="row">
+							<span className="ag-label">{tr("Modelis")}</span>
+							<select value={a.model ?? ""} onChange={(e) => patch({ model: e.target.value || undefined, effort: "" })}>
+								<option value="">{tr("kā iestatījumos")}</option>
+								{a.model && !models.some((m) => m.id === a.model) && <option value={a.model}>{a.model}</option>}
+								{models.map((m) => (
+									<option key={m.id} value={m.id}>
+										{m.name}
+									</option>
+								))}
+							</select>
+						</label>
+						<label className="row">
+							<span>{tr("Domāšana")}</span>
+							<select value={a.effort ?? ""} onChange={(e) => patch({ effort: e.target.value as AgentSpec["effort"] })}>
+								<option value="">{tr("kā iestatījumos")}</option>
+								{a.effort && !model?.efforts.includes(a.effort) && <option value={a.effort}>{a.effort}</option>}
+								{(model?.efforts ?? []).map((x) => (
+									<option key={x}>{x}</option>
+								))}
+							</select>
+						</label>
+					</div>
+					<div className="row">
+						<span className="ag-label">{tr("Rezerve")}</span>
+						<select value={a.backup?.provider ?? ""} onChange={(e) => patch({ backup: e.target.value ? { provider: e.target.value, model: "" } : undefined })}>
+							<option value="">{tr("nav")}</option>
+							{providers.map((p) => (
+								<option key={p.id} value={p.id}>
+									{p.label}
+								</option>
+							))}
+						</select>
+						{a.backup && (
+							<select value={a.backup.model} onChange={(e) => patch({ backup: { provider: a.backup!.provider, model: e.target.value } })}>
+								<option value="">{tr("izvēlies modeli")}</option>
+								{a.backup.model && !backupModels.some((m) => m.id === a.backup!.model) && <option value={a.backup.model}>{a.backup.model}</option>}
+								{backupModels.map((m) => (
+									<option key={m.id} value={m.id}>
+										{m.name}
+									</option>
+								))}
+							</select>
+						)}
+					</div>
+					<div className="small dim">{a.backup && !a.backup.model ? tr("Bez modeļa rezerve netiks saglabāta.") : tr("Kur turpināt, ja pakalpojumam ir limits vai tas nav pieslēgts.")}</div>
+				</>
+			)}
+
+			{section === "tools" && (
+				<>
+					<div className="row">
+						<span className="ag-label">{tr("Līmenis")}</span>
+						{(
+							[
+								["run", tr("palaiž")],
+								["confirm", tr("apstiprina lietotājs")],
+							] as const
+						).map(([k, text]) => (
+							<label key={k} className="small">
+								<input
+									type="radio"
+									name="level"
+									checked={level === k}
+									onChange={() => {
+										// a tool above the new level would be refused on save, so it leaves the list now
+										const kept = k === "run" ? a.tools.filter((n) => tools.find((t) => t.name === n)?.level !== "confirm") : a.tools;
+										patch({ maxLevel: k, tools: kept });
+									}}
+								/>{" "}
+								{text}
+							</label>
+						))}
+					</div>
+					<div className="small dim">{tr("Rīki bez lasīšanas (lasīšana vienmēr ir atļauta)")}{level === "confirm" ? tr("; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:") : ":"}</div>
+					<div className="ag-chips">
+						{tools
+							.filter((t) => t.level !== "confirm" || level === "confirm")
+							.map((t) => (
+								<label key={t.name} title={t.description} className={`ag-chip ${a.tools.includes(t.name) ? "on" : ""}`}>
+									<input type="checkbox" checked={a.tools.includes(t.name)} onChange={(e) => patch({ tools: e.target.checked ? [...a.tools, t.name] : a.tools.filter((x) => x !== t.name) })} /> {t.name}{" "}
+									<Badge tone={t.level === "confirm" ? "warn" : "dim"}>{t.level}</Badge>
+								</label>
+							))}
+					</div>
+				</>
+			)}
+
+			{section === "reach" && (
+				<>
+					<AclEditor label={tr("Drīkst rakstīt")} value={a.mayMessage} options={aclOptions} onChange={(x) => patch({ mayMessage: x })} />
+					<AclEditor label={tr("Pieņem no")} value={a.acceptsFrom} options={aclOptions} onChange={(x) => patch({ acceptsFrom: x })} />
+				</>
+			)}
+
+			{section === "skills" && (
+				<>
+					<div className="row">
+						<input className="grow" value={skillQuery} placeholder={tr("Meklēt prasmi")} onChange={(e) => setSkillQuery(e.target.value)} />
+						<span className="small dim">{tr("{n} izvēlētas", { n: chosenSkills.size })}</span>
+					</div>
+					<div className="small dim">{tr("Aģents zina tikai gatavās prasmes (bez vietturiem un ar tavu atzīmi «pārbaudīta» lapā Prasmes). Melnraksta prasmi var piešķirt jau tagad.")}</div>
+					{skills === null && <div className="dim small">{tr("Ielādē…")}</div>}
+					{skills?.length === 0 && <div className="dim small">{tr("Prasmju bibliotēka ir tukša: importē prasmes lapā Prasmes vai importē komandu.")}</div>}
+					<div className="ag-skills">
+						{visibleSkills.map((s) => (
+							<label key={s.name} className={`ag-skill ${chosenSkills.has(s.name) ? "on" : ""}`} title={s.description}>
+								<input type="checkbox" checked={chosenSkills.has(s.name)} onChange={(e) => patch({ skills: e.target.checked ? [...(a.skills ?? []), s.name] : (a.skills ?? []).filter((x) => x !== s.name) })} />
+								<span className="grow">
+									<b className="small">{s.name}</b>
+									<span className="small dim"> {s.description.slice(0, 110)}</span>
+								</span>
+								<Badge tone={s.state === "ready" ? "ok" : "warn"}>{s.state === "ready" ? tr("gatava") : tr("melnraksts")}</Badge>
+								{s.group && <span className="small dim">{s.group}</span>}
+							</label>
+						))}
+						{/* a name on the list that the library lacks (yet): shown so it can be taken off */}
+						{(a.skills ?? [])
+							.filter((n) => skills && !skills.some((s) => s.name === n))
+							.map((n) => (
+								<label key={n} className="ag-skill">
+									<input type="checkbox" checked onChange={() => patch({ skills: (a.skills ?? []).filter((x) => x !== n) })} />
+									<span className="grow small">{n}</span>
+									<Badge tone="bad">{tr("nav bibliotēkā")}</Badge>
+								</label>
+							))}
+					</div>
+				</>
+			)}
+
+			{section === "mcp" && <McpSection agentId={a.id} servers={a.mcp ?? []} onChange={(mcp: AgentMcpServer[]) => patch({ mcp: mcp.length ? mcp : undefined })} />}
+
+			{section === "check" && (
+				<>
+					<div className="small dim">{tr("Pirms aģents nodod atbildi, to izlasa pārbaudītājs un salīdzina ar pieprasījumu: līdz {n} pārbaudēm. Labāk citam pakalpojumam nekā autoram: modelis reti ievēro savas kļūdas.", { n: AGENT_CHECKS_MAX })}</div>
+					<div className="row">
+						{(
+							[
+								["none", tr("nav")],
+								["agent", tr("cits aģents")],
+								["model", tr("modelis")],
+							] as const
+						).map(([k, text]) => (
+							<label key={k} className="small">
+								<input type="radio" name="check-mode" checked={checkMode === k} onChange={() => setCheck(k)} /> {text}
+							</label>
+						))}
+					</div>
+					{checkMode === "agent" && (
+						<label className="row">
+							<span className="ag-label">{tr("Pārbauda")}</span>
+							<select value={check?.agent ?? ""} onChange={(e) => setCheck("agent", { agent: e.target.value })}>
+								{others.map((x) => (
+									<option key={x.id} value={x.id}>
+										{x.name || x.id}
+									</option>
+								))}
+							</select>
+						</label>
+					)}
+					{checkMode === "model" && (
+						<>
+							<label className="row">
+								<span className="ag-label">{tr("Pakalpojums")}</span>
+								<select value={check?.provider ?? ""} onChange={(e) => setCheck("model", { provider: e.target.value, model: "" })}>
+									<option value="">{tr("kā iestatījumos")}</option>
+									{providers.map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.label}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="row">
+								<span className="ag-label">{tr("Modelis")}</span>
+								<select value={check?.model ?? ""} onChange={(e) => setCheck("model", { model: e.target.value })}>
+									<option value="">{tr("pakalpojuma noklusējums")}</option>
+									{check?.model && !modelsOf(check.provider).some((m) => m.id === check.model) && <option value={check.model}>{check.model}</option>}
+									{modelsOf(check?.provider || appProvider).map((m) => (
+										<option key={m.id} value={m.id}>
+											{m.name}
+										</option>
+									))}
+								</select>
+							</label>
+						</>
+					)}
+					{checkMode !== "none" && (
+						<label className="row">
+							<span className="ag-label">{tr("Pārbaužu skaits")}</span>
+							<select value={check?.maxChecks ?? AGENT_CHECKS_MAX} onChange={(e) => setCheck(checkMode, { maxChecks: Number(e.target.value) })}>
+								{Array.from({ length: AGENT_CHECKS_MAX }, (_, i) => i + 1).map((n) => (
+									<option key={n}>{n}</option>
+								))}
+							</select>
+							<span className="small dim">{tr("Katra pārbaude ir pilns modeļa gājiens (izmaksas redzamas darba kartītē).")}</span>
+						</label>
+					)}
+				</>
+			)}
+		</div>
+	);
+	const actions = (
+		<>
+			{!isNew && (
+				<button className="ghost" onClick={remove} disabled={busy}>
+					{tr("Izņemt aģentu")}
+				</button>
+			)}
+			<span className="grow" />
+			{dirty && <span className="small">{tr("nesaglabāts")}</span>}
+			<button onClick={onClose} disabled={busy}>
+				{tr("Atcelt")}
+			</button>
+			<button className="primary" onClick={save} disabled={busy || (!dirty && !isNew)}>
+				{tr("Saglabāt")}
+			</button>
+		</>
+	);
+
+	// In the page (Aģenti → Aģenti): BIM Crew's editor beside the list (actions on top, the sections below), with OpenMausBot's hero (avatar, name, what it does,
+	// where it sits and what it runs on) and its pill tabs over the same sections the dialog lists down its side.
+	if (inline) {
+		const deptName = departments.find((x) => x.id === dept)?.name ?? tr("bez nodaļas");
+		const providerName = providers.find((p) => p.id === (a.provider || appProvider))?.label ?? (a.provider || appProvider || "—");
+		const modelName = model?.name ?? (a.model || tr("noklusējuma modelis"));
+		return (
+			<div className="ag-editor" role="region" aria-label={tr("Aģenta iestatījumi")}>
+				<div className="row ag-editor-bar">{actions}</div>
+				<div className="ag-editor-scroll">
+					<div className="ag-hero">
+						<AgentAvatar id={a.id} name={a.name} hue={hue} big />
+						<div className="ag-hero-text">
+							<div className="row ag-hero-name">
+								<b>{a.name || tr("Jauns aģents")}</b>
+								{lead && <Badge tone="info">{tr("vadītājs")}</Badge>}
+							</div>
+							<div className="small dim">{a.description || tr("nav apraksta")}</div>
+							<div className="small ag-hero-meta">
+								{deptName} · {providerName} · {modelName}
+								{a.id && <span className="mono"> · {a.id}</span>}
+							</div>
+						</div>
+					</div>
+					<div className="ag-pills" role="tablist" aria-label={tr("Aģenta iestatījumi")}>
+						{sections.map(([k, label]) => (
+							<button key={k} role="tab" aria-selected={section === k} className={section === k ? "on" : ""} onClick={() => setSection(k)}>
+								{label}
+								{badge(k) && <span className="ag-pill-n">{badge(k)}</span>}
+							</button>
+						))}
+					</div>
+					{err && <div className="err">{err}</div>}
+					{pane}
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
 			<div className="modal ag-dialog" role="dialog" aria-label={tr("Aģenta iestatījumi")}>
 				<div className="row">
+					<AgentAvatar id={a.id} name={a.name} hue={hue} />
 					<b className="grow">{a.name || tr("Jauns aģents")}</b>
 					<span className="mono small dim">{a.id}</span>
 					<button className="ghost small" onClick={onClose} disabled={busy} aria-label={tr("Aizvērt")}>
@@ -254,321 +629,10 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 							</button>
 						))}
 					</nav>
-					<div className="ag-dialog-pane">
-						{section === "role" && (
-							<>
-								<div className="row">
-									<span className="small dim grow">
-										{tr("Loma (agents\\")}
-										{a.id || tr("<id>")}
-										{tr(".md): kā šis aģents strādā un kādā balsī runā")}
-									</span>
-									<Counter n={roleLen} max={ROLE_MAX} />
-									<button className="small ghost" disabled={!a.id || !ID_OK.test(a.id)} title={a.id ? tr("Nolasa .md failu un ieraksta to kā lomas tekstu") : tr("Vispirms ieraksti identifikatoru")} onClick={importRole}>
-										{tr("Importēt .md")}
-									</button>
-								</div>
-								<textarea
-									className="ag-role"
-									value={a.role ?? ""}
-									disabled={!a.id && !a.name}
-									placeholder={a.id ? tr("Lomas teksts (var palikt tukšs, ja aģentam pietiek ar zemāko norādījumu)") : tr("Vispirms ieraksti nosaukumu un identifikatoru (Vispārīgi)")}
-									onChange={(e) => patch({ role: e.target.value, roleDirty: true })}
-								/>
-								<label>
-									<div className="small dim">{tr("Papildu norādījums (īss; ja lomas teksta nav, tas ir viss norādījums)")}</div>
-									<textarea style={{ width: "100%", minHeight: 60 }} value={a.prompt} onChange={(e) => patch({ prompt: e.target.value })} />
-								</label>
-								<div className="small">
-									{tr("Pastāvīgais konteksts:")}{" "}
-									{a.fixedTokens === undefined ? (
-										<span className="dim">{tr("tiks izmērīts pēc saglabāšanas")}</span>
-									) : (
-										<b style={a.fixedTokens > SPECIALIST_FIXED_MAX ? { color: "var(--bad)" } : undefined}>{tr("{fixedTokens} tokeni", { fixedTokens: nf(a.fixedTokens) })}</b>
-									)}{" "}
-									{tr("(bez Revit rīku aprakstiem)")}
-									{a.fixedTokens !== undefined && a.fixedTokens > SPECIALIST_FIXED_MAX && <span style={{ color: "var(--bad)" }}> {tr("— pāri {v}, saglabāt nevarēs", { v: nf(SPECIALIST_FIXED_MAX) })}</span>}
-									{dirty && a.fixedTokens !== undefined && <span className="dim"> {tr("(pēc pēdējās saglabāšanas)")}</span>}
-								</div>
-							</>
-						)}
-
-						{section === "general" && (
-							<>
-								<label className="row">
-									<span className="ag-label">{tr("Nosaukums")}</span>
-									<input className="grow" value={a.name} onChange={(e) => patch({ name: e.target.value, ...(isNew && (a.id === "" || a.id === slug(a.name)) ? { id: slug(e.target.value) } : {}) })} />
-								</label>
-								<label className="row">
-									<span className="ag-label">{tr("Identifikators")}</span>
-									<input className="grow mono" value={a.id} readOnly={!isNew} title={isNew ? "" : tr("Esoša aģenta identifikators nav maināms: pie tā ir sarunas un lomas fails")} onChange={(e) => patch({ id: e.target.value })} />
-								</label>
-								<label className="row">
-									<span className="ag-label">{tr("Kam paredzēts")}</span>
-									<input className="grow" value={a.description} placeholder={tr("viena rinda: pēc tās aģents izvēlas speciālistu")} onChange={(e) => patch({ description: e.target.value })} />
-								</label>
-								<label className="row">
-									<span className="ag-label">{tr("Nodaļa")}</span>
-									<select
-										value={dept}
-										onChange={(e) => {
-											patch({ department: e.target.value });
-											setLead(false);
-										}}
-									>
-										<option value="">{tr("bez nodaļas")}</option>
-										{dept && !departments.some((x) => x.id === dept) && <option value={dept}>{dept}</option>}
-										{departments.map((x) => (
-											<option key={x.id} value={x.id}>
-												{x.name}
-											</option>
-										))}
-									</select>
-									<span className="small dim">{tr("Pēc noklusējuma raksta visu projektēšanas nodaļu aģentiem un BPV; Kvalitāte (EKS) ir atsevišķi (skat. «Drīkst rakstīt» zemāk).")}</span>
-								</label>
-								<label className="row">
-									<span className="ag-label" />
-									<input type="checkbox" checked={lead} disabled={!departments.some((x) => x.id === dept)} onChange={(e) => (setLead(e.target.checked), setDirty(true))} />
-									<span>{tr("Šīs nodaļas vadītājs")}</span>
-									<span className="small dim">{tr("Vadītājs uzdod darbus savā nodaļā un uztur tās atmiņu; bez vadītāja to dara BPV. Katrai nodaļai ir viens.")}</span>
-								</label>
-							</>
-						)}
-
-						{section === "model" && (
-							<>
-								<label className="row">
-									<span className="ag-label">{tr("Pakalpojums")}</span>
-									<select value={a.provider ?? ""} onChange={(e) => patch({ provider: e.target.value || undefined, model: undefined, effort: "" })}>
-										<option value="">{tr("kā iestatījumos")}</option>
-										{a.provider && !providers.some((p) => p.id === a.provider) && <option value={a.provider}>{a.provider}</option>}
-										{providers.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.label}
-												{p.configured ? "" : tr(" (nav pieslēgts)")}
-											</option>
-										))}
-									</select>
-								</label>
-								<div className="row">
-									<label className="row">
-										<span className="ag-label">{tr("Modelis")}</span>
-										<select value={a.model ?? ""} onChange={(e) => patch({ model: e.target.value || undefined, effort: "" })}>
-											<option value="">{tr("kā iestatījumos")}</option>
-											{a.model && !models.some((m) => m.id === a.model) && <option value={a.model}>{a.model}</option>}
-											{models.map((m) => (
-												<option key={m.id} value={m.id}>
-													{m.name}
-												</option>
-											))}
-										</select>
-									</label>
-									<label className="row">
-										<span>{tr("Domāšana")}</span>
-										<select value={a.effort ?? ""} onChange={(e) => patch({ effort: e.target.value as AgentSpec["effort"] })}>
-											<option value="">{tr("kā iestatījumos")}</option>
-											{a.effort && !model?.efforts.includes(a.effort) && <option value={a.effort}>{a.effort}</option>}
-											{(model?.efforts ?? []).map((x) => (
-												<option key={x}>{x}</option>
-											))}
-										</select>
-									</label>
-								</div>
-								<div className="row">
-									<span className="ag-label">{tr("Rezerve")}</span>
-									<select value={a.backup?.provider ?? ""} onChange={(e) => patch({ backup: e.target.value ? { provider: e.target.value, model: "" } : undefined })}>
-										<option value="">{tr("nav")}</option>
-										{providers.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.label}
-											</option>
-										))}
-									</select>
-									{a.backup && (
-										<select value={a.backup.model} onChange={(e) => patch({ backup: { provider: a.backup!.provider, model: e.target.value } })}>
-											<option value="">{tr("izvēlies modeli")}</option>
-											{a.backup.model && !backupModels.some((m) => m.id === a.backup!.model) && <option value={a.backup.model}>{a.backup.model}</option>}
-											{backupModels.map((m) => (
-												<option key={m.id} value={m.id}>
-													{m.name}
-												</option>
-											))}
-										</select>
-									)}
-								</div>
-								<div className="small dim">{a.backup && !a.backup.model ? tr("Bez modeļa rezerve netiks saglabāta.") : tr("Kur turpināt, ja pakalpojumam ir limits vai tas nav pieslēgts.")}</div>
-							</>
-						)}
-
-						{section === "tools" && (
-							<>
-								<div className="row">
-									<span className="ag-label">{tr("Līmenis")}</span>
-									{(
-										[
-											["run", tr("palaiž")],
-											["confirm", tr("apstiprina lietotājs")],
-										] as const
-									).map(([k, text]) => (
-										<label key={k} className="small">
-											<input
-												type="radio"
-												name="level"
-												checked={level === k}
-												onChange={() => {
-													// a tool above the new level would be refused on save, so it leaves the list now
-													const kept = k === "run" ? a.tools.filter((n) => tools.find((t) => t.name === n)?.level !== "confirm") : a.tools;
-													patch({ maxLevel: k, tools: kept });
-												}}
-											/>{" "}
-											{text}
-										</label>
-									))}
-								</div>
-								<div className="small dim">{tr("Rīki bez lasīšanas (lasīšana vienmēr ir atļauta)")}{level === "confirm" ? tr("; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:") : ":"}</div>
-								<div className="row" style={{ flexWrap: "wrap" }}>
-									{tools
-										.filter((t) => t.level !== "confirm" || level === "confirm")
-										.map((t) => (
-											<label key={t.name} title={t.description} className="small" style={{ minWidth: 190 }}>
-												<input type="checkbox" checked={a.tools.includes(t.name)} onChange={(e) => patch({ tools: e.target.checked ? [...a.tools, t.name] : a.tools.filter((x) => x !== t.name) })} /> {t.name}{" "}
-												<Badge tone={t.level === "confirm" ? "warn" : "dim"}>{t.level}</Badge>
-											</label>
-										))}
-								</div>
-							</>
-						)}
-
-						{section === "reach" && (
-							<>
-								<AclEditor label={tr("Drīkst rakstīt")} value={a.mayMessage} options={aclOptions} onChange={(x) => patch({ mayMessage: x })} />
-								<AclEditor label={tr("Pieņem no")} value={a.acceptsFrom} options={aclOptions} onChange={(x) => patch({ acceptsFrom: x })} />
-							</>
-						)}
-
-						{section === "skills" && (
-							<>
-								<div className="row">
-									<input className="grow" value={skillQuery} placeholder={tr("Meklēt prasmi")} onChange={(e) => setSkillQuery(e.target.value)} />
-									<span className="small dim">{tr("{n} izvēlētas", { n: chosenSkills.size })}</span>
-								</div>
-								<div className="small dim">{tr("Aģents zina tikai gatavās prasmes (bez vietturiem un ar tavu atzīmi «pārbaudīta» lapā Prasmes). Melnraksta prasmi var piešķirt jau tagad.")}</div>
-								{skills === null && <div className="dim small">{tr("Ielādē…")}</div>}
-								{skills?.length === 0 && <div className="dim small">{tr("Prasmju bibliotēka ir tukša: importē prasmes lapā Prasmes vai importē komandu.")}</div>}
-								<div className="ag-skills">
-									{visibleSkills.map((s) => (
-										<label key={s.name} className="ag-skill" title={s.description}>
-											<input type="checkbox" checked={chosenSkills.has(s.name)} onChange={(e) => patch({ skills: e.target.checked ? [...(a.skills ?? []), s.name] : (a.skills ?? []).filter((x) => x !== s.name) })} />
-											<span className="grow">
-												<b className="small">{s.name}</b>
-												<span className="small dim"> {s.description.slice(0, 110)}</span>
-											</span>
-											<Badge tone={s.state === "ready" ? "ok" : "warn"}>{s.state === "ready" ? tr("gatava") : tr("melnraksts")}</Badge>
-											{s.group && <span className="small dim">{s.group}</span>}
-										</label>
-									))}
-									{/* a name on the list that the library lacks (yet): shown so it can be taken off */}
-									{(a.skills ?? [])
-										.filter((n) => skills && !skills.some((s) => s.name === n))
-										.map((n) => (
-											<label key={n} className="ag-skill">
-												<input type="checkbox" checked onChange={() => patch({ skills: (a.skills ?? []).filter((x) => x !== n) })} />
-												<span className="grow small">{n}</span>
-												<Badge tone="bad">{tr("nav bibliotēkā")}</Badge>
-											</label>
-										))}
-								</div>
-							</>
-						)}
-
-						{section === "mcp" && <McpSection agentId={a.id} servers={a.mcp ?? []} onChange={(mcp: AgentMcpServer[]) => patch({ mcp: mcp.length ? mcp : undefined })} />}
-
-						{section === "check" && (
-							<>
-								<div className="small dim">{tr("Pirms aģents nodod atbildi, to izlasa pārbaudītājs un salīdzina ar pieprasījumu: līdz {n} pārbaudēm. Labāk citam pakalpojumam nekā autoram: modelis reti ievēro savas kļūdas.", { n: AGENT_CHECKS_MAX })}</div>
-								<div className="row">
-									{(
-										[
-											["none", tr("nav")],
-											["agent", tr("cits aģents")],
-											["model", tr("modelis")],
-										] as const
-									).map(([k, text]) => (
-										<label key={k} className="small">
-											<input type="radio" name="check-mode" checked={checkMode === k} onChange={() => setCheck(k)} /> {text}
-										</label>
-									))}
-								</div>
-								{checkMode === "agent" && (
-									<label className="row">
-										<span className="ag-label">{tr("Pārbauda")}</span>
-										<select value={check?.agent ?? ""} onChange={(e) => setCheck("agent", { agent: e.target.value })}>
-											{others.map((x) => (
-												<option key={x.id} value={x.id}>
-													{x.name || x.id}
-												</option>
-											))}
-										</select>
-									</label>
-								)}
-								{checkMode === "model" && (
-									<>
-										<label className="row">
-											<span className="ag-label">{tr("Pakalpojums")}</span>
-											<select value={check?.provider ?? ""} onChange={(e) => setCheck("model", { provider: e.target.value, model: "" })}>
-												<option value="">{tr("kā iestatījumos")}</option>
-												{providers.map((p) => (
-													<option key={p.id} value={p.id}>
-														{p.label}
-													</option>
-												))}
-											</select>
-										</label>
-										<label className="row">
-											<span className="ag-label">{tr("Modelis")}</span>
-											<select value={check?.model ?? ""} onChange={(e) => setCheck("model", { model: e.target.value })}>
-												<option value="">{tr("pakalpojuma noklusējums")}</option>
-												{check?.model && !modelsOf(check.provider).some((m) => m.id === check.model) && <option value={check.model}>{check.model}</option>}
-												{modelsOf(check?.provider || appProvider).map((m) => (
-													<option key={m.id} value={m.id}>
-														{m.name}
-													</option>
-												))}
-											</select>
-										</label>
-									</>
-								)}
-								{checkMode !== "none" && (
-									<label className="row">
-										<span className="ag-label">{tr("Pārbaužu skaits")}</span>
-										<select value={check?.maxChecks ?? AGENT_CHECKS_MAX} onChange={(e) => setCheck(checkMode, { maxChecks: Number(e.target.value) })}>
-											{Array.from({ length: AGENT_CHECKS_MAX }, (_, i) => i + 1).map((n) => (
-												<option key={n}>{n}</option>
-											))}
-										</select>
-										<span className="small dim">{tr("Katra pārbaude ir pilns modeļa gājiens (izmaksas redzamas darba kartītē).")}</span>
-									</label>
-								)}
-							</>
-						)}
-					</div>
+					{pane}
 				</div>
 				{err && <div className="err">{err}</div>}
-				<div className="row">
-					{!isNew && (
-						<button className="ghost" onClick={remove} disabled={busy}>
-							{tr("Izņemt aģentu")}
-						</button>
-					)}
-					<span className="grow" />
-					{dirty && <span className="small">{tr("nesaglabāts")}</span>}
-					<button onClick={onClose} disabled={busy}>
-						{tr("Atcelt")}
-					</button>
-					<button className="primary" onClick={save} disabled={busy || (!dirty && !isNew)}>
-						{tr("Saglabāt")}
-					</button>
-				</div>
+				<div className="row">{actions}</div>
 			</div>
 		</div>
 	);
