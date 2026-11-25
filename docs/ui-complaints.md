@@ -559,3 +559,17 @@ His words (via the project chat): `.md` work files dated 24 and 25 November (an 
 **Test:** `test/21.1-free-writes.test.ts` (rewritten, 13 tests: relative path = work folder, free text notes there, what still asks, every write tool refused in an office folder by relative / full / `..` / other project's path, a junction leading in, a network path, `run_command` named / in-folder / read / look-alike names, the read fallback, backups, `edit_file`, the gate refusing before asking, the Antigravity session setup), `test/22.0-antigravity.test.ts` (setup). Also ran: 0.5, 21.2 revit-no-shell, 17.2.
 
 **Not done / limits.** (1) A shell command can reach a path in ways the text check cannot see; it still asks him first. (2) Reading the office folder by an agent is unchanged (read-only by design, and the server's `view_file` stays on). (3) `<app data>\agent-files\<project>.json` (the old "files the agent made" list) is no longer used; it can stay. (4) **Not checked live** (his rule); the disabled-tools list is names found in the runtime and the transcripts, and a name the runtime does not know is ignored by it, but this was not run against Google's server (that needs his signed-in account).
+
+## 2026-11-25: agents may delete model elements, one click per batch (version 2.14.4)
+
+His words (via the project chat): "Since you told the agent it can delete what it doesn't need from the template, should I allow it? obviously how else it can fix mistakes". Until now `delete_element` was `never` for every agent and `operate_element` with the action Delete was refused even inside a confirmed batch (v2-design 4.2; the agent had been told in a skill that it may delete what it does not need).
+
+| Done in 2.14.4 |
+|---|
+| `delete_element` is a `confirm` tool (`revit-levels.ts`), and `operate_element` with Delete is no longer refused by its arguments (`levels.ts`): both wait for his click per batch like every change of the model, the card shows the element ids, and the batch runs only while the active document is the project's working copy (the same rule as every Revit batch). `send_code_to_revit` stays `never` (`ALWAYS_NEVER`). |
+| Given to the roles that model, in their own models: AR, BK, UK, AVK, GA, EL, ESS (`fleet-defaults.ts`). Not to BPV (it coordinates), UD, TAM, EKS or the readers. A fleet set up by 2.14.0 gets it once at the first start of this version (`FLEET_ADDITIONS`, marker `agents\.fleet-setup-2`): only a modeller (it has `operate_element`) with the level cap "user confirms"; a list he made without the model tools is left alone. |
+| The Revit rules every modelling agent works by now say: delete only your own mistakes, never what the user made or corrected (rule 4 stands), never another discipline's elements. |
+
+**Test:** `test/0.5-agent.test.ts`, `test/6.3-6.5-agent-modelling.test.ts` (delete `confirm`, send_code `never`, Delete in `operate_element` asks and is blocked when declined) and `test/23.0-fleet-setup.test.ts` (delete only in the lists of the modelling roles; the one-time addition, once). **Not checked live** (his rule).
+
+**Not done / his call.** Deleting is by element id in the active model; it cannot be undone from the app (Revit's own undo, or the revision the app records after each batch, is the way back).

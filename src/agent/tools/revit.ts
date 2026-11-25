@@ -8,7 +8,7 @@ import { tool, type ToolDef } from "./tool.js";
 
 /** The user's rules for modelling through the agent (design doc, work plan 6.3). */
 export const REVIT_RULES = `Revit noteikumi:
-1. Viena darbība — viens īss izsaukums. Nekad garu kodu; send_code_to_revit un delete_element tev nav pieejami.
+1. Viena darbība — viens īss izsaukums. Nekad garu kodu; send_code_to_revit tev nav pieejams. Dzēst elementus (delete_element, operate_element ar Delete) drīksti tikai savu kļūdu labošanai un tikai ar lietotāja apstiprinājumu; nekad nedzēs to, ko lietotājs ir uztaisījis vai izlabojis, un nedzēs citu disciplīnu elementus.
 2. Vispirms asis un līmeņi, tad sienas. Katra siena ir viena siena (viens elements no stūra līdz stūrim).
 3. Sienas sadala tikai ārējās un iekšējās sienas savienojumā. Izvirzījumiem (pilastri, nišas) lieto plānas sienas, nevis sienas sadalīšanu.
 4. Nekad nepārbūvē to, ko lietotājs ir izlabojis: pirms izmaiņām nolasi esošo (get_current_view_elements, get_selected_elements); ja elements ir, maini to tikai tad, ja lietotājs to lūdz.

@@ -43,7 +43,8 @@ test("default tools exist, are none of the always-never or the process / main to
 		}
 		assert.equal(hasConfirm, d.confirm, `${id}: the confirm flag says whether a confirm tool is listed`);
 		assert.equal(new Set(d.tools).size, d.tools.length, `${id}: no repeats`);
-		assert.ok(!d.tools.includes("delete_element") && !d.tools.includes("send_code_to_revit"), id);
+		assert.ok(!d.tools.includes("send_code_to_revit"), id);
+		assert.equal(d.tools.includes("delete_element"), ["ar", "bk", "uk", "avk", "ga", "el", "ess"].includes(id), `${id}: delete_element only for the roles that model`);
 	}
 });
 
@@ -65,10 +66,10 @@ test("who models and who only reads: AR / BK / the engineers write the model, th
 	assert.ok(!FLEET_DEFAULTS.bpv!.tools.includes("save_document"), "BPV coordinates: it opens and refreshes models, it does not save the disciplines' models");
 });
 
-test("Revit: the three document tools are confirm, delete and send_code stay never, the reading tools of the page are the Revit MCP's reads", () => {
+test("Revit: the three document tools and delete are confirm, send_code stays never, the reading tools of the page are the Revit MCP's reads", () => {
 	for (const t of ["open_document", "save_document", "reload_links"]) assert.equal(REVIT_LEVELS[t], "confirm", t);
 	assert.ok(REVIT_TOOLS.includes("open_document"));
-	assert.equal(levelOf("delete_element"), "never");
+	assert.equal(levelOf("delete_element"), "confirm", "deleting waits for the user's click (2.14.4)");
 	assert.equal(levelOf("send_code_to_revit"), "never");
 	for (const t of REVIT_READ) assert.ok(known.includes(t), t);
 });
@@ -111,7 +112,7 @@ test("a run: AR with the defaults has Revit reading and modelling in its own thr
 	const ar = withFleetDefaults(spec("ar"), have);
 	const mine = ownTools(listed, levelOf, revitTools, ar, "confirm");
 	assert.ok(mine.includes("get_current_view_elements") && mine.includes("create_room") && mine.includes("open_document"));
-	assert.ok(!mine.includes("delete_element") && !mine.includes("send_code_to_revit"));
+	assert.ok(mine.includes("delete_element") && !mine.includes("send_code_to_revit"));
 	const bare = ownTools(listed, levelOf, revitTools, spec("ar"), "confirm");
 	assert.ok(!bare.some((n) => revitTools.has(n)), "no Revit by itself: reading Revit has to be given");
 	// at the run cap the confirm tools wait for the user's cap
@@ -203,4 +204,37 @@ test("setupFleet: once, an empty tool list is set up by role and a list the user
 	settings.saveAgentSpecs(after.map((s) => (s.id === "mel" ? { ...s, tools: [] } : s)));
 	assert.equal(setupFleet({ settings }), null);
 	assert.deepEqual(settings.agentSpecs().specs.find((s) => s.id === "mel")!.tools, []);
+});
+
+test("2.14.4: a fleet set up before gets delete_element once, only the modelling roles with the confirm cap; step 2 runs once", async () => {
+	const { withFleetAddition, FLEET_ADDITIONS } = await import("../src/shared/fleet-defaults.ts");
+	const add = FLEET_ADDITIONS[0]!.tools;
+	const modeller = spec("ar", { tools: ["operate_element", "create_room"], maxLevel: "confirm" });
+	assert.deepEqual(withFleetAddition(modeller, add, have).tools, ["operate_element", "create_room", "delete_element"]);
+	assert.equal(withFleetAddition(spec("ar", { tools: ["write_note"], maxLevel: "confirm" }), add, have).tools.length, 1, "no model tools: not a modeller");
+	assert.equal(withFleetAddition(spec("ar", { tools: ["operate_element"], maxLevel: "run" }), add, have).tools.length, 1, "no confirm cap: the page would refuse it");
+	assert.equal(withFleetAddition(spec("bpv", { tools: ["operate_element"], maxLevel: "confirm" }), add, have).tools.length, 1, "BPV coordinates, it does not delete");
+	assert.equal(withFleetAddition({ ...modeller, tools: [...modeller.tools, "delete_element"] }, add, have).tools.length, 3, "no repeats");
+
+	const { setupFleet } = await import("../src/main/handlers/agents.ts");
+	const { AppSettings } = await import("../src/main/settings.ts");
+	const dir = tmp("pj-fleet2-");
+	const settings = new AppSettings(dir, { available: () => false, encrypt: () => Buffer.alloc(0), decrypt: () => "" });
+	mkdirSync(join(dir, "agents"), { recursive: true });
+	for (const id of ["ar", "bk", "ud"]) writeFileSync(join(dir, "agents", `${id}.md`), `# Agents: ${id}
+
+## Loma
+Izdomāta loma.
+`);
+	// a fleet that the first set-up (2.14.0) made: the marker of step 1 is there, the tools have no delete_element
+	const old = (id: string) => withFleetDefaults(spec(id, { name: id.toUpperCase(), description: "x", roleFile: true }), have);
+	const strip = (s: AgentSpec): AgentSpec => ({ ...s, tools: s.tools.filter((t) => t !== "delete_element") });
+	settings.saveAgentSpecs([strip(old("ar")), strip(old("bk")), strip(old("ud"))]);
+	writeFileSync(join(dir, "agents", ".fleet-setup-1"), "x");
+	const r = setupFleet({ settings })!;
+	assert.deepEqual(r.applied.sort(), ["ar", "bk"]);
+	const get = (id: string) => settings.agentSpecs().specs.find((s) => s.id === id)!;
+	assert.ok(get("ar").tools.includes("delete_element") && get("bk").tools.includes("delete_element"));
+	assert.ok(!get("ud").tools.includes("delete_element"), "UD marks and colours, it does not delete");
+	assert.equal(setupFleet({ settings }), null, "once");
 });

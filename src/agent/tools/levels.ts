@@ -14,7 +14,7 @@ export const LEVEL_LABEL: Record<Level, string> = {
 };
 
 /** Tools whose level is fixed at `never` whatever any table says. */
-export const ALWAYS_NEVER = new Set(["delete_element", "send_code_to_revit"]);
+export const ALWAYS_NEVER = new Set(["send_code_to_revit"]);
 
 export type LevelOf = (tool: string) => Level;
 
@@ -33,14 +33,10 @@ export function revitShellBlock(command: string): string | null {
 	return `run_command nedrīkst vadīt Revit (ne UI automatizācija, ne Revit procesa vadība, ne apiešana ap Revit MCP) — lietotājs to neatļauj nekad. Lieto: ${REVIT_INSTEAD}. Ja vajadzīgā Revit darbībai rīka nav, pasaki lietotājam, kas trūkst, un neizmēģini apeju ar komandrindu.`;
 }
 
-/** Tools whose level depends on what they are asked to do. operate_element also deletes ("Delete") — deletion is never
- *  an agent action, whatever the batch confirmation says. */
+/** Tools whose level depends on what they are asked to do. (Deleting model elements, delete_element and operate_element with "Delete", was never until 2.14.4; the user's ruling of
+ *  2026-11-25, "obviously how else it can fix mistakes": it is a `confirm` action like every change of the model, one click per batch, on the working copy only.) */
 export function neverByArgs(tool: string, args: unknown): string | null {
 	if (tool === "run_command") return revitShellBlock(String((args as { command?: unknown } | null)?.command ?? ""));
-	if (tool === "operate_element") {
-		const action = String((args as { data?: { action?: unknown } } | null)?.data?.action ?? "").toLowerCase();
-		if (action === "delete") return "operate_element ar darbību Delete nav atļauts: elementus dzēš tikai lietotājs.";
-	}
 	return null;
 }
 

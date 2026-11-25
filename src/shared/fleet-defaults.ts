@@ -6,7 +6,8 @@
 // the self tools (memory_write, edit_own_role, draft_skill, routines) and, for bpv and eks, their process tools. What IS listed: the tools beyond
 // reading, and the Revit MCP's own reading tools. Those are never given by themselves (agent/subagents.ts specialistTools), so an agent
 // that is not named here has no Revit at all, and an agent that has any Revit tool holds the Revit seat for its run (one Revit, one connection).
-// `delete_element` and `send_code_to_revit` are in no list: they are `never` for every agent (tools/levels.ts ALWAYS_NEVER).
+// `send_code_to_revit` is in no list: it is `never` for every agent (tools/levels.ts ALWAYS_NEVER). `delete_element` (confirm, one click per batch, working copy only) is in the lists of the roles that model
+// (AR, BK, UK, AVK, GA, EL, ESS): the user's ruling of 2026-11-25, "obviously how else it can fix mistakes".
 
 /** The tools of a coding agent beyond reading, for files on the PC (2026-11-25: "it should have all tools you have as an agent"): write, edit, copy, move, run a command. Each batch waits
  *  for the user's click (a text note in the agent's own work folder does not; the office project folders are refused whatever the click: tools/project-write.ts). Converting files, unpacking archives and the spreadsheet (tools/media.ts) write only
@@ -40,6 +41,7 @@ const REVIT_WORK = [
 	"create_line_based_element", "create_point_based_element", "create_surface_based_element", "create_dimensions", "operate_element", "color_elements", "store_project_data", "store_room_data",
 	"revit_set_parameter", "revit_set_view_settings", "revit_set_schedule_filter", "revit_set_view_scale", "revit_create_plans", "revit_create_sheet",
 	"open_document", "save_document", "reload_links", "revit_save_copy", "revit_export_pdf", "revit_export_ifc",
+	"delete_element",
 ];
 
 export interface FleetDefault {
@@ -111,4 +113,17 @@ export function withFleetDefaults<T extends { id: string; tools: string[]; maxLe
 	const add = d.skills.filter((n) => have.skills.has(n));
 	if (add.length) next.skills = [...new Set([...(spec.skills ?? []), ...add])];
 	return next;
+}
+
+/** What was added to the roles' lists after the first set-up (each has its marker file in agents\, shared/fleet-defaults.ts users: main/handlers/agents.ts setupFleet): the version, and for each role the tools
+ *  an existing agent of it gets once. An agent that has no `operate_element` (it does not model: it was never given the model tools) or no level cap "confirm" is left as it is. */
+export const FLEET_ADDITIONS: { marker: string; tools: Readonly<Record<string, readonly string[]>> }[] = [
+	{ marker: ".fleet-setup-2", tools: Object.fromEntries(["ar", "bk", "uk", "avk", "ga", "el", "ess"].map((id) => [id, ["delete_element"]])) },
+];
+
+/** The spec with the tools of one addition: only a modeller (it has `operate_element`) with the level cap `confirm`, only tools that exist, no repeats. */
+export function withFleetAddition<T extends { id: string; tools: string[]; maxLevel?: "run" | "confirm" }>(spec: T, add: Readonly<Record<string, readonly string[]>>, have: { tools: ReadonlySet<string> }): T {
+	const more = (add[spec.id] ?? []).filter((n) => have.tools.has(n) && !spec.tools.includes(n));
+	if (!more.length || !spec.tools.includes("operate_element") || spec.maxLevel !== "confirm") return spec;
+	return { ...spec, tools: [...spec.tools, ...more] };
 }

@@ -170,7 +170,7 @@ ${rows.join("\n")}
 ## Agent tools
 
 Planned in the tool table: ${[...new Set(planned)].length}. Present: ${[...new Set(planned)].length - missingTools.length}.${missingTools.length ? ` Missing: ${missingTools.join(", ")}.` : " None missing."}
-\`delete_element\` and \`send_code_to_revit\` are \`never\` (not offered; test 0.5 and 6.3).
+\`send_code_to_revit\` is \`never\` (not offered; test 0.5 and 6.3); \`delete_element\` is \`confirm\` since 2.14.4.
 
 ## Problems
 

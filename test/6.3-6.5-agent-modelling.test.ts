@@ -15,14 +15,15 @@ import type { Pin } from "../src/core/model.ts";
 import { ProjectStore } from "../src/core/store.ts";
 import { tmp } from "./helpers.ts";
 
-test("6.3 Revit allow-list: create and modify wait for the user; delete and code are never offered", () => {
+test("6.3 Revit allow-list: create, modify and delete wait for the user; send_code_to_revit is never offered", () => {
 	const levelOf = makeLevelOf(appLevels(), REVIT_LEVELS);
 	const off = offered(REVIT_TOOLS, levelOf);
 	for (const t of ["create_level", "create_grid", "create_line_based_element", "create_room", "operate_element", "tag_all_rooms"]) {
 		assert.ok(off.includes(t), t);
 		assert.equal(levelOf(t), "confirm", t);
 	}
-	for (const t of ["delete_element", "send_code_to_revit"]) assert.ok(!off.includes(t), t);
+	assert.ok(off.includes("delete_element") && levelOf("delete_element") === "confirm");
+	assert.ok(!off.includes("send_code_to_revit") && levelOf("send_code_to_revit") === "never");
 	for (const t of ["export_room_data", "get_current_view_info", "list_revit_instances"]) assert.equal(levelOf(t), "read", t);
 	assert.equal(levelOf("a_new_tool_nobody_rated"), "never");
 });

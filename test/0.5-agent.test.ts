@@ -17,18 +17,18 @@ import { mailDeclarations } from "../src/agent/mail.ts";
 import { subagentDeclarations } from "../src/agent/subagents.ts";
 import { tmp } from "./helpers.ts";
 
-const levelOf = makeLevelOf({ get_focus: "read", set_fact: "propose", create_level: "confirm", create_grid: "confirm", delete_element: "confirm" });
+const levelOf = makeLevelOf({ get_focus: "read", set_fact: "propose", create_level: "confirm", create_grid: "confirm", delete_element: "confirm", send_code_to_revit: "confirm" });
 
 const msg = (...tools: string[]) => ({ role: "assistant", content: tools.map((name, i) => ({ type: "toolCall", id: `t${i}`, name, arguments: { i } })) }) as never;
 const call = (m: unknown, name: string) => ({ assistantMessage: m, toolCall: { type: "toolCall", id: "x", name, arguments: {} }, args: {}, context: {} }) as never;
 
-test("levels: never and unknown tools are not offered; delete and send_code are never whatever a table says", () => {
-	assert.deepEqual(offered(["get_focus", "create_level", "delete_element", "send_code_to_revit", "made_up"], levelOf), ["get_focus", "create_level"]);
+test("levels: never and unknown tools are not offered; send_code_to_revit is never whatever a table says; delete_element waits for the user like any change (2.14.4)", () => {
+	assert.deepEqual(offered(["get_focus", "create_level", "delete_element", "send_code_to_revit", "made_up"], levelOf), ["get_focus", "create_level", "delete_element"]);
 });
 
 test("gate: a never tool is blocked even if a model names it", async () => {
 	const g = new Gate(levelOf, async () => true);
-	assert.equal((await g.before(call(msg("delete_element"), "delete_element")))?.block, true);
+	assert.equal((await g.before(call(msg("send_code_to_revit"), "send_code_to_revit")))?.block, true);
 	assert.equal(await g.before(call(msg("get_focus"), "get_focus")), undefined);
 });
 
@@ -101,14 +101,18 @@ test("session: without a credential the status is nav pieslēgts", async () => {
 	assert.equal(st.revit, "nav konfigurēts");
 });
 
-test("gate: operate_element with Delete is blocked even inside a confirmed batch", async () => {
+test("gate: operate_element with Delete waits for the user like any change of the model (2.14.4); declined, it is blocked", async () => {
 	const lv = makeLevelOf({ operate_element: "confirm" });
-	const g = new Gate(lv, async () => true);
+	const asked: ConfirmRequest[] = [];
+	const g = new Gate(lv, async (r) => (asked.push(r), true));
 	const m = { role: "assistant", content: [{ type: "toolCall", id: "a", name: "operate_element", arguments: {} }] } as never;
 	const del = { assistantMessage: m, toolCall: { type: "toolCall", id: "a", name: "operate_element", arguments: { data: { action: "Delete", elementIds: [1] } } }, args: { data: { action: "Delete", elementIds: [1] } }, context: {} } as never;
 	const sel = { assistantMessage: m, toolCall: { type: "toolCall", id: "a", name: "operate_element", arguments: { data: { action: "Select", elementIds: [1] } } }, args: { data: { action: "Select", elementIds: [1] } }, context: {} } as never;
-	assert.equal((await g.before(del))?.block, true);
+	assert.equal(await g.before(del), undefined);
+	assert.equal(asked.length, 1, "the user was asked");
 	assert.equal(await g.before(sel), undefined);
+	const no = new Gate(lv, async () => false);
+	assert.equal((await no.before(del))?.block, true);
 });
 
 test("every tool the agent is sent has parameter names the providers accept (Claude: ^[a-zA-Z0-9_.-]{1,64}$; \"daļa\" failed every run)", () => {

@@ -4,7 +4,7 @@
 // shared rules the Aģenti page edits.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
-import { withFleetDefaults } from "../../shared/fleet-defaults.js";
+import { FLEET_ADDITIONS, withFleetAddition, withFleetDefaults } from "../../shared/fleet-defaults.js";
 import { PROCESS_OWN_TOOLS } from "../../core/process-def.js";
 import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
@@ -233,42 +233,52 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 	};
 }
 
-/** The one-time set-up of a fleet that is already saved (2026-11-25: every agent properly set up, by role, none with an empty tool list; shared/fleet-defaults.ts).
- *  Runs at the first start of this version: an agent whose tool list is empty gets its role's tools and level cap, and every agent in the table gets its synced Revit
- *  skills. A list the user made is kept. All agents go in one save (one measurement of the whole list, the settings page's own checks); only if that is refused is each one
- *  tried alone, so one that cannot be saved (its context would pass the limit) is skipped with the reason and the others still go in. A marker file in agents\ makes it run once, so the
- *  user can untick anything afterwards. `null` = nothing to do (done before, no fleet saved yet). The result is also written to agents\fleet-setup.log. */
+/** The one-time set-ups of a fleet that is already saved (2026-11-25: every agent properly set up, by role, none with an empty tool list; shared/fleet-defaults.ts).
+ *  Step 1 (first start of 2.14.0): an agent whose tool list is empty gets its role's tools and level cap, and every agent in the table gets its synced Revit skills; a list the user made
+ *  is kept. Step 2 (2.14.4): the modelling roles that already have their tools get `delete_element` (confirm). Each step: all agents in one save (one measurement of the whole list, the
+ *  settings page's own checks); only if that is refused is each one tried alone, so one that cannot be saved (its context would pass the limit) is skipped with the reason and the others
+ *  still go in. A marker file in agents\ per step makes it run once, so the user can untick anything afterwards. `null` = nothing to do (done before, no fleet saved yet). The result is also
+ *  written to agentsleet-setup.log. */
 export function setupFleet(d: { settings: AppSettings; skillsDir?: string }): { applied: string[]; skipped: { id: string; why: string }[] } | null {
 	const dir = join(d.settings.dir, "agents");
-	const marker = join(dir, ".fleet-setup-1");
-	if (existsSync(marker)) return null;
-	const { specs, shipped } = d.settings.agentSpecs();
-	if (shipped || !specs.length) return null;
+	const first = join(dir, ".fleet-setup-1");
+	const pending = [{ marker: first, apply: (s: AgentSpec, have: Have) => withFleetDefaults(s, have) }, ...FLEET_ADDITIONS.map((a) => ({ marker: join(dir, a.marker), apply: (s: AgentSpec, have: Have) => withFleetAddition(s, a.tools, have) }))].filter((x) => !existsSync(x.marker));
+	if (!pending.length) return null;
+	if (d.settings.agentSpecs().shipped || !d.settings.agentSpecs().specs.length) return null;
 	const save = agentHandlers(d)["agents.save"] as (list: AgentSpec[]) => unknown;
-	const have = {
+	const have: Have = {
 		tools: new Set([...allTools().map((t) => t.name), ...Object.keys(REVIT_LEVELS)]),
 		skills: new Set(listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)).map((x) => x.name)),
 	};
-	const next = specs.map((s) => withFleetDefaults(s, have));
-	const changed = next.filter((s, k) => JSON.stringify(s) !== JSON.stringify(specs[k]));
 	const report: { applied: string[]; skipped: { id: string; why: string }[] } = { applied: [], skipped: [] };
-	if (changed.length) {
-		try {
-			save(next);
-			report.applied = changed.map((s) => s.id);
-		} catch {
-			for (const s of changed) {
-				try {
-					save(d.settings.agentSpecs().specs.map((x) => (x.id === s.id ? s : x)));
-					report.applied.push(s.id);
-				} catch (e) {
-					report.skipped.push({ id: s.id, why: e instanceof Error ? e.message : String(e) });
+	for (const step of pending) {
+		const specs = d.settings.agentSpecs().specs;
+		const next = specs.map((s) => step.apply(s, have));
+		const changed = next.filter((s, k) => JSON.stringify(s) !== JSON.stringify(specs[k]));
+		const done: string[] = [];
+		if (changed.length) {
+			try {
+				save(next);
+				done.push(...changed.map((s) => s.id));
+			} catch {
+				for (const s of changed) {
+					try {
+						save(d.settings.agentSpecs().specs.map((x) => (x.id === s.id ? s : x)));
+						done.push(s.id);
+					} catch (e) {
+						report.skipped.push({ id: s.id, why: e instanceof Error ? e.message : String(e) });
+					}
 				}
 			}
 		}
+		report.applied.push(...done.filter((x) => !report.applied.includes(x)));
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(step.marker, `${new Date().toISOString()}
+`, "utf8");
+		appendFileSync(join(dir, "fleet-setup.log"), `${JSON.stringify({ at: new Date().toISOString(), step: step.marker.slice(step.marker.lastIndexOf(".fleet")), applied: done })}
+`, "utf8");
 	}
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(marker, `${new Date().toISOString()}\n`, "utf8");
-	appendFileSync(join(dir, "fleet-setup.log"), `${JSON.stringify({ at: new Date().toISOString(), ...report })}\n`, "utf8");
 	return report;
 }
+
+type Have = { tools: ReadonlySet<string>; skills: ReadonlySet<string> };
