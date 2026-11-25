@@ -37,7 +37,7 @@ import { ctxEnv } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
 import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
-import { freeWrite } from "./tools/project-write.js";
+import { freeWrite, officeBlock } from "./tools/project-write.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -395,7 +395,7 @@ export class ThreadRunner {
 						confirmedBatches++;
 					}
 					return ok;
-				}, (tool, args) => freeWrite({ ...this.d.ctx, projectId }, tool, args));
+				}, (tool, args) => freeWrite({ ...this.d.ctx, projectId }, tool, args), (tool, args) => officeBlock({ ...this.d.ctx, projectId }, tool, args));
 				// the lead's own writes take their lock after the gate has let them through, and free it when the call is done
 				const locks = this.d.locks;
 				const agentId = spec ? spec.id : LEAD_ID;

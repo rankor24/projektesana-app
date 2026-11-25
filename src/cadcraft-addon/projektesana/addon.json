@@ -1,7 +1,7 @@
 {
   "id": "projektesana",
   "name": "Projektēšanas App",
-  "version": "2.14.1",
+  "version": "2.14.2",
   "apps": ["cadcraft"],
   "api": "1.0",
   "license": "Apache-2.0",

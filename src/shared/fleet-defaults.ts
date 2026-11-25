@@ -9,7 +9,7 @@
 // `delete_element` and `send_code_to_revit` are in no list: they are `never` for every agent (tools/levels.ts ALWAYS_NEVER).
 
 /** The tools of a coding agent beyond reading, for files on the PC (2026-11-25: "it should have all tools you have as an agent"): write, edit, copy, move, run a command. Each batch waits
- *  for the user's click (a text note inside the project folder does not: tools/project-write.ts). Converting files, unpacking archives and the spreadsheet (tools/media.ts) write only
+ *  for the user's click (a text note in the agent's own work folder does not; the office project folders are refused whatever the click: tools/project-write.ts). Converting files, unpacking archives and the spreadsheet (tools/media.ts) write only
  *  new files in the app's own folders, so they run at once. Reading, searching, viewing images, archive listing and reading drawings are read tools every agent has already. */
 const FILES = ["write_file", "edit_file", "copy_file", "move_file", "run_command"];
 const NEW_FILES = ["convert_file", "archive_extract", "write_spreadsheet"];

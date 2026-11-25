@@ -167,11 +167,22 @@ export class AntigravityHost {
 		try {
 			const { client, init } = await this.client();
 			const setup = antigravitySessionSetup(init);
+			// the server's own writing, running and browsing tools are off; a runtime that refuses that setup gets the minimal one (the permission handler of run.ts still refuses them)
+			const open = async (method: string, params: Record<string, unknown>) => {
+				try {
+					return await client.request(method, { ...params, ...setup }, 120_000);
+				} catch (e) {
+					// a refused resume (the session is gone) fails the same way again, so only a session/new falls back
+					if (method !== "session/new" || e instanceof AntigravitySignInRequired) throw e;
+					this.log(`antigravity: session/new with the server's own tools off failed (${(e as Error).message}); trying without`);
+					return client.request(method, { ...params, ...antigravitySessionSetup(init, true) }, 120_000);
+				}
+			};
 			let session: any = null;
 			let resumed = false;
 			if (spec.resume) {
 				try {
-					session = await client.request("session/resume", { sessionId: spec.resume, cwd: spec.cwd, mcpServers: spec.mcpServers, ...setup }, 120_000);
+					session = await open("session/resume", { sessionId: spec.resume, cwd: spec.cwd, mcpServers: spec.mcpServers });
 					session = { ...session, sessionId: session?.sessionId ?? spec.resume };
 					resumed = true;
 				} catch (e) {
@@ -179,7 +190,7 @@ export class AntigravityHost {
 					this.log(`antigravity: session/resume refused (${(e as Error).message}); a new session`);
 				}
 			}
-			if (!session) session = await client.request("session/new", { cwd: spec.cwd, mcpServers: spec.mcpServers, ...setup }, 120_000);
+			if (!session) session = await open("session/new", { cwd: spec.cwd, mcpServers: spec.mcpServers });
 			const sessionId: string = session?.sessionId;
 			if (!sessionId) throw new Error("Antigravity did not return a session.");
 			this.listeners.set(sessionId, listener);

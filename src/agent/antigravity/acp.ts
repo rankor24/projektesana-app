@@ -353,8 +353,36 @@ export function antigravityClientInfo(version: string | null | undefined): { nam
 
 const runtimeVersion = (value: unknown) => (typeof value === "string" ? value.replace(/^agy_acp_server_/u, "").trim() : "");
 
-/** agy_acp_server 1.4.2 to 1.4.5 create or overwrite skills/system/run-workflow/SKILL.md in the session's folder unless the session turns its `run_workflow` tool off. */
-export function antigravitySessionSetup(initialized: any): { _meta?: { antigravity: { disabledTools: string[] } } } {
+/** The server's own tools that write, run, browse or start helpers. This app's agents work through the app's tools only (the bridge: approval gate, write guard, the
+ *  office folders read-only), so a session turns these off. What stays is reading (view_file is how the server shows the model a long tool result it saved to a file,
+ *  list_dir, grep_search, find_by_name, code_search …) and the server's own bookkeeping (task_boundary, notify_user, ask_user). A name the runtime does not know is ignored. */
+export const ANTIGRAVITY_OWN_TOOLS_OFF = [
+	"write_to_file",
+	"replace_file_content",
+	"multi_replace_file_content",
+	"edit_notebook",
+	"execute_notebook",
+	"propose_code",
+	"run_command",
+	"send_command_input",
+	"command_status",
+	"read_terminal",
+	"run_workflow",
+	"browser_subagent",
+	"open_browser_url",
+	"read_browser_page",
+	"capture_browser_screenshot",
+	"invoke_subagent",
+	"search_web",
+	"read_url_content",
+	"generate_image",
+] as const;
+
+/** What a session is opened with. Every session turns the server's own writing, running and browsing tools off (above); agy_acp_server 1.4.2 to 1.4.5 also create or
+ *  overwrite skills/system/run-workflow/SKILL.md in the session's folder unless `run_workflow` is off, which the list already holds.
+ *  `minimal: true` is the old setup (only that one tool), for a runtime that refuses the long list: the permission handler of run.ts is then the only wall. */
+export function antigravitySessionSetup(initialized: any, minimal = false): { _meta?: { antigravity: { disabledTools: string[] } } } {
+	if (!minimal) return { _meta: { antigravity: { disabledTools: [...ANTIGRAVITY_OWN_TOOLS_OFF] } } };
 	const match = /^1\.4\.(\d+)(?!\d)/u.exec(runtimeVersion(initialized?.agentInfo?.version));
 	const patch = match ? Number(match[1]) : -1;
 	return patch >= 2 && patch <= 5 ? { _meta: { antigravity: { disabledTools: ["run_workflow"] } } } : {};

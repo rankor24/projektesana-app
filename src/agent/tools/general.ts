@@ -1,26 +1,31 @@
 // The agent's general tools (2.6.9: "all regular agent tools", the ones a coding agent has): the web, the PC's files and the
 // shell. Reading is free; anything that writes, moves or runs waits for the user's click (level confirm, the batch gate shows
-// the exact path and command). Folders are never deleted (the user's standing rule). A file that is overwritten is kept first
-// under <data>\backups\agent so the user can take it back.
+// the exact path and command), except a text note in the agent's own work folder. The office project folders are read-only here
+// whatever the click (project-write.ts `officeBlock`): a relative path of a write tool means the app's work folder
+// (<app data>\agent-work\<project>), never the project. Folders are never deleted (the user's standing rule). A file that is
+// overwritten is kept first under <data>\backups\agent so the user can take it back.
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
 import { extractBytes, TEXT_FORMATS } from "../../sources/text/index.js";
 import type { ToolCtx } from "./context.js";
 import { revitShellBlock } from "./levels.js";
-import { recordCreated, projectRoot } from "./project-write.js";
+import { officeBlock, resolveRead, resolveWrite, workFolder } from "./project-write.js";
 import { tool, type ToolDef } from "./tool.js";
 
 const MAX_TEXT = 60_000;
 const cut = (s: string, n = MAX_TEXT) => (s.length > n ? `${s.slice(0, n)}\n[… apgriezts: ${s.length} zīmes kopā]` : s);
 
-/** A path as the agent gives it: absolute, or under the open project's folder. */
+/** A path to READ as the agent gives it: absolute, or under the open project's folder (else under its own work folder, where its notes are). */
 export function abs(ctx: ToolCtx, p: string): string {
-	if (isAbsolute(p)) return resolve(p);
-	const root = projectRoot(ctx);
-	if (!root) throw new Error("Relatīvs ceļš vajag atvērtu projektu; dod pilnu ceļu.");
-	return resolve(root, p);
+	return resolveRead(ctx, p, existsSync);
+}
+
+/** The refusal of a write tool into an office folder, thrown where the tool runs (the gate has asked the same before the click). */
+function noOffice(ctx: ToolCtx, tool: string, args: unknown): void {
+	const b = officeBlock(ctx, tool, args);
+	if (b) throw new Error(b);
 }
 
 /** Keeps the file that is about to be overwritten or moved: <app data>\backups\agent\<time>\<name>. */
@@ -174,15 +179,14 @@ export const generalTools: ToolDef[] = [
 		name: "write_file",
 		level: "confirm",
 		description:
-			"Write a text file (create, or replace what is there; the old file is kept in the app's backups first). A relative path is under the open project's folder. Runs without asking for a text note (.md, .txt, .csv, .json, .html…) inside the open project's folder when the file is new or one you made yourself; any other path, a file type that is not plain text, or a file you did not make waits for the user's click.",
+			"Write a text file (create, or replace what is there; the old file is kept in the app's backups first). Your own files (analyses, letters, lists) go to YOUR WORK FOLDER in the app: a relative path means that folder, and a text note (.md, .txt, .csv, .json, .html…) there runs without asking. Read it back with the full path the result gives. The office's project folders are read-only for you: a path inside one is refused, whatever the user would click; the user copies to 1.4_Nodevumi himself. Any other path, or a file type that is not plain text, waits for the user's click.",
 		input: { path: z.string(), content: z.string() },
 		run: (ctx, { path, content }) => {
-			const f = abs(ctx, path);
-			const existed = existsSync(f);
+			noOffice(ctx, "write_file", { path });
+			const f = resolveWrite(ctx, path);
 			const kept = keep(ctx, f);
 			mkdirSync(dirname(f), { recursive: true });
 			writeFileSync(f, content, "utf8");
-			if (!existed) recordCreated(ctx, f);
 			return { ok: true, file: f, ...(kept ? { previousKeptAt: kept } : {}) };
 		},
 	}),
@@ -190,10 +194,11 @@ export const generalTools: ToolDef[] = [
 		name: "edit_file",
 		level: "confirm",
 		description:
-			"Change part of a text file: every place where `old` stands exactly once is replaced by `new` (more than one place, or none, is an error: give more of the text around it, or pass all: true to change every place). Use it to fix a note instead of writing the whole file again. The old file is kept in the app's backups first. A relative path is under the open project's folder. Runs without asking on a text note inside the open project's folder that you made yourself; anything else waits for the user's click.",
+			"Change part of a text file: every place where `old` stands exactly once is replaced by `new` (more than one place, or none, is an error: give more of the text around it, or pass all: true to change every place). Use it to fix a note instead of writing the whole file again. The old file is kept in the app's backups first. A relative path means your work folder in the app. Runs without asking on a text note there; the office's project folders are read-only for you (refused); any other path waits for the user's click.",
 		input: { path: z.string(), old: z.string().min(1), new: z.string(), all: z.boolean().optional() },
 		run: (ctx, a) => {
-			const f = abs(ctx, a.path);
+			noOffice(ctx, "edit_file", { path: a.path });
+			const f = resolveWrite(ctx, a.path);
 			if (!existsSync(f) || !statSync(f).isFile()) throw new Error(`Tas nav fails: ${f}`);
 			const text = readFileSync(f, "utf8");
 			const n = text.split(a.old).length - 1;
@@ -207,11 +212,12 @@ export const generalTools: ToolDef[] = [
 	tool({
 		name: "move_file",
 		level: "confirm",
-		description: "Move or rename a file (never a folder). The target must not exist. Waits for the user's click.",
+		description: "Move or rename a file (never a folder). The target must not exist. Neither end may be in an office project folder (read-only for you: refused); a relative target means your work folder. Waits for the user's click.",
 		input: { from: z.string(), to: z.string() },
 		run: (ctx, a) => {
+			noOffice(ctx, "move_file", a);
 			const from = abs(ctx, a.from);
-			const to = abs(ctx, a.to);
+			const to = resolveWrite(ctx, a.to);
 			if (!existsSync(from) || !statSync(from).isFile()) throw new Error(`Tas nav fails: ${from} (mapes netiek pārvietotas).`);
 			if (existsSync(to)) throw new Error(`Mērķis jau ir: ${to}`);
 			mkdirSync(dirname(to), { recursive: true });
@@ -222,17 +228,16 @@ export const generalTools: ToolDef[] = [
 	tool({
 		name: "copy_file",
 		level: "confirm",
-		description: "Copy a file (never a folder). An existing target is kept in the app's backups before it is replaced. Waits for the user's click, except a copy to a new text note (.md, .txt, .csv, .json…) inside the open project's folder.",
+		description: "Copy a file (never a folder). An existing target is kept in the app's backups before it is replaced. The target may not be in an office project folder (read-only for you: refused); a relative target means your work folder, and a copy of a text file there needs no click. Any other target waits for the user's click.",
 		input: { from: z.string(), to: z.string() },
 		run: (ctx, a) => {
+			noOffice(ctx, "copy_file", { to: a.to });
 			const from = abs(ctx, a.from);
-			const to = abs(ctx, a.to);
+			const to = resolveWrite(ctx, a.to);
 			if (!existsSync(from) || !statSync(from).isFile()) throw new Error(`Tas nav fails: ${from}`);
-			const existed = existsSync(to);
 			const kept = keep(ctx, to);
 			mkdirSync(dirname(to), { recursive: true });
 			copyFileSync(from, to);
-			if (!existed) recordCreated(ctx, to);
 			return { ok: true, from, to, ...(kept ? { previousKeptAt: kept } : {}) };
 		},
 	}),
@@ -240,14 +245,17 @@ export const generalTools: ToolDef[] = [
 		name: "run_command",
 		level: "confirm",
 		description:
-			"Run a PowerShell command on the PC and get its output (2 minutes at most): convert files, call a program, check something the app's tools do not. Never delete folders. NEVER for Revit: no clicking in its windows (UI automation), no starting, stopping or inspecting its process — such a command is refused. Revit work goes through the Revit MCP tools and the revit_* tools. Waits for the user's click, who sees the command. cwd: a folder (default the open project's folder).",
+			"Run a PowerShell command on the PC and get its output (2 minutes at most): convert files, call a program, check something the app's tools do not. Never delete folders. NEVER for Revit: no clicking in its windows (UI automation), no starting, stopping or inspecting its process — such a command is refused. Revit work goes through the Revit MCP tools and the revit_* tools. Waits for the user's click, who sees the command. cwd: a folder (default: your work folder in the app, where a file a command writes belongs). A command that writes into an office project folder is refused.",
 		input: { command: z.string().min(1), cwd: z.string().optional() },
 		run: (ctx, a) =>
 			new Promise((ok, fail) => {
 				// the gate refuses these before the user is asked (levels.ts neverByArgs); this is the same rule where the command would run
 				const blocked = revitShellBlock(a.command);
 				if (blocked) return fail(new Error(blocked));
-				const cwd = abs(ctx, a.cwd || ".");
+				const office = officeBlock(ctx, "run_command", a);
+				if (office) return fail(new Error(office));
+				const cwd = a.cwd ? abs(ctx, a.cwd) : workFolder(ctx);
+				if (!a.cwd) mkdirSync(cwd, { recursive: true });
 				execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", a.command], { cwd, timeout: 120_000, maxBuffer: 8_000_000, windowsHide: true }, (err, stdout, stderr) => {
 					ok({ exitCode: err ? ((err as { code?: number }).code ?? 1) : 0, stdout: cut(String(stdout), 30_000), ...(stderr ? { stderr: cut(String(stderr), 10_000) } : {}), ...(err && (err as { killed?: boolean }).killed ? { note: "apturēts pēc 2 minūtēm" } : {}) });
 				});

@@ -72,11 +72,13 @@ export class Gate {
 	private pending = new WeakMap<object, Promise<boolean>>();
 	private n = 0;
 
-	/** `free` lifts a confirm call that needs no click for what it was asked to do (project-write.ts: a text note inside the project folder). */
+	/** `free` lifts a confirm call that needs no click for what it was asked to do (project-write.ts: a text note in the agent's work folder).
+	 *  `deny` is a refusal no click can lift (project-write.ts `officeBlock`: a write into an office project folder): the call is blocked before the user is asked. */
 	constructor(
 		private levelOf: LevelOf,
 		private ask: (req: ConfirmRequest) => Promise<boolean>,
 		private free: (tool: string, args: unknown) => boolean = () => false,
+		private deny: (tool: string, args: unknown) => string | null = () => null,
 	) {}
 
 	before = async (ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
@@ -85,6 +87,8 @@ export class Gate {
 		if (level === "never") return { block: true, reason: `Rīks ${name} nav atļauts (līmenis: nekad).` };
 		const argNever = neverByArgs(name, ctx.args ?? ctx.toolCall.arguments);
 		if (argNever) return { block: true, reason: argNever };
+		const denied = this.deny(name, ctx.args ?? ctx.toolCall.arguments);
+		if (denied) return { block: true, reason: denied };
 		if (level !== "confirm") return undefined;
 		if (this.free(name, ctx.args ?? ctx.toolCall.arguments)) return undefined;
 		const msg = ctx.assistantMessage as object;
@@ -93,7 +97,7 @@ export class Gate {
 			let p = this.pending.get(msg);
 			if (!p) {
 				const batch = ctx.assistantMessage.content
-					.filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall" && this.levelOf(c.name) === "confirm" && !this.free(c.name, c.arguments) && !neverByArgs(c.name, c.arguments))
+					.filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall" && this.levelOf(c.name) === "confirm" && !this.free(c.name, c.arguments) && !neverByArgs(c.name, c.arguments) && !this.deny(c.name, c.arguments))
 					.map((c) => ({ tool: c.name, args: c.arguments }));
 				p = this.ask({ id: `c${++this.n}`, batch });
 				this.pending.set(msg, p);

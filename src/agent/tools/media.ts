@@ -6,7 +6,7 @@
 //   cad_describe / cad_objects / pointcloud_info   what is IN a DWG or DXF (layers, blocks, sheets, text, dimensions, areas, lengths) and the header of a LAS/LAZ cloud:
 //                     CadCraft's own headless modules (agent/cad-headless.ts), which the app only used to show and compare drawings before
 // Reading and viewing are `read`. Converting, extracting and the spreadsheet are `run`: they write only NEW files, into the delivery's staging (spreadsheet) or the app's own
-// agent-work folder (the rest), never over a file and never into the office folders; copying a result into the project is copy_file (a click).
+// agent-work folder (the rest), never over a file and never into the office folders; a result is never copied into the office folders by an agent (read-only for agents; the user copies to 1.4_Nodevumi).
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
@@ -114,7 +114,7 @@ export const mediaTools: ToolDef[] = [
 		name: "archive_extract",
 		level: "run",
 		description:
-			"Unpack an archive into a NEW folder of the app's agent-work area (never into the project, never over anything): all of it, or only the entries named (archive_list shows the names). Then read the files with read_file, view_image, cad_describe; copy what the project should keep with copy_file. Refuses paths that leave the folder and archives of more than 100 000 files or 4 GB.",
+			"Unpack an archive into a NEW folder of the app's agent-work area (never into the project, never over anything): all of it, or only the entries named (archive_list shows the names). Then read the files with read_file, view_image, cad_describe; what should go into the project, the user copies himself (an agent may not write into the office folders). Refuses paths that leave the folder and archives of more than 100 000 files or 4 GB.",
 		input: { path: z.string(), entries: z.array(z.string()).optional() },
 		run: async (ctx, a) => {
 			const f = existing(ctx, a.path);
@@ -135,7 +135,7 @@ export const mediaTools: ToolDef[] = [
 			const to = a.to.toLowerCase().replace(/^\./, "").replace("jpeg", "jpg");
 			const dir = workDirOf(ctx.appDir, ctx.projectId);
 			const base = cleanName(basename(src, ext));
-			const done = (files: string[], note?: string) => ({ ok: true, files, ...(note ? { note } : {}), note2: "Jauns fails agent-work mapē; kopē projektā ar copy_file, ja vajag." });
+			const done = (files: string[], note?: string) => ({ ok: true, files, ...(note ? { note } : {}), note2: "Jauns fails agent-work mapē; uz projekta mapi to nokopē lietotājs (aģents projekta mapē neraksta)." });
 
 			if ((GDI_IMAGE.has(ext) || NATIVE_IMAGE.has(ext)) && (to === "png" || to === "jpg")) {
 				const out = uniquePath(dir, `${base}.${to}`);
