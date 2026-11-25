@@ -1,5 +1,5 @@
 // Shapes of a thread: one stored conversation of one agent. Shared with the renderer, so no node imports here.
-import type { ChatAttachment, FocusItem } from "./api.js";
+import type { ChatAttachment, ChatAttachmentRef, FocusItem } from "./api.js";
 
 /** The id of the lead agent (the one the user talks to by default). */
 export const LEAD_ID = "lead";
@@ -92,6 +92,21 @@ export interface QueueView {
 	waves: Wave[];
 	/** what the user paused (agents, departments, everything): these start nothing new until resumed */
 	held: HeldView;
+	/** the messages the user wrote while a chat's agent was answering, one per thread, not yet read by the agent (steering) */
+	steering: SteerView[];
+}
+
+/** A message held for the agent that is answering: it reaches the agent after its current step, or starts a new run when this one ends. Until then the user can edit or cancel it.
+ *  `kept` = it will not be sent by itself: the run was stopped, ended in an error, or the new run was refused; the user decides (Labot / Atcelt). */
+export interface SteerView {
+	threadId: string;
+	projectId: string | null;
+	text: string;
+	attachments: ChatAttachmentRef[];
+	at: string;
+	kept?: "stopped" | "failed" | "refused";
+	/** the reason a refused delivery gave, as written */
+	detail?: string;
 }
 
 /** Pause state as the window sees it. `all`: a full stop is on. Agent and department ids; a department's agents are held with it. */

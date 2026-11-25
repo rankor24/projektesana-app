@@ -16,7 +16,7 @@ import { compactMessages, type Complete } from "./compact.js";
 import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
-import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime } from "./pi/index.js";
+import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime, type SteerHandle } from "./pi/index.js";
 import { catalogProvider, isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
 import { backupFor, classifyFailure, targetFor, type Failover, type Target } from "./failover/index.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
@@ -66,6 +66,14 @@ const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0
 /** Names a conversation and its usage rows: the provider and the model as chosen. */
 const keyOf = (t: Pick<Target, "provider" | "model">) => `${t.provider}/${t.model}`;
 
+/** A way to hand the running agent one more message from the user (steering). The runner gives it to the coordinator while an attempt is going and takes it away when the attempt ends. */
+export interface RunSteer {
+	/** Queues the message: the agent reads it after its current step. `taken` is called when it has (the message is then in the thread's history and a `steered` event has gone out). */
+	push(m: { text: string; focus: FocusItem[]; files: PreparedAttachments }, taken: () => void): void;
+	/** Takes the message back while the agent has not read it; false when it has been read or is being read. */
+	withdraw(): boolean;
+}
+
 export interface RunInput {
 	runId: string;
 	thread: Thread;
@@ -91,6 +99,8 @@ export interface RunInput {
 	notesChanged?: () => void;
 	/** project data changed in the tools server's process (a process tool's result): the window reloads what shows it */
 	dataChanged?: (what: string[]) => void;
+	/** steering: called with a handle while the engine can take a message mid-run, and with null when it cannot any more. The Claude subscription engine never offers one. */
+	onSteer?: (h: RunSteer | null) => void;
 }
 
 export interface Conversation {
@@ -587,6 +597,27 @@ export class ThreadRunner {
 							: { onMessages: (messages: AgentMessage[]) => this.conversations.set(thread.id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }) }),
 						onEvent: handle,
 						extraTools: extraTools.length ? extraTools : undefined,
+						// a message the user writes while this attempt goes is read after its current step: the engine reads it (pi's steer), the thread keeps it from that moment
+						...(i.onSteer
+							? {
+									onSteer: (h: SteerHandle | null) =>
+										i.onSteer!(
+											h && {
+												push: (m, taken) =>
+													h.push({ text: buildPrompt([], m.focus, [m.text.trim(), m.files.text].filter(Boolean).join("\n\n")), images: m.files.images.length ? m.files.images : undefined }, () => {
+														try {
+															this.remember(thread, "user", m.text, m.files.refs);
+														} catch {
+															// the history is a convenience for reopening the chat; the agent has the message
+														}
+														emit({ type: "steered", text: m.text, ...(m.files.refs.length ? { attachments: m.files.refs } : {}) });
+														taken();
+													}),
+												withdraw: () => h.withdraw(),
+											},
+										),
+								}
+							: {}),
 					});
 				};
 				await attempt(history, shape);

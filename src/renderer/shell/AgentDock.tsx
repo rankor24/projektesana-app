@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { groupRuns, isRunning } from "../../shared/activity";
 import { useActivity } from "../activity";
 import { RunCard } from "./RunCard";
-import { apply, startChatStreams, streamedLines, type Line } from "./chat-lines";
+import { apply, placeSteered, runLines, startChatStreams, streamedLines, type Line } from "./chat-lines";
+import { HeldMessage } from "./HeldMessage";
 import { PlanBlock } from "./PlanBlock";
 import { attachBus } from "../attach-bus";
 import { Icon } from "../icons";
@@ -169,7 +170,7 @@ export function AgentDock() {
 		// what the run streamed while this conversation was not on screen comes back with its card. It is read here, in the same step that sets
 		// `runRef`: an event after this point reaches the line list through `apply`, one before it is in the buffer, so no text is doubled or lost.
 		const streamed = streamedLines(id);
-		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, { kind: "run", runId: id }, ...streamed]));
+		setLines((ls) => (ls.some((l) => l.kind === "run" && l.runId === id) ? ls : [...ls, ...runLines(id, streamed)]));
 	}, [runs, loadedFor, viewKey, viewId]);
 
 	useEffect(
@@ -177,7 +178,8 @@ export function AgentDock() {
 			on("agent.event", ({ runId: id, event }) => {
 				if (id !== runRef.current) return;
 				queuedRef.current = false;
-				setLines((ls) => apply(ls, event));
+				// a run started to deliver a held message: its card is here already, the message goes above it
+				setLines((ls) => (event.type === "steered" && event.starts ? placeSteered(ls, id, event) : apply(ls, event)));
 				if (event.type === "tool_result" && event.ok) runUi(readUi(event.output));
 				if (event.type === "done" || event.type === "error") {
 					runRef.current = null;
@@ -222,9 +224,12 @@ export function AgentDock() {
 	useEffect(() => attachBus.on((f) => void addRef.current(f)), []);
 
 	const closedView = viewThread?.state === "closed";
+	// the agent is answering in this chat (or its run waits in the queue): a message is held for it, not refused
+	const workingHere = !!runId || (!!viewId && (T.queue.running.some((r) => r.threadId === viewId) || T.queue.queued.some((q) => q.threadId === viewId && q.state === "queued")));
+	const held = viewId ? T.queue.steering.find((m) => m.threadId === viewId) : undefined;
 	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0 && !closedView;
 	const send = async () => {
-		if (!canSend || runId) return;
+		if (!canSend) return;
 		setErr(null);
 		const t = text;
 		const files = pending;
@@ -253,6 +258,17 @@ export function AgentDock() {
 				return;
 			}
 			const body = here ? here.text : t;
+			// the agent of this chat is answering: the message is held (it reaches the agent after its current step), not refused
+			if (workingHere && viewId) {
+				const h = await call("threads.hold", viewId, projectId, body, focus, atts);
+				if (h) {
+					setText("");
+					setPending([]);
+					return;
+				}
+				// the run ended while the message was being prepared: it is sent the normal way below
+			}
+			if (runId) throw new Error(tr("Aģents vēl strādā: pagaidi mirkli vai aptur."));
 			const r = leadPath ? await call("agent.send", projectId, t, focus, atts) : await call("threads.send", viewId!, projectId, body, focus, atts);
 			const refs: ChatAttachmentRef[] = files.map((f) => ({ name: f.name, kind: f.kind, thumb: f.thumb }));
 			const user = { kind: "user" as const, text: body, attachments: refs.length ? refs : undefined };
@@ -472,6 +488,21 @@ export function AgentDock() {
 						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
 					),
 				)}
+				{held && viewId && (
+					<HeldMessage
+						key={held.at}
+						held={held}
+						act={{
+							edit: async (t) => (await call("threads.holdEdit", viewId, projectId, t)) !== null,
+							cancel: () => call("threads.unhold", viewId, projectId),
+							send: async () => {
+								const r = await call("threads.holdSend", viewId, projectId);
+								// the run this starts is picked up by the card effect above (it is going in the run table); a queued start has its card too
+								if (r.queued) setErr(null);
+							},
+						}}
+					/>
+				)}
 			</div>
 			{err && <div className="err">{err}</div>}
 			{notice && (
@@ -518,7 +549,7 @@ export function AgentDock() {
 						ref={inputRef}
 						rows={2}
 						value={text}
-						placeholder={closedView ? tr("Saruna ir slēgta") : st && !st.signedIn ? tr("nav pieslēgts — atver Iestatījumi") : tr("Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu")}
+						placeholder={closedView ? tr("Saruna ir slēgta") : st && !st.signedIn ? tr("nav pieslēgts — atver Iestatījumi") : workingHere ? tr("Aģents strādā — raksti tālāk, ziņa nonāks pie viņa pēc tekošā soļa (Ctrl+Enter)") : tr("Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu")}
 						onChange={(e) => {
 							setText(e.target.value);
 							setPick(0);
@@ -570,16 +601,15 @@ export function AgentDock() {
 						<button className={`ghost small reasoning-btn ${reasoning}`} title={tr("Modeļa domāšana sarunā: paslēpta, sakļauta (atveras tikai tā, kas top) vai atvērta")} onClick={cycleReasoning}>
 							{tr("Domāšana:")} {REASONING_LABEL[reasoning]}
 						</button>
-						{runId ? (
+						{runId && (
 							<button className="stop-btn" onClick={stop}>
 								<Icon name="square" size={12} />
 								{tr("Apturēt")}
 							</button>
-						) : (
-							<button className="send-btn" title={tr("Sūtīt")} aria-label={tr("Sūtīt")} disabled={!canSend || blind} onClick={send}>
-								<Icon name="send" />
-							</button>
 						)}
+						<button className="send-btn" title={workingHere ? tr("Sūtīt: ziņa nonāks pie aģenta pēc tekošā soļa") : tr("Sūtīt")} aria-label={tr("Sūtīt")} disabled={!canSend || blind} onClick={send}>
+							<Icon name="send" />
+						</button>
 					</div>
 				</div>
 			</div>

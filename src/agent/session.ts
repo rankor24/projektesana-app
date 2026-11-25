@@ -12,12 +12,14 @@ import { isPiProvider, lookupPiModel, PI_PROVIDERS, piAuthState, piProviderInfo,
 import { catalogProvider, CLAUDE_SUB, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
 import { Failover, ProviderHolds } from "./failover/index.js";
 import type { ClaudeRunOptions } from "./claude/run.js";
+import { ANTIGRAVITY, ANTIGRAVITY_LABEL, isAntigravity } from "./antigravity/provider.js";
+import type { AntigravityRunOptions } from "./antigravity/run.js";
 import type { ToolCtx } from "./tools/context.js";
 import type { Level } from "./tools/levels.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import type { Department } from "../shared/departments.js";
 import { parseMention } from "../shared/mention.js";
-import { LEAD_ID, type PauseTarget, type QueueView, type RunMeta, type Thread, type WaitingItem } from "../shared/thread-types.js";
+import { LEAD_ID, type PauseTarget, type QueueView, type RunMeta, type SteerView, type Thread, type WaitingItem } from "../shared/thread-types.js";
 import { BPV_ID, DEFAULT_DEPARTMENTS } from "../shared/departments.js";
 import { parseEveryone, toEveryoneText } from "../shared/everyone.js";
 import { Holds } from "../core/holds.js";
@@ -75,6 +77,10 @@ export interface SessionDeps {
 	claudeRun?: (o: ClaudeRunOptions) => Promise<void>;
 	/** how the Claude subscription is connected: a pasted setup-token, a login made by Sign in, or false (the status line) */
 	claudeConnected?: () => "setup-token" | "login" | false;
+	/** the Antigravity engine (Google's ACP server, signed in with the user's Google account); absent = not offered (tests, or not built in) */
+	antigravityRun?: (o: AntigravityRunOptions) => Promise<void>;
+	/** is a Google account signed in to Antigravity (the last look at the disk; nothing is read here) */
+	antigravityConnected?: () => boolean;
 	/** is the active Revit document this project's working copy? (6.3) */
 	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
 	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
@@ -83,12 +89,14 @@ export interface SessionDeps {
 	ready?: () => Promise<ReadonlySet<string>>;
 	/** the provider holds changed (a limit was met, a hold ended): the settings page shows them */
 	onHolds?: () => void;
+	/** a run starts for a message the user wrote while the chat's agent was answering: the activity log titles it with the text; the returned function takes the title back when the start fails */
+	titleRun?: (projectId: string | null, text: string, runId: string) => () => void;
 }
 
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
 
 /** A provider as the person knows it. */
-export const providerLabel = (provider: string): string => (isClaudeSub(provider) ? CLAUDE_SUB_LABEL : isPiProvider(provider) ? piProviderInfo(provider).label : provider);
+export const providerLabel = (provider: string): string => (isClaudeSub(provider) ? CLAUDE_SUB_LABEL : isAntigravity(provider) ? ANTIGRAVITY_LABEL : isPiProvider(provider) ? piProviderInfo(provider).label : provider);
 
 export class AgentSession {
 	private runner: ThreadRunner;
@@ -107,7 +115,7 @@ export class AgentSession {
 			log: (line) => console.warn(line),
 		});
 		this.runner = new ThreadRunner({ ...d, threads: (projectId) => this.threads(projectId), locks: new LockRegistry(), mail: (projectId) => this.mailbox(projectId), failover: this.failover, held: (agent) => this.coordinator.handoffRefusal(agent), incidents: (projectId) => this.coordinator.listIncidents(projectId), retryIncident: (id, by) => this.coordinator.retryIncident(id, by) });
-		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))), holds: new Holds(join(d.ctx.appDir, "paused.json")), incidents: new IncidentStore(join(d.ctx.appDir, "incidents.json")), departments: () => d.departments?.() ?? DEFAULT_DEPARTMENTS });
+		this.coordinator = new Coordinator({ runner: this.runner, threads: (projectId) => this.threads(projectId), settings: d.settings, emit: (runId, e, meta) => d.emit(runId, e, meta), onThread: d.onThread, onQueue: d.onQueue, onWaiting: d.onWaiting, onData: d.onData, queueFile: join(d.ctx.appDir, "queue.json"), specs: () => this.specs(), projects: () => knownProjects(d.ctx.appDir, d.ctx.projectsDir), mail: (projectId) => this.mailbox(projectId), eksAnswered: (projectId, topic) => this.eksAnswered(projectId, topic), questions: () => waitingQuestions(d.ctx.projectsDir), gates: () => waitingGates(d.ctx.projectsDir), escalations: () => waitingEscalations(d.ctx.projectsDir), eksStarts: () => waitingEksStarts(d.ctx.projectsDir, (projectId) => eksLastRun(this.threads(projectId).list({ agent: EKS }))), holds: new Holds(join(d.ctx.appDir, "paused.json")), incidents: new IncidentStore(join(d.ctx.appDir, "incidents.json")), departments: () => d.departments?.() ?? DEFAULT_DEPARTMENTS, titleRun: d.titleRun });
 		// the stall watchdog: a run silent for 20 minutes is stopped and listed (core/incidents.ts)
 		this.coordinator.watch();
 	}
@@ -171,6 +179,7 @@ export class AgentSession {
 	private async readyProviders(): Promise<ReadonlySet<string>> {
 		const out = new Set<string>();
 		if (this.d.claudeConnected?.()) out.add(CLAUDE_SUB);
+		if (this.d.antigravityConnected?.()) out.add(ANTIGRAVITY);
 		try {
 			const rt = await this.d.runtime();
 			for (const p of PI_PROVIDERS) if ((await piAuthState(rt, p.id)).configured) out.add(p.id);
@@ -208,8 +217,9 @@ export class AgentSession {
 	async status(): Promise<AgentStatus> {
 		const s = this.d.settings();
 		const revit = this.d.revit() ? "savienots" : s.revitServerJs ? "nav savienojuma" : "nav konfigurēts";
-		if (isClaudeSub(s.provider)) {
-			const via = this.d.claudeConnected?.() ?? false;
+		if (isClaudeSub(s.provider) || isAntigravity(s.provider)) {
+			const antigravity = isAntigravity(s.provider);
+			const via = antigravity ? (this.d.antigravityConnected?.() ? "google" : false) : (this.d.claudeConnected?.() ?? false);
 			const on = via !== false;
 			let images: boolean | null = null;
 			let limits: AgentStatus["imageLimits"] = null;
@@ -220,7 +230,7 @@ export class AgentSession {
 			} catch {
 				// unknown model: the run says why
 			}
-			return { provider: s.provider, providerLabel: CLAUDE_SUB_LABEL, model: s.model || "(noklusējums)", signedIn: on, reason: on ? via : "nav pieslēgts", revit, images, imageLimits: limits };
+			return { provider: s.provider, providerLabel: antigravity ? ANTIGRAVITY_LABEL : CLAUDE_SUB_LABEL, model: s.model || "(noklusējums)", signedIn: on, reason: on ? via : "nav pieslēgts", revit, images, imageLimits: limits };
 		}
 		if (!isPiProvider(s.provider)) return { provider: s.provider, providerLabel: s.provider, model: s.model, signedIn: false, reason: `nezināms pakalpojums: ${s.provider}`, revit, images: null, imageLimits: null };
 		const info = piProviderInfo(s.provider);
@@ -402,6 +412,47 @@ export class AgentSession {
 		onRunId?.(runId, text);
 		const r = await this.coordinator.start({ threadId: thread.id, projectId, text, focus, cause: { by: "user" }, files, runId });
 		return { runId, queued: r.queued };
+	}
+
+	/** A message written while this chat's agent is answering (steering): it is held, shown in the chat where it can be edited or cancelled, and reaches the agent after its current step;
+	 *  when the engine cannot take it mid-run, or the run ends first, it starts a new run. Attachments are read and checked like in a normal send. Null when the agent is not working in this thread
+	 *  (nothing is held: the window then sends the message the normal way). */
+	async holdTo(threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments: ChatAttachment[] = []): Promise<SteerView | null> {
+		const thread = this.threadOf(threadId, projectId);
+		if (thread.state === "closed") throw new Error("Saruna ir slēgta.");
+		if (thread.agent !== LEAD_ID && !this.specs().some((s) => s.id === thread.agent)) throw new Error(`Nav speciālista: ${thread.agent}.`);
+		if (!text.trim() && !attachments.length) throw new Error("Tukšs ziņojums.");
+		if (!this.coordinator.threadBusy(thread.id)) return null;
+		let files: PreparedAttachments | undefined;
+		if (attachments.length) {
+			const s = this.d.settings();
+			const model = await this.modelOf(s);
+			files = await prepareAttachments(attachments, {
+				seesImages: model ? seesImages(model) : true,
+				model: s.model || model?.id || "(noklusējums)",
+				saveDir: join(this.d.runsDir, this.coordinator.newRunId(), "attachments"),
+				limits: model ? imageLimits(model) : null,
+				imagesInContext: this.runner.imagesInContext(thread),
+			});
+		}
+		// the files took a moment to read: the run may have ended meanwhile
+		if (!this.coordinator.threadBusy(thread.id)) return null;
+		return this.coordinator.hold({ threadId: thread.id, projectId, text, focus, files });
+	}
+
+	/** Cancels the held message of a thread. True when it was taken back; false when nothing was held or the agent is reading it right now. */
+	unhold(threadId: string, projectId: string | null): boolean {
+		return this.coordinator.unhold(this.threadOf(threadId, projectId).id) !== null;
+	}
+
+	/** Changes the text of the held message; null when the agent is reading it right now (or nothing is held). */
+	holdEdit(threadId: string, projectId: string | null, text: string): SteerView | null {
+		return this.coordinator.edit(this.threadOf(threadId, projectId).id, text);
+	}
+
+	/** Sends a kept message (its run was stopped or failed) now. */
+	holdSend(threadId: string, projectId: string | null): { runId: string | null; queued: boolean } {
+		return this.coordinator.release(this.threadOf(threadId, projectId).id);
 	}
 
 	stop() {

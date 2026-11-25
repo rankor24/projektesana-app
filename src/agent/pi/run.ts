@@ -6,12 +6,20 @@
 // beforeToolCall hook; the previous messages of the conversation are passed in and handed back, so a chat keeps its context.
 // A turn that fails on the wire is restarted with backoff (retry.ts) instead of ending the run.
 import { Agent, type AfterToolCallContext, type AfterToolCallResult, type AgentMessage, type AgentTool, type BeforeToolCallContext, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, ImageContent, Model, RetryPolicy } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, ImageContent, Model, RetryPolicy, TextContent } from "@earendil-works/pi-ai";
 import type { RunEvent } from "../../shared/types.js";
 import { newPiState, piEvents } from "./events.js";
 import { connectMcpServers, type McpLaunchSpec } from "./mcp.js";
 import { effortFor, lookupPiModel, streamFn, type PiEffort, type PiRuntime } from "./models.js";
 import { RUN_RETRY, dropFailedTail, retryDelay, sleep, willRetry } from "./retry.js";
+
+/** A way into a running agent: a message the user wrote meanwhile is queued and read after the agent's current step (pi's `steer`). */
+export interface SteerHandle {
+	/** Queues one user message. `taken` is called when the agent loop has taken it into the conversation (it is then part of what the agent has read). */
+	push(m: { text: string; images?: ImageContent[] }, taken: () => void): void;
+	/** Takes back what the agent has not read yet. True when it was still waiting: it will never reach the agent. False when there is nothing, or it is being read now. */
+	withdraw(): boolean;
+}
 
 export interface PiRunOptions {
 	runtime: PiRuntime;
@@ -44,6 +52,9 @@ export interface PiRunOptions {
 	onMessages?: (messages: AgentMessage[]) => void;
 	/** Restarts of a turn that failed on the wire (default RUN_RETRY: 4 restarts, 2–16 s apart). */
 	retry?: RetryPolicy;
+	/** Steering: called with a handle once the agent exists, and with null when the run is over (a message not read by then is the caller's to deliver another way).
+	 *  An engine that cannot take a message mid-run never calls it. */
+	onSteer?: (h: SteerHandle | null) => void;
 }
 
 export const DEFAULT_MAX_TURNS = 80;
@@ -87,6 +98,26 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 			...(identity ? { identity: { attribution: { name: identity.name, url: identity.url } } } : {}),
 		});
 
+		// steering: the agent loop reads a queued message after the current assistant turn and its tool calls. The caller queues one message at a time, but a second can follow
+		// while the loop is already reading the first, so the messages not yet announced are a list (the newest is the only one that can still be taken back)
+		let queued: { message: AgentMessage; taken: () => void }[] = [];
+		const a0 = agent;
+		o.onSteer?.({
+			push: (m, taken) => {
+				const content: (TextContent | ImageContent)[] = [{ type: "text", text: m.text }, ...(m.images ?? [])];
+				const message: AgentMessage = { role: "user", content, timestamp: Date.now() };
+				queued.push({ message, taken });
+				a0.steer(message);
+			},
+			withdraw: () => {
+				// drained but not yet announced: the loop is reading it now, so it can no longer be taken back
+				if (!queued.length || !a0.hasQueuedMessages()) return false;
+				a0.clearSteeringQueue();
+				queued.pop();
+				return true;
+			},
+		});
+
 		let turns = 0;
 		agent.finishTurn = async (turn) => {
 			if (++turns >= maxTurns && turn.toolResults.length > 0) {
@@ -103,6 +134,10 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 		let held = null as AgentMessage | null;
 		agent.subscribe((ev) => {
 			if (ev.type === "message_end" && !o.signal.aborted && willRetry(ev.message, restarts + 1, policy)) held = ev.message;
+			if (queued.length && ev.type === "message_start" && ev.message.role === "user") {
+				const at = queued.findIndex((q) => q.message === ev.message || (q.message as { timestamp?: number }).timestamp === (ev.message as { timestamp?: number }).timestamp);
+				if (at >= 0) queued.splice(at, 1)[0].taken();
+			}
 			if (held && (ev.type === "message_end" || ev.type === "turn_end" || ev.type === "agent_end")) return;
 			for (const r of piEvents(ev, st)) send(r);
 		});
@@ -137,6 +172,8 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 	} finally {
 		// a failed last turn is not carried into the next message: it holds no answer, only an empty assistant turn
 		if (agent) o.onMessages?.(dropFailedTail(agent.state.messages));
+		// the agent is gone: a message it did not read is the caller's to deliver another way (a new attempt gets a handle of its own)
+		o.onSteer?.(null);
 		await closeTools?.().catch(() => undefined);
 	}
 }

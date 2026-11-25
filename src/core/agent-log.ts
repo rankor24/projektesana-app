@@ -151,6 +151,8 @@ export class AgentLog {
 			}
 			case "compact":
 				return void this.add(st, "compact", `${e.phase}: ${e.before}${e.after !== undefined ? ` → ${e.after}` : ""} tokens`, { text: e.message }, lane, at);
+			case "steered":
+				return void this.add(st, "prompt", e.starts ? "message held while the agent answered: sent as this run" : "message written during the run: read by the agent after its step", { text: e.text }, lane, at);
 			case "confirm":
 				return void this.add(st, "confirm", e.tool, { text: pretty(e.batch), id: e.id }, lane, at);
 			case "retry":

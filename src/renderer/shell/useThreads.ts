@@ -10,7 +10,7 @@ import { call, on } from "../bridge";
 import { ui, useUi } from "../state";
 import { tr } from "../i18n";
 
-const NO_QUEUE: QueueView = { running: [], queued: [], why: {}, paused: false, waves: [], held: { agents: [], departments: [], all: false } };
+const NO_QUEUE: QueueView = { running: [], queued: [], why: {}, paused: false, waves: [], held: { agents: [], departments: [], all: false }, steering: [] };
 
 /** "Vadošais" for the lead, the specialist's name, or the bare id of one that was removed in Iestatījumi. */
 export function agentName(id: string, specs: readonly AgentSpec[]): string {

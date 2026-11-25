@@ -245,6 +245,11 @@ const session = new AgentSession({
 		emit("agent.event", { runId, event: slim, ...meta });
 	},
 	onHolds: () => emit("data.changed", { projectId: null, what: ["agent"] }),
+	// a held message that starts a run of its own (the agent finished before reading it): the activity log titles that run with the text
+	titleRun: (projectId, text, runId) => {
+		activity.begin(projectId, text, runId);
+		return () => activity.cancel(runId);
+	},
 	onThread: (thread) => {
 		emit("threads.changed", { projectId: thread.projectId, thread });
 		// a turn ended (the thread is waiting for the user or closed): its new messages go into the search index

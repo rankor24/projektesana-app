@@ -240,6 +240,42 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "A message to one thread. Refused for a closed thread, a removed specialist, and a thread that is running or queued."
 	},
+	"threads.hold": {
+		"sig": "(threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => SteerView | null",
+		"params": [
+			"threadId",
+			"projectId",
+			"text",
+			"focus",
+			"attachments"
+		],
+		"doc": "A message written while this thread's agent is answering (steering): held, shown in the chat, read by the agent after its current step, else sent as a new run when this one ends. Null when the agent is not working in the thread (nothing is held: the window sends the message the normal way)."
+	},
+	"threads.unhold": {
+		"sig": "(threadId: string, projectId: string | null) => boolean",
+		"params": [
+			"threadId",
+			"projectId"
+		],
+		"doc": "Cancels the held message of a thread (Atcelt). False when the agent is reading it right now or nothing is held."
+	},
+	"threads.holdEdit": {
+		"sig": "(threadId: string, projectId: string | null, text: string) => SteerView | null",
+		"params": [
+			"threadId",
+			"projectId",
+			"text"
+		],
+		"doc": "Changes the text of the held message (Labot); the files stay. Null when the agent is reading it right now or nothing is held."
+	},
+	"threads.holdSend": {
+		"sig": "(threadId: string, projectId: string | null) => { runId: string | null; queued: boolean }",
+		"params": [
+			"threadId",
+			"projectId"
+		],
+		"doc": "Sends a held message that will not go by itself (its run was stopped or failed) now."
+	},
 	"threads.history": {
 		"sig": "(threadId: string, projectId: string | null) => ChatEntry[]",
 		"params": [

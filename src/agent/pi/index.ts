@@ -6,4 +6,4 @@ export { createPiRuntime, defaultEffort, defaultPiModel, effortFor, effortsOf, E
 export { interactionFor, loginProvider, logoutProvider, type LoginNotice, type LoginUi } from "./login.js";
 export { connectMcpServers, connectMcpTools, type McpLaunchSpec, type McpTools, type McpToolsOptions } from "./mcp.js";
 export { newPiState, piEvents, type PiState } from "./events.js";
-export { DEFAULT_MAX_TURNS, DEFAULT_SYSTEM_PROMPT, runPi, type PiRunOptions } from "./run.js";
+export { DEFAULT_MAX_TURNS, DEFAULT_SYSTEM_PROMPT, runPi, type PiRunOptions, type SteerHandle } from "./run.js";

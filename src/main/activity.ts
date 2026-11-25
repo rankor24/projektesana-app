@@ -234,6 +234,10 @@ export class ActivityLog {
 				}
 				return;
 			}
+			case "steered":
+				// the run itself was started for this message: its first line is the title already
+				if (!e.starts) this.line(r, "note", `Aģents izlasīja jauno ziņu: ${oneLine(e.text, 80)}`);
+				return;
 			case "retry":
 				this.line(r, "note", `Savienojums pārtrūka (${oneLine(e.message, 80)}). Atkārto ${e.attempt}/${e.of}…`, { step: "retry", status: "running" });
 				return;

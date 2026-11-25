@@ -209,6 +209,13 @@ tr.click:hover td { background: var(--elev); }
 .msg { white-space: pre-wrap; padding: 6px 10px; border-radius: 8px; max-width: 95%; overflow-wrap: anywhere; }
 .msg.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 18%, var(--elev)); }
 .msg.assistant { align-self: flex-start; background: var(--elev); }
+/* a message written while the agent answers: not yet read by it, so it is drawn lighter, with its own Labot / Atcelt */
+.msg.user.held { border: 1px dashed var(--accent); background: transparent; }
+.msg.user.held.kept { border-color: var(--warn); }
+.held-head { color: var(--muted); margin-bottom: 4px; }
+.msg.user.held.kept .held-head { color: var(--warn); }
+.held-edit { width: 100%; box-sizing: border-box; resize: vertical; }
+.held-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 .thinking { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .tool { font-size: 12px; color: var(--dim); border-left: 2px solid var(--border-strong); padding-left: 8px; }
 .tool.bad { border-left-color: var(--bad); }

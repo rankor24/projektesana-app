@@ -39,6 +39,9 @@ export function apply(ls: Line[], e: RunEvent): Line[] {
 						: { kind: "compact", phase: "failed", text: tr("Saspiešana neizdevās, darbs turpinās bez tās: {message}", { message: e.message ?? "" }) };
 			return last?.kind === "compact" && last.phase === "start" ? [...ls.slice(0, -1), line] : [...ls, line];
 		}
+		case "steered":
+			// a message the user wrote while the agent answered has reached it: it is a line of the chat now (a run started for it puts it above its card, see `placeSteered`)
+			return [...ls, steeredLine(e)];
 		case "confirm":
 			return [...ls, { kind: "confirm", id: e.id, tool: e.tool, batch: e.batch }];
 		case "retry": {
@@ -55,6 +58,21 @@ export function apply(ls: Line[], e: RunEvent): Line[] {
 		default:
 			return ls;
 	}
+}
+
+const steeredLine = (e: Extract<RunEvent, { type: "steered" }>): Line => ({ kind: "user", text: e.text, ...(e.attachments?.length ? { attachments: e.attachments } : {}) });
+
+/** The lines of a run that is picked up after it began: a message it was started to deliver goes above the run's card, the rest below it. */
+export function runLines(runId: string, streamed: Line[]): Line[] {
+	const first = streamed.findIndex((l) => l.kind !== "user");
+	const before = first < 0 ? streamed : streamed.slice(0, first);
+	return [...before, { kind: "run", runId }, ...(first < 0 ? [] : streamed.slice(first))];
+}
+
+/** A run that was started to deliver a held message says so with its first event; its card is already in the chat, so the message goes above the card. */
+export function placeSteered(ls: Line[], runId: string, e: Extract<RunEvent, { type: "steered" }>): Line[] {
+	const at = ls.findIndex((l) => l.kind === "run" && l.runId === runId);
+	return at < 0 ? [...ls, steeredLine(e)] : [...ls.slice(0, at), steeredLine(e), ...ls.slice(at)];
 }
 
 const buffers = new Map<string, Line[]>();

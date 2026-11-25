@@ -8,7 +8,8 @@
 //   - the Chief's ceiling: the tool level a message carries (`Message.level`) caps the run it starts (core/chief.ts `minLevel`; docs/approval-levels.md).
 // No Electron imports: the runner, the stores and the sink are injected.
 import type { AgentSpec } from "../shared/agent-types.js";
-import { LEAD_ID, type IncidentView, type PauseTarget, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
+import type { FocusItem } from "../shared/api.js";
+import { LEAD_ID, type IncidentView, type SteerView, type PauseTarget, type Thread, type RunMeta, type StartInput, type QueueView, type WaitingItem, type Wave } from "../shared/thread-types.js";
 import { waitingItems } from "../shared/waiting.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { answered, inboxOf, limitsOf, pendingOf, runDepth, shouldWake, deliveryText, type Mailbox, type Message } from "../core/messages.js";
@@ -21,7 +22,7 @@ import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, waitReason, waveCheck, type QueueItem, type Running, type WaitReason } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
 import type { ConfirmRequest } from "./tools/levels.js";
-import type { ThreadRunner } from "./thread-runner.js";
+import type { RunSteer, ThreadRunner } from "./thread-runner.js";
 
 export interface CoordinatorDeps {
 	runner: ThreadRunner;
@@ -61,12 +62,14 @@ export interface CoordinatorDeps {
 	incidents?: IncidentStore;
 	/** the departments, for the name in a pause refusal; the shipped ones when absent */
 	departments?: () => readonly Department[];
+	/** a run is about to start for a message the user wrote while the chat's agent was answering: the activity log titles it with the text; the returned function takes the title back when the start fails */
+	titleRun?: (projectId: string | null, text: string, runId: string) => () => void;
 	now?: () => string;
 }
 
 /** A start as the coordinator takes it: the caller (AgentSession) has already read the attachments, so `StartInput.attachments`
  *  is not looked at here; `files` is what the run carries. `runId` lets the caller name the run before it starts (the files are saved under it). */
-export type StartRequest = StartInput & { files?: PreparedAttachments; runId?: string };
+export type StartRequest = StartInput & { files?: PreparedAttachments; runId?: string; /** the run delivers a held message: its first event is `steered`, so the chat shows the message as a line of its own */ steered?: boolean };
 
 interface Live {
 	runId: string;
@@ -84,7 +87,26 @@ interface Live {
 	askedBy: string[];
 	/** what it was asked, for the incident's "request" line */
 	request: string;
+	/** the way into the agent while an attempt of the engine is going (steering); null when the engine has none or the attempt is over */
+	steer: RunSteer | null;
 }
+
+/** A message the user wrote while a chat's agent was answering. One per thread. */
+interface HeldMsg {
+	threadId: string;
+	projectId: string | null;
+	text: string;
+	focus: FocusItem[];
+	files: PreparedAttachments;
+	at: string;
+	/** the handle it was queued in: the agent has it and will read it after its current step */
+	armed: RunSteer | null;
+	/** it will not be sent by itself (see SteerView) */
+	kept?: SteerView["kept"];
+	detail?: string;
+}
+
+const NO_FILES_PREPARED: PreparedAttachments = { images: [], text: "", refs: [] };
 
 /** A message the app itself sends between two agents (`Coordinator.postSystem`). */
 export interface SystemPost {
@@ -104,6 +126,8 @@ export interface SystemPost {
 const BUSY = "Aģents jau strādā. Aptur vai pagaidi.";
 const NO_FILES = "[pielikumi pēc restartēšanas netika saglabāti]";
 
+const steerView = (m: HeldMsg): SteerView => ({ threadId: m.threadId, projectId: m.projectId, text: m.text, attachments: m.files.refs, at: m.at, ...(m.kept ? { kept: m.kept } : {}), ...(m.detail ? { detail: m.detail } : {}) });
+
 export class Coordinator {
 	private live = new Map<string, Live>();
 	private queue: QueueItem[] = [];
@@ -116,7 +140,9 @@ export class Coordinator {
 	private cutMail: { projectId: string | null; ids: string[] }[] = [];
 	private orphanMail: { projectId: string | null; ids: string[] }[] = [];
 	/** prepared files (and the run id the caller named) wait here beside the queued item; the saved queue never holds them */
-	private prepared = new Map<string, { files?: PreparedAttachments; runId?: string }>();
+	private prepared = new Map<string, { files?: PreparedAttachments; runId?: string; steered?: boolean }>();
+	/** the message each thread's user wrote while its agent was answering; it is read by the agent after the current step, else it starts a run when this one ends */
+	private steering = new Map<string, HeldMsg>();
 	/** a job that is not a run but holds the slot (the user's own "saspiest") */
 	private held: AbortController | null = null;
 	private confirms = new Map<string, { resolve: (ok: boolean) => void; live: Live; waiting: () => void; resume: () => void; item: Extract<WaitingItem, { kind: "confirm" }> }>();
@@ -244,7 +270,7 @@ export class Coordinator {
 			const r = waitReason(q, running, Number.isFinite(cap) ? cap : 1, this.paused, blocked);
 			if (r) why[q.id] = r;
 		}
-		return { running, queued: [...this.queue], why, paused: this.paused, waves: this.liveWaves(), held: this.holds.view() };
+		return { running, queued: [...this.queue], why, paused: this.paused, waves: this.liveWaves(), held: this.holds.view(), steering: [...this.steering.values()].map(steerView) };
 	}
 
 	/** Everything that waits for the user, of every project: open confirmations first, then the gates of process mode, then the questions in Atmiņa, then the unanswered restart. */
@@ -332,6 +358,7 @@ export class Coordinator {
 				// the item cannot run (its thread is gone, a state write failed): it stays in the queue as stopped
 				const err = e instanceof Error ? e : new Error(String(e));
 				this.queue.push({ ...item, state: "stopped" });
+				this.keepHold(item.threadId, "stopped");
 				if (item.id === own) failed.set(item.id, err);
 				else {
 					// nobody was looking at this start (a woken thread, a restored item): it goes into the incidents list
@@ -386,7 +413,7 @@ export class Coordinator {
 			...(i.files && (i.files.images.length || i.files.text || i.files.refs.length) ? { hadFiles: true } : {}),
 			input: { text: i.text, focus: i.focus, cause: i.cause },
 		});
-		this.prepared.set(id, { files: i.files, runId: i.runId });
+		this.prepared.set(id, { files: i.files, runId: i.runId, ...(i.steered ? { steered: true } : {}) });
 		const { started, failed } = this.pump(id);
 		const error = failed.get(id);
 		if (error) {
@@ -402,7 +429,7 @@ export class Coordinator {
 	}
 
 	/** Takes an item out of the queue into the run table and starts its run. */
-	private begin(item: QueueItem, extra?: { files?: PreparedAttachments; runId?: string }): string {
+	private begin(item: QueueItem, extra?: { files?: PreparedAttachments; runId?: string; steered?: boolean }): string {
 		const found = this.d.threads(item.projectId).get(item.threadId);
 		if (!found) throw new Error(`Saruna ${item.threadId} nav atrasta.`);
 		// the specialist is looked up before anything is written: one that was removed in the settings stops this item, the thread stays as it was
@@ -465,7 +492,7 @@ export class Coordinator {
 			}
 			this.d.emit(runId, e, meta);
 		};
-		const live: Live = { runId, thread, wave, abort, done: Promise.resolve(), lastActive: Date.now(), askedBy, request: item.input.text };
+		const live: Live = { runId, thread, wave, abort, done: Promise.resolve(), lastActive: Date.now(), askedBy, request: item.input.text, steer: null };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
 				// the gate numbers its confirmations per run (c1, c2…), so two runs both ask "c1": the id the window sees names the run too
@@ -486,8 +513,17 @@ export class Coordinator {
 				this.pump();
 			});
 		this.live.set(runId, live);
+		// a run that delivers a held message says so first: the chat shows the message as a line of its own, before the card
+		if (extra?.steered) emit({ type: "steered", text: item.input.text, starts: true, ...(extra.files?.refs.length ? { attachments: extra.files.refs } : {}) });
+		// steering: while an attempt of the engine goes, a held message is handed to the agent; when the attempt ends, what it has not read stays held here
+		const onSteer = (h: RunSteer | null) => {
+			const prev = live.steer;
+			live.steer = h;
+			if (h) this.arm(thread.id, live);
+			else for (const m of this.steering.values()) if (m.armed && m.armed === prev) m.armed = null;
+		};
 		live.done = this.d.runner
-			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, peer: ids.length > 0, ...(levelCap ? { levelCap } : {}), wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what) })
+			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, peer: ids.length > 0, ...(levelCap ? { levelCap } : {}), wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what), onSteer })
 			.then(
 				(r) => {
 					ok = r.ok;
@@ -512,6 +548,8 @@ export class Coordinator {
 				// a run cut by the app closing is not finished: its thread stays `interrupted`, so the next start asks the user and tells the senders (I1)
 				if (this.closing && abort.signal.aborted && !ok && !live.silent) this.mark(thread, { state: "interrupted" });
 				else this.settle(thread.projectId, thread.id);
+				// a message the user wrote while this run went on and the agent did not read: sent as a new run now, or kept for the user when this run was stopped or failed
+				this.afterRun(thread, { ok, aborted: abort.signal.aborted });
 				// what the user must be able to see and retry: a run that failed or stalled; a run the user stopped (or a pause did) is not one, and a run that worked clears the thread's
 				if (!this.closing) {
 					// a stall was recorded by the watchdog the moment it stopped the run (an engine that ignores its signal never gets here)
@@ -548,6 +586,153 @@ export class Coordinator {
 			this.held = null;
 			this.pump();
 		}
+	}
+
+	// ---- steering: a message written while the agent answers ------------------------------------------------------------------------
+
+	/** Holds a message for the thread whose agent is answering (or waiting in the queue). It is handed to the agent when the engine can take it (it reads it after its current step);
+	 *  else, or when the run ends before the agent read it, it starts a new run of the thread (`afterRun`). A second message while one is held is added to it (same text box, nothing is lost):
+	 *  the texts one under the other, the newer Fokuss, all the files. Refused like a normal send: a closed thread, a paused agent, a compaction going. A thread that is not busy is refused too:
+	 *  the caller sends the message the normal way (`AgentSession.holdTo` does). */
+	hold(i: { threadId: string; projectId: string | null; text: string; focus: FocusItem[]; files?: PreparedAttachments }): SteerView {
+		if (this.held) throw new Error(BUSY);
+		const t = this.d.threads(i.projectId).get(i.threadId);
+		if (!t) throw new Error(`Saruna ${i.threadId} nav atrasta.`);
+		if (t.state === "closed") throw new Error("Saruna ir slēgta.");
+		const by = this.heldNow(t.agent);
+		if (by) throw new Error(this.refusal(t.agent, by));
+		if (!this.threadBusy(i.threadId)) throw new Error("Aģents šajā sarunā nestrādā: ziņu sūta parastā veidā.");
+		const files = i.files ?? NO_FILES_PREPARED;
+		const cur = this.steering.get(i.threadId);
+		let m: HeldMsg;
+		if (cur && this.unarm(cur)) {
+			m = {
+				...cur,
+				text: [cur.text, i.text].filter((x) => x.trim()).join("\n\n"),
+				focus: i.focus.length ? i.focus : cur.focus,
+				files: { images: [...cur.files.images, ...files.images], text: [cur.files.text, files.text].filter(Boolean).join("\n\n"), refs: [...cur.files.refs, ...files.refs] },
+				kept: undefined,
+				detail: undefined,
+			};
+		} else m = { threadId: i.threadId, projectId: i.projectId, text: i.text, focus: i.focus, files, at: this.now(), armed: null };
+		this.steering.set(i.threadId, m);
+		this.arm(i.threadId);
+		this.changed();
+		return steerView(m);
+	}
+
+	/** Takes the held message of this thread back (Labot moves it to the text box, Atcelt drops it). Null when nothing is held, or the agent is reading it right now (it can no longer be taken back). */
+	unhold(threadId: string): SteerView | null {
+		const m = this.steering.get(threadId);
+		if (!m || !this.unarm(m)) return null;
+		this.steering.delete(threadId);
+		this.changed();
+		return steerView(m);
+	}
+
+	/** Changes the text of the held message (the files stay). Null when nothing is held or the agent is reading it right now. A kept message (stopped, failed, refused) stays kept after an edit: `release` sends it.
+	 *  Refused for an empty text when no file is attached. */
+	edit(threadId: string, text: string): SteerView | null {
+		const m = this.steering.get(threadId);
+		if (!m) return null;
+		if (!text.trim() && !m.files.refs.length) throw new Error("Tukšs ziņojums.");
+		if (!this.unarm(m)) return null;
+		// a kept message stays kept (the user sends it with Sūtīt); only a message that still waits for a run is armed again
+		const next: HeldMsg = { ...m, text };
+		this.steering.set(threadId, next);
+		this.arm(threadId);
+		this.changed();
+		return steerView(next);
+	}
+
+	/** Sends a kept message now, as a normal message of the user (the thread must be free). Refused when the agent works again or the message is not kept. */
+	release(threadId: string): { runId: string | null; queued: boolean } {
+		const m = this.steering.get(threadId);
+		if (!m) throw new Error("Nav aizturētas ziņas.");
+		if (!m.kept) throw new Error("Ziņa jau gaida aģentu.");
+		if (this.threadBusy(threadId)) throw new Error(BUSY);
+		const runId = this.newRunId();
+		const untitle = this.d.titleRun?.(m.projectId, m.text, runId);
+		try {
+			const r = this.submit({ threadId: m.threadId, projectId: m.projectId, text: m.text, focus: m.focus, cause: { by: "user" }, files: m.files, runId, steered: true });
+			this.steering.delete(threadId);
+			this.changed();
+			return { runId, queued: r.queued };
+		} catch (e) {
+			untitle?.();
+			throw e;
+		}
+	}
+
+	/** Is a message held for this thread (waiting for the agent or kept for the user)? */
+	hasHold(threadId: string): boolean {
+		return this.steering.has(threadId);
+	}
+
+	/** Hands the held message of the thread to the agent of its live run when that run has a way in. */
+	private arm(threadId: string, from?: Live): void {
+		const m = this.steering.get(threadId);
+		if (!m || m.armed || m.kept) return;
+		const live = from ?? [...this.live.values()].find((l) => l.thread.id === threadId);
+		const h = live?.steer;
+		if (!live || !h || live.abort.signal.aborted) return;
+		m.armed = h;
+		try {
+			h.push({ text: m.text, focus: m.focus, files: m.files }, () => {
+				// the agent has read it: it is a line of the chat now, not a held message
+				if (this.steering.get(threadId) === m) {
+					this.steering.delete(threadId);
+					this.changed();
+				}
+			});
+		} catch {
+			m.armed = null;
+		}
+	}
+
+	/** Takes a held message back out of the agent's queue. False when the agent is reading it now. */
+	private unarm(m: HeldMsg): boolean {
+		if (!m.armed) return true;
+		let back = false;
+		try {
+			back = m.armed.withdraw();
+		} catch {
+			back = false;
+		}
+		if (back) m.armed = null;
+		return back;
+	}
+
+	/** The thread's held message will not be sent by itself: no run is left whose end would decide it. */
+	private keepHold(threadId: string, why: NonNullable<SteerView["kept"]>, detail?: string): void {
+		const m = this.steering.get(threadId);
+		if (!m || [...this.live.values()].some((l) => l.thread.id === threadId)) return;
+		m.armed = null;
+		m.kept = why;
+		if (detail) m.detail = detail;
+	}
+
+	/** A run of the thread ended. Its held message, if the agent did not read it: after a good end it starts a new run of the thread; a run that was stopped or failed keeps it for the user. */
+	private afterRun(thread: Thread, o: { ok: boolean; aborted: boolean }): void {
+		const m = this.steering.get(thread.id);
+		if (!m || this.closing || this.threadBusy(thread.id)) return;
+		m.armed = null;
+		if (o.aborted || !o.ok) {
+			m.kept = o.aborted ? "stopped" : "failed";
+			this.changed();
+			return;
+		}
+		this.steering.delete(thread.id);
+		const runId = this.newRunId();
+		let untitle: (() => void) | undefined;
+		try {
+			untitle = this.d.titleRun?.(m.projectId, m.text, runId);
+			this.submit({ threadId: m.threadId, projectId: m.projectId, text: m.text, focus: m.focus, cause: { by: "user" }, files: m.files, runId, steered: true });
+		} catch (e) {
+			untitle?.();
+			this.steering.set(thread.id, { ...m, kept: "refused", detail: e instanceof Error ? e.message : String(e) });
+		}
+		this.changed();
 	}
 
 	// ---- pause ----------------------------------------------------------------------------------------------------------------------
@@ -623,6 +808,7 @@ export class Coordinator {
 			return { ...q, state: "stopped" as const };
 		});
 		for (const q of dropped) {
+			this.keepHold(q.threadId, "stopped");
 			if (q.input.cause.by === "message") this.setMail(q.projectId, q.input.cause.ids, "stopped");
 			if (![...this.live.values()].some((l) => l.thread.id === q.threadId)) this.settle(q.projectId, q.threadId);
 		}
@@ -715,6 +901,8 @@ export class Coordinator {
 			return { ...q, state: "stopped" as const };
 		});
 		for (const q of dropped) {
+			// a thread that was only waiting in the queue has no run whose end would decide its held message: it is kept for the user
+			this.keepHold(q.threadId, "stopped");
 			// Stop for everything or a wave: its messages are stopped and wake nobody. Stopping one thread: its senders are told, like for a run that was stopped
 			if (q.input.cause.by === "message") {
 				if (silent) this.setMail(q.projectId, q.input.cause.ids, "stopped");

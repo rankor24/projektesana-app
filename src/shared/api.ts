@@ -18,7 +18,7 @@ import type { LoginNotice, RunEvent, Settings } from "./types.js";
 import type { Activity } from "./activity.js";
 import type { LogEntry, LogNotice, LogRun } from "./agent-log.js";
 import type { AppSettingChange, AppSettingEvent } from "./app-settings.js";
-import type { PauseTarget, QueueView, Thread, WaitingItem } from "./thread-types.js";
+import type { PauseTarget, QueueView, SteerView, Thread, WaitingItem } from "./thread-types.js";
 import type { SearchKind, SearchResult, SearchStatus } from "./search-types.js";
 import type { ChecklistRow, CopyPlan, StageSheetsResult } from "./nodevums.js";
 import type { LayoutStore } from "./layout.js";
@@ -484,6 +484,14 @@ export interface ApiSpec {
 	"threads.open": (projectId: string | null, agent: string, title?: string) => Thread;
 	/** A message to one thread. Refused for a closed thread, a removed specialist, and a thread that is running or queued. */
 	"threads.send": (threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => { runId: string | null; queued: boolean };
+	/** A message written while this thread's agent is answering (steering): held, shown in the chat, read by the agent after its current step, else sent as a new run when this one ends. Null when the agent is not working in the thread (nothing is held: the window sends the message the normal way). */
+	"threads.hold": (threadId: string, projectId: string | null, text: string, focus: FocusItem[], attachments?: ChatAttachment[]) => SteerView | null;
+	/** Cancels the held message of a thread (Atcelt). False when the agent is reading it right now or nothing is held. */
+	"threads.unhold": (threadId: string, projectId: string | null) => boolean;
+	/** Changes the text of the held message (Labot); the files stay. Null when the agent is reading it right now or nothing is held. */
+	"threads.holdEdit": (threadId: string, projectId: string | null, text: string) => SteerView | null;
+	/** Sends a held message that will not go by itself (its run was stopped or failed) now. */
+	"threads.holdSend": (threadId: string, projectId: string | null) => { runId: string | null; queued: boolean };
 	"threads.history": (threadId: string, projectId: string | null) => ChatEntry[];
 	"threads.stop": (threadId: string) => void;
 	/** Closes a thread (kept on disk); refused while it is running or queued. */
@@ -821,6 +829,10 @@ export const API_NAMES = [
 	"threads.list",
 	"threads.open",
 	"threads.send",
+	"threads.hold",
+	"threads.unhold",
+	"threads.holdEdit",
+	"threads.holdSend",
 	"threads.history",
 	"threads.stop",
 	"threads.close",

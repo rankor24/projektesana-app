@@ -34,6 +34,11 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 		"threads.list": (projectId) => d.session.listThreads(projectId),
 		"threads.open": (projectId, agent, title) => d.session.openThread(projectId, agent, title),
 		"threads.send": (threadId, projectId, text, focus, attachments) => titled(d, projectId, (onRunId) => d.session.sendToThread(threadId, projectId, text, focus, attachments ?? [], onRunId)),
+		// a message written while the agent answers: held by main, titled in the activity log only when it starts a run of its own (the coordinator asks for the title then)
+		"threads.hold": (threadId, projectId, text, focus, attachments) => d.session.holdTo(threadId, projectId, text, focus, attachments ?? []),
+		"threads.unhold": (threadId, projectId) => d.session.unhold(threadId, projectId),
+		"threads.holdEdit": (threadId, projectId, text) => d.session.holdEdit(threadId, projectId, text),
+		"threads.holdSend": (threadId, projectId) => d.session.holdSend(threadId, projectId),
 		"threads.history": (threadId, projectId) => d.session.threadHistory(threadId, projectId),
 		"threads.stop": (threadId) => d.session.stopThread(threadId),
 		"threads.close": (threadId, projectId) => d.session.closeThread(threadId, projectId),
