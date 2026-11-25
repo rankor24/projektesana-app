@@ -15,7 +15,7 @@ import { join } from "node:path";
 import type { ChatEntry } from "../shared/api.js";
 import { LEAD_ID, type Thread } from "../shared/thread-types.js";
 import { newId } from "./model.js";
-import { ThreadsDb, ThreadsDbError, parseTranscript, threadsDbFile, type ConversationHit, type SearchQuery } from "./threads-db.js";
+import { ThreadsDb, ThreadsDbError, parseTranscript, threadsDbFile, type ArchiveInput, type ArchiveRecord, type ConversationHit, type SearchQuery } from "./threads-db.js";
 
 /** Where a project's threads live: inside the project's data folder; with no project, under the app's data folder. */
 export function threadsDir(appDir: string, projectsDir: string, projectId: string | null): string {
@@ -135,6 +135,31 @@ export class FileThreads {
 	transcript(id: string): ChatEntry[] {
 		const f = this.chatFile(id);
 		return existsSync(f) ? parseTranscript(readFileSync(f, "utf8")) : [];
+	}
+
+	private archivesFile(id: string) {
+		return join(this.folder(id), "archives.jsonl");
+	}
+
+	/** The old way's archive: one line per original in the thread's own folder, the line number (from 1) is its id. */
+	archive(id: string, a: ArchiveInput): number {
+		const f = this.archivesFile(id);
+		mkdirSync(this.folder(id), { recursive: true });
+		const n = (existsSync(f) ? readFileSync(f, "utf8").split("\n").filter((l) => l.trim()).length : 0) + 1;
+		appendFileSync(f, (endsWithoutNewline(f) ? "\n" : "") + JSON.stringify({ ...a, id: n, threadId: id, at: new Date().toISOString() }) + "\n", "utf8");
+		return n;
+	}
+
+	readArchive(id: string, n: number): ArchiveRecord | null {
+		const f = this.archivesFile(id);
+		if (!existsSync(f)) return null;
+		const line = readFileSync(f, "utf8").split("\n").filter((l) => l.trim())[n - 1];
+		try {
+			const r = line ? JSON.parse(line) : null;
+			return r ? { ...r, sessionId: r.sessionId ?? null } : null;
+		} catch {
+			return null;
+		}
 	}
 }
 
@@ -258,6 +283,16 @@ export class ThreadStore {
 		const m = this.ready(false);
 		if (m?.kind === "broken") throw m.error;
 		return this.reader()?.transcript(id) ?? [];
+	}
+
+	/** Keeps the original of a conversation a compaction is about to replace; the id goes on the compaction line. Throws when nothing can be written (the caller then does not compact: the original is never lost for a summary). */
+	archive(id: string, a: ArchiveInput): number {
+		return this.writer().archive(id, a);
+	}
+
+	/** The stored original a compaction line names; null when there is none (another thread's id, an old build's line). */
+	readArchive(id: string, n: number): ArchiveRecord | null {
+		return this.reader()?.readArchive(id, n) ?? null;
 	}
 
 	/** Full-text search over message text (diacritics folded). Empty while the old files are in use: they have no index. */

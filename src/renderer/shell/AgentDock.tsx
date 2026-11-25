@@ -145,7 +145,7 @@ export function AgentDock() {
 			setLines(
 				h.map((m): Line =>
 					m.kind === "compaction"
-						? { kind: "compact", phase: "past", text: `Saruna saspiesta: ${fmtTokens(m.tokens?.before ?? 0)} → ${fmtTokens(m.tokens?.after ?? 0)} tokeni`, summary: m.text }
+						? { kind: "compact", phase: "past", text: `Saruna saspiesta: ${fmtTokens(m.tokens?.before ?? 0)} → ${fmtTokens(m.tokens?.after ?? 0)} tokeni`, summary: m.text, archive: m.archive }
 						: m.role === "user"
 							? { kind: "user", text: m.text, attachments: m.attachments }
 							: { kind: "assistant", text: m.text },
@@ -485,7 +485,7 @@ export function AgentDock() {
 						)
 					) : l.kind === "confirm" && !l.answered && T.pending(l.id) ? null : (
 						// a card that waits for an answer shows once, in Gaida tevi above the chat; it joins the chat when answered
-						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} />
+						<ChatLine key={i} line={l.kind === "confirm" && !l.answered && T.settled(l.id) ? { ...l, answered: true } : l} onAnswer={answer} thread={viewId ?? undefined} projectId={projectId} />
 					),
 				)}
 				{held && viewId && (
@@ -617,7 +617,7 @@ export function AgentDock() {
 	);
 }
 
-function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, allow: boolean) => void }) {
+function ChatLine({ line: l, onAnswer, thread, projectId }: { line: Line; onAnswer: (id: string, allow: boolean) => void; thread?: string; projectId: string | null }) {
 	if (l.kind === "user")
 		return (
 			<div className="msg user">
@@ -655,11 +655,48 @@ function ChatLine({ line: l, onAnswer }: { line: Line; onAnswer: (id: string, al
 			<details className={`compact-line ${l.phase}`}>
 				<summary>{l.text}</summary>
 				{l.summary ? <pre>{l.summary}</pre> : null}
+				{l.archive !== undefined && thread ? <ArchiveView thread={thread} projectId={projectId} id={l.archive} /> : null}
 			</details>
 		);
 	if (l.kind === "confirm") return <ConfirmLine l={l} onAnswer={onAnswer} />;
 	if (l.kind === "retry") return <div className="retry">{l.text}</div>;
 	return <div className="err">{l.text}</div>;
+}
+
+/** The conversation as it was before this compaction replaced it by its summary: kept in the threads database, read here on a click (it can be long). */
+function ArchiveView({ thread, projectId, id }: { thread: string; projectId: string | null; id: number }) {
+	const [a, setA] = useState<{ text: string; at: string; engine: string; sessionId: string | null } | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
+	const open = async () => {
+		setBusy(true);
+		setErr(null);
+		try {
+			setA(await call("threads.archive", thread, projectId, id));
+		} catch (e) {
+			setErr(errText(e));
+		} finally {
+			setBusy(false);
+		}
+	};
+	if (a)
+		return (
+			<>
+				<div className="dim">
+					{tr("Oriģināls, saglabāts {at} ({engine})", { at: a.at.slice(0, 16).replace("T", " "), engine: a.engine })}
+					{a.sessionId ? ` · ${tr("dzinēja sesija {id}", { id: a.sessionId })}` : ""}
+				</div>
+				<pre>{a.text}</pre>
+			</>
+		);
+	return (
+		<div>
+			<button className="ghost small" disabled={busy} onClick={open} title={tr("Saspiešanas brīdī saglabātā pilnā saruna: nekas no tās nav zaudēts")}>
+				{busy ? tr("ielādē…") : tr("Atvērt oriģinālo sarunu")}
+			</button>
+			{err ? <div className="err">{err}</div> : null}
+		</div>
+	);
 }
 
 /**

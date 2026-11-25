@@ -13,7 +13,7 @@ export type Line =
 	| { kind: "assistant"; text: string; thinking?: string }
 	/** the run card of one run: its steps come from the activity feed */
 	| { kind: "run"; runId: string; queued?: boolean }
-	| { kind: "compact"; phase: "start" | "done" | "failed" | "past"; text: string; summary?: string }
+	| { kind: "compact"; phase: "start" | "done" | "failed" | "past"; text: string; summary?: string; /** the stored original of the conversation this line replaced (threads.archive) */ archive?: number }
 	| { kind: "confirm"; id: string; tool: string; batch: string; answered?: boolean; allow?: boolean }
 	| { kind: "error"; text: string }
 	| { kind: "retry"; text: string };

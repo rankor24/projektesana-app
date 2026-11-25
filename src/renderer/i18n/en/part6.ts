@@ -51,4 +51,8 @@ export const part6: Record<string, string> = {
 	"Ieteiktās darbības": "Suggested actions",
 	"Pievienot uzdevumu": "Add a task",
 	"{length} gaida": "{length} waiting",
+	"Oriģināls, saglabāts {at} ({engine})": "Original, stored {at} ({engine})",
+	"dzinēja sesija {id}": "engine session {id}",
+	"Saspiešanas brīdī saglabātā pilnā saruna: nekas no tās nav zaudēts": "The whole conversation as stored at the moment of compaction: nothing of it is lost",
+	"Atvērt oriģinālo sarunu": "Open the original conversation",
 };

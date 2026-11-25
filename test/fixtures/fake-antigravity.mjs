@@ -74,6 +74,8 @@ async function prompt(msg, text) {
 		const r = await callThroughRelay(s.mcpServers[0], "echo_tool", { word: "pelēks" });
 		log({ relay: { tools: r.tools, result: r.called.result ?? r.called.error } });
 		chunk(`&_a_m_p_;_Gatavs: ${r.called.result?.content?.[0]?.text ?? "(nav)"}`);
+		// the real server reports the size of the context (the prompt of its newest model call) apart from the turn's summed usage
+		out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: { sessionUpdate: "usage_update", used: 1234, size: 5000 } } });
 		return out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn", usage: { inputTokens: 10, outputTokens: 5 } } });
 	}
 	chunk(`atbilde: ${text.slice(0, 40)}`);

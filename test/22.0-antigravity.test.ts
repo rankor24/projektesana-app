@@ -23,7 +23,7 @@ import {
 	validateAntigravityCallbackUrl,
 } from "../src/agent/antigravity/acp.ts";
 import { startToolBridge } from "../src/agent/antigravity/bridge.ts";
-import { antigravityEnd, antigravityEvents, antigravitySignInError, antigravityToolEnded, antigravityToolStarted, antigravityUsage, cleanAntigravityTextStart, newAntigravityState, ownToolRequest, permissionOption } from "../src/agent/antigravity/events.ts";
+import { antigravityContext, antigravityEnd, antigravityEvents, antigravitySignInError, antigravityToolEnded, antigravityToolStarted, antigravityUsage, cleanAntigravityTextStart, newAntigravityState, ownToolRequest, permissionOption } from "../src/agent/antigravity/events.ts";
 import { AntigravityHost } from "../src/agent/antigravity/host.ts";
 import { resolveAntigravityReleaseAsset } from "../src/agent/antigravity/release.ts";
 import { antigravityPrompt, createAntigravityRun, relayEnv } from "../src/agent/antigravity/run.ts";
@@ -142,6 +142,13 @@ test("the end of a prompt: a stop, a refusal and a limit are errors, never a don
 	assert.equal(err("refusal")[0].type, "error");
 	assert.equal(err("max_tokens")[0].type, "error");
 	assert.equal(antigravityUsage({}), null);
+	// the context size of the session is the server's own `usage_update`; the turn's usage is a sum over its model calls and is never read as the size
+	assert.deepEqual(antigravityContext({ sessionUpdate: "usage_update", used: 118000, size: 262144 }), { used: 118000, window: 262144 });
+	assert.deepEqual(antigravityContext({ sessionUpdate: "usage_update", used: 5 }), { used: 5 });
+	assert.equal(antigravityContext({ sessionUpdate: "usage_update", used: 0, size: 1000 }), null);
+	assert.equal(antigravityContext({ sessionUpdate: "agent_message_chunk", used: 5 }), null);
+	assert.deepEqual(antigravityUsage({ usage: { inputTokens: 700000, outputTokens: 3000, cachedReadTokens: 480000 } }, { used: 118000, window: 262144 }), { type: "usage", input: 700000, output: 3000, cacheRead: 480000, cacheWrite: 0, cost: null, context: { used: 118000, window: 262144 } });
+	assert.deepEqual(antigravityUsage({}, { used: 9 }), { type: "usage", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: null, context: { used: 9 } }, "a context size without counts still reaches the meter");
 	assert.deepEqual(antigravityUsage({ usage: { inputTokens: 12, outputTokens: 3, cachedReadTokens: 4 } }), { type: "usage", input: 12, output: 3, cacheRead: 4, cacheWrite: 0, cost: null });
 	assert.equal(antigravitySignInError({ code: -32000, message: "Authentication required" }), true);
 	assert.equal(antigravitySignInError({ code: -32000, message: "Model overloaded" }), false);
@@ -284,7 +291,7 @@ test("a whole run: the server calls the app's tool through the relay, asks permi
 		assert.deepEqual({ ok: result.ok, output: result.output }, { ok: true, output: "echo:pelēks" });
 		const done = events.find((e) => e.type === "done") as Extract<RunEvent, { type: "done" }>;
 		assert.equal(done.text, "Gatavs: echo:pelēks", "the answer is the text after the tool, its escape tokens gone");
-		assert.deepEqual(events.find((e) => e.type === "usage"), { type: "usage", input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: null });
+		assert.deepEqual(events.find((e) => e.type === "usage"), { type: "usage", input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: null, context: { used: 1234, window: 5000 } }, "the turn's summed counts, and apart from them the size of the context the server reported");
 		assert.deepEqual(sessions, ["sess-1"]);
 		const log = calls();
 		const methods = log.filter((c) => c.method).map((c) => c.method);

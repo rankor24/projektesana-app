@@ -112,6 +112,23 @@ export interface ChatEntry {
 	kind?: "compaction";
 	/** compaction: estimated context before and after */
 	tokens?: { before: number; after: number };
+	/** compaction: the id of the stored original (the whole conversation as it was before it was summarized), readable with `threads.archive` */
+	archive?: number;
+	/** compaction of a conversation kept in an engine's own session (Antigravity): the number of lines before the line that asked for it which stay word for word in the new session */
+	keep?: number;
+}
+
+/** A conversation as it was before a compaction replaced it by its summary, kept in the threads database. `engine`: where the context lived; `sessionId`: that engine's own session (it stays with the engine, the thread has moved on to a new one). */
+export interface ConversationArchive {
+	id: number;
+	threadId: string;
+	at: string;
+	engine: string;
+	sessionId: string | null;
+	tokens: { before: number; after: number };
+	summary: string;
+	/** the original, readable: every line with its tool calls and answers, in full */
+	text: string;
 }
 
 /** A provider on hold: it refused a run for its usage limit, for want of credit, or because its sign-in is gone; the agents carry on with their backups until `until`. */
@@ -498,6 +515,8 @@ export interface ApiSpec {
 	"threads.close": (threadId: string, projectId: string | null) => Thread;
 	/** A thread as a file: JSONL (one entry per line) or Markdown. Answers with the file name and the text; saving it is the window's job. */
 	"threads.export": (threadId: string, projectId: string | null, format: "jsonl" | "md") => { fileName: string; mime: string; text: string };
+	/** The original conversation a compaction line stands for (`ChatEntry.archive`): kept in the threads database, read here without changing anything. */
+	"threads.archive": (threadId: string, projectId: string | null, archiveId: number) => ConversationArchive;
 	/** Gives a thread a new title (1-80 characters); the conversation itself is not touched. */
 	"threads.rename": (threadId: string, projectId: string | null, title: string) => Thread;
 	/** Pins or unpins a thread: pinned threads are listed first in their agent's list. */
@@ -837,6 +856,7 @@ export const API_NAMES = [
 	"threads.stop",
 	"threads.close",
 	"threads.export",
+	"threads.archive",
 	"threads.rename",
 	"threads.pin",
 	"threads.reopen",

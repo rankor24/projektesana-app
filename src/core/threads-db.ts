@@ -181,7 +181,38 @@ const SCHEMA = `
 		created_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS chunks_message ON chunks(message_id);
+	-- The original of a conversation before a compaction replaced it by its summary, kept whole: body is JSON (a pi conversation's messages with their tool
+	-- calls and results, or the chat lines of a conversation an engine keeps in its own session), engine and session_id say where the context lived.
+	-- Never changed or removed by the app; the compaction line in messages names its row (json.archive).
+	CREATE TABLE IF NOT EXISTS archives (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		thread_id TEXT NOT NULL,
+		at TEXT NOT NULL,
+		engine TEXT NOT NULL,
+		session_id TEXT,
+		tokens_before INTEGER NOT NULL DEFAULT 0,
+		tokens_after INTEGER NOT NULL DEFAULT 0,
+		summary TEXT NOT NULL,
+		body TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS archives_thread ON archives(thread_id, id);
 `;
+
+/** What a compaction hands over to be kept: see the `archives` table. */
+export interface ArchiveInput {
+	engine: string;
+	sessionId?: string | null;
+	tokens: { before: number; after: number };
+	summary: string;
+	body: string;
+}
+/** A stored original as read back (`body` is the JSON as it was written). */
+export interface ArchiveRecord extends ArchiveInput {
+	id: number;
+	threadId: string;
+	at: string;
+	sessionId: string | null;
+}
 
 /** The schema version this build writes (`PRAGMA user_version`). 1 = the first schema; 2 = threads.pinned (the user's pin); 3 = threads.seen_msg (the last message the user had in front of them). A step runs once, in order, and only when the file is below it. */
 export const SCHEMA_VERSION = 3;
@@ -460,5 +491,16 @@ export class ThreadsDb {
 
 	search(q: SearchQuery): ConversationHit[] {
 		return searchIn(this.db, q);
+	}
+
+	/** Keeps a conversation's original; returns its id (the compaction line carries it). */
+	archive(threadId: string, a: ArchiveInput): number {
+		const r = this.stmt("INSERT INTO archives (thread_id, at, engine, session_id, tokens_before, tokens_after, summary, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(threadId, new Date().toISOString(), a.engine, a.sessionId ?? null, Math.round(a.tokens.before), Math.round(a.tokens.after), a.summary, a.body);
+		return Number(r.lastInsertRowid);
+	}
+
+	readArchive(threadId: string, id: number): ArchiveRecord | null {
+		const r = this.stmt("SELECT * FROM archives WHERE id = ? AND thread_id = ?").get(id, threadId) as { id: number; thread_id: string; at: string; engine: string; session_id: string | null; tokens_before: number; tokens_after: number; summary: string; body: string } | undefined;
+		return r ? { id: Number(r.id), threadId: r.thread_id, at: r.at, engine: r.engine, sessionId: r.session_id, tokens: { before: Number(r.tokens_before), after: Number(r.tokens_after) }, summary: r.summary, body: r.body } : null;
 	}
 }

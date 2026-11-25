@@ -306,6 +306,15 @@ export const APP_CATALOG: Record<string, { sig: string; params: string[]; doc?: 
 		],
 		"doc": "A thread as a file: JSONL (one entry per line) or Markdown. Answers with the file name and the text; saving it is the window's job."
 	},
+	"threads.archive": {
+		"sig": "(threadId: string, projectId: string | null, archiveId: number) => ConversationArchive",
+		"params": [
+			"threadId",
+			"projectId",
+			"archiveId"
+		],
+		"doc": "The original conversation a compaction line stands for (`ChatEntry.archive`): kept in the threads database, read here without changing anything."
+	},
 	"threads.rename": {
 		"sig": "(threadId: string, projectId: string | null, title: string) => Thread",
 		"params": [

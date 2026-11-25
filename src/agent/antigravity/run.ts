@@ -11,7 +11,7 @@ import { connectMcpServers } from "../pi/mcp.js";
 import type { RunEvent } from "../../shared/types.js";
 import type { PiRunOptions } from "../pi/run.js";
 import { BRIDGE_SERVER, startToolBridge } from "./bridge.js";
-import { antigravityEnd, antigravityEvents, antigravitySignInError, antigravityToolEnded, antigravityToolStarted, antigravityUsage, newAntigravityState, ownToolRequest, permissionOption } from "./events.js";
+import { antigravityContext, antigravityEnd, antigravityEvents, antigravitySignInError, antigravityToolEnded, antigravityToolStarted, antigravityUsage, newAntigravityState, ownToolRequest, permissionOption } from "./events.js";
 import { AntigravitySignInRequired, noteAntigravitySignInRequired } from "./acp.js";
 import type { AntigravityHost } from "./host.js";
 import { ANTIGRAVITY_NOT_CONNECTED, ANTIGRAVITY_SIGN_IN_AGAIN } from "./provider.js";
@@ -59,6 +59,8 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 		let closeTools: (() => Promise<void>) | undefined;
 		let closeBridge: (() => Promise<void>) | undefined;
 		let session: string | null = null;
+		// the context size the server reported last (usage_update): what the thread's meter shows, not the sum the prompt answer bills
+		let context: { used: number; window?: number } | null = null;
 		try {
 			if (!(await cfg.host.installed()) || !(await cfg.host.signedIn())) throw new Error(ANTIGRAVITY_NOT_CONNECTED);
 			const mcp = await connectMcpServers(o.mcp, { maxResultChars: 200_000 });
@@ -90,7 +92,10 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 					variant: o.effort ?? "",
 				},
 				{
-					update: (u) => antigravityEvents(u, st).forEach(send),
+					update: (u) => {
+						context = antigravityContext(u) ?? context;
+						antigravityEvents(u, st).forEach(send);
+					},
 					permission: async (params) => {
 						const tool = ownToolRequest(params.toolCall, BRIDGE_SERVER, offered);
 						const option = permissionOption(params.options, tool ? "allow" : "reject");
@@ -114,7 +119,7 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				else o.signal.addEventListener("abort", onAbort, { once: true });
 			});
 			const result = await Promise.race([cfg.host.prompt(opened.sessionId, blocks, o.signal), stopped]);
-			const usage = antigravityUsage(result);
+			const usage = antigravityUsage(result, context);
 			if (usage) send(usage);
 			antigravityEnd(result, st, o.signal.aborted).forEach(send);
 		} catch (e) {

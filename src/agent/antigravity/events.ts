@@ -85,16 +85,29 @@ export function antigravityEvents(update: Record<string, any>, st: AntigravitySt
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-/** The usage the prompt answer carries, when it does (ACP's `usage`, camelCase; a subscription has no price, cost null). */
-export function antigravityUsage(result: { usage?: Record<string, unknown>; _meta?: Record<string, unknown> } | null | undefined): RunEvent | null {
+/**
+ * The size of the context the session holds, from the server's `usage_update` notification (`used` tokens of a window of `size`). The server computes it as the
+ * prompt of the newest model call, so it is the real occupancy. The prompt answer's `usage` is something else: the sum over every model call of the turn (each call
+ * resends the whole history), which a long tool turn makes several times the window.
+ */
+export function antigravityContext(update: Record<string, any>): { used: number; window?: number } | null {
+	if (update?.sessionUpdate !== "usage_update") return null;
+	const used = num(update.used);
+	if (used <= 0) return null;
+	const size = num(update.size);
+	return { used, ...(size > 0 ? { window: size } : {}) };
+}
+
+/** The usage the prompt answer carries, when it does (ACP's `usage`, camelCase; a subscription has no price, cost null), with the context size the server last reported for the session. */
+export function antigravityUsage(result: { usage?: Record<string, unknown>; _meta?: Record<string, unknown> } | null | undefined, context?: { used: number; window?: number } | null): RunEvent | null {
 	const u = (result?.usage ?? (result?._meta as { usage?: Record<string, unknown> } | undefined)?.usage) as Record<string, unknown> | undefined;
-	if (!u) return null;
-	const input = num(u.inputTokens ?? u.input_tokens);
-	const output = num(u.outputTokens ?? u.output_tokens);
-	const cacheRead = num(u.cachedReadTokens ?? u.cacheReadTokens ?? u.cached_read_tokens);
-	const cacheWrite = num(u.cachedWriteTokens ?? u.cacheWriteTokens ?? u.cached_write_tokens);
-	if (input + output + cacheRead + cacheWrite <= 0) return null;
-	return { type: "usage", input, output, cacheRead, cacheWrite, cost: null };
+	const input = num(u?.inputTokens ?? u?.input_tokens);
+	const output = num(u?.outputTokens ?? u?.output_tokens);
+	const cacheRead = num(u?.cachedReadTokens ?? u?.cacheReadTokens ?? u?.cached_read_tokens);
+	const cacheWrite = num(u?.cachedWriteTokens ?? u?.cacheWriteTokens ?? u?.cached_write_tokens);
+	// no counts but a context size: the meter still learns it (a zero row of counts costs nothing)
+	if (input + output + cacheRead + cacheWrite <= 0 && !context) return null;
+	return { type: "usage", input, output, cacheRead, cacheWrite, cost: null, ...(context ? { context } : {}) };
 }
 
 /** The end of the prompt: the answer, or why there is none. `aborted`: the user stopped the run. */

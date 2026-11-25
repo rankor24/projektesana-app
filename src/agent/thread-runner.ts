@@ -12,7 +12,8 @@ import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type IncidentView, type RunMeta, type Thread } from "../shared/thread-types.js";
 import type { CheckUsage, RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
-import { compactMessages, type Complete } from "./compact.js";
+import { compactMessages, summarize, type Complete } from "./compact.js";
+import { archiveBody, entriesAsMessages, planSessionCompaction, seedFromTranscript } from "./session-compact.js";
 import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
@@ -113,6 +114,8 @@ export interface Conversation {
 	/** Claude subscription engine: the SDK session holding the conversation (`messages` stays empty), and its size at the last turn */
 	sessionId?: string;
 	tokens?: number;
+	/** that session's context window as its server states it (Antigravity's usage_update), when it does */
+	window?: number;
 }
 
 export class ThreadRunner {
@@ -207,8 +210,8 @@ export class ThreadRunner {
 		};
 	}
 
-	private rememberCompaction(thread: Thread, summary: string, before: number, after: number) {
-		const entry: ChatEntry = { role: "assistant", kind: "compaction", text: summary, at: new Date().toISOString(), tokens: { before, after } };
+	private rememberCompaction(thread: Thread, summary: string, before: number, after: number, extra: { archive?: number; keep?: number } = {}) {
+		const entry: ChatEntry = { role: "assistant", kind: "compaction", text: summary, at: new Date().toISOString(), tokens: { before, after }, ...extra };
 		this.store(thread).append(thread.id, entry);
 		this.compactions.set(thread.id, (this.compactions.get(thread.id) ?? 0) + 1);
 	}
@@ -226,7 +229,9 @@ export class ThreadRunner {
 				o.emit?.({ type: "compact", phase: "failed", before, message: "Nav ko saspiest: sarunā ir tikai viens posms, vai viss ietilpst nesenajā daļā." });
 				return null;
 			}
-			this.rememberCompaction(o.thread, c.summary, before, c.tokensAfter);
+			// the original stays in the threads database, whole; no summary replaces a conversation that could not be kept
+			const archive = this.store(o.thread).archive(o.thread.id, { engine: "pi", tokens: { before, after: c.tokensAfter }, summary: c.summary, body: archiveBody(o.history) });
+			this.rememberCompaction(o.thread, c.summary, before, c.tokensAfter, { archive });
 			o.emit?.({ type: "compact", phase: "done", before, after: c.tokensAfter });
 			return c.messages;
 		} catch (e) {
@@ -235,15 +240,60 @@ export class ThreadRunner {
 		}
 	}
 
-	/** The newest compaction summary in the transcript and the lines after it, for a conversation that is not in memory (restart, model change). */
+	/** The newest compaction summary in the transcript and the lines before the message being answered, for a conversation that is not in memory (restart, model change, a new session). */
 	private transcriptSeed(thread: Thread): { summary: string | null; earlier: { role: string; text: string }[] } {
-		const all = this.store(thread).transcript(thread.id);
-		const ci = all.map((e) => e.kind).lastIndexOf("compaction");
-		const tail = all.slice(ci + 1).slice(-11, -1);
-		return {
-			summary: ci >= 0 ? all[ci].text : null,
-			earlier: tail.map((e) => ({ role: e.role, text: e.attachments?.length ? `${e.text}\n[pielikumi: ${e.attachments.map((a) => a.name).join(", ")}]` : e.text })),
+		return seedFromTranscript(this.store(thread).transcript(thread.id));
+	}
+
+	/**
+	 * A one-off model call through an engine that keeps its own sessions: the summarizer of a conversation on Antigravity (its model has no API of its own for pi to call;
+	 * the Google sign-in works through the ACP server only). A fresh session without the app's tools; what it says is the answer.
+	 */
+	private sessionComplete(engine: (o: PiRunOptions) => Promise<void>, rt: PiRuntime, provider: string, modelId: string): Complete {
+		return async (_model, system, user, signal) => {
+			let text = "";
+			let error: string | null = null;
+			await engine({
+				runtime: rt,
+				provider,
+				modelId,
+				prompt: user,
+				systemPrompt: system,
+				mcp: {},
+				signal: signal ?? new AbortController().signal,
+				onEvent: (e) => {
+					if (e.type === "done") text = e.text;
+					else if (e.type === "error") error = e.message;
+				},
+			});
+			return { role: "assistant", content: error === null ? [{ type: "text", text }] : [], stopReason: error === null ? "stop" : signal?.aborted ? "aborted" : "error", ...(error !== null ? { errorMessage: error } : {}), timestamp: Date.now() } as unknown as AssistantMessage;
 		};
+	}
+
+	/**
+	 * The user's rule for a conversation that grew too big: keep the old session as it was, and go on in a new, compacted one. For an engine that holds the context in its own
+	 * session (Antigravity) the app cannot cut that context, so: the old session stays with the engine (its id is recorded), the original chat lines since the last compaction go
+	 * whole into the threads database, a summary of them is written, and the thread's next message opens a NEW session that starts from the summary and the last lines word for word.
+	 * Nothing is changed before the original is stored; a failure leaves the thread as it was (the run goes on in the old session). Returns whether a new session will be opened.
+	 */
+	private async compactSession(o: { thread: Thread; complete: Complete; model: Model<Api>; key: string; engine: string; sessionId: string; before: number; signal: AbortSignal; emit?: (e: RunEvent) => void }): Promise<boolean> {
+		o.emit?.({ type: "compact", phase: "start", before: o.before });
+		try {
+			const store = this.store(o.thread);
+			const plan = planSessionCompaction(store.transcript(o.thread.id));
+			const summary = plan.old.length ? await summarize({ complete: o.complete, model: o.model, old: entriesAsMessages(plan.old), previous: plan.previous ?? undefined, signal: o.signal, maxInputTokens: Math.floor(o.model.contextWindow * 0.7) }) : (plan.previous ?? "");
+			const text = summary || "(Vecākas sarunas nebija: jaunā sesija sākas ar pēdējiem ziņojumiem.)";
+			const after = estimateTextTokens(text) + plan.covered.slice(plan.covered.length - plan.kept).reduce((n, e) => n + estimateTextTokens(e.text), 0);
+			const archive = store.archive(o.thread.id, { engine: o.engine, sessionId: o.sessionId, tokens: { before: o.before, after }, summary: text, body: JSON.stringify(plan.covered) });
+			this.rememberCompaction(o.thread, text, o.before, after, { archive, keep: plan.kept });
+			// no session id: the next run opens a new session and seeds it from the summary and the last lines
+			this.conversations.set(o.thread.id, { key: o.key, messages: [], lastAdded: null });
+			o.emit?.({ type: "compact", phase: "done", before: o.before, after });
+			return true;
+		} catch (e) {
+			o.emit?.({ type: "compact", phase: "failed", before: o.before, message: (e as Error).message });
+			return false;
+		}
 	}
 
 	async run(i: RunInput): Promise<{ ok: boolean; answer: string; confirmedBatches: number }> {
@@ -425,6 +475,14 @@ export class ThreadRunner {
 				const historyFor = async (sh: typeof shape): Promise<AgentMessage[]> => {
 					let h = conv && conv.key === sh.key ? this.shrink(conv.messages) : [];
 					if (h.length && estimateContext(h).tokens + promptTokens > compactLine(sh.model.contextWindow)) h = (await this.compactHistory({ thread, rt, model: sh.model, history: h, signal, emit, keepRecent: sh.keepRecent })) ?? h;
+					// Antigravity keeps the conversation in its own session: past the line the old session stays and a new, compacted one takes over (its size is what the server reported, not a sum)
+					if (isAntigravity(sh.provider) && conv && conv.key === sh.key && conv.sessionId && (conv.tokens ?? 0) + promptTokens > compactLine(conv.window ?? sh.model.contextWindow)) {
+						const done = await this.compactSession({ thread, complete: this.sessionComplete(sh.engine, rt, sh.provider, sh.modelId), model: sh.model, key: sh.key, engine: "antigravity", sessionId: conv.sessionId, before: conv.tokens ?? 0, signal, emit });
+						if (done) {
+							conv = this.conversations.get(thread.id);
+							sh.resume = undefined;
+						}
+					}
 					return h;
 				};
 				const history = await historyFor(shape);
@@ -501,7 +559,12 @@ export class ThreadRunner {
 							// the Claude session's size, for the context meter (the SDK holds the messages)
 							if (claude && !e.model) {
 								const c = this.conversations.get(thread.id);
-								if (c && c.key === key) c.tokens = e.input + e.cacheRead + e.cacheWrite + e.output;
+								if (c && c.key === key) {
+									// Antigravity states the size of its context itself (`e.context`); its `input` / `output` are the sum of every model call of the turn. When it does not state it,
+									// the last size grows by what this turn added to the conversation (the new message and the answer): a rough figure, never the sum
+									c.tokens = e.context ? e.context.used : isAntigravity(provider) ? (c.tokens ?? 0) + promptTokens + e.output : e.input + e.cacheRead + e.cacheWrite + e.output;
+									if (e.context?.window) c.window = e.context.window;
+								}
 							}
 							try {
 								appendUsage(join(this.d.ctx.appDir, "usage.jsonl"), { at: new Date().toISOString(), run: runId, project: projectId, model: e.model ?? key, input: e.input, output: e.output, cacheRead: e.cacheRead, cacheWrite: e.cacheWrite, cost: e.cost });
@@ -597,7 +660,7 @@ export class ThreadRunner {
 							? {
 									resume,
 									// the session id comes with the run's first message: kept at once, so a stopped run still continues its session
-									onSession: (sessionId: string) => this.conversations.set(thread.id, { key, messages: [], lastAdded: null, sessionId, tokens: conv?.key === key ? conv.tokens : undefined }),
+									onSession: (sessionId: string) => this.conversations.set(thread.id, { key, messages: [], lastAdded: null, sessionId, tokens: conv?.key === key ? conv.tokens : undefined, window: conv?.key === key ? conv.window : undefined }),
 								}
 							: { onMessages: (messages: AgentMessage[]) => this.conversations.set(thread.id, { key, messages, lastAdded: Math.max(0, estimateContext(messages).tokens - base) }) }),
 						onEvent: handle,
@@ -851,15 +914,19 @@ export class ThreadRunner {
 		const b = live ? breakdown(live.messages) : null;
 		// a Claude session: its size is what the SDK reported for the last turn; there is no breakdown (the messages are the SDK's)
 		const sdkTokens = !live && conv && conv.key === mf.key && conv.sessionId ? (conv.tokens ?? null) : null;
+		// the window the engine's own server states for the model wins over the catalogue's figure
+		const window = !live && sdkTokens !== null && conv?.window ? conv.window : model.contextWindow;
+		const fixedEstimate = fixedTokens(agent, this.standingDeps(s, agent, undefined, thread.projectId), declarationTokens(agent));
 		return {
-			window: model.contextWindow,
-			compactAt: compactLine(model.contextWindow),
+			window,
+			compactAt: compactLine(window),
 			used: est ? est.tokens : sdkTokens,
 			source: est ? est.source : sdkTokens !== null ? "usage" : "none",
-			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : null,
+			// an engine session has no messages here: the size is split into the base (rules, skills, tool descriptions) and the rest, which is the conversation with its tool results
+			parts: b ? { fixed: b.fixed, chat: b.chat, docs: b.docs, tools: b.tools, images: b.images } : sdkTokens !== null ? { fixed: Math.min(fixedEstimate, sdkTokens), chat: Math.max(0, sdkTokens - fixedEstimate), docs: 0, tools: 0, images: 0 } : null,
 			imageCount: b?.imageCount ?? 0,
 			messages: live?.messages.length ?? 0,
-			fixedEstimate: fixedTokens(agent, this.standingDeps(s, agent, undefined, thread.projectId), declarationTokens(agent)),
+			fixedEstimate,
 			lastAdded: live?.lastAdded ?? null,
 			compactions: this.compactions.get(thread.id) ?? 0,
 			// the Fokuss line is sent with every message, "Fokuss: nekas" included
@@ -867,12 +934,24 @@ export class ThreadRunner {
 		};
 	}
 
-	/** Summarizes the thread's in-memory conversation now; the caller guards against a run going on. */
+	/** Summarizes the thread's conversation now; the caller guards against a run going on. Not for a Claude subscription (Claude compacts its own session). */
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
 		const mf = this.modelFor(this.d.settings(), this.specOf(thread), thread);
 		if (isClaudeSub(mf.provider)) throw new Error("Claude abonementa sarunu Claude saspiež pats, kad tā tuvojas limitam. Jaunai tēmai sāc jaunu sarunu.");
-		if (isAntigravity(mf.provider)) throw new Error("Antigravity sarunu uztur pats Google serveris. Jaunai tēmai sāc jaunu sarunu.");
 		const conv = this.conversations.get(thread.id);
+		if (isAntigravity(mf.provider)) {
+			// the server holds the conversation: the old session stays, the next message opens a new one from the summary
+			if (!conv || conv.key !== mf.key || !conv.sessionId) throw new Error("Nav ko saspiest: šīs sarunas Antigravity sesijas nav (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
+			const engine = this.d.antigravityRun;
+			if (!engine) throw new Error(ANTIGRAVITY_NOT_CONNECTED);
+			const rt = await this.d.runtime();
+			const before = conv.tokens ?? 0;
+			const events: RunEvent[] = [];
+			const done = await this.compactSession({ thread, complete: this.sessionComplete(engine, rt, mf.provider, mf.modelId), model: lookupAgentModel(rt, mf.provider, mf.modelId), key: mf.key, engine: "antigravity", sessionId: conv.sessionId, before, signal: signal ?? new AbortController().signal, emit: (e) => events.push(e) });
+			if (!done) throw new Error((events.find((e) => e.type === "compact" && e.phase === "failed") as { message?: string } | undefined)?.message ?? "Saspiešana neizdevās.");
+			const after = (events.find((e) => e.type === "compact" && e.phase === "done") as { after?: number } | undefined)?.after ?? 0;
+			return { before, after };
+		}
 		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();
 		const model = lookupAgentModel(rt, mf.provider, mf.modelId);
@@ -880,7 +959,8 @@ export class ThreadRunner {
 		const before = estimateContext(conv.messages).tokens;
 		const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });
 		if (!c) throw new Error(`Nav ko saspiest: sarunā ir tikai viens posms, vai viss (${before} tokeni) ietilpst nesenajā daļā.`);
-		this.rememberCompaction(thread, c.summary, before, c.tokensAfter);
+		const archive = this.store(thread).archive(thread.id, { engine: "pi", tokens: { before, after: c.tokensAfter }, summary: c.summary, body: archiveBody(conv.messages) });
+		this.rememberCompaction(thread, c.summary, before, c.tokensAfter, { archive });
 		this.conversations.set(thread.id, { key: conv.key, messages: c.messages, lastAdded: null });
 		return { before, after: c.tokensAfter };
 	}

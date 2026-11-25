@@ -3,9 +3,10 @@
 // No Electron imports: the runtime, the settings and the event sink are injected.
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { join } from "node:path";
-import type { AgentStatus, ChatAttachment, ChatEntry, ContextInfo, FileCost, FocusItem } from "../shared/api.js";
+import type { AgentStatus, ChatAttachment, ChatEntry, ContextInfo, ConversationArchive, FileCost, FocusItem } from "../shared/api.js";
 import { measureAttachment, prepareAttachments, type PreparedAttachments } from "./attachments.js";
 import { type Complete } from "./compact.js";
+import { archiveText } from "./session-compact.js";
 import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { isPiProvider, lookupPiModel, PI_PROVIDERS, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
@@ -325,6 +326,14 @@ export class AgentSession {
 
 	threadHistory(threadId: string, projectId: string | null): ChatEntry[] {
 		return this.threads(projectId).transcript(this.threadOf(threadId, projectId).id);
+	}
+
+	/** The original of a conversation a compaction line stands for: what the thread held before the summary replaced it. */
+	threadArchive(threadId: string, projectId: string | null, archiveId: number): ConversationArchive {
+		const id = this.threadOf(threadId, projectId).id;
+		const a = this.threads(projectId).readArchive(id, archiveId);
+		if (!a) throw new Error("Šīs saspiešanas oriģināls nav saglabāts (tā tika veikta ar vecāku versiju).");
+		return { id: a.id, threadId: a.threadId, at: a.at, engine: a.engine, sessionId: a.sessionId, tokens: a.tokens, summary: a.summary, text: archiveText(a.body) };
 	}
 
 	stopThread(threadId: string): void {

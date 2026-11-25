@@ -49,6 +49,7 @@ export function threadHandlers(d: ThreadDeps): Pick<Handlers, Extract<keyof Hand
 			if (!thread) throw new Error(`Saruna ${threadId} nav atrasta.`);
 			return exportThread(thread, entries, format === "md" ? "md" : "jsonl");
 		},
+		"threads.archive": (threadId, projectId, archiveId) => d.session.threadArchive(threadId, projectId, archiveId),
 		"threads.rename": (threadId, projectId, title) => d.session.renameThread(threadId, projectId, title),
 		"threads.pin": (threadId, projectId, pinned) => d.session.pinThread(threadId, projectId, pinned),
 		"threads.reopen": (threadId, projectId) => d.session.reopenThread(threadId, projectId),
