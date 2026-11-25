@@ -529,7 +529,12 @@ His words: "After compaction wasn't resumed any actions" (screenshot: "Saruna sa
 
 **Test:** `test/22.0-antigravity.test.ts` (a silent prompt is cancelled and resumed once in the same session; silent twice, or deaf to the cancel, ends as an error; a running tool call is not a stall), `test/22.1-session-compaction.test.ts` (the new session's text tells it to carry on, and its task is the message that started the run).
 
-**Not done / limits.** Only the Antigravity engine has the watchdog; the Claude subscription and pi engines have their own retries and are unchanged. What the model does after the resume is Google's: if the server stays silent for 10 minutes again, the run ends as an error and he sends again. The new session still starts from a summary of what was said, not from the old session's tool results. **Not checked live** (his rule).
+**Same watchdog for the other providers (version 2.14.3, his question: "what about other providers?").** `agent/stall.ts` holds the shared rule: 5 minutes with no event from the engine and no tool running. The pi engine (every API-key provider) stops the stuck model turn, drops its stopped tail from the transcript and asks again once; the Claude subscription stops the stuck query and resumes the same SDK session with a "continue" prompt once. In both the chat shows a line saying so, the stopped turn's end is not shown as the run's end, and a second silence ends the run with an error in words. A running tool call (a Revit batch, a confirmation waiting for his click) is never silence. `pi/run.ts`, `claude/run.ts`; the engine's model call (`streamFn`) and the SDK's `query` can be injected for tests.
+
+**Test:** `test/22.2-stall-watch.test.ts` (the watchdog itself; pi and Claude engines over scripted model calls: silent once resumes, silent twice is an error, a user's stop is still just a stop).
+
+**Not done / limits.** The watchdog limit is fixed at 5 minutes (not a setting). What the model does after the resume is the provider's: if it stays silent again the run ends as an error and he sends again. A pi provider whose connection hangs before it sends anything is caught the same way, but a provider that streams slowly forever (a token a minute) is not a stall. The new session still starts from a summary of what was said, not from the old session's tool results. **Not checked live** (his rule): the engines were tested over scripted model calls, not against a real provider.
+
 
 ## 2026-11-25: agent notes appeared in an office project folder (office folders are read-only to agents) (version 2.14.2)
 

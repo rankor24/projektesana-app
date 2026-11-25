@@ -41,6 +41,17 @@ export function dropFailedTail(messages: readonly AgentMessage[]): AgentMessage[
 	return messages.slice(0, end);
 }
 
+/** The transcript without its trailing assistant messages that ended in an error or an abort (a turn stopped by the stall watchdog holds a part of an answer at most; the turn is asked again from what came before). */
+export function dropStoppedTail(messages: readonly AgentMessage[]): AgentMessage[] {
+	let end = messages.length;
+	while (end > 0) {
+		const m = messages[end - 1];
+		if (!isAssistant(m) || (m.stopReason !== "error" && m.stopReason !== "aborted")) break;
+		end--;
+	}
+	return messages.slice(0, end);
+}
+
 /** Sleeps, or resolves false at once when the signal aborts. */
 export function sleep(ms: number, signal: AbortSignal): Promise<boolean> {
 	return new Promise((resolve) => {

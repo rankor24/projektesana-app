@@ -18,6 +18,7 @@ import { claudeEvents, newClaudeState, toolNameOf, TOOL_SERVER } from "./events.
 import { claudeBaseEnv } from "./login.js";
 import { catalogProvider, claudeEffort, CLAUDE_SUB, NOT_CONNECTED } from "./provider.js";
 import { toolServer } from "./tools.js";
+import { STALL_MS, STALL_NOTE, STALL_RESUME, StallWatch, stallError } from "../stall.js";
 
 export interface ClaudeEngineConfig {
 	/** The user's setup-token (stored encrypted by the settings); null = none pasted. */
@@ -34,6 +35,8 @@ export interface ClaudeEngineConfig {
 	clientApp: string;
 	/** Claude Code's stderr lines (diagnostics). */
 	log?: (line: string) => void;
+	/** The SDK's `query`; tests inject a scripted one. */
+	query?: typeof query;
 }
 
 export interface ClaudeRunOptions extends PiRunOptions {
@@ -138,54 +141,104 @@ export function createClaudeRun(cfg: ClaudeEngineConfig) {
 				return { behavior: "allow", updatedInput: input };
 			};
 
-			const content = [
-				{ type: "text" as const, text: o.prompt },
-				...(o.images ?? []).map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mimeType as "image/png", data: i.data } })),
-			];
-			async function* input(): AsyncIterable<SDKUserMessage> {
-				yield { type: "user", parent_tool_use_id: null, message: { role: "user", content } };
-				await finished;
-			}
+			// a turn that shows no sign of life (no message from the SDK, no tool going) is stopped and the session asked to carry on, once; the second silence ends the run in words
+			const stallMs = o.stallMs ?? STALL_MS;
+			let current = new AbortController();
+			const watch = new StallWatch(stallMs, () => current.abort());
+			const going = new Set<string>();
+			const once = async (resume: string | undefined, text: string, images: ClaudeRunOptions["images"]): Promise<void> => {
+				const ac = new AbortController();
+				current = ac;
+				const link = () => ac.abort();
+				if (abort.signal.aborted) link();
+				else abort.signal.addEventListener("abort", link, { once: true });
+				let done: () => void = () => undefined;
+				const over = new Promise<void>((r) => (done = r));
+				ac.signal.addEventListener("abort", () => done(), { once: true });
+				const content = [
+					{ type: "text" as const, text },
+					...(images ?? []).map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mimeType as "image/png", data: i.data } })),
+				];
+				async function* input(): AsyncIterable<SDKUserMessage> {
+					yield { type: "user", parent_tool_use_id: null, message: { role: "user", content } };
+					await over;
+				}
 
-			const q = query({
-				prompt: input(),
-				options: {
-					abortController: abort,
-					cwd: cfg.cwd,
-					model: model.id,
-					...(effort ? { effort } : {}),
-					systemPrompt: o.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
-					// no built-in tools (Bash, Edit, Task…), no settings files or CLAUDE.md, no other MCP servers: the app's tools only
-					tools: [],
-					settingSources: [],
-					strictMcpConfig: true,
-					mcpServers: { [TOOL_SERVER]: { type: "sdk", name: TOOL_SERVER, instance: bridge.server } },
-					// every call goes through canUseTool; omitted, the mode could be "auto" and a classifier would approve
-					permissionMode: "default",
-					canUseTool,
-					includePartialMessages: true,
-					maxTurns,
-					...(o.resume ? { resume: o.resume } : {}),
-					...(cfg.executable ? { pathToClaudeCodeExecutable: cfg.executable } : {}),
-					env: claudeEnv(token, cfg),
-					stderr: (d) => cfg.log?.(d),
-				},
-			});
+				const q = (cfg.query ?? query)({
+					prompt: input(),
+					options: {
+						abortController: ac,
+						cwd: cfg.cwd,
+						model: model.id,
+						...(effort ? { effort } : {}),
+						systemPrompt: o.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+						// no built-in tools (Bash, Edit, Task…), no settings files or CLAUDE.md, no other MCP servers: the app's tools only
+						tools: [],
+						settingSources: [],
+						strictMcpConfig: true,
+						mcpServers: { [TOOL_SERVER]: { type: "sdk", name: TOOL_SERVER, instance: bridge.server } },
+						// every call goes through canUseTool; omitted, the mode could be "auto" and a classifier would approve
+						permissionMode: "default",
+						canUseTool,
+						includePartialMessages: true,
+						maxTurns,
+						...(resume ? { resume } : {}),
+						...(cfg.executable ? { pathToClaudeCodeExecutable: cfg.executable } : {}),
+						env: claudeEnv(token, cfg),
+						stderr: (d) => cfg.log?.(d),
+					},
+				});
 
-			for await (const m of q) {
-				if (!session && "session_id" in m && typeof m.session_id === "string" && m.session_id) {
-					session = m.session_id;
-					o.onSession?.(session);
+				try {
+					for await (const m of q) {
+						// the watchdog stopped this turn: what the stopped query still says is not the run's end
+						if (watch.stalled) break;
+						watch.alive();
+						if (!session && "session_id" in m && typeof m.session_id === "string" && m.session_id) {
+							session = m.session_id;
+							o.onSession?.(session);
+						}
+						if (m.type === "assistant" && !m.parent_tool_use_id) {
+							for (const c of m.message.content)
+								if (c.type === "tool_use") {
+									going.add(c.id);
+									watch.tool(1);
+									batches.add(m.message.id, { type: "toolCall", id: c.id, name: toolNameOf(c.name), arguments: (c.input ?? {}) as Record<string, unknown> });
+								}
+						}
+						// a tool's result frees the lock its call took in the gate
+						if (m.type === "user" && !m.parent_tool_use_id && Array.isArray(m.message.content)) {
+							for (const c of m.message.content)
+								if (c.type === "tool_result") {
+									if (going.delete(c.tool_use_id)) watch.tool(-1);
+									await o.afterToolCall?.({ toolCall: { id: c.tool_use_id } } as never, abort.signal);
+								}
+						}
+						for (const e of claudeEvents(m, st)) send(e);
+						if (m.type === "result") done();
+					}
+				} catch (e) {
+					// an abort by the watchdog ends the loop with an error: not the run's failure
+					if (!watch.stalled) throw e;
+				} finally {
+					done();
+					abort.signal.removeEventListener("abort", link);
 				}
-				if (m.type === "assistant" && !m.parent_tool_use_id) {
-					for (const c of m.message.content) if (c.type === "tool_use") batches.add(m.message.id, { type: "toolCall", id: c.id, name: toolNameOf(c.name), arguments: (c.input ?? {}) as Record<string, unknown> });
+			};
+
+			try {
+				watch.start();
+				await once(o.resume, o.prompt, o.images);
+				if (watch.stalled && !abort.signal.aborted) {
+					if (!session) throw new Error(stallError(stallMs));
+					going.clear();
+					send({ type: "text", text: STALL_NOTE });
+					watch.start();
+					await once(session, STALL_RESUME, undefined);
+					if (watch.stalled && !abort.signal.aborted) throw new Error(stallError(stallMs));
 				}
-				// a tool's result frees the lock its call took in the gate
-				if (m.type === "user" && !m.parent_tool_use_id && Array.isArray(m.message.content)) {
-					for (const c of m.message.content) if (c.type === "tool_result") await o.afterToolCall?.({ toolCall: { id: c.tool_use_id } } as never, abort.signal);
-				}
-				for (const e of claudeEvents(m, st)) send(e);
-				if (m.type === "result") finish();
+			} finally {
+				watch.stop();
 			}
 		} catch (e) {
 			if (!reported) send({ type: "error", engine: "pi", message: abort.signal.aborted ? "aborted" : (e as Error).message });

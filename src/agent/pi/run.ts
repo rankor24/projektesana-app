@@ -11,7 +11,8 @@ import type { RunEvent } from "../../shared/types.js";
 import { newPiState, piEvents } from "./events.js";
 import { connectMcpServers, type McpLaunchSpec } from "./mcp.js";
 import { effortFor, lookupPiModel, streamFn, type PiEffort, type PiRuntime } from "./models.js";
-import { RUN_RETRY, dropFailedTail, retryDelay, sleep, willRetry } from "./retry.js";
+import { RUN_RETRY, dropFailedTail, dropStoppedTail, retryDelay, sleep, willRetry } from "./retry.js";
+import { STALL_MS, STALL_NOTE, StallWatch, stallError } from "../stall.js";
 
 /** A way into a running agent: a message the user wrote meanwhile is queued and read after the agent's current step (pi's `steer`). */
 export interface SteerHandle {
@@ -52,6 +53,10 @@ export interface PiRunOptions {
 	onMessages?: (messages: AgentMessage[]) => void;
 	/** Restarts of a turn that failed on the wire (default RUN_RETRY: 4 restarts, 2–16 s apart). */
 	retry?: RetryPolicy;
+	/** Silence after which a model turn is stopped and asked again once (default 5 minutes, agent/stall.ts); tests make it short. */
+	stallMs?: number;
+	/** The model call; defaults to the runtime's. Tests inject a scripted one. */
+	streamFn?: ReturnType<typeof streamFn>;
 	/** Steering: called with a handle once the agent exists, and with null when the run is over (a message not read by then is the caller's to deliver another way).
 	 *  An engine that cannot take a message mid-run never calls it. */
 	onSteer?: (h: SteerHandle | null) => void;
@@ -90,7 +95,7 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 				tools: [...mcp.tools, ...(o.extraTools ?? [])],
 				messages: o.history ?? [],
 			},
-			streamFn: streamFn(o.runtime.models),
+			streamFn: o.streamFn ?? streamFn(o.runtime.models),
 			// tools write project state and drive one Revit: one at a time
 			toolExecution: "sequential",
 			beforeToolCall: o.beforeToolCall,
@@ -132,7 +137,18 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 		const policy = o.retry ?? RUN_RETRY;
 		let restarts = 0;
 		let held = null as AgentMessage | null;
+		// a model turn that shows no sign of life is stopped (the abort ends its message) and asked again, once; its end events are not shown as the run's end
+		let stallHold = false;
+		const stallMs = o.stallMs ?? STALL_MS;
+		const watch = new StallWatch(stallMs, () => {
+			stallHold = true;
+			agent?.abort();
+		});
 		agent.subscribe((ev) => {
+			watch.alive();
+			if (ev.type === "tool_execution_start") watch.tool(1);
+			else if (ev.type === "tool_execution_end") watch.tool(-1);
+			if (stallHold && (ev.type === "message_end" || ev.type === "turn_end" || ev.type === "agent_end")) return;
 			if (ev.type === "message_end" && !o.signal.aborted && willRetry(ev.message, restarts + 1, policy)) held = ev.message;
 			if (queued.length && ev.type === "message_start" && ev.message.role === "user") {
 				const at = queued.findIndex((q) => q.message === ev.message || (q.message as { timestamp?: number }).timestamp === (ev.message as { timestamp?: number }).timestamp);
@@ -147,9 +163,26 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 		if (o.signal.aborted) stop();
 		else o.signal.addEventListener("abort", stop, { once: true });
 		try {
+			watch.start();
 			await agent.prompt(o.prompt, o.images?.length ? o.images : undefined);
+			let resumed = false;
 			// restart the failed turn from the same transcript: the user's prompt and every tool result so far stay
-			while (held) {
+			while (held || (watch.stalled && !o.signal.aborted)) {
+				if (watch.stalled) {
+					// a stuck turn: stopped by the watchdog, asked again from what came before; the second silence ends the run in words
+					stallHold = false;
+					agent.state.messages = dropStoppedTail(agent.state.messages);
+					if (resumed) {
+						st.errored = true;
+						send({ type: "error", engine: "pi", message: stallError(stallMs) });
+						break;
+					}
+					resumed = true;
+					send({ type: "text", text: STALL_NOTE });
+					watch.start();
+					await agent.continue();
+					continue;
+				}
 				const failed = held as AssistantMessage;
 				held = null;
 				restarts++;
@@ -164,6 +197,7 @@ export async function runPi(o: PiRunOptions): Promise<void> {
 				await agent.continue();
 			}
 		} finally {
+			watch.stop();
 			o.signal.removeEventListener("abort", stop);
 		}
 		if (!reported && !st.errored && agent.state.errorMessage) send({ type: "error", engine: "pi", message: agent.state.errorMessage });
