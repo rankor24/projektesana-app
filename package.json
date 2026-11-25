@@ -16,7 +16,7 @@
 		"audit": "node --import tsx scripts/audit.ts",
 		"pack": "npm run build && electron-builder --win dir",
 		"fixtures": "electron scripts/make-fixtures.mjs",
-		"dist": "npm run build && electron-builder --win nsis",
+		"dist": "node scripts/sync-revit-mcp.mjs --strict && npm run build && electron-builder --win nsis",
 		"smoke:packaged": "node scripts/smoke-packaged.mjs"
 	},
 	"dependencies": {

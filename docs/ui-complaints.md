@@ -390,3 +390,13 @@ Follows the entry above. His words: "add it then. mcp should be bundled with pro
 
 **Not checked live:** Revit was closed on this PC, and a model is not opened to test on (his rule). The C# compiles for 2024, 2025 and 2026, the server starts and lists the tools, the bundle self-check passes, the registry merge has a test (`test/21.2-revit-no-shell.test.ts`). Not seen yet: `OpenAndActivateDocument` on an already-open model (the one API call whose behaviour in a real session decides if `open_view model=…` works as intended; the error then says "click its tab in Revit"), and the write commands on a real model. The add-in is placed into `%APPDATA%\Autodesk\Revit\Addins\<year>` at the app's first start, with Revit closed; restart Revit after.
 **Not done / his call:** the old bundle folder `Revit-MCP-Bundle-2026-10-19-0067a70` (and its `.zip`, `.zip.sha256`) in Downloads is now superseded; delete it when he wants (a folder: not deleted by me).
+
+## 2026-11-25: the two Revit MCP lines merged (40 tools)
+
+Follows the 2.11.1 entry. His words (via the project chat): merge the two Revit MCPs so the app's MCP has all 40 tools.
+
+| Done |
+|---|
+| **One Revit MCP, 40 tools.** `D:\Code\BIM\revit-mcp` (branch `bv/p1-safety`, local only: its only remote is the public upstream, never pushed) had 37 tools (`8b51cd3`); the zip `Revit-MCP-Bundle-2026-10-20-49242cc.zip` (31 tools) carried its full git history in `source\revit-mcp.gitbundle`. Both lines share `0067a70`. The zip's one commit (`49242cc`: `open_document`, `save_document`, `reload_links`) was fetched from that bundle and merged (commit `d97d28a`): its C# and node files came in unchanged, `command.json` is the union (35 add-in commands), the model-access packaging files and `merge-registry.mjs` were kept. Bundle `Revit-MCP-Bundle-2026-11-25-d97d28a` (Downloads) compiles for Revit 2024, 2025, 2026; its handshake lists 40 tools. |
+| **The setup ships the MCP.** `electron-builder.yml` `extraResources` copies `resources/revit-mcp` (node runtime, server, add-ins 2024-2026, licenses) into the install folder; the 2.11.1 build holds all of it. The setup itself does not touch Revit's folders: the app puts the add-in into `%APPDATA%\Autodesk\Revit\Addins\<year>` at every start (`syncAddins`), for each Revit year found on the PC. Gap closed: `sync-revit-mcp.mjs` only warned when no bundle was found, so a build could ship without the MCP. `npm run dist` now runs it with `--strict` and stops. |
+| **Agent levels unchanged.** `open_document`, `save_document`, `reload_links` are not in `revit-levels.ts`, so the app's agent does not get them (unknown tool = never; they open and save model files). Other MCP clients get them. Giving the agent any of them is his call. |
