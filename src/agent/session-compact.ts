@@ -12,7 +12,7 @@ import type { ChatEntry } from "../shared/api.js";
 export const SEED_TAIL = 10;
 
 const real = (e: ChatEntry) => e.kind !== "compaction";
-const lineText = (e: ChatEntry) => (e.attachments?.length ? `${e.text}\n[pielikumi: ${e.attachments.map((a) => a.name).join(", ")}]` : e.text);
+const lineText = (e: ChatEntry) => (e.attachments?.length ? `${e.text}\n[pielikumi: ${e.attachments.map((a) => (a.path ? `${a.name} (saglabāts: ${a.path})` : a.name)).join(", ")}]` : e.text);
 
 /**
  * The lines a rebuilt conversation draws on, oldest first: what came after the newest compaction line, and before it the lines that compaction kept word for word

@@ -588,3 +588,20 @@ His words (via the project chat): "app has no tray icon, its a bug that leaves s
 **Test:** `test/21.2-revit-no-shell.test.ts` (the block: ten ways to start or stop the app refused, five ordinary commands allowed). **Not checked live** (his rule): the lock needs the packaged app.
 
 **Not done / his call.** The processes already running when this was written were not ended by me: the permission system refused the kill, so they stay until he ends them or allows it. Antigravity's own tools (shell, browser) were turned off in 2.14.2; whether another harness can still launch the exe from outside the app is not something the app can see.
+
+
+## 2026-11-25: Revit writes "rejected by the user" that nobody rejected, and the reply missing from the chat until a switch (version 2.14.6)
+
+His words (via the project chat): the agent's reply showed in the Log panel but not in the chat until he switched conversation and back (Antigravity, after a compaction); and why `create_level` and `revit_set_parameter` came back "Lietotājs šo partiju noraidīja" after about 2 s: "Did you click Reject … or is the app blocking direct writes to the .rvt until we create a working copy?"
+
+**Cause (read from the run's log on his PC).** One bug, two symptoms. The open Revit document was the office model, not the project's working copy, so the gate refused both batches itself, before any card was shown (that is the 1–2 s). It then (1) told the agent "the user rejected this" (so the agent asked him instead of making the working copy with `revit_save_copy`), and (2) sent the refusal to the window as an `error` event. In the window `error` means "this run ended": the run card closes, the chat stops following the run and the activity line is marked failed. The run went on, so the reply that followed was written to the log and saved, but the chat was no longer listening until he switched conversation (which reads the saved history). The compaction was a coincidence; the Antigravity engine was not involved. The rule itself (Revit changes only on the working copy) is the design and stays; his instruction "work directly in BD436_AR.rvt" was the opposite of it.
+
+| Done in 2.14.6 |
+|---|
+| **The agent is told the truth.** A refusal the app makes (not the working copy, the Revit lock is held by another agent) goes back as its own reason: "NOT done, the user did NOT reject it: … make the working copy with revit_save_copy or ask the user: Versijas → Revit → Darba kopija". Only a real click on Noraidīt says "Lietotājs šo partiju noraidīja" (`Gate`: `ask` may answer a string; `workCopyRefusal` in `thread-runner.ts`). |
+| **The refusal no longer ends the run in the window.** It is a `[lietotne] …` line in the chat (the same kind as the failover notices), not an `error` event; the run card, the live chat and the activity keep going to the real end. |
+| **A saved attachment can be opened again.** The prompt, the stored chat line and the seed of a new session now carry the path of the copy the app saved in the run's folder (`ChatAttachmentRef.path`). He had attached a screenshot; in the new session after the compaction the picture itself was gone and the agent searched his project folder for the file name ("Faila nav"). It can open `view_image` on the saved path now. |
+
+**Test:** `test/24.0-gate-refusal.test.ts` (a string from `ask` blocks with its own reason, a user's "no" still says so; a whole run whose Revit write is refused for the working copy: no click asked, no `error` event, the agent's reason says it was not the user, the chat lines go on with the reply; the attachment path in prompt, stored line and seed). **Not checked live** (his rule).
+
+**Not done / his call.** An agent that is told to "work directly in the office model" still cannot; it has to make the working copy first (`revit_save_copy`, which only some roles have, or his click). Whether the lead agent should have `revit_save_copy` is his call.

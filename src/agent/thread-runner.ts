@@ -63,6 +63,10 @@ export const S5_BLOCK = "S5 laikā sadaļas autors nelabo projektu.";
 /** Tools that stay open to the authors in S5 though they are above `read`: mail (they answer eks), the process tools, and the expert_* ones (remarks are the expert's record, not the project). */
 const S5_OPEN = (name: string) => Object.hasOwn(MAIL_TOOL_LEVELS, name) || name.startsWith("process_") || name.startsWith("expert_");
 
+/** What the agent is told when a Revit change is refused because the open document is not the project's working copy. It says it was the app, not the user, and what to do. */
+export const workCopyRefusal = (title: string): string =>
+	`Revit izmaiņa NAV izpildīta, un lietotājs partiju NENORAIDĪJA: lietotne Revit modeli maina tikai projekta darba kopijā (<nosaukums>_WORK.rvt lietotnes datu mapē), bet atvērtais dokuments «${title}» tāds nav. Izveido darba kopiju ar revit_save_copy (ja tas tev ir) vai lūdz lietotāju: Versijas → Revit → Darba kopija; tad atkārto izmaiņu. Biroja failā nerakstīs.`;
+
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
 
@@ -375,8 +379,9 @@ export class ThreadRunner {
 					if (hasRevit && !onlyOpens && this.d.revitWork) {
 						const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
 						if (!w.ok) {
-							emit({ type: "error", engine: "pi", message: `Partija noraidīta: aktīvais Revit dokuments nav šī projekta darba kopija (${w.title}). Izveido to: Versijas → Revit → Darba kopija.` });
-							return false;
+							// Not an `error` event: that ends the run in the window (card, chat, activity) while the run goes on. A text line tells the user; the agent gets the real reason, never "the user refused".
+							emit({ type: "text", text: `\n\n[lietotne] Revit izmaiņa nav izpildīta: aktīvais Revit dokuments (${w.title}) nav šī projekta darba kopija. Izveido to: Versijas → Revit → Darba kopija.\n\n` });
+							return workCopyRefusal(w.title);
 						}
 					}
 					const ok = await i.ask(req);
@@ -387,8 +392,8 @@ export class ThreadRunner {
 								this.d.locks.beginBatch(owner, holder);
 								batchOpen = true;
 							} catch (e) {
-								emit({ type: "error", engine: "pi", message: `Partija noraidīta: ${(e as Error).message}` });
-								return false;
+								emit({ type: "text", text: `\n\n[lietotne] Revit izmaiņa nav izpildīta: ${(e as Error).message}\n\n` });
+								return `Revit izmaiņa nav izpildīta (lietotājs partiju NENORAIDĪJA): ${(e as Error).message} Mēģini vēlāk vai pasaki lietotājam.`;
 							}
 						}
 						// counted only once the batch can run: afterBatch records a revision for it

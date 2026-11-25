@@ -101,6 +101,8 @@ export interface ChatAttachmentRef {
 	name: string;
 	kind: "image" | "document";
 	thumb?: string;
+	/** where the app saved the file (the run's folder): the agent can open it again later, also in a new session where the picture itself is gone */
+	path?: string;
 }
 
 /** One line of a project's chat transcript. A `compaction` line holds the summary that replaced the older conversation. */

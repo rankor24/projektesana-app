@@ -90,9 +90,11 @@ export async function prepareAttachments(
 		const name = safeName(a.name, i);
 		const bytes = Buffer.from(a.data, "base64");
 		if (!bytes.length) throw new Error(`Pielikums "${name}" ir tukšs.`);
+		let saved: string | undefined;
 		if (o.saveDir) {
 			mkdirSync(o.saveDir, { recursive: true });
-			writeFileSync(join(o.saveDir, `${String(i + 1).padStart(2, "0")}-${name}`), bytes);
+			saved = join(o.saveDir, `${String(i + 1).padStart(2, "0")}-${name}`);
+			writeFileSync(saved, bytes);
 		}
 
 		if (isImage(a.mimeType)) {
@@ -100,15 +102,15 @@ export async function prepareAttachments(
 			if (bytes.length > limits.maxBytes) throw new Error(`Attēls "${name}" ir ${kb(bytes.length)}; modelis ${o.model} pieņem līdz ${kb(limits.maxBytes)}.`);
 			imageBytes += a.data.length;
 			out.images.push({ type: "image", data: a.data, mimeType: a.mimeType });
-			imageNames.push(name);
-			out.refs.push({ name, kind: "image", thumb: a.thumb && a.thumb.length <= ATTACH_LIMITS.thumbChars ? a.thumb : undefined });
+			imageNames.push(saved ? `${name} (saglabāts: ${saved})` : name);
+			out.refs.push({ name, kind: "image", ...(saved ? { path: saved } : {}), thumb: a.thumb && a.thumb.length <= ATTACH_LIMITS.thumbChars ? a.thumb : undefined });
 			continue;
 		}
 
 		const d = await readDocument(a, name, bytes, ATTACH_LIMITS.totalDocChars - total);
 		total += d.used;
 		docs.push(d.block);
-		out.refs.push({ name, kind: "document" });
+		out.refs.push({ name, kind: "document", ...(saved ? { path: saved } : {}) });
 	}
 
 	// what the provider states for one request: how many images, how many bytes
