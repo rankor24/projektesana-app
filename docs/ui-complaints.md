@@ -573,3 +573,18 @@ His words (via the project chat): "Since you told the agent it can delete what i
 **Test:** `test/0.5-agent.test.ts`, `test/6.3-6.5-agent-modelling.test.ts` (delete `confirm`, send_code `never`, Delete in `operate_element` asks and is blocked when declined) and `test/23.0-fleet-setup.test.ts` (delete only in the lists of the modelling roles; the one-time addition, once). **Not checked live** (his rule).
 
 **Not done / his call.** Deleting is by element id in the active model; it cannot be undone from the app (Revit's own undo, or the revision the app records after each batch, is the way back).
+
+## 2026-11-25: copies of the app stayed running in the background and blocked the build (version 2.14.5)
+
+His words (via the project chat): "app has no tray icon, its a bug that leaves some processes still running", and, when asked to end the leftovers himself: "why i have to do it? its not fixed yet?"
+
+**Cause (looked at on his PC).** The stray copies were not leftovers of a closed window: each was a separate `Projektesana.exe` from `release\win-unpacked` with no window and no child processes, started by another program (the first one by `localharness_external.exe`, Antigravity's agent harness; at one point nine copies were running, one of them his real app). The app's own quit code (`window-all-closed`, `before-quit`, `app.exit`) ends everything when the real window closes. What was missing: nothing stopped a second copy from starting, and nothing stopped an agent from starting the program (a shell, or Antigravity's own tools, which 2.14.2 turned off).
+
+| Done in 2.14.5 |
+|---|
+| **One copy only** (`main.ts`): a second start asks for the single-instance lock before it reads or writes anything and ends at once; the first copy brings its window forward, or opens one if it has none, so a copy that lost its window shows itself instead of hiding. |
+| **`run_command` may not start or stop the app** (`levels.ts` `appShellBlock`, in the gate before any click, and again where the command would run): the program (`Projektesana.exe`, `win-unpacked`, the setup file) and stopping it by name (`Stop-Process`, `taskkill`, `Get-Process Projektesana | …`) are refused with a sentence that says the user opens and closes the app. Commands that only touch the project folder still run. |
+
+**Test:** `test/21.2-revit-no-shell.test.ts` (the block: ten ways to start or stop the app refused, five ordinary commands allowed). **Not checked live** (his rule): the lock needs the packaged app.
+
+**Not done / his call.** The processes already running when this was written were not ended by me: the permission system refused the kill, so they stay until he ends them or allows it. Antigravity's own tools (shell, browser) were turned off in 2.14.2; whether another harness can still launch the exe from outside the app is not something the app can see.

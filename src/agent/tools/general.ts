@@ -10,7 +10,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
 import { extractBytes, TEXT_FORMATS } from "../../sources/text/index.js";
 import type { ToolCtx } from "./context.js";
-import { revitShellBlock } from "./levels.js";
+import { appShellBlock, revitShellBlock } from "./levels.js";
 import { officeBlock, resolveRead, resolveWrite, workFolder } from "./project-write.js";
 import { tool, type ToolDef } from "./tool.js";
 
@@ -250,7 +250,7 @@ export const generalTools: ToolDef[] = [
 		run: (ctx, a) =>
 			new Promise((ok, fail) => {
 				// the gate refuses these before the user is asked (levels.ts neverByArgs); this is the same rule where the command would run
-				const blocked = revitShellBlock(a.command);
+				const blocked = revitShellBlock(a.command) ?? appShellBlock(a.command);
 				if (blocked) return fail(new Error(blocked));
 				const office = officeBlock(ctx, "run_command", a);
 				if (office) return fail(new Error(office));

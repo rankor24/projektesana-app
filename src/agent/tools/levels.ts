@@ -33,10 +33,22 @@ export function revitShellBlock(command: string): string | null {
 	return `run_command nedrīkst vadīt Revit (ne UI automatizācija, ne Revit procesa vadība, ne apiešana ap Revit MCP) — lietotājs to neatļauj nekad. Lieto: ${REVIT_INSTEAD}. Ja vajadzīgā Revit darbībai rīka nav, pasaki lietotājam, kas trūkst, un neizmēģini apeju ar komandrindu.`;
 }
 
+// The app's own program: starting it (a second copy that stays in the background: seen 2026-11-25, nine processes) or stopping it (the user's own app window).
+const APP_PROGRAM = /projektesana[\w-]*\.exe|win-unpacked|projektesana-setup|get-process\s+(?:-name\s+)?projektesana(?![\w-])|(?:stop-process|taskkill|kill)\b[^\n|;]*\bprojektesana(?![\w-])/i;
+
+/** `run_command` may not start or stop the app itself: a copy started by an agent has no window and stays running, and stopping it is the user's call. Returns the refusal, or null. */
+export function appShellBlock(command: string): string | null {
+	if (!APP_PROGRAM.test(command)) return null;
+	return "run_command nedrīkst startēt vai apturēt pašu lietotni (Projektesana.exe): kopija bez loga paliek fonā. Lietotni atver un aizver lietotājs; ja vajag testu, pasaki, kas jāpārbauda.";
+}
+
 /** Tools whose level depends on what they are asked to do. (Deleting model elements, delete_element and operate_element with "Delete", was never until 2.14.4; the user's ruling of
  *  2026-11-25, "obviously how else it can fix mistakes": it is a `confirm` action like every change of the model, one click per batch, on the working copy only.) */
 export function neverByArgs(tool: string, args: unknown): string | null {
-	if (tool === "run_command") return revitShellBlock(String((args as { command?: unknown } | null)?.command ?? ""));
+	if (tool === "run_command") {
+		const command = String((args as { command?: unknown } | null)?.command ?? "");
+		return revitShellBlock(command) ?? appShellBlock(command);
+	}
 	return null;
 }
 
@@ -64,15 +76,17 @@ export interface ConfirmRequest {
  * that message; his answer covers the rest of the message. `never` tools are blocked even if a model names one.
  */
 export class Gate {
-	private answered = new WeakMap<object, boolean>();
-	private pending = new WeakMap<object, Promise<boolean>>();
+	private answered = new WeakMap<object, boolean | string>();
+	private pending = new WeakMap<object, Promise<boolean | string>>();
 	private n = 0;
 
-	/** `free` lifts a confirm call that needs no click for what it was asked to do (project-write.ts: a text note in the agent's work folder).
+	/** `ask` answers true (the user allowed it), false (the user refused, or the run was stopped), or a string: the app itself refused the batch before any click (for example the
+	 *  working-copy rule), and the string is the reason the agent is told. A refusal that is not the user's must never reach the agent as "the user refused".
+	 *  `free` lifts a confirm call that needs no click for what it was asked to do (project-write.ts: a text note in the agent's work folder).
 	 *  `deny` is a refusal no click can lift (project-write.ts `officeBlock`: a write into an office project folder): the call is blocked before the user is asked. */
 	constructor(
 		private levelOf: LevelOf,
-		private ask: (req: ConfirmRequest) => Promise<boolean>,
+		private ask: (req: ConfirmRequest) => Promise<boolean | string>,
 		private free: (tool: string, args: unknown) => boolean = () => false,
 		private deny: (tool: string, args: unknown) => string | null = () => null,
 	) {}
@@ -101,6 +115,7 @@ export class Gate {
 			ok = await p;
 			this.answered.set(msg, ok);
 		}
+		if (typeof ok === "string") return { block: true, reason: ok };
 		return ok ? undefined : { block: true, reason: "Lietotājs šo partiju noraidīja. Neatkārto to; jautā, ko darīt citādi." };
 	};
 }

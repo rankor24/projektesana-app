@@ -60,6 +60,12 @@ const crypto = {
 const appDir = join(app.getPath("appData"), "Projektesana");
 // Chromium's own caches go to a subfolder, so the app data folder holds only app data
 app.setPath("userData", join(appDir, "chromium"));
+// One copy of the app (2.14.5: nine copies were running at once, most of them started by tools, with no window, and they blocked the build). A second start hands over to the first and
+// ends before it reads or writes anything; the first brings its window forward, or opens one if it has none (a copy that lost its window shows itself instead of hiding for ever).
+if (!app.requestSingleInstanceLock()) {
+	app.exit(0);
+	process.exit(0);
+}
 const settings = new AppSettings(appDir, crypto);
 // before anything reads or writes: a copy of settings, project list, layout and the key files (see core/safe-file.ts)
 snapshotAppData(appDir);
@@ -501,3 +507,10 @@ app.on("before-quit", (e) => {
 		.finally(() => app.exit(0));
 });
 app.on("window-all-closed", () => app.quit());
+app.on("second-instance", () => {
+	if (!app.isReady()) return;
+	if (!win || win.isDestroyed()) return createWindow();
+	if (win.isMinimized()) win.restore();
+	win.show();
+	win.focus();
+});

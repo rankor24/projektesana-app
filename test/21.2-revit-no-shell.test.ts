@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { mergeRegistry, syncAddins } from "../src/revit/addin-install.ts";
 import { allTools, appLevels } from "../src/agent/tools/defs.ts";
-import { Gate, makeLevelOf, neverByArgs, revitShellBlock, type ConfirmRequest } from "../src/agent/tools/levels.ts";
+import { Gate, appShellBlock, makeLevelOf, neverByArgs, revitShellBlock, type ConfirmRequest } from "../src/agent/tools/levels.ts";
 import { MODEL_SNIPPETS } from "../src/agent/tools/revit-model.ts";
 import { tmp } from "./helpers.ts";
 
@@ -132,4 +132,22 @@ test("21.2 an update switches on the commands the user's list lacks, and keeps t
 	assert.match(log.join(" | "), /open_view/, "the log says which commands were switched on");
 	const after = JSON.parse(readFileSync(join(installedPlugin, "Commands", "commandRegistry.json"), "utf8"));
 	assert.deepEqual(after.Commands.map((c: { commandName: string; enabled: boolean }) => [c.commandName, c.enabled]), [["a", false], ["open_view", true]]);
+});
+
+test("2.14.5 run_command may not start or stop the app itself (a second copy with no window stays running); ordinary commands on the project folder still run", () => {
+	for (const c of [
+		"Start-Process 'D:\Code\BIM\projektesana-app\release\win-unpacked\Projektesana.exe'",
+		"& .\Projektesana.exe --inspect",
+		"cmd /c start Projektesana.exe",
+		"taskkill /IM Projektesana.exe /F",
+		"taskkill /F /IM Projektesana",
+		"Get-Process Projektesana | Stop-Process",
+		"Get-Process -Name projektesana | Stop-Process -Force",
+		"Stop-Process -Name Projektesana",
+		"Start-Process .\Projektesana-Setup-2.14.5.exe",
+		"cd release\win-unpacked; dir",
+	]) assert.ok(appShellBlock(c), c);
+	assert.match(appShellBlock("taskkill /IM Projektesana.exe")!, /pašu lietotni/);
+	assert.equal(neverByArgs("run_command", { command: "taskkill /IM Projektesana.exe" })?.includes("lietotni"), true, "the gate refuses it before asking");
+	for (const c of ["Get-ChildItem D:\Code\BIM\projektesana-app\docs", "python convert.py a.docx", "Get-Process node", "Stop-Process -Name notepad", "git -C D:\Code\BIM\projektesana-app status"]) assert.equal(appShellBlock(c), null, c);
 });
