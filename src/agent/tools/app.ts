@@ -69,11 +69,16 @@ export const appTools: ToolDef[] = [
 		name: "view_page",
 		level: "read",
 		description:
-			"See one page of a source (PDF or image) as an image and read it yourself: for scans the code's OCR reads badly (tables of an inventarizācijas lieta, stamps, handwriting, drawings). Page numbers from 1. Read the page as it is; say what you cannot read.",
-		input: { sourceId: z.string(), page: z.number().int().min(1).optional(), scale: z.number().min(1).max(3).optional().describe("2 by default; 3 for small print") },
+			"See one page of a source (PDF or image) as an image and read it yourself: for scans the code's OCR reads badly (tables of an inventarizācijas lieta, stamps, handwriting, drawings). Page numbers from 1. Add region to zoom into one part of a PDF page. Read the page as it is; say what you cannot read.",
+		input: {
+			sourceId: z.string(),
+			page: z.number().int().min(1).optional(),
+			scale: z.number().min(1).max(8).optional().describe("2 by default (3 at most for a whole page); with region 4 by default, up to 8"),
+			region: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional().describe("ZOOM into one part of the page, as fractions 0..1 from its top left corner: {x: 0, y: 0.5, w: 0.5, h: 0.5} is the bottom left quarter. Use it for stamps, room tags, small print and the corner of a big sheet: a part comes out much sharper than the whole page."),
+		},
 		run: async (ctx, a): Promise<ImageResult> => {
 			if (!ctx.projectId) throw new Error("nav projekta.");
-			const r = await bridge(ctx, "/page", { projectId: ctx.projectId, sourceId: a.sourceId, page: a.page ?? 1, scale: a.scale ?? 2 });
+			const r = await bridge(ctx, "/page", { projectId: ctx.projectId, sourceId: a.sourceId, page: a.page ?? 1, scale: a.scale ?? (a.region ? 4 : 2), region: a.region });
 			return { __image: { data: String(r.image), mimeType: String(r.mimeType) }, text: `Lapa ${r.page}${r.width ? ` (${r.width}×${r.height})` : ""} no ${a.sourceId}.` };
 		},
 	}),

@@ -2,8 +2,9 @@
 // app data; until the first save the shipped three are in use. A specialist's tools are checked here against the tools that exist
 // and their levels (nothing above `run` unless the agent's maxLevel is "confirm", nothing that starts other agents). 13.5: the role text and the
 // shared rules the Aģenti page edits.
-import { readFileSync, statSync } from "node:fs";
-import { extname } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { extname, join } from "node:path";
+import { withFleetDefaults } from "../../shared/fleet-defaults.js";
 import { PROCESS_OWN_TOOLS } from "../../core/process-def.js";
 import { appLevels, allTools } from "../../agent/tools/defs.js";
 import { REVIT_LEVELS } from "../../agent/tools/revit-levels.js";
@@ -30,7 +31,9 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 		const rv = Object.entries(REVIT_LEVELS).map(([name, level]) => ({ name, level: level as string, description: "Revit" }));
 		// the process write tools are given to bpv and eks by themselves (R35): not a row to tick
 		// confirm tools are listed too (13.5): the page offers them only to an agent with maxLevel "confirm", validateSpec holds the line on save
-		return [...app, ...rv].filter((r) => !PROCESS_OWN_TOOLS.has(r.name) && LEVEL_RANK[levelOf(r.name)] > 0 && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
+		// the Revit MCP's reading tools are listed too: unlike every other read tool they are NOT given to an agent by themselves (subagents.ts specialistTools), so they have to be ticked
+		const revitRead = new Set(Object.keys(REVIT_LEVELS).filter((n) => levelOf(n) === "read"));
+		return [...app, ...rv].filter((r) => !PROCESS_OWN_TOOLS.has(r.name) && (LEVEL_RANK[levelOf(r.name)] > 0 || revitRead.has(r.name)) && LEVEL_RANK[levelOf(r.name)] <= LEVEL_RANK.confirm).sort((a, b) => a.name.localeCompare(b.name));
 	};
 	/** what the agent's requests carry before the conversation starts, measured with the settings, the specs and the skills as they are now, and with what a run adds later at its
 	 *  largest: the office knowledge, the process text (status, stage card) and the declarations of its Revit tools. The limit must hold then (R47). `unsaved`: a role text or shared rules not saved yet. */
@@ -182,8 +185,9 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 			const inLibrary = new Set(library().map((x) => x.name));
 			const common = plan.common.filter((n) => inLibrary.has(n));
 			const departments = d.settings.departments().departments;
-			// a name the library does not have (a refused skill) is not assigned
-			const specOf = (list: readonly AgentSpec[], role: (typeof plan.roles)[number]) => mergeRole(list.find((x) => x.id === role.id), { ...role, skills: role.skills.filter((n) => inLibrary.has(n)) }, common, departments);
+			// a name the library does not have (a refused skill) is not assigned; the tools and the synced Revit skills each role gets are the ones that exist (shared/fleet-defaults.ts)
+			const have = { tools: new Set(known), skills: inLibrary };
+			const specOf = (list: readonly AgentSpec[], role: (typeof plan.roles)[number]) => mergeRole(list.find((x) => x.id === role.id), { ...role, skills: role.skills.filter((n) => inLibrary.has(n)) }, common, departments, have);
 			const writable = plan.roles.filter((role) => {
 				if (role.text.length <= ROLE_MAX) return true;
 				report.skipped.push({ id: role.id, why: `Lomas teksts ${role.text.length} zīmes (limits ${ROLE_MAX}).` });
@@ -227,4 +231,44 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 			return { tools: await probeMcpTools(v.spec.mcp![0]!) };
 		},
 	};
+}
+
+/** The one-time set-up of a fleet that is already saved (2026-11-25: every agent properly set up, by role, none with an empty tool list; shared/fleet-defaults.ts).
+ *  Runs at the first start of this version: an agent whose tool list is empty gets its role's tools and level cap, and every agent in the table gets its synced Revit
+ *  skills. A list the user made is kept. All agents go in one save (one measurement of the whole list, the settings page's own checks); only if that is refused is each one
+ *  tried alone, so one that cannot be saved (its context would pass the limit) is skipped with the reason and the others still go in. A marker file in agents\ makes it run once, so the
+ *  user can untick anything afterwards. `null` = nothing to do (done before, no fleet saved yet). The result is also written to agents\fleet-setup.log. */
+export function setupFleet(d: { settings: AppSettings; skillsDir?: string }): { applied: string[]; skipped: { id: string; why: string }[] } | null {
+	const dir = join(d.settings.dir, "agents");
+	const marker = join(dir, ".fleet-setup-1");
+	if (existsSync(marker)) return null;
+	const { specs, shipped } = d.settings.agentSpecs();
+	if (shipped || !specs.length) return null;
+	const save = agentHandlers(d)["agents.save"] as (list: AgentSpec[]) => unknown;
+	const have = {
+		tools: new Set([...allTools().map((t) => t.name), ...Object.keys(REVIT_LEVELS)]),
+		skills: new Set(listSkills(d.skillsDir ?? "", officeSkillsDir(d.settings.dir)).map((x) => x.name)),
+	};
+	const next = specs.map((s) => withFleetDefaults(s, have));
+	const changed = next.filter((s, k) => JSON.stringify(s) !== JSON.stringify(specs[k]));
+	const report: { applied: string[]; skipped: { id: string; why: string }[] } = { applied: [], skipped: [] };
+	if (changed.length) {
+		try {
+			save(next);
+			report.applied = changed.map((s) => s.id);
+		} catch {
+			for (const s of changed) {
+				try {
+					save(d.settings.agentSpecs().specs.map((x) => (x.id === s.id ? s : x)));
+					report.applied.push(s.id);
+				} catch (e) {
+					report.skipped.push({ id: s.id, why: e instanceof Error ? e.message : String(e) });
+				}
+			}
+		}
+	}
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(marker, `${new Date().toISOString()}\n`, "utf8");
+	appendFileSync(join(dir, "fleet-setup.log"), `${JSON.stringify({ at: new Date().toISOString(), ...report })}\n`, "utf8");
+	return report;
 }

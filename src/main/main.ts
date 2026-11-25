@@ -1,6 +1,6 @@
 // Electron main process: window and wiring. Logic lives in api.ts and the modules it calls.
 // Carried from v1 src/main/main.ts: crash log, link handling, reload / devtools keys, renderer recovery.
-import { app, BrowserWindow, dialog, net, protocol, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, nativeImage, net, protocol, safeStorage, shell } from "electron";
 import { pathToFileURL } from "node:url";
 import { BIMCRAFT_SCHEME, bimcraftResponse, bimcraftSite, CADCRAFT_SCHEME, craftSite } from "./bimcraft-protocol.js";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
@@ -42,6 +42,7 @@ import { officeText } from "../sources/text/office-com.js";
 import { ocrHook } from "./ocr-hook.js";
 import { startAgentBridge } from "./agent-bridge.js";
 import { createAppSettingsHost } from "./app-settings/handlers.js";
+import { setupFleet } from "./handlers/agents.js";
 import { PageRenderer } from "./offscreen.js";
 import { RoutineService } from "./routines-scheduler.js";
 import { SearchIndexer } from "../search/manager.js";
@@ -225,6 +226,13 @@ indexOnData = (p) => {
 // The tools server runs on Electron's own node (ELECTRON_RUN_AS_NODE), from the built dist/agent/tools/server.js.
 const toolsServerJs = join(here, "..", "agent", "tools", "server.js");
 const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..", "..", "resources"), "skills");
+// once, at the first start of the version that has role-based tools: agents whose tool list is empty get the tools and skills of their role (shared/fleet-defaults.ts)
+try {
+	const fleet = setupFleet({ settings, skillsDir });
+	if (fleet) log(`fleet setup: ${fleet.applied.length} agents set up${fleet.skipped.length ? `, skipped: ${fleet.skipped.map((s) => `${s.id} (${s.why})`).join("; ")}` : ""}`);
+} catch (e) {
+	log(`fleet setup failed: ${e instanceof Error ? e.message : e}`);
+}
 const session = new AgentSession({
 	runtime: pi,
 	claudeRun,
@@ -389,7 +397,7 @@ routines.start();
 app.on("will-quit", () => routines.stop());
 // the agent's way into every call of the app and to page images (main/agent-bridge.ts); each agent run's tools server gets its
 // address and token (agent/tools/context.ts ctxEnv)
-void startAgentBridge({ handlers, registry, renderer: pageRenderer, appSettings: appSettingsHost })
+void startAgentBridge({ handlers, registry, renderer: pageRenderer, appSettings: appSettingsHost, native: nativeImage })
 	.then((b) => {
 		process.env.PROJEKTESANA_BRIDGE = b.url;
 		process.env.PROJEKTESANA_BRIDGE_TOKEN = b.token;

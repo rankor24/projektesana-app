@@ -32,6 +32,11 @@ export const REVIT_LEVELS: Record<string, Level> = {
 	color_elements: "confirm",
 	store_project_data: "confirm",
 	store_room_data: "confirm",
+	// the document tools of the merged Revit MCP (2026-11-25): they open, save and refresh model files, so each batch waits for the user, and like every
+	// batch that changes the model it runs only while the active document is the project's working copy (thread-runner.ts, the Revit gate)
+	open_document: "confirm",
+	save_document: "confirm",
+	reload_links: "confirm",
 	// never
 	delete_element: "never",
 	send_code_to_revit: "never",

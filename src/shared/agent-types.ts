@@ -5,7 +5,10 @@ import type { Effort } from "./types.js";
 export const ROLE_MAX = 16_000; // characters of a role text
 export const SHARED_MAX = 6_000; // characters of the shared rules
 /** What a specialist's requests carry before the conversation starts (its standing text + tool declarations); a save past it is refused. */
-export const SPECIALIST_FIXED_MAX = 16_000; // tokens
+/** 28 000 since the role-based tool set-up (2026-11-25): every agent's declarations of the app's read tools, the mail and self tools measure ~9 400 tokens before it has a tool of its own, the 16 BD roles
+ *  come to ~5 500 of standing text, and a modelling role's own tools add ~7 000 (AR 72 tools, BK 66, the engineers 62: ~21 700 in all, BPV ~22 400). 16 000 refused every one of them. The cost is
+ *  small: the whole prefix is cached between the calls of a run, and it is a tenth of the 262 000 window of the smallest model the agents run on. A guard against a runaway list or text, not a budget. */
+export const SPECIALIST_FIXED_MAX = 28_000; // tokens
 /** The same for the lead (standing text with the roster and skills list + its declarations); the 0.6 guard holds it, and saving specialists is refused past it (R49).
  *  16 000 since the team import: the lead's declarations alone (the app's tools and the app_calls catalog) measure ~12 100 tokens and its standing text ~1 400, so the old
  *  10 000 refused every added agent ("a save that makes the lead heavier is refused while it is over") and the 16 BD roles could not be saved. A roster line costs ~12 tokens, so

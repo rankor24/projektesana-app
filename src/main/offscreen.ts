@@ -40,6 +40,18 @@ export class PageRenderer {
 		return job;
 	}
 
+	/** One part of one page (`region`: fractions of the page from its top left corner) at up to `scale`, at most `maxSide` pixels on the long side. */
+	renderRegion(pdf: Uint8Array, page: number, scale: number, region: { x: number; y: number; w: number; h: number }, maxSide: number): Promise<{ png: Uint8Array; width: number; height: number; scale: number }> {
+		const job = this.queue.then(async () => {
+			const w = await this.open();
+			const b64 = Buffer.from(pdf).toString("base64");
+			const o = (await w.webContents.executeJavaScript(`window.__renderRegion(${JSON.stringify(b64)}, ${Number(page)}, ${Number(scale)}, ${JSON.stringify(region)}, ${Number(maxSide)})`)) as { png: string; width: number; height: number; scale: number };
+			return { width: o.width, height: o.height, scale: o.scale, png: new Uint8Array(Buffer.from(o.png.slice(o.png.indexOf(",") + 1), "base64")) };
+		});
+		this.queue = job.catch(() => undefined);
+		return job;
+	}
+
 	close() {
 		void this.win?.then((w) => w.destroy());
 		this.win = null;

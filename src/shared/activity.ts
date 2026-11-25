@@ -161,6 +161,15 @@ export const TOOLS: Record<string, { words: string; kind: ActKind }> = {
 	memory_write_office: { words: "Raksta biroja atmiņā", kind: "write" },
 	edit_own_role: { words: "Maina savu lomu", kind: "write" },
 	draft_skill: { words: "Sagatavo prasmes melnrakstu", kind: "write" },
+	agent_configure: { words: "Maina aģenta iestatījumus", kind: "write" },
+	view_image: { words: "Skatās attēlu", kind: "read" },
+	archive_list: { words: "Skatās arhīva saturu", kind: "read" },
+	archive_extract: { words: "Izpako arhīvu", kind: "write" },
+	convert_file: { words: "Pārveido failu", kind: "write" },
+	write_spreadsheet: { words: "Raksta tabulu (xlsx)", kind: "write" },
+	cad_describe: { words: "Lasa zīmējuma sastāvu", kind: "read" },
+	cad_objects: { words: "Meklē zīmējuma objektus", kind: "read" },
+	pointcloud_info: { words: "Lasa punktu mākoņa galveni", kind: "read" },
 	report_app_issue: { words: "Ziņo par lietotnes problēmu", kind: "write" },
 	routine_list: { words: "Skatās rutīnas", kind: "read" },
 	routine_create: { words: "Piedāvā rutīnu", kind: "write" },
@@ -285,6 +294,9 @@ export function toolLine(name: string, detail: string | undefined, title: (sourc
 			target = `${str(field(detail, "action"))} · ${oneLine(what, 50)}`;
 			break;
 		}
+		case "agent_configure":
+			target = `${str(field(detail, "agent"))} — ${oneLine(str(field(detail, "reason")), 50)}`;
+			break;
 		case "edit_own_role":
 		case "draft_skill":
 			target = str(field(detail, "name")) ? `${str(field(detail, "name"))} — ${oneLine(str(field(detail, "reason")), 50)}` : oneLine(str(field(detail, "reason")), 60);

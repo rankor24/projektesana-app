@@ -454,7 +454,7 @@ export function AgentDialog({ agent, isNew, all, departments, tools, providers, 
 							</label>
 						))}
 					</div>
-					<div className="small dim">{tr("Rīki bez lasīšanas (lasīšana vienmēr ir atļauta)")}{level === "confirm" ? tr("; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:") : ":"}</div>
+					<div className="small dim">{tr("Rīki bez lasīšanas (lasīšana vienmēr ir atļauta, izņemot Revit: tā jāatzīmē šeit)")}{level === "confirm" ? tr("; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:") : ":"}</div>
 					<div className="ag-chips">
 						{tools
 							.filter((t) => t.level !== "confirm" || level === "confirm")

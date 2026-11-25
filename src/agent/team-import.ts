@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { DEFAULT_DEPARTMENT_OF, TEAM_IDS, type Department } from "../shared/departments.js";
+import { withFleetDefaults } from "../shared/fleet-defaults.js";
 import { frontMatter } from "./skills.js";
 
 /** The role number of a file name → the agent id (shared/departments.ts: the window needs it too, to tell which agent a skill group belongs to). */
@@ -99,10 +100,12 @@ export function readTeam(folder: string): TeamPlan {
 /** The spec an imported role gives. A new agent: the file's name, description and text, its department by its id, the skills of its folder and the common ones.
  *  An agent of that id that exists: the user's own settings stay (provider, model, effort, backup, tools, level, reach, check, MCP servers, department, extra prompt);
  *  the name, the description and the role text come from the file, the department is set only when the agent has none yet, and the skills are added to its own. */
-export function mergeRole(existing: AgentSpec | undefined, role: TeamRole, common: readonly string[], departments: readonly Department[]): AgentSpec {
+export function mergeRole(existing: AgentSpec | undefined, role: TeamRole, common: readonly string[], departments: readonly Department[], have?: { tools: ReadonlySet<string>; skills: ReadonlySet<string> }): AgentSpec {
 	const skills = [...new Set([...(existing?.skills ?? []), ...role.skills, ...common])];
 	const dept = DEFAULT_DEPARTMENT_OF[role.id];
 	// a department the user's list no longer has is not filed under a name nobody sees: the agent is then in none, as for any id that has no default
 	const department = existing?.department ?? (dept && departments.some((d) => d.id === dept) ? dept : undefined);
-	return { prompt: "", tools: [], ...existing, id: role.id, name: role.name, description: role.description, roleFile: true, skills, ...(department !== undefined ? { department } : {}) };
+	const spec: AgentSpec = { prompt: "", tools: [], ...existing, id: role.id, name: role.name, description: role.description, roleFile: true, skills, ...(department !== undefined ? { department } : {}) };
+	// the role's own tools and Revit skills (shared/fleet-defaults.ts): a new agent, or one whose tool list is still empty, is set up; a list the user made is kept
+	return have ? withFleetDefaults(spec, have) : spec;
 }

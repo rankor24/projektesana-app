@@ -16,7 +16,7 @@ const MAX_TEXT = 60_000;
 const cut = (s: string, n = MAX_TEXT) => (s.length > n ? `${s.slice(0, n)}\n[… apgriezts: ${s.length} zīmes kopā]` : s);
 
 /** A path as the agent gives it: absolute, or under the open project's folder. */
-function abs(ctx: ToolCtx, p: string): string {
+export function abs(ctx: ToolCtx, p: string): string {
 	if (isAbsolute(p)) return resolve(p);
 	const root = projectRoot(ctx);
 	if (!root) throw new Error("Relatīvs ceļš vajag atvērtu projektu; dod pilnu ceļu.");

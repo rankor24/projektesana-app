@@ -369,7 +369,10 @@ export class ThreadRunner {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
-					if (hasRevit && this.d.revitWork) {
+					// except a batch that only opens a document: opening the working copy is how an agent gets onto it (another project's model may be the active one),
+					// and the user sees the file in the card; the next batch that changes anything is held to the working copy again
+					const onlyOpens = req.batch.filter((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_")).every((b) => b.tool === "open_document");
+					if (hasRevit && !onlyOpens && this.d.revitWork) {
 						const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
 						if (!w.ok) {
 							emit({ type: "error", engine: "pi", message: `Partija noraidīta: aktīvais Revit dokuments nav šī projekta darba kopija (${w.title}). Izveido to: Versijas → Revit → Darba kopija.` });

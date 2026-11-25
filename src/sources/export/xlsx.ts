@@ -1,13 +1,17 @@
 // A minimal, valid .xlsx writer (fflate, no native modules): named sheets of rows, numbers as numbers, a bold header row,
 // column widths. Enough for the room table and check sheets the user opens in Excel.
 import { strToU8, zipSync } from "fflate";
+import { evaluateWorkbook, type FormulaCell } from "./xlsx-formula.js";
 
-export type Cell = string | number | null;
+/** A cell: text, a number, empty, or a formula `{ f: "SUM(B2:B9)" }` (written with its computed value as the cache; Excel recalculates on opening). */
+export type Cell = string | number | null | FormulaCell;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const col = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : col(Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)));
 
-export function writeXlsx(sheets: { name: string; rows: Cell[][]; widths?: number[] }[]): Uint8Array {
+export function writeXlsx(sheets: { name: string; rows: Cell[][]; widths?: number[]; /** the first row is a bold header (default true; the room table and check sheets have one) */ header?: boolean }[]): Uint8Array {
+	// formulas get their computed value as the cache, so any viewer (not only Excel) shows the totals; one that cannot be computed has no cache
+	const calc = evaluateWorkbook(sheets.map((s) => ({ name: s.name.slice(0, 31), rows: s.rows })));
 	const shared: string[] = [];
 	const index = new Map<string, number>();
 	const si = (s: string) => {
@@ -25,8 +29,16 @@ export function writeXlsx(sheets: { name: string; rows: Cell[][]; widths?: numbe
 				const cells = r
 					.map((v, ci) => {
 						const ref = `${col(ci)}${ri + 1}`;
-						const style = ri === 0 ? ' s="1"' : "";
+						const style = ri === 0 && sh.header !== false ? ' s="1"' : "";
 						if (v === null || v === "") return "";
+						if (typeof v === "object") {
+							const val = calc.values.get(`${sh.name.slice(0, 31)}!${ref}`);
+							const f = `<f>${esc(v.f.replace(/^=/, ""))}</f>`;
+							if (typeof val === "number" && Number.isFinite(val)) return `<c r="${ref}"${style}>${f}<v>${val}</v></c>`;
+							if (typeof val === "boolean") return `<c r="${ref}" t="b"${style}>${f}<v>${val ? 1 : 0}</v></c>`;
+							if (typeof val === "string" && !val.startsWith("#ERR")) return `<c r="${ref}" t="str"${style}>${f}<v>${esc(val)}</v></c>`;
+							return `<c r="${ref}"${style}>${f}</c>`;
+						}
 						if (typeof v === "number" && Number.isFinite(v)) return `<c r="${ref}"${style}><v>${v}</v></c>`;
 						return `<c r="${ref}" t="s"${style}><v>${si(String(v))}</v></c>`;
 					})
@@ -35,14 +47,14 @@ export function writeXlsx(sheets: { name: string; rows: Cell[][]; widths?: numbe
 			})
 			.join("");
 		const cols = sh.widths?.length ? `<cols>${sh.widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
-		files[`xl/worksheets/sheet${n + 1}.xml`] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${rows}</sheetData></worksheet>`);
+		files[`xl/worksheets/sheet${n + 1}.xml`] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">${sh.header === false ? "" : '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'}</sheetView></sheetViews>${cols}<sheetData>${rows}</sheetData></worksheet>`);
 	});
 	files["[Content_Types].xml"] = strToU8(
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`,
 	);
 	files["_rels/.rels"] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
 	files["xl/workbook.xml"] = strToU8(
-		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${esc(s.name.slice(0, 31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`,
+		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${esc(s.name.slice(0, 31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
 	);
 	files["xl/_rels/workbook.xml.rels"] = strToU8(
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${sheets.length + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,

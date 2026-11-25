@@ -13,6 +13,9 @@ import type { Registry } from "../core/registry.js";
 import { sourceBytes } from "../sources/bytes.js";
 import type { PageRenderer } from "./offscreen.js";
 import type { AppSettingsHost } from "./app-settings/host.js";
+import { cleanRegion, viewImage, type NativeLike } from "./image-view.js";
+import { existsSync, statSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
 export interface Bridge {
 	url: string;
@@ -41,7 +44,7 @@ const body = (req: IncomingMessage): Promise<unknown> =>
 
 const isBytes = (v: unknown): boolean => v instanceof Uint8Array || (v !== null && typeof v === "object" && Object.values(v as object).some((x) => x instanceof Uint8Array));
 
-export function startAgentBridge(d: { handlers: Handlers; registry: Registry; renderer: PageRenderer; /** the app_settings tool's host (main/app-settings); absent in tests that do not use it */ appSettings?: AppSettingsHost }): Promise<Bridge> {
+export function startAgentBridge(d: { handlers: Handlers; registry: Registry; renderer: PageRenderer; /** the app_settings tool's host (main/app-settings); absent in tests that do not use it */ appSettings?: AppSettingsHost; /** Electron's nativeImage, for view_image (crop, resize); absent in tests */ native?: NativeLike }): Promise<Bridge> {
 	const token = randomBytes(24).toString("hex");
 	const server = createServer(async (req, res) => {
 		const send = (status: number, v: unknown) => {

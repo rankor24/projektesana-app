@@ -44,7 +44,7 @@ export const part1: Record<string, string> = {
 	"Domāšana": "Thinking",
 	"Drīkst rakstīt": "May message",
 	"Pieņem no": "Accepts from",
-	"Rīki bez lasīšanas (lasīšana vienmēr ir atļauta)": "Tools beyond reading (reading is always allowed)",
+	"Rīki bez lasīšanas (lasīšana vienmēr ir atļauta, izņemot Revit: tā jāatzīmē šeit)": "Tools beyond reading (reading is always allowed, except Revit: tick it here)",
 	"; ar līmeni «apstiprina lietotājs» var dot arī rīkus, kuriem vajag apstiprinājumu:": "; at the level “user confirms” tools that need confirmation can also be given:",
 	"+ speciālists": "+ specialist",
 	"Saglabāt": "Save",
