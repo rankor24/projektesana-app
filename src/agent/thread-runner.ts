@@ -13,7 +13,7 @@ import { LEAD_ID, type IncidentView, type RunMeta, type Thread } from "../shared
 import type { CheckUsage, RunEvent, Settings } from "../shared/types.js";
 import type { PreparedAttachments } from "./attachments.js";
 import { compactMessages, summarize, type Complete } from "./compact.js";
-import { archiveBody, entriesAsMessages, planSessionCompaction, seedFromTranscript } from "./session-compact.js";
+import { archiveBody, entriesAsMessages, planSessionCompaction, seedFromTranscript, withSummary } from "./session-compact.js";
 import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
@@ -494,7 +494,7 @@ export class ThreadRunner {
 				// a resumed SDK session already holds the conversation: the earlier lines are not repeated (history stays [] for that engine)
 				const seedFor = (sh: typeof shape) => {
 					const seed = sh.resume ? { summary: null, earlier: [] } : this.transcriptSeed(thread);
-					return { seed, seeded: seed.summary ? `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${seed.summary}` : standing };
+					return { seed, seeded: seed.summary ? withSummary(standing, seed.summary) : standing };
 				};
 				// send_message, close_topic and the task tools: the lead's threads and a specialist's alike, never a lane
 				const md: MailDeps | null = mailbox ? ({

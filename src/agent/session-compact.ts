@@ -103,3 +103,11 @@ export function archiveText(body: string): string {
 	}
 	return out.join("\n\n");
 }
+
+/**
+ * The standing text of a conversation that starts from a compaction summary. The summary alone reads as background, so a new session may greet the user and wait; it must carry
+ * on: the work that was going is in «Procesā» and «Nākamie soļi», and the message it answers is the user's next step in it.
+ */
+export function withSummary(standing: string, summary: string): string {
+	return `${standing}\n\nIepriekšējās sarunas kopsavilkums:\n${summary}\n\nŠī ir jauna sesija pēc sarunas saspiešanas: darbs turpinās, tas nav jauns sākums. Turpini no kopsavilkuma sadaļām «Procesā» un «Nākamie soļi» un no lietotāja pēdējās ziņas; ko vari izdarīt ar rīkiem, to dari uzreiz, un jautā tikai to, ko tiešām nevar atrast. Ja kopsavilkumā kaut kā trūkst (elementu id, faktu), nolasi to no jauna ar rīkiem, nesāc darbu no nulles.`;
+}

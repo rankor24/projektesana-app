@@ -103,8 +103,9 @@ test("the release is pinned for Windows and the client is named for its version"
 	assert.equal(resolveAntigravityReleaseAsset("linux", "x64"), null);
 	assert.equal(antigravityClientInfo("1.4.3").name, "zed", "before 1.5.1 a runtime offers some models only to clients it knows");
 	assert.equal(antigravityClientInfo("1.5.1").name, "projektesana");
-	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.4.3" } }), { _meta: { antigravity: { disabledTools: ["run_workflow"] } } });
-	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.5.1" } }), {});
+	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.4.3" } }, true), { _meta: { antigravity: { disabledTools: ["run_workflow"] } } });
+	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.5.1" } }, true), {});
+	assert.ok(antigravitySessionSetup({ agentInfo: { version: "1.4.3" } })._meta?.antigravity.disabledTools.includes("run_workflow"), "the full setup holds it too");
 	const init = { protocolVersion: 1, agentInfo: { name: "antigravity-acp", version: "1.4.3" }, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, auth: { logout: {} } }, authMethods: [{ id: "oauth-personal" }] };
 	assert.equal(isValidAntigravityInitializeResult(init, "1.4.3"), true);
 	assert.equal(isValidAntigravityInitializeResult({ ...init, agentInfo: { name: "something-else", version: "1.4.3" } }, "1.4.3"), false);
@@ -263,14 +264,14 @@ test("tool bridge: lists the tools, runs a call through the gate, refuses a wron
 const fake = join(FIX, "fake-antigravity.mjs");
 const tsxUrl = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;
 
-function engine(root: string) {
+function engine(root: string, timing: { stallMs?: number; cancelWaitMs?: number } = {}) {
 	process.env.FAKE_AGY_LOG = join(root, "calls.log");
 	const token = join(root, "profile", "antigravity-acp");
 	mkdirSync(token, { recursive: true });
 	writeFileSync(join(token, "acp_token.json"), '{"refresh_token":"x"}');
 	const host = new AntigravityHost({ root, runtime: async () => ({ executablePath: process.execPath, args: [fake], harnessPath: "-", version: "1.4.3" }) });
 	mkdirSync(host.folders.work, { recursive: true });
-	const run = createAntigravityRun({ host, nodePath: process.execPath, nodeArgs: ["--import", tsxUrl], bridgeScript: join(import.meta.dirname, "..", "src", "agent", "antigravity", "bridge-stdio.ts") });
+	const run = createAntigravityRun({ host, nodePath: process.execPath, nodeArgs: ["--import", tsxUrl], bridgeScript: join(import.meta.dirname, "..", "src", "agent", "antigravity", "bridge-stdio.ts"), ...timing });
 	const calls = () => (existsSync(join(root, "calls.log")) ? readFileSync(join(root, "calls.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
 	return { host, run, calls };
 }
@@ -347,6 +348,57 @@ test("a stop cancels the prompt: an aborted error, never a done", async () => {
 		await running;
 		assert.ok(Date.now() - started < 12_000);
 		assert.deepEqual(events.filter((e) => e.type === "error" || e.type === "done"), [{ type: "error", engine: "pi", message: "aborted" }]);
+	} finally {
+		await host.closeAll();
+	}
+});
+
+test("a prompt that goes silent is cancelled and the same session resumes the task once; the chat says so", async () => {
+	const root = tmp("agy-stall1-");
+	const { host, run, calls } = engine(root, { stallMs: 400 });
+	try {
+		const events: RunEvent[] = [];
+		const sessions: string[] = [];
+		await run(base(events, { prompt: "STALL1 sāc darbu", onSession: (id: string) => sessions.push(id) }) as never);
+		assert.equal(events.some((e) => e.type === "error"), false, JSON.stringify(events.filter((e) => e.type === "error")));
+		assert.ok(events.some((e) => e.type === "text" && /ilgi neatbildēja/.test(e.text)), "the user is told");
+		assert.equal(events.filter((e) => e.type === "done").length, 1, "the resumed prompt ends the run");
+		const prompts = calls().filter((c) => c.method === "session/prompt");
+		assert.equal(prompts.length, 2);
+		assert.equal(prompts[0].params.sessionId, prompts[1].params.sessionId, "the same session, not a new one");
+		assert.match(prompts[1].params.text, /Turpini darbu no vietas, kur apstājies/);
+		assert.equal(calls().filter((c) => c.method === "session/cancel").length, 1);
+		assert.deepEqual(sessions, ["sess-1"]);
+	} finally {
+		await host.closeAll();
+	}
+});
+
+test("a prompt that goes silent twice, or ignores the cancel, ends as an error in words (not a run that is \"working\" for ever)", async () => {
+	for (const [marker, stallMs] of [["STALL2", 400], ["STALLDEAF", 400]] as const) {
+		const root = tmp("agy-stall2-");
+		const { host, run } = engine(root, { stallMs, cancelWaitMs: 600 });
+		try {
+			const events: RunEvent[] = [];
+			await run(base(events, { prompt: `${marker} sāc darbu` }) as never);
+			const errors = events.filter((e) => e.type === "error") as Extract<RunEvent, { type: "error" }>[];
+			assert.equal(errors.length, 1, marker);
+			assert.match(errors[0].message, /neko nedarīja/, marker);
+			assert.equal(events.some((e) => e.type === "done"), false, marker);
+		} finally {
+			await host.closeAll();
+		}
+	}
+});
+
+test("a tool call that is still going keeps the run alive however long it is quiet", async () => {
+	const root = tmp("agy-stall-tool-");
+	const { host, run } = engine(root, { stallMs: 300 });
+	const slowEcho: AgentTool<any> = { ...echoTool, execute: async (id, params, signal) => (await new Promise((r) => setTimeout(r, 1200)), echoTool.execute(id, params, signal)) };
+	try {
+		const events: RunEvent[] = [];
+		await run(base(events, { prompt: "CALLTOOL lūdzu", extraTools: [slowEcho] }) as never);
+		assert.equal(events.some((e) => e.type === "error"), false);
 	} finally {
 		await host.closeAll();
 	}

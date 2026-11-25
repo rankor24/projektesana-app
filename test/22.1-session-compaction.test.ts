@@ -171,6 +171,8 @@ test("a session past the line: the next message opens a NEW session from the sum
 	assert.equal(second.resume, undefined, "not the old session");
 	assert.match(second.system ?? "", /TESTA KOPSAVILKUMS/, "the new session starts from the summary");
 	assert.match(second.system ?? "", /Iepriekšējā saruna šajā projektā/, "and the last lines word for word");
+	assert.match(second.system ?? "", /jauna sesija pēc sarunas saspiešanas: darbs turpinās[\s\S]*«Procesā» un «Nākamie soļi»/, "and is told to carry on from the summary, not to wait or start over");
+	assert.match(second.prompt, /Otrā ziņa/, "the message that started the run is the new session's task");
 	assert.ok(events.some((e) => e.type === "compact" && e.phase === "done"));
 
 	const log = store.transcript(r.thread.id);

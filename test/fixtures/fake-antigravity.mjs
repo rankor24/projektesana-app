@@ -54,6 +54,15 @@ async function prompt(msg, text) {
 	const sessionId = msg.params.sessionId;
 	const s = sessions.get(sessionId);
 	const chunk = (t) => out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: t } } } });
+	// "STALL1" / "STALL2": the next one / two prompts of the session go silent (no update) until session/cancel, which this server honours; "STALLDEAF": silent, and a cancel is ignored
+	const stall = /STALL(\d)/.exec(text);
+	if (stall) s.stalls = Number(stall[1]);
+	if (s.stalls > 0) {
+		s.stalls--;
+		s.cancelled = () => out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "cancelled" } });
+		return;
+	}
+	if (text.includes("STALLDEAF")) return;
 	if (text.includes("WAIT")) {
 		s.cancelled = () => out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "cancelled" } });
 		return;

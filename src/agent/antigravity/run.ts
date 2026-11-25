@@ -25,7 +25,17 @@ export interface AntigravityEngineConfig {
 	/** arguments of node before the script (a test runs the TypeScript source through tsx) */
 	nodeArgs?: string[];
 	log?: (line: string) => void;
+	/** a prompt with no sign of life (no update from the server, no tool call going) for this long is cancelled and the work resumed once in the same session; default 5 minutes */
+	stallMs?: number;
+	/** how long a cancel may take before the server is left behind (tests make it short) */
+	cancelWaitMs?: number;
 }
+
+/** The default silence after which a prompt counts as stuck. A model that thinks without streaming its thoughts is quiet for a minute or two; ten minutes of nothing (a stalled call, a quota backoff the server retries silently) must not leave the chat "working" for ever. */
+export const STALL_MS = 5 * 60_000;
+
+/** What the resumed prompt says after a stall: the same session still holds the whole task. */
+export const STALL_RESUME = "[lietotne] Serveris ilgi neatbildēja, tāpēc pēdējais solis tika pārtraukts. Turpini darbu no vietas, kur apstājies: tas pats uzdevums, tie paši rīki.";
 
 export interface AntigravityRunOptions extends PiRunOptions {
 	/** the ACP session to continue (the thread's conversation); absent = a new one */
@@ -61,6 +71,12 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 		let session: string | null = null;
 		// the context size the server reported last (usage_update): what the thread's meter shows, not the sum the prompt answer bills
 		let context: { used: number; window?: number } | null = null;
+		// signs of life: the server's updates, the app's own tool calls (one going keeps the run alive however long it takes: a Revit batch, a question to the user)
+		let lastAt = Date.now();
+		let inFlight = 0;
+		const alive = () => {
+			lastAt = Date.now();
+		};
 		try {
 			if (!(await cfg.host.installed()) || !(await cfg.host.signedIn())) throw new Error(ANTIGRAVITY_NOT_CONNECTED);
 			const mcp = await connectMcpServers(o.mcp, { maxResultChars: 200_000 });
@@ -75,9 +91,17 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				signal: o.signal,
 				emit: (e) => {
 					send(e);
-					if (e.type === "tool_result") antigravityToolEnded(st);
+					if (e.type === "tool_result") {
+						inFlight = Math.max(0, inFlight - 1);
+						antigravityToolEnded(st);
+					}
+					alive();
 				},
-				onToolStart: () => antigravityToolStarted(st).forEach(send),
+				onToolStart: () => {
+					inFlight++;
+					alive();
+					antigravityToolStarted(st).forEach(send);
+				},
 			});
 			closeBridge = bridge.close;
 			const offered = new Set(bridge.names);
@@ -93,10 +117,12 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				},
 				{
 					update: (u) => {
+						alive();
 						context = antigravityContext(u) ?? context;
 						antigravityEvents(u, st).forEach(send);
 					},
 					permission: async (params) => {
+						alive();
 						const tool = ownToolRequest(params.toolCall, BRIDGE_SERVER, offered);
 						const option = permissionOption(params.options, tool ? "allow" : "reject");
 						if (!tool) cfg.log?.(`antigravity: refused a tool of the server's own (${String(params.toolCall?.kind ?? "?")}: ${String(params.toolCall?.title ?? "").slice(0, 80)})`);
@@ -112,16 +138,50 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				{ type: "text", text: antigravityPrompt(o.systemPrompt, o.prompt, opened.resumed) },
 				...(o.images ?? []).map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType })),
 			];
-			// a stop ends the prompt by itself (session/cancel); a server that does not answer in time is left behind
-			const stopped = new Promise<never>((_resolve, reject) => {
-				const onAbort = () => setTimeout(() => reject(new Error("aborted")), 15_000).unref?.();
-				if (o.signal.aborted) onAbort();
-				else o.signal.addEventListener("abort", onAbort, { once: true });
-			});
-			const result = await Promise.race([cfg.host.prompt(opened.sessionId, blocks, o.signal), stopped]);
-			const usage = antigravityUsage(result, context);
+			const stallMs = cfg.stallMs ?? STALL_MS;
+			// One prompt to its end. A stop ends it by itself (session/cancel); a server that does not answer a cancel in time is left behind. A prompt that shows no sign of life for
+			// `stallMs` is cancelled by the watchdog: `stalled` with a result = the server honoured the cancel (the session is usable), `stalled` without = it did not.
+			const prompt = async (parts: unknown[]): Promise<{ result: Awaited<ReturnType<typeof cfg.host.prompt>> | null; stalled: boolean }> => {
+				const inner = new AbortController();
+				const onOuter = () => inner.abort();
+				if (o.signal.aborted) inner.abort();
+				else o.signal.addEventListener("abort", onOuter, { once: true });
+				let stalled = false;
+				alive();
+				const timer = setInterval(() => {
+					if (inFlight === 0 && Date.now() - lastAt > stallMs) {
+						stalled = true;
+						inner.abort();
+					}
+				}, Math.max(20, Math.min(5_000, Math.floor(stallMs / 4))));
+				timer.unref?.();
+				const left = new Promise<never>((_resolve, reject) => {
+					const onAbort = () => setTimeout(() => reject(new Error(stalled ? "stalled" : "aborted")), cfg.cancelWaitMs ?? 15_000).unref?.();
+					if (inner.signal.aborted) onAbort();
+					else inner.signal.addEventListener("abort", onAbort, { once: true });
+				});
+				try {
+					return { result: await Promise.race([cfg.host.prompt(opened.sessionId, parts, inner.signal), left]), stalled };
+				} catch (e) {
+					if (stalled && !o.signal.aborted) return { result: null, stalled: true };
+					throw e;
+				} finally {
+					clearInterval(timer);
+					o.signal.removeEventListener("abort", onOuter);
+				}
+			};
+			let r = await prompt(blocks);
+			if (r.stalled && r.result) {
+				// the server stopped the stuck step: the same session carries on with the task, once
+				const first = antigravityUsage(r.result, context);
+				if (first) send(first);
+				send({ type: "text", text: "[lietotne] Antigravity ilgi neatbildēja: solis pārtraukts, darbs turpinās tajā pašā sesijā.\n\n" });
+				r = await prompt([{ type: "text", text: STALL_RESUME }]);
+			}
+			if (r.stalled || !r.result) throw new Error(`Antigravity ilgi (vairāk nekā ${Math.max(1, Math.round(stallMs / 60_000))} min) neko nedarīja un neatsaucās uz pārtraukšanu vai apstājās atkal. Spied «Sūtīt» vēlreiz vai izvēlies citu modeli.`);
+			const usage = antigravityUsage(r.result, context);
 			if (usage) send(usage);
-			antigravityEnd(result, st, o.signal.aborted).forEach(send);
+			antigravityEnd(r.result, st, o.signal.aborted).forEach(send);
 		} catch (e) {
 			if (!reported) {
 				const err = e as Error;
