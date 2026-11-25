@@ -707,7 +707,7 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
    data-tier on .tg-slim from the window's own width) the header buttons sit in a row and the tools and colours wrap into a grid. */
 .ctool-win { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--elev); box-shadow: inset 0 2px 0 #8e6bbf; }
 .ctool-empty { padding: 10px 6px; font-size: 11px; }
-.ctool-col { position: relative; display: flex; flex-flow: row wrap; justify-content: center; align-content: flex-start; align-items: center; gap: 2px; padding: 6px 4px; min-height: 100%; box-sizing: border-box; }
+.ctool-col { position: relative; display: flex; flex-flow: row wrap; justify-content: center; align-content: flex-start; align-items: center; gap: 2px; padding: 6px 4px; box-sizing: border-box; }
 .ctool-ab { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 40px; }
 .ctool-ab button { padding: 1px 0; font-size: 11px; }
 .ctool-ab button.on { background: #8e6bbf; color: #fff; border-color: #8e6bbf; }
@@ -719,8 +719,15 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .ctool-count { position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; font-size: 9.5px; line-height: 14px; font-weight: 700; text-align: center; color: #fff; background: #8e6bbf; }
 .ctool-sep { flex: none; width: calc(100% - 12px); height: 1px; margin: 4px 6px; background: var(--border); }
 .ctool-colours { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 2px 0; }
-.tg-slim[data-tier="s"] .ctool-colours { grid-template-columns: repeat(3, auto); }
-.tg-slim[data-tier="m"] .ctool-colours { grid-template-columns: repeat(6, auto); }
+/* Given room (tiers s and m) everything packs into as few rows as possible: tools, the model's tools and the colours flow as one
+   run from the left, the groups divided by a short vertical line instead of a line that breaks the row, no padding to spread them out. */
+.tg-slim[data-tier="s"] .ctool-col, .tg-slim[data-tier="m"] .ctool-col { justify-content: flex-start; gap: 2px; padding: 4px 6px; }
+.tg-slim[data-tier="s"] .ctool, .tg-slim[data-tier="m"] .ctool { width: 30px; height: 28px; border-radius: 6px; }
+.tg-slim[data-tier="s"] .ctool-icon, .tg-slim[data-tier="m"] .ctool-icon { font-size: 15px; }
+.tg-slim[data-tier="s"] .ctool-sep, .tg-slim[data-tier="m"] .ctool-sep { width: 1px; height: 20px; margin: 0 4px; }
+.tg-slim[data-tier="s"] .ctool-colours, .tg-slim[data-tier="m"] .ctool-colours { display: contents; }
+.tg-slim[data-tier="s"] .ctool-swatch, .tg-slim[data-tier="m"] .ctool-swatch { margin: 0 2px; }
+.tg-slim[data-tier="s"] .ctool-ab, .tg-slim[data-tier="m"] .ctool-ab { width: 36px; }
 .ctool-swatch { width: 16px; height: 16px; padding: 0; border: 2px solid transparent; border-radius: 50%; }
 .ctool-swatch.on { border-color: var(--text); box-shadow: 0 0 0 1px var(--bg); }
 .ctool-col > .grow { display: none; }

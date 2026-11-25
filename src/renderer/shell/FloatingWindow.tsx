@@ -8,10 +8,10 @@
 // rendered again for every pixel the mouse travels; the store gets the final geometry once, on release. The component is
 // memoised, so the drop hint that follows the pointer (a separate layer) never re-renders the windows either.
 import { memo, useCallback, useRef, type ReactNode } from "react";
-import { clampGeo, MIN_H, minWOf, type FloatPlace, type Geo, type Group } from "../../shared/layout";
+import { clampGeo, minHOf, minWOf, TOOLS, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
 import { followMouse, track } from "./drag";
-import { TabGroup } from "./TabGroup";
+import { fitToolsHeight, TabGroup } from "./TabGroup";
 
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
 const DIRS: Dir[] = ["e", "w", "s", "n", "se", "sw", "ne", "nw"];
@@ -22,6 +22,8 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 	const id = group.active;
 	const root = useRef<HTMLDivElement>(null);
 	const minW = minWOf(group.tabs);
+	const minH = minHOf(minW);
+	const slimTools = group.tabs.length === 1 && group.tabs[0] === TOOLS;
 	const frame = useRef(0);
 
 	/** Writes a geometry to the element, at most once per animation frame. */
@@ -79,13 +81,13 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 				const dy = ev.clientY - sy;
 				let { x, y, w, h } = o;
 				if (dir.includes("e")) w = Math.max(minW, o.w + dx);
-				if (dir.includes("s")) h = Math.max(MIN_H, o.h + dy);
+				if (dir.includes("s")) h = Math.max(minH, o.h + dy);
 				if (dir.includes("w")) {
 					w = Math.max(minW, o.w - dx);
 					x = o.x + (o.w - w);
 				}
 				if (dir.includes("n")) {
-					h = Math.max(MIN_H, o.h - dy);
+					h = Math.max(minH, o.h - dy);
 					y = o.y + (o.h - h);
 				}
 				final = clampGeo({ x, y, w, h }, vp(), minW);
@@ -97,7 +99,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			};
 			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
-		[id, p.x, p.y, p.w, p.h, minW, apply, settle],
+		[id, p.x, p.y, p.w, p.h, minW, minH, slimTools, apply, settle],
 	);
 
 	return (

@@ -415,3 +415,17 @@ His request (via the project chat): while a chat's agent is running, Send turned
 
 **Not checked live:** the pi engine reading a steered message mid-run was tested through the runner with a scripted engine, not against a real model (his rule: he playtests). **Not done / his call:** a held message on a thread whose run waits in the queue is held until the run starts (it is not shown anywhere but the dock of that thread); attachments cannot be added or removed while editing a held message (cancel and send again).
 
+
+## 2026-11-25: Comment tools window packs tight and shrinks to its contents (version 2.13.2)
+
+Follows 2.10.2. His words (via the project chat): still not compact enough when resized. Screenshot of a ~190 px wide window: three header buttons, big empty gaps, one icon alone on a row, three tool icons spread out with padding, the colour dots on their own row, a lot of empty height under it.
+
+**Causes** (read from the code, not guessed): (1) every group divider was a full-width line (`.ctool-sep`), so it forced a new row: the screen-grab icon sat alone before the first line, the colours alone after the last; (2) the colours were their own grid block that also took a whole row; (3) tools were centred, so the leftover width became padding around them; (4) the window could not get lower than 200 px (`MIN_H`), whatever its contents.
+
+| Change | Where |
+|---|---|
+| From 100 px wide up, tools, the model's tools and the six colours flow as one run from the left; the group dividers are short vertical lines inside the run; icons 30 x 28 px; gaps 2 px. Under 100 px nothing changes: still the one column he asked for three times (§8). | `styles.css` (`.tg-slim[data-tier="s"/"m"]`) |
+| The comment tools window alone may be as low as 72 px (`TOOLS_H`, one row of icons under the header); every other window keeps 200 px. | `shared/layout.ts` (`minHOf`), `FloatingWindow.tsx` |
+| The window is as tall as its icons need: when he lets go of the left or right edge, the height is fitted to the re-flowed icons (shrinks when there is empty room, grows when icons are cut off). A double-click on the grip fits it at any time (also after the page's tools change). Dragging the top or bottom edge is still free. | `TabGroup.tsx` (`fitToolsHeight`), `FloatingWindow.tsx` |
+
+**Test:** `test/9.0-layout.test.ts` (the tools window's minimum height; other windows unchanged). **Not checked live** (his rule): the fitting reads the real layout of the icons, which only the running app has.

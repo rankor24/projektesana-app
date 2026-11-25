@@ -43,3 +43,16 @@ test("a long random run of operations never breaks an invariant", () => {
 	assert.deepEqual(L.allWindows(n).sort(), L.allWindows(l).sort(), "and loses no window");
 });
 
+
+test("the comment tools window alone may be as low as one row of icons; every other window keeps its minimum height", () => {
+	let l = L.open(L.emptyLayout(), L.TOOLS, VP);
+	l = L.resize(l, L.TOOLS, { x: 100, y: 100, w: 190, h: 10 }, VP);
+	const g = L.groupOf(l, L.TOOLS)?.place;
+	assert.equal(g?.kind, "float");
+	assert.equal(g?.kind === "float" && g.h, L.TOOLS_H);
+	assert.ok(L.TOOLS_H < L.MIN_H);
+	assert.equal(L.minHOf(L.minWOf([L.TOOLS])), L.TOOLS_H);
+	assert.equal(L.minHOf(L.minWOf([L.CHAT])), L.MIN_H);
+	assert.equal(L.clampGeo({ x: 0, y: 0, w: 400, h: 10 }, VP).h, L.MIN_H);
+	valid(l);
+});

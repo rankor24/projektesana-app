@@ -62,6 +62,10 @@ export const MIN_W = 280;
 export const TOOLS_W = 60;
 export const minWOf = (tabs: readonly string[]): number => (tabs.length === 1 && tabs[0] === TOOLS ? TOOLS_W : MIN_W);
 export const MIN_H = 200;
+/** The slim comment tools window may be as low as one row of icons under its header; the window is meant to fit its contents. */
+export const TOOLS_H = 72;
+/** The lowest a floating window may be, from its lowest width (only the comment tools alone have a width under MIN_W). */
+export const minHOf = (minW: number): number => (minW < MIN_W ? TOOLS_H : MIN_H);
 export const MIN_DOCK = 200;
 export const DEFAULT_DOCK = 440;
 export const DEFAULT_DOCK_H = 320;
@@ -90,7 +94,7 @@ const topZ = (l: Layout) => l.groups.reduce((m, g) => (g.place.kind === "float" 
 
 export function clampGeo(g: Geo, vp: Vp, minW = MIN_W): Geo {
 	const w = Math.max(minW, Math.min(g.w, vp.w - 16));
-	const h = Math.max(MIN_H, Math.min(g.h, vp.h - 16));
+	const h = Math.max(minHOf(minW), Math.min(g.h, vp.h - 16));
 	return { x: Math.max(0, Math.min(g.x, Math.max(0, vp.w - w))), y: Math.max(0, Math.min(g.y, Math.max(0, vp.h - h))), w, h };
 }
 /** A bar docked on the top or bottom may be as slim as the comment tool bar; a side panel needs its width. */

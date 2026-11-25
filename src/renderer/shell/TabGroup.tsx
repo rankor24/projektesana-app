@@ -12,6 +12,21 @@ import { tr } from "../i18n";
 const SLIM_MID = 100;
 const SLIM_WIDE = 140;
 
+/**
+ * The comment tools' window is meant to be exactly as tall as its icons need: measures the icon grid against the body it sits in
+ * and resizes the floating window by the difference (shrinks it when there is empty room, grows it when icons are cut off).
+ * Called when the user lets go of a width drag, and by a double-click on the grip.
+ */
+export function fitToolsHeight(id: string): void {
+	const fw = document.querySelector<HTMLElement>(`[data-strip="${id}"]`)?.closest<HTMLElement>(".fw");
+	const body = fw?.querySelector<HTMLElement>(".ctool-win");
+	const col = fw?.querySelector<HTMLElement>(".ctool-col");
+	if (!fw || !body || !col) return;
+	const delta = col.offsetHeight - body.clientHeight;
+	if (Math.abs(delta) < 2) return;
+	windows.resize(id, { x: fw.offsetLeft, y: fw.offsetTop, w: fw.offsetWidth, h: fw.offsetHeight + delta });
+}
+
 export function TabGroup({
 	group,
 	render,
@@ -91,10 +106,10 @@ export function TabGroup({
 	}, [slim]);
 	return (
 		<div ref={tg} className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
-			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? undefined : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
+			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? (mode === "float" ? fitToolsHeight(own) : undefined) : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
 				{/* the slim strip is all buttons: this grip is the part that moves the window (or drags the column off its edge) */}
 				{slim && (
-					<div className="tg-grip" title={tr("Vilkt, lai pārvietotu")} aria-hidden>
+					<div className="tg-grip" title={tr("Vilkt, lai pārvietotu; dubultklikšķis: logs pēc satura augstuma")} aria-hidden>
 						⋮⋮
 					</div>
 				)}
