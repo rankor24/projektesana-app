@@ -47,7 +47,8 @@ export interface ClaudeRunOptions extends PiRunOptions {
  * No token = the run uses the login in the config folder, so a `CLAUDE_CODE_OAUTH_TOKEN` of the user's shell must not reach it either. */
 export function claudeEnv(token: string | null, cfg: Pick<ClaudeEngineConfig, "configDir" | "clientApp">, base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
 	// a colleague's own key or proxy settings must not change which account a run uses (same rule as pi's createPiRuntime)
-	return { ...claudeBaseEnv(cfg.configDir, base), ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}), CLAUDE_AGENT_SDK_CLIENT_APP: cfg.clientApp };
+	// The SDK would compact a long session inside itself and lose the original. The app compacts instead (thread-runner `compactSession`): the old session stays, the work goes on in a new one.
+	return { ...claudeBaseEnv(cfg.configDir, base), ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}), CLAUDE_AGENT_SDK_CLIENT_APP: cfg.clientApp, DISABLE_AUTO_COMPACT: "1" };
 }
 
 type Block = { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };

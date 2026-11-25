@@ -246,8 +246,8 @@ export class ThreadRunner {
 	}
 
 	/**
-	 * A one-off model call through an engine that keeps its own sessions: the summarizer of a conversation on Antigravity (its model has no API of its own for pi to call;
-	 * the Google sign-in works through the ACP server only). A fresh session without the app's tools; what it says is the answer.
+	 * A one-off model call through an engine that keeps its own sessions: the summarizer of a conversation on Antigravity or the Claude subscription (their sign-ins work through
+	 * the engine only; there is no API key for pi to call). A fresh session without the app's tools; what it says is the answer.
 	 */
 	private sessionComplete(engine: (o: PiRunOptions) => Promise<void>, rt: PiRuntime, provider: string, modelId: string): Complete {
 		return async (_model, system, user, signal) => {
@@ -475,9 +475,9 @@ export class ThreadRunner {
 				const historyFor = async (sh: typeof shape): Promise<AgentMessage[]> => {
 					let h = conv && conv.key === sh.key ? this.shrink(conv.messages) : [];
 					if (h.length && estimateContext(h).tokens + promptTokens > compactLine(sh.model.contextWindow)) h = (await this.compactHistory({ thread, rt, model: sh.model, history: h, signal, emit, keepRecent: sh.keepRecent })) ?? h;
-					// Antigravity keeps the conversation in its own session: past the line the old session stays and a new, compacted one takes over (its size is what the server reported, not a sum)
-					if (isAntigravity(sh.provider) && conv && conv.key === sh.key && conv.sessionId && (conv.tokens ?? 0) + promptTokens > compactLine(conv.window ?? sh.model.contextWindow)) {
-						const done = await this.compactSession({ thread, complete: this.sessionComplete(sh.engine, rt, sh.provider, sh.modelId), model: sh.model, key: sh.key, engine: "antigravity", sessionId: conv.sessionId, before: conv.tokens ?? 0, signal, emit });
+					// The Claude subscription and Antigravity keep the conversation in their own sessions: past the line the old session stays and a new, compacted one takes over (the size is the engine's own count of its last model call)
+					if (sh.claude && conv && conv.key === sh.key && conv.sessionId && (conv.tokens ?? 0) + promptTokens > compactLine(conv.window ?? sh.model.contextWindow)) {
+						const done = await this.compactSession({ thread, complete: this.sessionComplete(sh.engine, rt, sh.provider, sh.modelId), model: sh.model, key: sh.key, engine: isAntigravity(sh.provider) ? "antigravity" : "claude", sessionId: conv.sessionId, before: conv.tokens ?? 0, signal, emit });
 						if (done) {
 							conv = this.conversations.get(thread.id);
 							sh.resume = undefined;
@@ -934,20 +934,19 @@ export class ThreadRunner {
 		};
 	}
 
-	/** Summarizes the thread's conversation now; the caller guards against a run going on. Not for a Claude subscription (Claude compacts its own session). */
+	/** Summarizes the thread's conversation now; the caller guards against a run going on. */
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
 		const mf = this.modelFor(this.d.settings(), this.specOf(thread), thread);
-		if (isClaudeSub(mf.provider)) throw new Error("Claude abonementa sarunu Claude saspiež pats, kad tā tuvojas limitam. Jaunai tēmai sāc jaunu sarunu.");
 		const conv = this.conversations.get(thread.id);
-		if (isAntigravity(mf.provider)) {
-			// the server holds the conversation: the old session stays, the next message opens a new one from the summary
-			if (!conv || conv.key !== mf.key || !conv.sessionId) throw new Error("Nav ko saspiest: šīs sarunas Antigravity sesijas nav (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
-			const engine = this.d.antigravityRun;
-			if (!engine) throw new Error(ANTIGRAVITY_NOT_CONNECTED);
+		if (isAntigravity(mf.provider) || isClaudeSub(mf.provider)) {
+			// the engine holds the conversation in its own session: the old session stays, the next message opens a new one from the summary
+			if (!conv || conv.key !== mf.key || !conv.sessionId) throw new Error("Nav ko saspiest: šīs sarunas sesijas nav (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
+			const engine = this.engineOf(mf.provider);
+			if (!engine) throw new Error(isAntigravity(mf.provider) ? ANTIGRAVITY_NOT_CONNECTED : NOT_CONNECTED);
 			const rt = await this.d.runtime();
 			const before = conv.tokens ?? 0;
 			const events: RunEvent[] = [];
-			const done = await this.compactSession({ thread, complete: this.sessionComplete(engine, rt, mf.provider, mf.modelId), model: lookupAgentModel(rt, mf.provider, mf.modelId), key: mf.key, engine: "antigravity", sessionId: conv.sessionId, before, signal: signal ?? new AbortController().signal, emit: (e) => events.push(e) });
+			const done = await this.compactSession({ thread, complete: this.sessionComplete(engine, rt, mf.provider, mf.modelId), model: lookupAgentModel(rt, mf.provider, mf.modelId), key: mf.key, engine: isAntigravity(mf.provider) ? "antigravity" : "claude", sessionId: conv.sessionId, before, signal: signal ?? new AbortController().signal, emit: (e) => events.push(e) });
 			if (!done) throw new Error((events.find((e) => e.type === "compact" && e.phase === "failed") as { message?: string } | undefined)?.message ?? "Saspiešana neizdevās.");
 			const after = (events.find((e) => e.type === "compact" && e.phase === "done") as { after?: number } | undefined)?.after ?? 0;
 			return { before, after };

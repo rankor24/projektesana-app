@@ -8,6 +8,7 @@ import { createPiRuntime } from "../src/agent/pi/index.ts";
 import { archiveBody, archiveText, planSessionCompaction, SEED_TAIL, seedFromTranscript } from "../src/agent/session-compact.ts";
 import { ThreadRunner } from "../src/agent/thread-runner.ts";
 import { ANTIGRAVITY } from "../src/agent/antigravity/provider.ts";
+import { CLAUDE_SUB } from "../src/agent/claude/provider.ts";
 import type { AntigravityRunOptions } from "../src/agent/antigravity/run.ts";
 import { ThreadStore } from "../src/core/threads.ts";
 import type { ChatEntry } from "../src/shared/api.ts";
@@ -97,7 +98,7 @@ test("threads database: an original is stored once and read back whole, only thr
 });
 
 /** A runner whose Antigravity engine is a script: each real run opens a numbered session and reports a context size; a summarizer call (a session without the app's tools) answers with a fixed summary. */
-function rig(contexts: number[], window?: number) {
+function rig(contexts: number[], window?: number, provider: string = ANTIGRAVITY) {
 	const dir = tmp("agy-compact-");
 	const stores = new Map<string | null, ThreadStore>();
 	const threads = (p: string | null) => stores.get(p) ?? (stores.set(p, new ThreadStore(join(dir, `th-${p ?? "_"}`))), stores.get(p)!);
@@ -115,12 +116,14 @@ function rig(contexts: number[], window?: number) {
 		}
 		o.onSession?.(`sess-${++sessions}`);
 		// the turn's billed counts are far above the window (many model calls); the context size is the server's own figure
-		o.onEvent({ type: "usage", input: 1_700_000, output: 13_000, cacheRead: 1_500_000, cacheWrite: 0, cost: null, context: { used: contexts[run++] ?? 1000, ...(window ? { window } : {}) } });
+		// the Claude engine reports one usage per model call, and the last one is the context; Antigravity states it apart
+		const used = contexts[run++] ?? 1000;
+		o.onEvent(provider === CLAUDE_SUB ? { type: "usage", input: 2, output: 500, cacheRead: used - 500 - 2 - 1000, cacheWrite: 1000, cost: null } : { type: "usage", input: 1_700_000, output: 13_000, cacheRead: 1_500_000, cacheWrite: 0, cost: null, context: { used, ...(window ? { window } : {}) } });
 		o.onEvent({ type: "done", text: `atbilde ${run}` });
 	};
 	const runner = new ThreadRunner({
 		runtime: async () => rt,
-		settings: () => ({ ...DEFAULT_SETTINGS, provider: ANTIGRAVITY, model: "gemini-3.8-flash" }),
+		settings: () => ({ ...DEFAULT_SETTINGS, provider, model: provider === CLAUDE_SUB ? "claude-sonnet-5-5" : "gemini-3.8-flash" }),
 		toolsServer: () => ({ command: "node", args: [], env: {} }),
 		revit: () => null,
 		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
@@ -128,7 +131,7 @@ function rig(contexts: number[], window?: number) {
 		runsDir: join(dir, "runs"),
 		chatDir: join(dir, "chat"),
 		emit: () => undefined,
-		antigravityRun: antigravityRun as never,
+		...(provider === CLAUDE_SUB ? { claudeRun: antigravityRun as never } : { antigravityRun: antigravityRun as never }),
 		threads,
 		locks: new LockRegistry(),
 	});
@@ -219,4 +222,23 @@ test("a summary that fails leaves the thread as it was: the run goes on in the o
 	assert.ok(events.some((e) => e.type === "compact" && e.phase === "failed"));
 	assert.equal(threads(null).transcript(thread.id).some((e) => e.kind === "compaction"), false, "no compaction line without a summary");
 	assert.equal(threads(null).readArchive(thread.id, 1), null, "nothing archived");
+});
+
+test("the Claude subscription follows the same rule: past the line the old session stays, the original is stored, a new session starts from the summary", async () => {
+	const r = rig([250_000, 40_000], undefined, CLAUDE_SUB);
+	const store = r.store();
+	for (const e of chat(24)) store.append(r.thread.id, e);
+	await r.send("Pirmā ziņa");
+	assert.equal((await r.runner.context(r.thread)).used, 250_000, "the last model call's own count");
+	await r.send("Otrā ziņa");
+	assert.deepEqual(r.seen.map((s) => [s.summarizer, s.resume]), [[false, undefined], [true, undefined], [false, undefined]], "summary, then a NEW session (no resume)");
+	assert.match(r.seen[2].system ?? "", /TESTA KOPSAVILKUMS/);
+	const line = store.transcript(r.thread.id).find((e) => e.kind === "compaction")!;
+	const original = store.readArchive(r.thread.id, line.archive!)!;
+	assert.deepEqual({ engine: original.engine, sessionId: original.sessionId }, { engine: "claude", sessionId: "sess-1" });
+	assert.equal(JSON.parse(original.body)[0].text, "rinda 0");
+	// the manual button does the same
+	const before = store.transcript(r.thread.id).filter((e) => e.kind === "compaction").length;
+	await r.runner.compactNow(r.thread);
+	assert.equal(store.transcript(r.thread.id).filter((e) => e.kind === "compaction").length, before + 1);
 });
