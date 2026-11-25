@@ -2,6 +2,8 @@
 import { join } from "node:path";
 import type { ClaudeAccount } from "../../agent/claude/login.js";
 import { CLAUDE_SUB, isClaudeSub } from "../../agent/claude/provider.js";
+import type { AntigravityAccount } from "../../agent/antigravity/account.js";
+import { ANTIGRAVITY, ANTIGRAVITY_LABEL, isAntigravity } from "../../agent/antigravity/provider.js";
 import type { AgentSession } from "../../agent/session.js";
 import { readUsage, summarizeUsage } from "../../agent/usage.js";
 import type { ActivityLog } from "../activity.js";
@@ -21,6 +23,8 @@ export interface CoreDeps {
 	pi: () => Promise<PiRuntime>;
 	/** the Claude subscription's login (Sign in by `claude auth login`); absent in tests and where Claude is not built in */
 	claude?: ClaudeAccount;
+	/** Google Antigravity: install of its server, Google sign-in and the models of the account; absent in tests and where it is not built in */
+	antigravity?: AntigravityAccount;
 	emit<E extends EventName>(event: E, payload: EventSpec[E]): void;
 	pickFolder(title: string): Promise<string | null>;
 	pickFile(title: string, extensions: string[]): Promise<string | null>;
@@ -60,6 +64,17 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 				claudeNotice({ type: "ask", message: `Ielogojies Anthropic lapā un ielīmē kodu, ko tā parāda (ja pārlūks pats pabeidza, kods nav vajadzīgs). Saite: ${url}` });
 			})
 			.catch((e: Error) => claudeNotice({ type: "error", message: e.message }));
+	};
+	// Google Antigravity signs in here too: the app installs Google's own server once, then runs its `authenticate`; the notices are the other providers' (info while it installs, url, ask, done)
+	const antigravityLogin = () => {
+		const a = d.antigravity;
+		if (!a || !a.available) throw new Error("Google Antigravity šajā datorā nav pieejams.");
+		void a.login((n) => {
+			if (n.type === "url") d.openUrl(n.url);
+			if (n.type === "done") d.session.signedIn(ANTIGRAVITY);
+			d.emit("agent.login", { provider: ANTIGRAVITY, ...n } as EventSpec["agent.login"]);
+			if (n.type === "done" || n.type === "error") d.emit("data.changed", { projectId: null, what: ["agent"] });
+		});
 	};
 	/** a provider just signed in or got a key: its own model list now, not tomorrow */
 	const refreshNow = async (provider: string) => {
@@ -106,6 +121,15 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 					});
 					rows.push({ id: c.CLAUDE_SUB, label: c.CLAUDE_SUB_LABEL, auth: ["api_key"], configured: on, method: on ? (token ? "api_key" : "oauth") : undefined, keyHelp: c.CLAUDE_SUB_TOKEN_HELP, models: subModels });
 				}
+				// next to Gemini by API key: Google's models through the user's Google account (Antigravity's own server); the list is what the server told for this account
+				if (p.id === "google" && d.antigravity?.available) {
+					const a = d.antigravity;
+					a.refreshIfStale();
+					const on = a.peek().signedIn;
+					if (on) a.refreshCatalogIfStale();
+					const catalog = on ? await a.catalog() : null;
+					rows.push({ id: ANTIGRAVITY, label: ANTIGRAVITY_LABEL, auth: ["oauth"], configured: on, method: on ? "oauth" : undefined, models: (catalog?.models ?? []).map((x) => ({ id: x.id, name: x.name, legacy: false, efforts: x.variants.map((v) => v.id).filter((id) => (m.EFFORTS as readonly string[]).includes(id)), defaultEffort: "" })) });
+				}
 			}
 			// the providers' own model lists, fetched in the background when missing or a day old; the pickers reload when they arrive
 			void m.refreshStaleModels(rt, signedIn).then((done) => done.length && d.emit("data.changed", { projectId: null, what: ["agent"] }));
@@ -129,6 +153,7 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		},
 		"agent.login": async (provider) => {
 			if (isClaudeSub(provider)) return claudeLogin();
+			if (isAntigravity(provider)) return antigravityLogin();
 			const m = await import("../../agent/pi/index.js");
 			if (!m.isPiProvider(provider)) throw new Error(`Nezināms pakalpojums: ${provider}`);
 			login?.abort.abort();
@@ -161,11 +186,16 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		},
 		"agent.loginAnswer": (text) => {
 			if (claudeAsking) return d.claude?.complete(text);
+			if (d.antigravity?.asked) return d.antigravity.complete(text);
 			if (!login?.answer) throw new Error("Pieslēgšanās šobrīd neko negaida.");
 			login.answer(text);
 			login.answer = null;
 		},
 		"agent.loginCancel": async (provider) => {
+			if (isAntigravity(provider)) {
+				d.antigravity?.cancel();
+				return;
+			}
 			if (isClaudeSub(provider)) {
 				claudeCancelling = true;
 				claudeAsking = false;
@@ -184,6 +214,12 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 			return { login: info?.state ?? "unknown", token: !!d.settings.apiKey(CLAUDE_SUB), ...(info?.account ? { account: info.account } : {}), busy: claude?.busy ?? false };
 		},
 		"agent.logout": async (provider) => {
+			if (isAntigravity(provider)) {
+				if (!d.antigravity) throw new Error("Antigravity pieslēgšanās šeit nav pieejama.");
+				await d.antigravity.signOut();
+				d.emit("data.changed", { projectId: null, what: ["agent"] });
+				return;
+			}
 			if (isClaudeSub(provider)) {
 				if (!d.claude) throw new Error("Claude pieslēgšanās šeit nav pieejama.");
 				await d.claude.signOut();

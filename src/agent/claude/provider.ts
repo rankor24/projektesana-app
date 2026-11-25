@@ -6,6 +6,8 @@
 // Claude folder, src/agent/claude/login.ts) or by a `claude setup-token` the user pastes (a long-lived OAuth token). A pasted token wins.
 // Model facts (context window, images, efforts) come from pi's `anthropic` catalog: same models, same ids.
 
+import { ANTIGRAVITY } from "../antigravity/provider.js";
+
 export const CLAUDE_SUB = "claude-sub";
 
 export const CLAUDE_SUB_LABEL = "Claude (abonements)";
@@ -20,8 +22,9 @@ export const NOT_CONNECTED = "Claude abonements nav pieslēgts: Iestatījumi →
 
 export const isClaudeSub = (provider: string): boolean => provider === CLAUDE_SUB;
 
-/** The pi provider whose catalog describes this provider's models: Claude's for the subscription, the provider itself for the rest. */
-export const catalogProvider = (provider: string): string => (provider === CLAUDE_SUB ? "anthropic" : provider);
+/** The pi provider whose catalog describes this provider's models: Claude's for the subscription, Gemini's for Antigravity (its models come from the server and are
+ *  not in any catalog, so a model pi does not know is made up with the same window and image support), the provider itself for the rest. */
+export const catalogProvider = (provider: string): string => (provider === CLAUDE_SUB ? "anthropic" : provider === ANTIGRAVITY ? "google" : provider);
 
 /** The SDK's effort levels; pi's "off" and "minimal" have no SDK equivalent (then the model's default). */
 export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";

@@ -10,6 +10,7 @@
 // Adapted: OpenMausBot's "engine instances" and approval modes are this app's providers and agent specs; its capability list (MCP kinds, workspace files)
 // shrinks to the one capability here that differs between providers: images. The tools an agent has come from its spec, never from its provider.
 import type { AgentSpec } from "../../shared/agent-types.js";
+import { ANTIGRAVITY } from "../antigravity/provider.js";
 import { CLAUDE_SUB } from "../claude/provider.js";
 import { isPiProvider } from "../pi/providers.js";
 import type { ModelChoice, Settings } from "../../shared/types.js";
@@ -38,7 +39,7 @@ export function targetFor(spec: Pick<AgentSpec, "provider" | "model" | "effort">
 }
 
 /** A provider id this app can run: a pi provider, or the Claude subscription. */
-export const isKnownProvider = (p: string): boolean => p === CLAUDE_SUB || isPiProvider(p);
+export const isKnownProvider = (p: string): boolean => p === CLAUDE_SUB || p === ANTIGRAVITY || isPiProvider(p);
 
 const usable = (c: ModelChoice | null | undefined): c is ModelChoice => !!c && typeof c.provider === "string" && c.provider.trim() !== "";
 
@@ -79,7 +80,7 @@ export function passOver(from: Target, fromId: string, candidate: Target, f: Fac
 // ---- the checker ---------------------------------------------------------------------------------------------------------------------------
 
 /** The providers in the order the checker prefers them: the strongest models first. A product choice (Boris can change the order here), not a fact of any provider. */
-export const CHECKER_RANK: readonly string[] = ["claude-sub", "anthropic", "openai-codex", "openai", "google", "xai", "openrouter"];
+export const CHECKER_RANK: readonly string[] = ["claude-sub", "anthropic", "openai-codex", "openai", "antigravity", "google", "xai", "openrouter"];
 
 /** The provider an agent that checks others' work (eks) starts on when it has none of its own: the best ready provider that none of the authors runs on.
  *  Null when no such provider is ready; the checker then keeps the app's provider. */

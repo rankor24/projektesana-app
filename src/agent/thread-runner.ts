@@ -18,6 +18,7 @@ import { breakdown, compactLine, countImages, estimateContext, estimateTextToken
 import { focusText } from "./focus.js";
 import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime, type SteerHandle } from "./pi/index.js";
 import { catalogProvider, isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
+import { ANTIGRAVITY_NOT_CONNECTED, isAntigravity } from "./antigravity/provider.js";
 import { backupFor, classifyFailure, targetFor, type Failover, type Target } from "./failover/index.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
 import { fixedTokens, knowledgeFor, standingFor } from "./agents.js";
@@ -148,7 +149,7 @@ export class ThreadRunner {
 
 	/** The engine of a provider: the Claude Agent SDK for the Claude subscription, pi for every other. Undefined = the subscription engine is not built in. */
 	private engineOf(provider: string): ((o: PiRunOptions) => Promise<void>) | undefined {
-		return isClaudeSub(provider) ? this.d.claudeRun : (this.d.runAgent ?? runPi);
+		return isClaudeSub(provider) ? this.d.claudeRun : isAntigravity(provider) ? this.d.antigravityRun : (this.d.runAgent ?? runPi);
 	}
 
 	/** Images the thread's live conversation holds, for the attachment limits (0 when it is not in memory or the model changed). */
@@ -398,10 +399,13 @@ export class ThreadRunner {
 				// ones), the conversation's key and, for a Claude session, the one to resume
 				const shapeFor = (target: Target) => {
 					const model = lookupPiModel(rt, catalogProvider(target.provider), target.model);
-					const claude = isClaudeSub(target.provider);
-					if (claude && !this.d.claudeRun) throw new Error(NOT_CONNECTED);
+					// `claude` is true for the two engines whose own session holds the conversation (resume / onSession): the Claude Agent SDK and Antigravity's ACP server
+					const antigravity = isAntigravity(target.provider);
+					const claude = isClaudeSub(target.provider) || antigravity;
+					const sessionRun = antigravity ? this.d.antigravityRun : this.d.claudeRun;
+					if (claude && !sessionRun) throw new Error(antigravity ? ANTIGRAVITY_NOT_CONNECTED : NOT_CONNECTED);
 					const key = keyOf(target);
-					return { target, provider: target.provider, modelId: target.model, effort: (target.effort || undefined) as PiEffort | undefined, model, claude, engine: claude ? this.d.claudeRun! : (this.d.runAgent ?? runPi), key, resume: claude && conv && conv.key === key ? conv.sessionId : undefined, keepRecent: keepRecentFor(model.contextWindow) };
+					return { target, provider: target.provider, modelId: target.model, effort: (target.effort || undefined) as PiEffort | undefined, model, claude, engine: claude ? sessionRun! : (this.d.runAgent ?? runPi), key, resume: claude && conv && conv.key === key ? conv.sessionId : undefined, keepRecent: keepRecentFor(model.contextWindow) };
 				};
 				let shape = shapeFor(started.on);
 				this.lastOn.set(thread.id, started.on);
@@ -574,7 +578,7 @@ export class ThreadRunner {
 					const extraTools = [...lanes, ...mail];
 					const systemPrompt = h.length ? standing : withEarlier(seeded, seed.earlier);
 					// the agent log: what this attempt sends (the model, the system text, the prompt, the tools); everything that comes back arrives as events
-					this.d.agentLog?.start(runId, logMeta, { provider, model: modelId, engine: claude ? "claude" : "pi", ...(effort ? { effort } : {}), system: systemPrompt, prompt, tools: [...Object.values(mcp).flatMap((m) => [...m.allow]), ...extraTools.map((t) => t.name)], history: h.length, ...(resume ? { resumed: true } : {}), ...(retried ? { backup: true } : {}), ...(turnImages.length ? { images: turnImages.length } : {}) });
+					this.d.agentLog?.start(runId, logMeta, { provider, model: modelId, engine: isAntigravity(provider) ? "antigravity" : claude ? "claude" : "pi", ...(effort ? { effort } : {}), system: systemPrompt, prompt, tools: [...Object.values(mcp).flatMap((m) => [...m.allow]), ...extraTools.map((t) => t.name)], history: h.length, ...(resume ? { resumed: true } : {}), ...(retried ? { backup: true } : {}), ...(turnImages.length ? { images: turnImages.length } : {}) });
 					await engine({
 						runtime: rt,
 						provider,
@@ -866,6 +870,7 @@ export class ThreadRunner {
 	async compactNow(thread: Thread, signal?: AbortSignal): Promise<{ before: number; after: number }> {
 		const mf = this.modelFor(this.d.settings(), this.specOf(thread), thread);
 		if (isClaudeSub(mf.provider)) throw new Error("Claude abonementa sarunu Claude saspiež pats, kad tā tuvojas limitam. Jaunai tēmai sāc jaunu sarunu.");
+		if (isAntigravity(mf.provider)) throw new Error("Antigravity sarunu uztur pats Google serveris. Jaunai tēmai sāc jaunu sarunu.");
 		const conv = this.conversations.get(thread.id);
 		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();

@@ -7,3 +7,11 @@ Adapted here, each file naming its source in its header comment:
   checker's provider of server/host/limit-takeover.ts, server/host/peer-limit-resend.ts, server/drivers/engine-errors.ts,
   server/drivers/claude-limits.ts, server/drivers/retry.ts, server/limit-notices.ts, server/limit-failover.ts,
   server/automatic-recovery.ts and server/checker-model.ts. Rewritten for this application's engines, settings and agents.
+- src/agent/antigravity/ (the Google Antigravity engine): the release pin, the install, the isolated Google profile and launch environment, the
+  sign-in link and redirect checks, the sign-in flow, the Windows temp-folder sweep, the session setup and the model catalog of
+  server/drivers/antigravity-release.ts, antigravity-runtime.ts, antigravity-acp.ts, antigravity-auth.ts, antigravity-temp.ts and
+  antigravity.ts (+ acp/core.ts for the shared server process and session resume). Rewritten for this application: no bot box or relay,
+  Windows only, one shared server process, the app's tools offered through a local MCP bridge (not from OpenMausBot).
+  The Google Antigravity parts of OpenMausBot are themselves adapted from T3 Code, Copyright (c) 2026 T3 Tools Inc., used under the MIT
+  License (third_party/t3-code/LICENSE): pingdotgg/t3code apps/server/src/provider/antigravityAuthSupport.ts, antigravityCallback.ts,
+  AntigravityAuth.ts and acp/AntigravityAcpSupport.ts. Their notice stays with this code.

@@ -12,6 +12,10 @@ import type { PiRuntime } from "../agent/pi/index.js";
 import { ClaudeAccount } from "../agent/claude/login.js";
 import { CLAUDE_SUB } from "../agent/claude/provider.js";
 import type { ClaudeRunOptions } from "../agent/claude/run.js";
+import { AntigravityAccount } from "../agent/antigravity/account.js";
+import { AntigravityHost } from "../agent/antigravity/host.js";
+import { ANTIGRAVITY } from "../agent/antigravity/provider.js";
+import type { AntigravityRunOptions } from "../agent/antigravity/run.js";
 import { AgentSession } from "../agent/session.js";
 import { createHandlers } from "./api.js";
 import { registerIpc } from "./ipc.js";
@@ -175,6 +179,25 @@ const claudeRun = async (o: ClaudeRunOptions) =>
 		});
 	})))(o);
 
+// Google Antigravity (Google's ACP server, signed in with the user's Google account): one server process for the whole app, started on first use and
+// ended after ten idle minutes; its install, its profile and the models of the account are in <appData>\antigravity. The run loads on first use, like pi.
+// The relay it starts for the app's tools is dist/agent/antigravity/bridge-stdio.js, on Electron's own node.
+const antigravityHost = new AntigravityHost({ root: join(appDir, "antigravity"), nodePath: process.execPath, log: (line) => log(`antigravity: ${line}`) });
+const antigravityAccount = new AntigravityAccount({
+	host: antigravityHost,
+	onChange: () => emit("data.changed", { projectId: null, what: ["agent"] }),
+	// a finished sign-in ends a "signed out" hold on the provider (failover/holds.ts)
+	onSignedIn: () => session.signedIn(ANTIGRAVITY),
+	log: (line) => log(`antigravity: ${line}`),
+});
+void antigravityAccount.refresh();
+let antigravityEngine: Promise<(o: AntigravityRunOptions) => Promise<void>> | null = null;
+const antigravityRun = async (o: AntigravityRunOptions) =>
+	(await (antigravityEngine ??= import("../agent/antigravity/run.js").then((m) => {
+		mkdirSync(antigravityHost.folders.work, { recursive: true });
+		return m.createAntigravityRun({ host: antigravityHost, nodePath: process.execPath, bridgeScript: join(here, "..", "agent", "antigravity", "bridge-stdio.js"), log: (line) => log(`antigravity: ${line}`) });
+	})))(o);
+
 // The project search index (src/search): built in a background worker after every scan and conversation turn and a little after
 // the app starts; the model files are fetched into <appDir>\models on the first build. Declared before the session because its
 // thread callback asks for a run, and `registry` (further down) is only touched when a run starts.
@@ -205,6 +228,11 @@ const skillsDir = join(app.isPackaged ? process.resourcesPath : join(here, "..",
 const session = new AgentSession({
 	runtime: pi,
 	claudeRun,
+	antigravityRun,
+	antigravityConnected: () => {
+		antigravityAccount.refreshIfStale();
+		return antigravityAccount.peek().signedIn;
+	},
 	claudeConnected: () => {
 		if (settings.apiKey(CLAUDE_SUB)) return "setup-token";
 		claudeAccount.refreshIfStale();
@@ -335,6 +363,7 @@ const handlers = createHandlers({
 	agentLog,
 	pi,
 	claude: claudeAccount,
+	antigravity: antigravityAccount,
 	emit,
 	popouts,
 	pickFolder: async (title) => {
@@ -451,7 +480,7 @@ app.whenReady().then(() => {
 let closing = false;
 async function shutdown(): Promise<void> {
 	pageRenderer.close();
-	const closeAll = Promise.allSettled([searchIndex.dispose(), session.shutdown(), revit.close(), ocr.close(), claudeAccount.dispose()]);
+	const closeAll = Promise.allSettled([searchIndex.dispose(), session.shutdown(), revit.close(), ocr.close(), claudeAccount.dispose(), antigravityAccount.dispose()]);
 	popouts.closeAll();
 	await Promise.race([closeAll, new Promise((r) => setTimeout(r, 4000))]);
 }

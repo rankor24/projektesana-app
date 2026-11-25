@@ -35,6 +35,8 @@ extraResources:
     to: office-word.ps1
 asarUnpack:
   - dist/agent/tools/**
+  # the relay Google's Antigravity server starts for the app's tools (a node script run by a program outside the app)
+  - dist/agent/antigravity/bridge-stdio.js
   # claude.exe of the Claude Agent SDK (Claude subscription engine): an exe inside the asar cannot be started
   - node_modules/@anthropic-ai/claude-agent-sdk-*/**
   # onnxruntime.dll and its binding: a native library cannot be loaded from inside the asar

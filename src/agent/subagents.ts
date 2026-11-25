@@ -27,6 +27,7 @@ import { MAIL_TOOL_LEVELS } from "./mail.js";
 import { SELF_TOOL_NAMES } from "./tools/self-tools.js";
 import { lookupPiModel, type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
 import { catalogProvider, isClaudeSub } from "./claude/provider.js";
+import { isAntigravity } from "./antigravity/provider.js";
 import type { LogLane, LogStart } from "../shared/agent-log.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
 
@@ -229,7 +230,7 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 		try {
 			const lane: LogLane = { id: job.id, label: job.label, ...(job.agent ? { agent: job.agent } : {}) };
 			const mcp = deps.mcpFor(job.allowed, job.agentId);
-			deps.log?.start(lane, { provider: t.provider || (deps.base.provider ?? ""), model: t.model || (deps.base.modelId ?? ""), ...(t.effort ? { effort: t.effort } : {}), engine: isClaudeSub(t.provider || (deps.base.provider ?? "")) ? "claude" : "pi", system: job.system ?? "", prompt: job.task, tools: Object.values(mcp).flatMap((m) => [...m.allow]), history: 0 });
+			deps.log?.start(lane, { provider: t.provider || (deps.base.provider ?? ""), model: t.model || (deps.base.modelId ?? ""), ...(t.effort ? { effort: t.effort } : {}), engine: isAntigravity(t.provider || (deps.base.provider ?? "")) ? "antigravity" : isClaudeSub(t.provider || (deps.base.provider ?? "")) ? "claude" : "pi", system: job.system ?? "", prompt: job.task, tools: Object.values(mcp).flatMap((m) => [...m.allow]), history: 0 });
 			await deps.run({
 				...deps.base,
 				provider: t.provider || undefined,
