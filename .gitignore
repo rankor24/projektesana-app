@@ -15,3 +15,6 @@ resources/bimcraft/
 resources/cadcraft/
 .bimcraft-check/
 resources/revit-mcp/
+
+# local working notes, never commit
+docs/BD/

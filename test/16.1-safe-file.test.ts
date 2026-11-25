@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -46,6 +46,30 @@ test("snapshot copies the key files and keeps only the last 15", () => {
 	assert.equal(all.length, 15);
 	const last = join(d, "backups", all.sort().at(-1)!);
 	assert.ok(existsSync(join(last, "keys", "anthropic.key")) && existsSync(join(last, "chromium", "Local State")) && existsSync(join(last, "settings.json")));
+});
+
+test("snapshot copies project work (findings, notes, threads) but not rebuildable text and blobs", () => {
+	const d = tmp();
+	const p = join(d, "projects", "BD424");
+	for (const s of ["notes", "text", "blobs", "threads"]) mkdirSync(join(p, s), { recursive: true });
+	mkdirSync(join(d, "library"));
+	writeFileSync(join(p, "findings.json"), "[1]");
+	writeFileSync(join(p, "notes", "a.md"), "n");
+	writeFileSync(join(p, "threads", "t.json"), "t");
+	writeFileSync(join(p, "text", "x.txt"), "big");
+	writeFileSync(join(p, "blobs", "b"), "big");
+	writeFileSync(join(d, "library", "k.md"), "k");
+	const root = snapshotAppData(d)!;
+	const m = join(root, "mirror");
+	const q = join(m, "projects", "BD424");
+	assert.ok(existsSync(join(q, "findings.json")) && existsSync(join(q, "notes", "a.md")) && existsSync(join(q, "threads", "t.json")) && existsSync(join(m, "library", "k.md")));
+	assert.ok(!existsSync(join(q, "text", "x.txt")) && !existsSync(join(q, "blobs", "b")));
+	// the mirror only adds: a project's file deleted in the app is still in the mirror; a changed file is updated
+	rmSync(join(p, "findings.json"));
+	writeFileSync(join(p, "notes", "a.md"), "new text");
+	snapshotAppData(d);
+	assert.equal(readFileSync(join(q, "findings.json"), "utf8"), "[1]");
+	assert.equal(readFileSync(join(q, "notes", "a.md"), "utf8"), "new text");
 });
 
 test("snapshot of an empty data folder does nothing", () => {
