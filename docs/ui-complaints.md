@@ -429,3 +429,16 @@ Follows 2.10.2. His words (via the project chat): still not compact enough when 
 | The window is as tall as its icons need: when he lets go of the left or right edge, the height is fitted to the re-flowed icons (shrinks when there is empty room, grows when icons are cut off). A double-click on the grip fits it at any time (also after the page's tools change). Dragging the top or bottom edge is still free. | `TabGroup.tsx` (`fitToolsHeight`), `FloatingWindow.tsx` |
 
 **Test:** `test/9.0-layout.test.ts` (the tools window's minimum height; other windows unchanged). **Not checked live** (his rule): the fitting reads the real layout of the icons, which only the running app has.
+
+## 2026-11-25: Moving the small comment tools window made it bigger (version 2.13.3)
+
+His words: "weird behavior when i try to move resized smaller it gets bigger on it own" (two screenshots: the compact window, then a window about 290 x 200 with one colour dot wrapped).
+
+**Cause (found by reading, not reproduced live: his rule).** In the layout model a resize followed by a move keeps the size exactly (checked with a script over `resize`, `focus`, `move`, `normalize`, `toggle`). The problem is on screen: every floating window has resize grips over its top corners (22 x 22 px) and top edge, and in the widened header of 2.10.2 the grip glyph «⋮⋮» sits at the far left, exactly under the top-left corner grip. Pressing the glyph to move the window started a resize from the top-left corner, so dragging made the window bigger. The top-right corner grip covered the right edge of the window buttons the same way.
+
+| Change | Where |
+|---|---|
+| On the comment tools window the top corner grips are 8 x 8 px and the top edge grip 3 px (the other windows keep 22 / 6 px); the grip glyph moved 8 px right. Side and bottom grips are as before. | `styles.css` (`.fw:has(> .tg-slim) .fw-rz-*`, `.tg-grip`) |
+
+**Not checked live** (his rule). If it still grows when he moves it, the next suspect is the tab strip's own double-click, which fits the height (2.13.2); say where he pressed.
+

@@ -778,7 +778,11 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
 .tg-edge .tg-buttons button { width: 26px; height: 26px; }
 /* the comment tools' window given room (data-tier "m", set by TabGroup from its width): the grip and the window buttons share one row */
 .tg-slim[data-tier="m"] .tg-strip { flex-direction: row; align-items: center; padding: 2px 4px; }
-.tg-slim[data-tier="m"] .tg-grip { flex: 1; height: 24px; margin: 0; justify-content: flex-start; padding-left: 6px; }
+.tg-slim[data-tier="m"] .tg-grip { flex: 1; height: 24px; margin: 0; justify-content: flex-start; padding-left: 14px; }
+/* The tools window is small, so the resize grips of its top corners and top edge (22 px / 6 px on every window) would cover the
+   grip glyph and the window buttons: pressing the glyph resized the window instead of moving it ("it gets bigger on its own"). */
+.fw:has(> .tg-slim) .fw-rz-nw, .fw:has(> .tg-slim) .fw-rz-ne { width: 8px; height: 8px; }
+.fw:has(> .tg-slim) .fw-rz-n { height: 3px; left: 8px; right: 8px; }
 .tg-slim[data-tier="m"] .tg-buttons { flex: none; flex-direction: row; align-self: center; justify-content: flex-end; gap: 2px; }
 .tg-slim[data-tier="m"] .tg-buttons button { width: 28px; height: 24px; }
 
