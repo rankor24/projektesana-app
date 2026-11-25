@@ -9,7 +9,8 @@ import { type Complete } from "./compact.js";
 import { imageLimits } from "./context.js";
 import type { RunEvent, Settings } from "../shared/types.js";
 import { isPiProvider, lookupPiModel, PI_PROVIDERS, piAuthState, piProviderInfo, runPi, seesImages, type McpLaunchSpec, type PiRuntime } from "./pi/index.js";
-import { catalogProvider, CLAUDE_SUB, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
+import { CLAUDE_SUB, CLAUDE_SUB_LABEL, isClaudeSub } from "./claude/provider.js";
+import { lookupAgentModel } from "./agent-model.js";
 import { Failover, ProviderHolds } from "./failover/index.js";
 import type { ClaudeRunOptions } from "./claude/run.js";
 import { ANTIGRAVITY, ANTIGRAVITY_LABEL, isAntigravity } from "./antigravity/provider.js";
@@ -192,7 +193,7 @@ export class AgentSession {
 	/** A model as the catalogue knows it (the provider's default when none is named), and whether it takes images; null when unknown. */
 	private async describeModel(t: { provider: string; model: string }): Promise<{ id: string; images: boolean } | null> {
 		try {
-			const m = lookupPiModel(await this.d.runtime(), catalogProvider(t.provider), t.model);
+			const m = lookupAgentModel(await this.d.runtime(), t.provider, t.model);
 			return { id: m.id, images: seesImages(m) };
 		} catch {
 			return null;
@@ -224,7 +225,7 @@ export class AgentSession {
 			let images: boolean | null = null;
 			let limits: AgentStatus["imageLimits"] = null;
 			try {
-				const m = lookupPiModel(await this.d.runtime(), catalogProvider(s.provider), s.model);
+				const m = lookupAgentModel(await this.d.runtime(), s.provider, s.model);
 				images = seesImages(m);
 				limits = imageLimits(m);
 			} catch {
@@ -516,7 +517,7 @@ export class AgentSession {
 	/** The chosen model, or null when it cannot be looked up (the run itself reports why). */
 	private async modelOf(s: Settings): Promise<Model<Api> | null> {
 		try {
-			return lookupPiModel(await this.d.runtime(), catalogProvider(s.provider), s.model);
+			return lookupAgentModel(await this.d.runtime(), s.provider, s.model);
 		} catch {
 			return null;
 		}

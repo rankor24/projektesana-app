@@ -25,8 +25,9 @@ import { WriteLocks, lockKeyOf, type ProjectLocks } from "./locks.js";
 import { PROCESS_TOOLS_OF, PROCESS_OWN_TOOLS } from "../core/process-def.js";
 import { MAIL_TOOL_LEVELS } from "./mail.js";
 import { SELF_TOOL_NAMES } from "./tools/self-tools.js";
-import { lookupPiModel, type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
-import { catalogProvider, isClaudeSub } from "./claude/provider.js";
+import { type McpLaunchSpec, type PiEffort, type PiRunOptions } from "./pi/index.js";
+import { isClaudeSub } from "./claude/provider.js";
+import { lookupAgentModel } from "./agent-model.js";
 import { isAntigravity } from "./antigravity/provider.js";
 import type { LogLane, LogStart } from "../shared/agent-log.js";
 import { Gate, type Level, type LevelOf } from "./tools/levels.js";
@@ -215,7 +216,7 @@ async function runLane(deps: LaneDeps, job: Job, signal: AbortSignal): Promise<L
 	const modelName = (t: Target): string | undefined => {
 		if (t.provider === (deps.base.provider ?? "") && t.model === (deps.base.modelId ?? "")) return undefined;
 		try {
-			return `${t.provider}/${lookupPiModel(deps.base.runtime, catalogProvider(t.provider), t.model).id}`;
+			return `${t.provider}/${lookupAgentModel(deps.base.runtime, t.provider, t.model).id}`;
 		} catch {
 			return `${t.provider}/${t.model || "(noklusējums)"}`;
 		}

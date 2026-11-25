@@ -131,6 +131,12 @@ function synthesize(rt: PiRuntime, provider: string, id: string): Model<Api> | u
 	return { ...template, id, name: live.name ?? id, contextWindow: live.contextWindow ?? template.contextWindow } as Model<Api>;
 }
 
+function standInModel(rt: PiRuntime, provider: string, id: string): Model<Api> | undefined {
+	const siblings = rt.models.getModels(provider);
+	const template = siblings[siblings.length - 1];
+	return template ? ({ ...template, id, name: id } as Model<Api>) : undefined;
+}
+
 /**
  * The models of one provider. With a live list: exactly the provider's list (catalog details where pi knows the model), newest or
  * the provider's own order first. Without one: pi's catalog.
@@ -167,10 +173,14 @@ export function defaultPiModel(rt: PiRuntime, provider: PiProviderId): string | 
 	return (list.find((m) => !m.legacy) ?? list[0])?.id;
 }
 
-export function lookupPiModel(rt: PiRuntime, provider: string, modelId?: string): Model<Api> {
+/**
+ * `standIn`: the id is named by another engine's own list (Antigravity's server), not by this provider: an id neither pi's catalog nor a live list
+ * knows is made up from the provider's newest catalog model, so only the window and image facts are borrowed and the id is the server's.
+ */
+export function lookupPiModel(rt: PiRuntime, provider: string, modelId?: string, standIn = false): Model<Api> {
 	if (!isPiProvider(provider)) throw new Error(`Unknown provider "${provider}"`);
 	const id = modelId?.trim() || defaultPiModel(rt, provider);
-	const model = id ? (rt.models.getModel(provider, id) ?? synthesize(rt, provider, id)) : undefined;
+	const model = id ? (rt.models.getModel(provider, id) ?? synthesize(rt, provider, id) ?? (standIn ? standInModel(rt, provider, id) : undefined)) : undefined;
 	if (!model) throw new Error(`Unknown model "${id ?? ""}" for provider "${provider}"`);
 	return model;
 }

@@ -16,8 +16,9 @@ import { compactMessages, type Complete } from "./compact.js";
 import { appendUsage } from "./usage.js";
 import { breakdown, compactLine, countImages, estimateContext, estimateTextTokens, IMAGE_TOKENS, pruneImages, trimToolResults } from "./context.js";
 import { focusText } from "./focus.js";
-import { lookupPiModel, runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime, type SteerHandle } from "./pi/index.js";
-import { catalogProvider, isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
+import { runPi, streamFn, type McpLaunchSpec, type PiEffort, type PiRunOptions, type PiRuntime, type SteerHandle } from "./pi/index.js";
+import { isClaudeSub, NOT_CONNECTED } from "./claude/provider.js";
+import { lookupAgentModel } from "./agent-model.js";
 import { ANTIGRAVITY_NOT_CONNECTED, isAntigravity } from "./antigravity/provider.js";
 import { backupFor, classifyFailure, targetFor, type Failover, type Target } from "./failover/index.js";
 import { buildPrompt, withEarlier } from "./prompt.js";
@@ -398,7 +399,7 @@ export class ThreadRunner {
 				// everything that follows the choice of provider: the model, the engine (the Claude Agent SDK for a Claude subscription, pi for every other provider; lanes use the same
 				// ones), the conversation's key and, for a Claude session, the one to resume
 				const shapeFor = (target: Target) => {
-					const model = lookupPiModel(rt, catalogProvider(target.provider), target.model);
+					const model = lookupAgentModel(rt, target.provider, target.model);
 					// `claude` is true for the two engines whose own session holds the conversation (resume / onSession): the Claude Agent SDK and Antigravity's ACP server
 					const antigravity = isAntigravity(target.provider);
 					const claude = isClaudeSub(target.provider) || antigravity;
@@ -843,7 +844,7 @@ export class ThreadRunner {
 		// the thread's own agent: the lead's number is the guard's, a specialist's has its own text, declarations and model
 		const agent = this.specOf(thread);
 		const mf = this.modelFor(s, agent, thread);
-		const model = lookupPiModel(await this.d.runtime(), catalogProvider(mf.provider), mf.modelId);
+		const model = lookupAgentModel(await this.d.runtime(), mf.provider, mf.modelId);
 		const conv = this.conversations.get(thread.id);
 		const live = conv && conv.key === mf.key && conv.messages.length > 0 ? conv : null;
 		const est = live ? estimateContext(live.messages) : null;
@@ -874,7 +875,7 @@ export class ThreadRunner {
 		const conv = this.conversations.get(thread.id);
 		if (!conv || conv.key !== mf.key || !conv.messages.length) throw new Error("Nav ko saspiest: šīs sarunas konteksts atmiņā ir tukšs (jauna saruna, mainīts modelis vai lietotne pārstartēta).");
 		const rt = await this.d.runtime();
-		const model = lookupPiModel(rt, catalogProvider(mf.provider), mf.modelId);
+		const model = lookupAgentModel(rt, mf.provider, mf.modelId);
 		const history = this.shrink(conv.messages);
 		const before = estimateContext(conv.messages).tokens;
 		const c = await compactMessages(history, { complete: this.completeFn(rt), model, keepRecentTokens: keepRecentFor(model.contextWindow), signal, maxInputTokens: Math.floor(model.contextWindow * 0.7) });

@@ -27,7 +27,9 @@ import { antigravityEnd, antigravityEvents, antigravitySignInError, antigravityT
 import { AntigravityHost } from "../src/agent/antigravity/host.ts";
 import { resolveAntigravityReleaseAsset } from "../src/agent/antigravity/release.ts";
 import { antigravityPrompt, createAntigravityRun, relayEnv } from "../src/agent/antigravity/run.ts";
+import { lookupAgentModel } from "../src/agent/agent-model.ts";
 import { catalogProvider } from "../src/agent/claude/provider.ts";
+import { createPiRuntime, lookupPiModel } from "../src/agent/pi/models.ts";
 import { checkerProvider, isKnownProvider } from "../src/agent/failover/plan.ts";
 import { FIX, tmp } from "./helpers.ts";
 
@@ -174,6 +176,23 @@ test("the provider is known to the settings and the failover; its models are des
 	assert.equal(isKnownProvider("antigravity"), true);
 	assert.equal(catalogProvider("antigravity"), "google");
 	assert.equal(checkerProvider(["antigravity", "xai"], ["openai-codex"]), "antigravity", "ranked before xai");
+});
+
+test("a model id only Google's server knows is not an \"Unknown model\" (it was routed to the plain google provider's registry)", () => {
+	const rt = createPiRuntime({ path: join(tmp(), "pi.json"), apiKey: () => null });
+	// the plain Gemini provider still refuses an id that is in neither pi's catalog nor its live list
+	assert.throws(() => lookupPiModel(rt, "google", "gemini-4-neon"), /Unknown model "gemini-4-neon" for provider "google"/);
+	// Antigravity names its own models: the id stays the server's, the window and image support come from Gemini's catalog
+	const m = lookupAgentModel(rt, "antigravity", "gemini-4-neon");
+	assert.equal(m.id, "gemini-4-neon");
+	assert.ok(m.contextWindow > 0 && m.input.includes("image"));
+	// a model pi does know keeps its own facts; no model named = the catalog's default, as before
+	assert.equal(lookupAgentModel(rt, "antigravity", "gemini-pro-latest").id, "gemini-pro-latest");
+	assert.ok(lookupAgentModel(rt, "antigravity", "").id);
+	// the other engines are unchanged: Claude's subscription reads the anthropic catalog, and an unknown id there is still refused
+	assert.equal(lookupAgentModel(rt, "claude-sub", "claude-sonnet-5-5").id, "claude-sonnet-5-5");
+	assert.throws(() => lookupAgentModel(rt, "claude-sub", "gemini-4-neon"), /Unknown model/);
+	assert.throws(() => lookupAgentModel(rt, "google", "gemini-4-neon"), /Unknown model/);
 });
 
 test("the prompt: the standing instructions go with a new session only", () => {
