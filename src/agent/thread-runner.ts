@@ -67,6 +67,9 @@ const S5_OPEN = (name: string) => Object.hasOwn(MAIL_TOOL_LEVELS, name) || name.
 export const workCopyRefusal = (title: string): string =>
 	`Revit izmaiņa NAV izpildīta, un lietotājs partiju NENORAIDĪJA: lietotne Revit modeli maina tikai projekta darba kopijā (<nosaukums>_WORK.rvt lietotnes datu mapē), bet atvērtais dokuments «${title}» tāds nav. Izveido darba kopiju ar revit_save_copy (ja tas tev ir) vai lūdz lietotāju: Versijas → Revit → Darba kopija; tad atkārto izmaiņu. Biroja failā nerakstīs.`;
 
+/** What the agent is told when a message mixes open_document with other Revit changes: it was the app, not the user, and what to do. */
+export const OPEN_ALONE = "Revit partija NAV izpildīta, un lietotājs to NENORAIDĪJA: open_document maina aktīvo dokumentu, tāpēc tas jāizsauc atsevišķi, bez citiem Revit rīkiem tajā pašā ziņā. Atver dokumentu atsevišķi, tad izsauc izmaiņas nākamajā ziņā (tās iet tikai uz darba kopiju).";
+
 /** Keep this much of the newest conversation word for word when compacting: 20K, or 15% of a small window. */
 const keepRecentFor = (window: number) => Math.min(20_000, Math.floor(window * 0.15));
 
@@ -375,7 +378,14 @@ export class ThreadRunner {
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
 					// except a batch that only opens a document: opening the working copy is how an agent gets onto it (another project's model may be the active one),
 					// and the user sees the file in the card; the next batch that changes anything is held to the working copy again
-					const onlyOpens = req.batch.filter((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_")).every((b) => b.tool === "open_document");
+					const revitCalls = req.batch.filter((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
+					const onlyOpens = revitCalls.every((b) => b.tool === "open_document");
+					// opening a document changes which model is active, and the working-copy check below is made before the batch runs: so an open stands alone, or a change in the same
+					// message could land in the model that was opened (an office file). The user's rule, 2026-11-25: the original is never touched.
+					if (!onlyOpens && revitCalls.some((b) => b.tool === "open_document")) {
+						emit({ type: "text", text: "\n\n[lietotne] Revit partija nav izpildīta: open_document jāizsauc atsevišķi, bez citām Revit izmaiņām tajā pašā ziņā.\n\n" });
+						return OPEN_ALONE;
+					}
 					if (hasRevit && !onlyOpens && this.d.revitWork) {
 						const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
 						if (!w.ok) {

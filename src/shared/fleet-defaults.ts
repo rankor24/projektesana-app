@@ -85,9 +85,9 @@ export const FLEET_DEFAULTS: Readonly<Record<string, FleetDefault>> = {
 	el: { tools: uniq(COMMON, REVIT_READ, REVIT_WORK, ["stage_ifc"]), confirm: true, skills: SYNCED_IFC },
 	ess: { tools: uniq(COMMON, REVIT_READ, REVIT_WORK, ["stage_ifc"]), confirm: true, skills: SYNCED_IFC },
 	// fire safety: marks and colours compartments, writes the fire parameters, filters schedules, exports the fire plans
-	ud: { tools: uniq(COMMON, REVIT_READ, ["color_elements", "operate_element", "revit_set_parameter", "revit_set_view_settings", "revit_set_schedule_filter", "revit_export_pdf"]), confirm: true, skills: [] },
+	ud: { tools: uniq(COMMON, REVIT_READ, ["color_elements", "operate_element", "revit_set_parameter", "revit_set_view_settings", "revit_set_schedule_filter", "revit_export_pdf", "revit_save_copy"]), confirm: true, skills: [] },
 	// cost estimator: quantities and schedules from the model (filters a schedule), the delivery's documents
-	tam: { tools: uniq(COMMON, REVIT_READ, ["revit_set_schedule_filter"]), confirm: true, skills: [] },
+	tam: { tools: uniq(COMMON, REVIT_READ, ["revit_set_schedule_filter", "revit_save_copy"]), confirm: true, skills: [] },
 	// the independent expert: reads, never changes a model, facts or tasks
 	eks: { tools: uniq(EXPERT, REVIT_READ), confirm: false, skills: [] },
 	// the specialists that read the model for areas, volumes, levels and quantities and write their part as documents
@@ -115,15 +115,25 @@ export function withFleetDefaults<T extends { id: string; tools: string[]; maxLe
 	return next;
 }
 
-/** What was added to the roles' lists after the first set-up (each has its marker file in agents\, shared/fleet-defaults.ts users: main/handlers/agents.ts setupFleet): the version, and for each role the tools
- *  an existing agent of it gets once. An agent that has no `operate_element` (it does not model: it was never given the model tools) or no level cap "confirm" is left as it is. */
-export const FLEET_ADDITIONS: { marker: string; tools: Readonly<Record<string, readonly string[]>> }[] = [
-	{ marker: ".fleet-setup-2", tools: Object.fromEntries(["ar", "bk", "uk", "avk", "ga", "el", "ess"].map((id) => [id, ["delete_element"]])) },
+/** What was added to the roles' lists after the first set-up (each has its marker file in agents\, used by main/handlers/agents.ts setupFleet): for each role the tools an existing agent of it gets once.
+ *  `needs`: the agent must already hold one of these tools (it uses Revit that way at all); `confirm`: it must also have the level cap "confirm" (the tools added are confirm tools). */
+export interface FleetAddition {
+	marker: string;
+	tools: Readonly<Record<string, readonly string[]>>;
+	needs: readonly string[];
+	confirm: boolean;
+}
+const MODELLERS = ["ar", "bk", "uk", "avk", "ga", "el", "ess"];
+export const FLEET_ADDITIONS: FleetAddition[] = [
+	// 2.14.4: deleting, for the roles that model, once they have the model tools
+	{ marker: ".fleet-setup-2", tools: Object.fromEntries(MODELLERS.map((id) => [id, ["delete_element"]])), needs: ["operate_element"], confirm: true },
+	// 2.14.7: every role that changes a model can make its own working copy (the user's ruling of 2026-11-25: agents never touch the original, they work on a copy in the app's own folder)
+	{ marker: ".fleet-setup-3", tools: Object.fromEntries([...MODELLERS, "bpv", "ud", "tam"].map((id) => [id, ["revit_save_copy"]])), needs: ["get_current_view_info"], confirm: false },
 ];
 
-/** The spec with the tools of one addition: only a modeller (it has `operate_element`) with the level cap `confirm`, only tools that exist, no repeats. */
-export function withFleetAddition<T extends { id: string; tools: string[]; maxLevel?: "run" | "confirm" }>(spec: T, add: Readonly<Record<string, readonly string[]>>, have: { tools: ReadonlySet<string> }): T {
+/** The spec with the tools of one addition: only an agent that holds one of `needs` (and the level cap `confirm` when the addition says so), only tools that exist, no repeats. */
+export function withFleetAddition<T extends { id: string; tools: string[]; maxLevel?: "run" | "confirm" }>(spec: T, add: Readonly<Record<string, readonly string[]>>, have: { tools: ReadonlySet<string> }, rule: Pick<FleetAddition, "needs" | "confirm"> = { needs: ["operate_element"], confirm: true }): T {
 	const more = (add[spec.id] ?? []).filter((n) => have.tools.has(n) && !spec.tools.includes(n));
-	if (!more.length || !spec.tools.includes("operate_element") || spec.maxLevel !== "confirm") return spec;
+	if (!more.length || !rule.needs.some((n) => spec.tools.includes(n)) || (rule.confirm && spec.maxLevel !== "confirm")) return spec;
 	return { ...spec, tools: [...spec.tools, ...more] };
 }

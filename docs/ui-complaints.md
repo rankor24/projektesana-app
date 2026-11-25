@@ -605,3 +605,20 @@ His words (via the project chat): the agent's reply showed in the Log panel but 
 **Test:** `test/24.0-gate-refusal.test.ts` (a string from `ask` blocks with its own reason, a user's "no" still says so; a whole run whose Revit write is refused for the working copy: no click asked, no `error` event, the agent's reason says it was not the user, the chat lines go on with the reply; the attachment path in prompt, stored line and seed). **Not checked live** (his rule).
 
 **Not done / his call.** An agent that is told to "work directly in the office model" still cannot; it has to make the working copy first (`revit_save_copy`, which only some roles have, or his click). Whether the lead agent should have `revit_save_copy` is his call.
+
+## 2026-11-25: the original model is never touched; every role that changes a model can make its own working copy (version 2.14.7)
+
+His words (via the project chat), to "should agents be allowed to change the original model": "no, they get copy to own project folder, nothing is touched original on B: disk".
+
+**What already held.** Every Revit batch that changes the model runs only while the active document is the project's working copy (`<name>_WORK.rvt` in the project's data folder, in the app's own folder): the gate checks it before the click (`thread-runner.ts`), and `save_document` is such a batch too. `revit_save_copy` (level `run`) makes the copy: it saves the open model as the working copy and continues in it, the original is not written.
+
+**Gaps closed.**
+| Gap | Done in 2.14.7 |
+|---|---|
+| UD and TAM change the model (colours, parameters, schedule filters) but had no way to make the copy | `revit_save_copy` is in their lists. Every role that has a tool that changes a model has it (AR, BK, UK, AVK, GA, EL, ESS, UD, TAM), and BPV too (for sheets and exports). A fleet set up earlier gets it once at the first start (`FLEET_ADDITIONS`, marker `agents\.fleet-setup-3`): only an agent that already reads Revit; the readers and the expert do not change a model and get none. |
+| `open_document` changes the active model, and the working-copy check is made before the batch runs: an `open_document` of an office file followed by a change **in the same message** would have changed the original | An open stands alone: a message that mixes `open_document` with any other Revit change is refused before any click, and the agent is told it was the app, not the user, and to open first and change in the next message (`OPEN_ALONE`). A change in the next message is checked against the working copy again. |
+| The agent was not told what to do | The Revit rules every Revit agent works by now say: never change the original (also on B:); if the active document is not the working copy, make it with `revit_save_copy`; if the copy exists, open it with `open_document`, alone. |
+
+**Test:** `test/25.0-working-copy.test.ts` (4 tests: every role that changes a model can make the copy; the rules; the one-time addition; a whole run: `open_document` alone runs after the click with no working-copy check, mixed with a change it is refused without a click and without an `error` event, a change while another model is active is still refused). **Not checked live** (his rule): `revit_save_copy` and `open_document` on a real model.
+
+**Not done / his call.** Opening an original (to read or link it) is allowed, with his click: opening does not write the file. If he wants opens limited to the project's data folder, that is a one-line check.

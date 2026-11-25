@@ -242,7 +242,7 @@ export function agentHandlers(d: { settings: AppSettings; /** the synced skills 
 export function setupFleet(d: { settings: AppSettings; skillsDir?: string }): { applied: string[]; skipped: { id: string; why: string }[] } | null {
 	const dir = join(d.settings.dir, "agents");
 	const first = join(dir, ".fleet-setup-1");
-	const pending = [{ marker: first, apply: (s: AgentSpec, have: Have) => withFleetDefaults(s, have) }, ...FLEET_ADDITIONS.map((a) => ({ marker: join(dir, a.marker), apply: (s: AgentSpec, have: Have) => withFleetAddition(s, a.tools, have) }))].filter((x) => !existsSync(x.marker));
+	const pending = [{ marker: first, apply: (s: AgentSpec, have: Have) => withFleetDefaults(s, have) }, ...FLEET_ADDITIONS.map((a) => ({ marker: join(dir, a.marker), apply: (s: AgentSpec, have: Have) => withFleetAddition(s, a.tools, have, a) }))].filter((x) => !existsSync(x.marker));
 	if (!pending.length) return null;
 	if (d.settings.agentSpecs().shipped || !d.settings.agentSpecs().specs.length) return null;
 	const save = agentHandlers(d)["agents.save"] as (list: AgentSpec[]) => unknown;
