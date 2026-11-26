@@ -12,7 +12,7 @@
 // write as text), and run_command and deletes never come to `freeWrite`.
 //
 // `officeBlock` is asked twice: by the gate before it asks the user (so no click is even offered), and by the tool where it runs.
-import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { isInside } from "../../core/guard.js";
 import { workDirOf } from "../media.js";
@@ -170,10 +170,14 @@ export function officeBlock(ctx: WriteCtx, tool: string, args: unknown): string 
 	return null;
 }
 
+/** The file move_file takes for this `from`, found the way its run finds it (resolveRead with the same test), so the check and the move name the same file: a relative path means
+ *  the project folder, and the work folder only when the file is there and not in the project. */
 function resolveFrom(ctx: WriteCtx, p: string): string {
-	if (isAbsolute(p)) return resolve(p);
-	const root = projectRoot(ctx);
-	return root ? resolve(root, p) : resolve(workFolder(ctx), p);
+	try {
+		return resolveRead(ctx, p, existsSync);
+	} catch {
+		return resolve(workFolder(ctx), p); // no project and no such file in the work folder: nothing to protect, and the move fails by itself
+	}
 }
 
 /** The real path of a file inside the agent's work folder, or null when it is not a path the agent may write without asking. */

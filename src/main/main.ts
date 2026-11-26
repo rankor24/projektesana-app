@@ -33,7 +33,7 @@ import { snapshotAppData } from "../core/safe-file.js";
 import { ProjectEngine } from "./engine.js";
 import { RevitClient, defaultServerJs, launchSpec, localAppDataDir, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
 import { syncAddins } from "../revit/addin-install.js";
-import { revitRead } from "../revit/commands.js";
+import { revitRead, selectSession } from "../revit/commands.js";
 import { revitExport } from "../revit/exports.js";
 import { captureRevision, isWorkCopy } from "../revit/revision.js";
 import { REVIT_LEVELS, REVIT_TOOLS } from "../agent/tools/revit-levels.js";
@@ -262,10 +262,23 @@ const session = new AgentSession({
 		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;
 	},
 	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir, skillsDir },
-	revitWork: async (projectId) => {
+	revitWork: async (projectId, choice) => {
 		if (!projectId) return { ok: false, title: "nav projekta" };
-		const doc = await revitExport.docInfo(revit);
-		return { ok: isWorkCopy(registry.store(projectId), doc.path), title: doc.title };
+		try {
+			// the session the agent chose (select_revit_instance) is chosen here too: with two Revit sessions open the check follows the agent, and a second Revit with another project never blocks it
+			// a choice this connection cannot make leaves it on an older session, which says nothing about where the agent writes: handled below like no choice at all
+			if (choice && !(await selectSession(revit, choice))) throw new Error("select_revit_instance: lietotne nevarēja izvēlēties to pašu sesiju");
+			const doc = await revitExport.docInfo(revit);
+			return { ok: isWorkCopy(registry.store(projectId), doc.path), title: doc.title };
+		} catch (e) {
+			if (!/Revit sessions are running|select_revit_instance/i.test((e as Error).message)) throw e;
+			// several sessions and the agent has not chosen one: tell it which one holds this project's working copy
+			const store = registry.store(projectId);
+			const inst = await revitRead.instances(revit).catch(() => ({ selectedPid: null, instances: [] }));
+			const mine = inst.instances.filter((x) => x.documentPath && isWorkCopy(store, x.documentPath));
+			const where = mine.length ? `Šī projekta darba kopija ir atvērta sesijā pid ${mine.map((x) => x.pid).join(", ")}: izsauc select_revit_instance ar to un atkārto izmaiņu.` : "Neviena sesija nav šī projekta darba kopija: izvēlies ar select_revit_instance sesiju, kurā atvērts modelis, izveido darba kopiju ar revit_save_copy un atkārto izmaiņu.";
+			return { ok: false, title: "vairākas Revit sesijas", hint: `Revit izmaiņa NAV izpildīta, un lietotājs partiju NENORAIDĪJA: darbojas vairākas Revit sesijas, un lietotne nezina, kurā tu strādā. ${where} Citā sesijā (cita projekta modelī) nerakstīs.` };
+		}
 	},
 	isWorkCopyPath: (projectId, path) => {
 		try {
@@ -274,8 +287,9 @@ const session = new AgentSession({
 			return false;
 		}
 	},
-	afterBatch: async (projectId, summary) => {
+	afterBatch: async (projectId, summary, choice) => {
 		const store = registry.store(projectId);
+		if (choice) await revit.call("select_revit_instance", choice).catch(() => undefined);
 		const rev = await captureRevision(store, revit, { trigger: "agentBatch", summary, bimcraftApp: join(resourcesDir, "bimcraft", "app") });
 		const r = await engine.afterChange(store, "rooms");
 		emit("data.changed", { projectId, what: ["revisions", "findings"] });

@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LockRegistry } from "../src/agent/locks.ts";
 import { createPiRuntime } from "../src/agent/pi/index.ts";
-import { OPEN_ALONE, ThreadRunner } from "../src/agent/thread-runner.ts";
+import { OPEN_ALONE, SELECT_AFTER_CHANGE, ThreadRunner } from "../src/agent/thread-runner.ts";
+import { selectSession } from "../src/revit/commands.ts";
 import { REVIT_RULES } from "../src/agent/tools/revit.ts";
 import { FLEET_ADDITIONS, FLEET_DEFAULTS, withFleetAddition } from "../src/shared/fleet-defaults.ts";
 import { DEFAULT_SETTINGS, type RunEvent } from "../src/shared/types.ts";
@@ -52,6 +53,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 	const levels = { open_document: "confirm", create_level: "confirm", save_document: "confirm" } as const;
 	let result: { block?: boolean; reason?: string } | undefined;
 	let checked = 0;
+	const choices: (Record<string, unknown> | null)[] = [];
 	const asked: unknown[] = [];
 	const content = calls.map((name, i) => ({ type: "toolCall", id: `t${i}`, name, arguments: opts.args ?? {} }));
 	const runner = new ThreadRunner({
@@ -59,7 +61,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 		settings: () => DEFAULT_SETTINGS,
 		toolsServer: () => ({ command: "node", args: [], env: {} }),
 		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
-		revitWork: async () => (checked++, { ok: !!opts.work, title: "XY_AR (cits modelis)" }),
+		revitWork: async (_p, choice) => (checked++, choices.push(choice ?? null), { ok: !!opts.work, title: "XY_AR (cits modelis)" }),
 		isWorkCopyPath: (_p, path) => opts.isWork?.(path) ?? false,
 		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
 		agents: () => [spec],
@@ -77,7 +79,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 	const thread = store.create({ projectId: null, agent: "lead", title: "t", startedBy: "user" });
 	const events: RunEvent[] = [];
 	await runner.run({ runId: "r1", thread, spec: null, text: "atver darba kopiju", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: (e) => void events.push(e), ask: async (q) => (asked.push(q), allow) });
-	return { result, events, asked, checked };
+	return { result, events, asked, checked, choices };
 }
 
 test("open_document alone is allowed to run while another model is active (the user's click asks); mixed with a change in the same message it is refused without a click", async () => {
@@ -118,5 +120,104 @@ test("2.15.0 a Revit change (create, save, delete) on the working copy asks nobo
 		assert.equal(r.asked.length, 0, call);
 		assert.equal(r.checked, 1, `${call}: the working-copy check still ran`);
 		assert.equal(r.result, undefined);
+	}
+});
+
+test("2.15.1 the working-copy check follows the Revit session the agent chose with select_revit_instance (two sessions open), and asks nothing of another one", async () => {
+	// a select_revit_instance call comes first in the run; the next Revit change is checked with the same arguments
+	const dir = tmp("wc-sel-");
+	const store = new ThreadStore(join(dir, "th"));
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const spec = { id: "lead", name: "Lead", description: "", prompt: "", tools: [] };
+	const levels = { select_revit_instance: "read", create_level: "confirm" } as const;
+	const seen: (Record<string, unknown> | null)[] = [];
+	const afterBatchChoice: (Record<string, unknown> | null)[] = [];
+	const runner = new ThreadRunner({
+		runtime: async () => rt,
+		settings: () => DEFAULT_SETTINGS,
+		toolsServer: () => ({ command: "node", args: [], env: {} }),
+		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
+		revitWork: async (_p, choice) => (seen.push(choice ?? null), { ok: true, title: "XY_AR_WORK" }),
+		afterBatch: async (_p, _s, choice) => (afterBatchChoice.push(choice ?? null), "revīzija r1"),
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
+		agents: () => [spec],
+		runsDir: join(dir, "runs"),
+		chatDir: join(dir, "chat"),
+		emit: () => undefined,
+		threads: () => store,
+		locks: new LockRegistry(),
+		runAgent: async (o) => {
+			const sig = new AbortController().signal;
+			const call = (name: string, args: Record<string, unknown>) => ({ toolCall: { name, id: name, arguments: args }, args, assistantMessage: { content: [{ type: "toolCall", id: name, name, arguments: args }] } }) as never;
+			await o.beforeToolCall?.(call("select_revit_instance", { pid: 14488 }), sig);
+			await o.beforeToolCall?.(call("create_level", {}), sig);
+			o.onEvent({ type: "done", text: "gatavs" });
+		},
+	});
+	const thread = store.create({ projectId: "BD999", agent: "lead", title: "t", startedBy: "user" });
+	await runner.run({ runId: "r1", thread, spec: null, text: "izveido līmeņus", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
+	assert.deepEqual(seen, [{ pid: 14488 }], "the check was made on the chosen session, nobody was asked");
+	assert.deepEqual(afterBatchChoice, [{ pid: 14488 }], "the revision is taken from the same session");
+});
+
+/** A run whose model asks, in ONE assistant message, for these Revit calls in order; each goes through the gate as the engine would send it. */
+async function messageRun(calls: { name: string; args: Record<string, unknown> }[]) {
+	const dir = tmp("wc-msg-");
+	const store = new ThreadStore(join(dir, "th"));
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const spec = { id: "lead", name: "Lead", description: "", prompt: "", tools: [] };
+	const levels = { select_revit_instance: "read", create_level: "confirm" } as const;
+	const seen: (Record<string, unknown> | null)[] = [];
+	const results: ({ block?: boolean; reason?: string } | undefined)[] = [];
+	const runner = new ThreadRunner({
+		runtime: async () => rt,
+		settings: () => DEFAULT_SETTINGS,
+		toolsServer: () => ({ command: "node", args: [], env: {} }),
+		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
+		revitWork: async (_p, choice) => (seen.push(choice ?? null), { ok: true, title: "XY_AR_WORK" }),
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
+		agents: () => [spec],
+		runsDir: join(dir, "runs"),
+		chatDir: join(dir, "chat"),
+		emit: () => undefined,
+		threads: () => store,
+		locks: new LockRegistry(),
+		runAgent: async (o) => {
+			const content = calls.map((c, i) => ({ type: "toolCall", id: `t${i}`, name: c.name, arguments: c.args }));
+			const assistantMessage = { content };
+			for (const [i, c] of calls.entries()) {
+				const ctx = { toolCall: content[i], args: c.args, assistantMessage } as never;
+				results.push((await o.beforeToolCall?.(ctx, new AbortController().signal)) as never);
+				await o.afterToolCall?.({ toolCall: { id: `t${i}` } } as never, new AbortController().signal);
+			}
+			o.onEvent({ type: "done", text: "gatavs" });
+		},
+	});
+	const thread = store.create({ projectId: "BD999", agent: "lead", title: "t", startedBy: "user" });
+	await runner.run({ runId: "r1", thread, spec: null, text: "modele", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
+	return { seen, results };
+}
+
+test("2.15.1 a Revit session switch after a change in the same message is refused, so a later change cannot land in an unchecked session", async () => {
+	const r = await messageRun([
+		{ name: "select_revit_instance", args: { pid: 1 } },
+		{ name: "create_level", args: {} },
+		{ name: "select_revit_instance", args: { pid: 2 } },
+		{ name: "create_level", args: {} },
+	]);
+	assert.equal(r.results[0], undefined, "a choice before the changes runs");
+	assert.equal(r.results[1], undefined);
+	assert.equal(r.results[2]?.block, true, "the switch after a change is refused");
+	assert.equal(r.results[2]?.reason, SELECT_AFTER_CHANGE);
+	assert.match(SELECT_AFTER_CHANGE, /NENORAIDĪJA/);
+	assert.equal(r.results[3], undefined, "the next change stays on the checked session");
+	assert.deepEqual(r.seen, [{ pid: 1 }]);
+});
+
+test("2.15.1 the app counts its own session choice only when the Revit server says it made it", async () => {
+	const answer = (text: string) => ({ call: async () => text }) as never;
+	assert.equal(await selectSession(answer("Selected: pid 1  Revit 2026  port 8081  XY_AR_WORK"), { pid: 1 }), true);
+	for (const text of ["No running session matches. Running sessions:\n  pid 1", "More than one session matches; use pid:\n  pid 1", "Give pid or match. Running sessions:\n  pid 1", ""]) {
+		assert.equal(await selectSession(answer(text), { match: "AR" }), false, text);
 	}
 });

@@ -84,11 +84,11 @@ export interface SessionDeps {
 	/** is a Google account signed in to Antigravity (the last look at the disk; nothing is read here) */
 	antigravityConnected?: () => boolean;
 	/** is the active Revit document this project's working copy? (6.3) */
-	revitWork?: (projectId: string | null) => Promise<{ ok: boolean; title: string }>;
+	revitWork?: (projectId: string | null, choice?: Record<string, unknown> | null) => Promise<{ ok: boolean; title: string; /** what the agent is told instead of the generic refusal (several Revit sessions and none chosen) */ hint?: string }>;
 	/** is this file the project's working copy (<name>_WORK.rvt in its data folder)? An open_document of it needs no click; of any other file it does */
 	isWorkCopyPath?: (projectId: string | null, path: string) => boolean;
 	/** after a run with a confirmed batch: capture a revision, run the room check; returns a line for the chat (6.2) */
-	afterBatch?: (projectId: string, summary: string) => Promise<string>;
+	afterBatch?: (projectId: string, summary: string, choice?: Record<string, unknown> | null) => Promise<string>;
 	/** the providers that can run now; by default the ones with a key, a sign-in or a token stored (tests name them) */
 	ready?: () => Promise<ReadonlySet<string>>;
 	/** the provider holds changed (a limit was met, a hold ended): the settings page shows them */

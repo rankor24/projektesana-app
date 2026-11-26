@@ -211,6 +211,22 @@ test("2.15.0 in the work folder a copy of any file type and a move from the work
 	assert.equal(r.free("write_file", { path: "a.docx", content: "x" }), false, "write_file still writes text only");
 });
 
+test("2.15.1 a relative `from` of move_file is checked where the move reads it: the project folder first (refused), the work folder only when the file is there alone", async () => {
+	const r = rig();
+	mkdirSync(r.work, { recursive: true });
+	writeFileSync(join(r.work, "mans.pdf"), "x", "utf8");
+	assert.equal(r.block("move_file", { from: "mans.pdf", to: "arhivs/mans.pdf" }), null, "only in the work folder: not an office move");
+	await r.run("move_file", { from: "mans.pdf", to: "arhivs/mans.pdf" });
+	assert.equal(readFileSync(join(r.work, "arhivs", "mans.pdf"), "utf8"), "x");
+	// the same name in both: the move would take the office file, so it is refused, and it stays
+	writeFileSync(join(r.root, "abi.pdf"), "office", "utf8");
+	writeFileSync(join(r.work, "abi.pdf"), "mine", "utf8");
+	assert.match(r.block("move_file", { from: "abi.pdf", to: "x.pdf" }) ?? "", /neraksta nekad/);
+	assert.equal(r.free("move_file", { from: "abi.pdf", to: "x.pdf" }), false);
+	await assert.rejects(r.run("move_file", { from: "abi.pdf", to: "x.pdf" }), /neraksta nekad/);
+	assert.equal(readFileSync(join(r.root, "abi.pdf"), "utf8"), "office");
+});
+
 test("2.15.0 the tools that only change the app's own project data need no click; the ones that reach further keep it", async () => {
 	const { OWN_DATA_TOOLS } = await import("../src/agent/tools/levels.ts");
 	assert.deepEqual([...OWN_DATA_TOOLS].sort(), ["delete_inventory_rooms", "start_delivery", "unstage_file"]);
