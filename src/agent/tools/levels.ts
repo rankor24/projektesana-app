@@ -18,6 +18,23 @@ export const ALWAYS_NEVER = new Set(["send_code_to_revit"]);
 
 export type LevelOf = (tool: string) => Level;
 
+/** `confirm` tools that only change the app's own project data (never an office folder, never a model file): the draft delivery and its staging folder in the app's data folder, and the
+ *  room table the app read from a document (it can be read again from the document). The user's ruling of 2026-11-26: an agent works on its own where it touches only its own copy,
+ *  so these need no click. They stay `confirm` in the tables (a delegate lane still never gets them); the gate lifts the click (thread-runner.ts). */
+export const OWN_DATA_TOOLS: ReadonlySet<string> = new Set(["start_delivery", "unstage_file", "delete_inventory_rooms"]);
+
+/** The .rvt paths an `open_document` call names, wherever the Revit MCP puts them in its arguments (strings, a few levels of nesting). */
+export function rvtPathsOf(args: unknown): string[] {
+	const out: string[] = [];
+	const walk = (v: unknown, depth: number) => {
+		if (typeof v === "string") {
+			if (/\.rvt$/i.test(v.trim())) out.push(v.trim());
+		} else if (depth < 3 && v && typeof v === "object") for (const x of Object.values(v)) walk(x, depth + 1);
+	};
+	walk(args, 0);
+	return out;
+}
+
 /** The Revit tools an agent has instead of a shell: the names the refusal below gives the agent (kept next to the rule so they cannot drift apart). */
 export const REVIT_INSTEAD = "Revit MCP rīki (get_current_view_info, get_current_view_elements, operate_element, …) un lietotnes rīki revit_list_views, revit_open_view, revit_get_view_settings, revit_set_view_settings, revit_get_schedule, revit_set_schedule_filter, revit_list_models, revit_read_parameters, revit_set_parameter";
 
@@ -42,8 +59,8 @@ export function appShellBlock(command: string): string | null {
 	return "run_command nedrīkst startēt vai apturēt pašu lietotni (Projektesana.exe): kopija bez loga paliek fonā. Lietotni atver un aizver lietotājs; ja vajag testu, pasaki, kas jāpārbauda.";
 }
 
-/** Tools whose level depends on what they are asked to do. (Deleting model elements, delete_element and operate_element with "Delete", was never until 2.14.4; the user's ruling of
- *  2026-11-25, "obviously how else it can fix mistakes": it is a `confirm` action like every change of the model, one click per batch, on the working copy only.) */
+/** Tools whose level depends on what they are asked to do. (Deleting model elements, delete_element and operate_element with "Delete", was never until 2.14.4, then a click per batch;
+ *  since 2.15.0 no click either: a change of the model runs on the project's working copy only, and the gate checks that, never the user. The user's ruling of 2026-11-26.) */
 export function neverByArgs(tool: string, args: unknown): string | null {
 	if (tool === "run_command") {
 		const command = String((args as { command?: unknown } | null)?.command ?? "");

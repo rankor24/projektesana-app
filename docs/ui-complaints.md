@@ -622,3 +622,59 @@ His words (via the project chat), to "should agents be allowed to change the ori
 **Test:** `test/25.0-working-copy.test.ts` (4 tests: every role that changes a model can make the copy; the rules; the one-time addition; a whole run: `open_document` alone runs after the click with no working-copy check, mixed with a change it is refused without a click and without an `error` event, a change while another model is active is still refused). **Not checked live** (his rule): `revit_save_copy` and `open_document` on a real model.
 
 **Not done / his call.** Opening an original (to read or link it) is allowed, with his click: opening does not write the file. If he wants opens limited to the project's data folder, that is a one-line check.
+
+## 2026-11-26: agents work on their own where they touch only their own copy (version 2.15.0)
+
+His words: "Whats the point? asses all current tools so agents can work on their own" (after a "Confirm the batch: create_grid" card appeared while an agent was modelling on the working copy).
+
+**Ruling applied.** A click is asked only where an action can reach something the app does not own. Everything that only touches the project's working copy or the app's own folders runs on its own. The hard rules stay and no click ever lifts them: nothing is written into an office folder or an original model, `send_code_to_revit` is never offered, Revit is never driven by the shell, and a Revit change on a document that is not the working copy is refused by the app (the agent is told how to make the copy).
+
+**What lost its click in 2.15.0.**
+| Tool | Before | Now |
+|---|---|---|
+| Every Revit change (MCP: create, modify, `operate_element`, `color_elements`, `store_*`, `save_document`, `reload_links`; app: `revit_create_plans`, `revit_set_view_scale`, `revit_create_elevations`, `revit_create_sheet`, `revit_set_schedule_filter`, `revit_set_view_settings`, `revit_set_parameter`) | click per batch | no click; the working-copy check before each batch stays |
+| Revit delete (`delete_element`, `operate_element` Delete) | click per batch (2.14.4) | no click, working copy only. **Changed from what he agreed on 2026-11-25; he now asked for agents that work on their own.** The revision after the batch is still taken, so a mistake can be looked at and undone in Revit |
+| `open_document` of the project's working copy | click | no click (the file name is checked against the working copy); any other file still asks |
+| `write_file`, `edit_file`, `copy_file`, `move_file` | text note in the work folder was free | also a copy of any file type into the work folder, and a move from the work folder to the work folder; other paths still ask |
+| `delete_inventory_rooms`, `start_delivery`, `unstage_file` (and the screen calls `rooms.delete`, `deliveries.start`, `deliveries.unstage` the agent reaches through the app tools) | click | no click: the app's own table (it can be read again from the document) and the draft delivery's staging copy |
+
+**Still asks, and why.**
+| Tool | Why |
+|---|---|
+| `run_command` | a PowerShell line can do anything on the PC; the app can only catch the plain cases of writing into an office folder, so the click is the last line |
+| `open_document` of any file but the working copy | it may be an office model on B: |
+| `write_file`, `edit_file`, `copy_file`, `move_file` to a path outside the work folder, or `write_file` of a file that is not plain text | reaches the user's other files |
+| `memory_write_office` | the office's shared notes, read by every agent in every project |
+| `agent_configure` | changes what an agent may do |
+| the tools of an agent's own MCP server | the app cannot know what they do outside |
+| `app_confirm` calls | the user's own decisions (accept a fact, approve a gate, mark a delivery sent), copying into 1.4_Nodevumi, adding or forgetting a project, writing the inventory area into Revit |
+| A batch that holds one of the above next to a Revit change | one card for the whole batch |
+
+**Never, unchanged:** a write into an office folder or an original model; `send_code_to_revit`; Revit through the shell or UI automation; starting or stopping the app itself.
+
+**Test:** `test/24.0-gate-refusal.test.ts`, `test/25.0-working-copy.test.ts`, `test/21.1-free-writes.test.ts`, `test/19.1-room-delete.test.ts`. **Not checked live** (his rule): a Revit batch on a real working copy.
+
+## 2026-11-26: two Revit sessions open, every Revit change refused (version 2.15.1)
+
+His words (the agent's report, then his order): the app refused every change to the model ("aktīvais Revit dokuments (Code execution failed: 2 Revit sessions are running. Call select_revit_instance first …) nav šī projekta darba kopija"); "fix so it can work".
+
+**Cause.** The working-copy check reads the active document through the app's own Revit connection. The agent chooses its Revit session (`select_revit_instance`) in its own, separate Revit server process, so the app's connection never knew the choice, and with two Revit sessions open the Revit server answered "which session?" and the check refused. The second Revit (another project's session) blocked the agent even though the agent was connected to the project's working copy. This was there before 2.15.0; the click used to come after the check, so the check failed first.
+
+**Fix (2.15.1).**
+| Where | Now |
+|---|---|
+| The check (`thread-runner.ts`, `main.ts revitWork`) | The run remembers the arguments of the agent's `select_revit_instance` and the app makes the same choice on its own connection before it reads the document. The change is checked on the session the agent writes to; another session with another project never matters. |
+| The revision after a batch (`afterBatch`) | Takes the model from the same session. |
+| Two sessions and the agent has not chosen yet | The app does not guess. The agent is told (not "the user refused") which session holds this project's working copy (pid) and to select it, or that none does and to make the copy. The chat shows one line. |
+| The agent's rules | Rule 9: with several Revit sessions, select the one with this project's working copy first. The task texts no longer say "stop so the user approves" (the old first-batch stop of "Modelēt esošo ēku", "ar apstiprināmu partiju" in the pins task). |
+
+**Test:** `test/25.0-working-copy.test.ts` (a run with `select_revit_instance` then a change: the check and the revision get the chosen session's arguments, no click). **Not checked live** (his rule): two real Revit sessions; the app replays the agent's own arguments, so it does not depend on the argument name.
+
+**Found in review before the 2.15.1 build, fixed in the same version** (the build session's finding, not his words). With no click left, the working-copy check is the only guard, and two cases got past it.
+| Case | Before | Now |
+|---|---|---|
+| One message: change, `select_revit_instance` (another session), change | the check runs once per message, so the second change went to the unchecked session | the switch after a change is refused (`SELECT_AFTER_CHANGE`); the later change stays on the checked session |
+| A choice the Revit server cannot make (no match, several matches) | it answers with plain text, not an error, so the app kept its older session and checked that one | only "Selected: …" counts (`selectSession`); otherwise the change is refused and the agent is told to select by pid |
+| `move_file` with a relative `from` that is only in the work folder | refused as an office-folder move, so the 2.15.0 "no click inside the work folder" did not work (the one failing test) | checked where the move reads it: the project folder first (still refused), the work folder only when the file is there alone |
+
+A choice that is refused is no longer remembered. **Test:** `test/25.0-working-copy.test.ts`, `test/21.1-free-writes.test.ts`.

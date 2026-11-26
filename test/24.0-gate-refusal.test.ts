@@ -19,7 +19,7 @@ import type { ChatEntry } from "../src/shared/api.ts";
 import { DEFAULT_SETTINGS, type RunEvent } from "../src/shared/types.ts";
 import { tmp } from "./helpers.ts";
 
-const toolCtx = (name: string) => ({ toolCall: { name, id: "t", arguments: {} }, args: {}, assistantMessage: { content: [{ type: "toolCall", name, arguments: {} }] } }) as never;
+const toolCtx = (name: string, calls: string[] = [name]) => ({ toolCall: { name, id: "t", arguments: {} }, args: {}, assistantMessage: { content: calls.map((n, i) => ({ type: "toolCall", id: `t${i}`, name: n, arguments: {} })) } }) as never;
 
 test("Gate: a string from `ask` blocks the call with that reason; false is still the user's refusal", async () => {
 	const levelOf = makeLevelOf({ create_level: "confirm" });
@@ -39,7 +39,7 @@ test("the working-copy refusal tells the agent it was not the user, and what to 
 });
 
 /** A whole run whose model asks for one Revit write; `work` = whether the open document is the project's working copy, `allow` = the user's click. */
-async function writeRun(work: boolean, allow: boolean) {
+async function writeRun(work: boolean, allow: boolean, calls: string[] = ["create_level"]) {
 	const dir = tmp("refusal-");
 	const store = new ThreadStore(join(dir, "th"));
 	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
@@ -60,7 +60,7 @@ async function writeRun(work: boolean, allow: boolean) {
 		threads: () => store,
 		locks: new LockRegistry(),
 		runAgent: async (o) => {
-			result = (await o.beforeToolCall?.(toolCtx("create_level"), new AbortController().signal)) as typeof result;
+			result = (await o.beforeToolCall?.(toolCtx(calls[0]!, calls), new AbortController().signal)) as typeof result;
 			o.onEvent({ type: "text", text: "Atbilde pēc atteikuma." });
 			o.onEvent({ type: "done", text: "Atbilde pēc atteikuma." });
 		},
@@ -85,11 +85,20 @@ test("a Revit write on a document that is not the working copy: the agent is tol
 	assert.match(JSON.stringify(lines), /Atbilde pēc atteikuma/);
 });
 
-test("a Revit write the user refuses with the click still says so; one the user allows runs", async () => {
-	const no = await writeRun(true, false);
+test("2.15.0 a Revit write on the working copy runs with no click; on any other document it is still refused by the app, and the click is no way round that", async () => {
+	const yes = await writeRun(true, false);
+	assert.equal(yes.result, undefined, "runs although the user would have said no: nobody is asked");
+	assert.equal(yes.asked.length, 0, "no approval card");
+	const other = await writeRun(false, true);
+	assert.equal(other.result?.block, true);
+	assert.equal(other.asked.length, 0);
+});
+
+test("2.15.0 a batch with a call that is not a Revit change (a shell command) still asks the user, and a refusal there is the user's", async () => {
+	const no = await writeRun(true, false, ["create_level", "run_command"]);
+	assert.equal(no.asked.length, 1, "one card for the whole batch");
 	assert.match(no.result?.reason ?? "", /^Lietotājs šo partiju noraidīja/);
-	assert.equal(no.asked.length, 1);
-	const yes = await writeRun(true, true);
+	const yes = await writeRun(true, true, ["create_level", "run_command"]);
 	assert.equal(yes.result, undefined);
 });
 

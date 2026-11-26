@@ -83,6 +83,11 @@ export const revitRead = {
 	levels: async (r: RevitCaller) => parseLevels(await r.call("analyze_model_statistics", { includeDetailedTypes: false })),
 };
 
+/** Chooses the agent's Revit session on this connection too. The server answers a choice it cannot make with plain text, not an error, and keeps its old session: only "Selected: …" counts. */
+export async function selectSession(r: RevitCaller, choice: Record<string, unknown>): Promise<boolean> {
+	return /^Selected:/.test((await r.call("select_revit_instance", choice)).trim());
+}
+
 /** The user's click on a room row selects that element in Revit (Select only: one short call). */
 export async function revitSelect(r: RevitCaller, elementIds: number[]): Promise<void> {
 	if (!elementIds.length || elementIds.some((x) => !Number.isInteger(x))) throw new Error("Nederīgs elementa id.");

@@ -56,7 +56,7 @@ export const planningTools: ToolDef[] = [
 		name: "delete_inventory_rooms",
 		level: "confirm",
 		description:
-			"Delete wrong rooms from a property document's room table (the Telpas panel, comparison with the model, checks): the ids of the rows (list_rooms gives each room's id), or all: true for the whole table of that document. Waits for the user's click. The deleted rooms stay deleted when the document is read again; the Telpas panel's «Atjaunot no dokumenta» (or set_inventory_rooms with clear: true) brings the document's own rows back. To fix a room instead of removing it use edit_inventory_room.",
+			"Delete wrong rooms from a property document's room table (the Telpas panel, comparison with the model, checks): the ids of the rows (list_rooms gives each room's id), or all: true for the whole table of that document. Runs without a click (it is the app's own table, not the office file). The deleted rooms stay deleted when the document is read again; the Telpas panel's «Atjaunot no dokumenta» (or set_inventory_rooms with clear: true) brings the document's own rows back. To fix a room instead of removing it use edit_inventory_room.",
 		input: { sourceId: z.string(), rowIds: z.array(z.string()).optional().describe("room ids from list_rooms"), all: z.boolean().optional() },
 		run: async (ctx, a) => {
 			if (!a.all && !a.rowIds?.length) throw new Error("Vajag rowIds (telpu id no list_rooms) vai all: true.");

@@ -86,14 +86,14 @@ test("editing one room changes only it, keeps the others, and checks the values"
 	await assert.rejects(() => editRoom(s, "s_kl", "nope", { name: "x" }, "agent"), /nav/);
 });
 
-test("the agent has the tools, deleting waits for the click, and the screen's calls are levelled", async () => {
+test("the agent has the tools, deleting the app's own table needs no click (2.15.0), and the screen's calls are levelled", async () => {
 	const { planningTools, PLANNING_TOOL_DATA } = await import("../src/agent/tools/planning.ts");
 	const del = planningTools.find((t) => t.name === "delete_inventory_rooms")!;
 	const edit = planningTools.find((t) => t.name === "edit_inventory_room")!;
 	assert.equal(del.level, "confirm");
 	assert.equal(edit.level, "run");
 	assert.ok(PLANNING_TOOL_DATA.delete_inventory_rooms?.includes("rooms") && PLANNING_TOOL_DATA.edit_inventory_room?.includes("rooms"));
-	assert.equal(APP_CALL_LEVEL["rooms.delete"], "confirm");
+	assert.equal(APP_CALL_LEVEL["rooms.delete"], "run");
 	assert.equal(APP_CALL_LEVEL["rooms.update"], "run");
 	assert.equal(APP_CALL_LEVEL["rooms.restore"], "run");
 

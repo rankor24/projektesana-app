@@ -4,7 +4,7 @@
 // one short snippet through the app's own Revit client (like revit-commands.ts), with a nonce on every reply (exports.ts).
 //
 // Levels: the reads and "open a view" are `run` (auto): `run`, not `read`, so a lane or a specialist does not get them unless its spec lists them — a lane never uses Revit
-// (subagents.ts). A change to the model (a schedule's filters, a parameter's value) is `confirm`: the user clicks per batch, and only on the project's working copy
+// (subagents.ts). A change to the model (a schedule's filters, a parameter's value) is `confirm` in the table, but the gate lifts the click (2.15.0): it runs on its own, and only on the project's working copy
 // (thread-runner.ts: every `revit_*` batch). The C# runs in the add-in's Revit session, in the active document; reading from another open model is read-only.
 import { z } from "zod";
 import { runSnippet } from "../../revit/exports.js";
@@ -279,7 +279,7 @@ export const revitModelTools: ToolDef[] = [
 		name: "revit_set_schedule_filter",
 		level: "confirm",
 		description:
-			"Change a schedule's filters: op add | set (replace the filter on that field, or the one at `index`) | remove | clear (all). `field` is a field of the schedule by name (revit_get_schedule lists them, hidden ones too). `filterType`: Equal, NotEqual, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Contains, NotContains, BeginsWith, NotBeginsWith, EndsWith, NotEndsWith, HasValue, HasNoValue, HasParameter. `valueKind`: text (default), number (length and area in Revit's internal units: feet, square feet), integer, elementId. The user confirms the batch; only on the working copy.",
+			"Change a schedule's filters: op add | set (replace the filter on that field, or the one at `index`) | remove | clear (all). `field` is a field of the schedule by name (revit_get_schedule lists them, hidden ones too). `filterType`: Equal, NotEqual, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Contains, NotContains, BeginsWith, NotBeginsWith, EndsWith, NotEndsWith, HasValue, HasNoValue, HasParameter. `valueKind`: text (default), number (length and area in Revit's internal units: feet, square feet), integer, elementId. Runs without a click; only on the working copy.",
 		input: {
 			viewId: z.string().optional(),
 			name: z.string().optional(),
@@ -332,7 +332,7 @@ export const revitModelTools: ToolDef[] = [
 		name: "revit_set_view_settings",
 		level: "confirm",
 		description:
-			"Change a view's settings: `categories` [{ category: \"Rooms\", visible: true }], `cropActive`, `cropVisible`, `viewRange` { topMm, cutMm, bottomMm, viewDepthMm } (offsets from each plane's own level), `removeTemplate` (true detaches the view template: do that only when revit_get_view_settings shows the template controls what you need, and say so). A category that the view template controls is refused — read the template first. The user confirms the batch; only on the working copy.",
+			"Change a view's settings: `categories` [{ category: \"Rooms\", visible: true }], `cropActive`, `cropVisible`, `viewRange` { topMm, cutMm, bottomMm, viewDepthMm } (offsets from each plane's own level), `removeTemplate` (true detaches the view template: do that only when revit_get_view_settings shows the template controls what you need, and say so). A category that the view template controls is refused — read the template first. Runs without a click; only on the working copy.",
 		input: {
 			viewId: z.string().optional(),
 			name: z.string().optional(),
@@ -354,7 +354,7 @@ export const revitModelTools: ToolDef[] = [
 		name: "revit_set_parameter",
 		level: "confirm",
 		description:
-			"Set one parameter on many elements of the working model: `parameter` (name as Revit shows it) and `items` [{ elementId, value }]. Text and whole numbers are set as given; a number with units as you would type it in Revit (project units, e.g. \"12,5\"). Skips what has no such parameter, is read-only or is refused, and says which. Max 500 items per call. The user confirms the batch; only on the working copy. To copy values from another open model, read them there with revit_read_parameters (model) first.",
+			"Set one parameter on many elements of the working model: `parameter` (name as Revit shows it) and `items` [{ elementId, value }]. Text and whole numbers are set as given; a number with units as you would type it in Revit (project units, e.g. \"12,5\"). Skips what has no such parameter, is read-only or is refused, and says which. Max 500 items per call. Runs without a click; only on the working copy. To copy values from another open model, read them there with revit_read_parameters (model) first.",
 		input: { parameter: z.string().min(1), items: z.array(z.object({ elementId: z.string().regex(/^\d+$/), value: z.string() })).min(1).max(500) },
 		run: async (_ctx, a) => runSnippet(revit(), MODEL_SNIPPETS.setParameter, [a.parameter, a.items.map((i) => `${i.elementId}${US}${i.value}`).join(RS)], "auto"),
 	}),

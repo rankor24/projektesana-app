@@ -7,11 +7,12 @@
 //
 // The agent's own files (an analysis, a letter draft, a list) go to the app's per-project folder, `<app data>\agent-work\<project>`
 // (`workDirOf`), the same folder convert_file, unpack_archive and write_spreadsheet use. A relative path of a write tool means that folder.
-// A text file inside it needs no click (the old text is kept in <app data>\backups\agent first). Everything else keeps its click, and
-// run_command, move_file and deletes never come to `freeWrite`.
+// Inside it an agent needs no click: a text note (write_file, edit_file), a copy of any file type (copy_file), and a move from the work folder to the work folder
+// (move_file); the old text is kept in <app data>\backups\agent first. Everything else keeps its click (a path elsewhere on the PC, a file type write_file cannot
+// write as text), and run_command and deletes never come to `freeWrite`.
 //
 // `officeBlock` is asked twice: by the gate before it asks the user (so no click is even offered), and by the tool where it runs.
-import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { isInside } from "../../core/guard.js";
 import { workDirOf } from "../media.js";
@@ -23,7 +24,9 @@ type WriteCtx = Pick<ToolCtx, "projectId" | "projectsDir" | "appDir">;
 /** The tools that write, and the arguments that name what they write to (move_file also takes something away from `from`). */
 const TARGETS: Record<string, readonly string[]> = { write_file: ["path"], edit_file: ["path"], copy_file: ["to"], move_file: ["from", "to"] };
 /** The tools whose confirm level is lifted when `freeWrite` says so, and the argument that names the file they write. */
-const FREE: Record<string, "path" | "to"> = { write_file: "path", edit_file: "path", copy_file: "to" };
+const FREE: Record<string, "path" | "to"> = { write_file: "path", edit_file: "path", copy_file: "to", move_file: "to" };
+/** Tools that write bytes they copy or move, not text they are given: any file type may land in the work folder (a PDF, a drawing, an export). */
+const ANY_TYPE = new Set(["copy_file", "move_file"]);
 
 /** Plain-text kinds only: write_file writes text, so a .docx or .pdf written this way would be damaged, never "a note". */
 const TEXT = new Set([".md", ".markdown", ".txt", ".csv", ".tsv", ".json", ".yml", ".yaml", ".html", ".htm", ".log"]);
@@ -167,14 +170,18 @@ export function officeBlock(ctx: WriteCtx, tool: string, args: unknown): string 
 	return null;
 }
 
+/** The file move_file takes for this `from`, found the way its run finds it (resolveRead with the same test), so the check and the move name the same file: a relative path means
+ *  the project folder, and the work folder only when the file is there and not in the project. */
 function resolveFrom(ctx: WriteCtx, p: string): string {
-	if (isAbsolute(p)) return resolve(p);
-	const root = projectRoot(ctx);
-	return root ? resolve(root, p) : resolve(workFolder(ctx), p);
+	try {
+		return resolveRead(ctx, p, existsSync);
+	} catch {
+		return resolve(workFolder(ctx), p); // no project and no such file in the work folder: nothing to protect, and the move fails by itself
+	}
 }
 
 /** The real path of a file inside the agent's work folder, or null when it is not a path the agent may write without asking. */
-function inWork(ctx: WriteCtx, raw: string): string | null {
+function inWork(ctx: WriteCtx, raw: string, anyType = false): string | null {
 	if (raw.includes("\0")) return null;
 	const target = resolveWrite(ctx, raw);
 	// a stream name ("file.md:x") or a drive other than the folder's is never a note; after the drive letter no ":" may stay
@@ -187,10 +194,10 @@ function inWork(ctx: WriteCtx, raw: string): string | null {
 	const rel = relative(workReal, real);
 	if (isAbsolute(rel)) return null;
 	for (const seg of rel.split(/[\\/]/)) if (seg.startsWith(".") || seg.endsWith(" ") || seg.endsWith(".") || DEVICE.test(seg)) return null;
-	return TEXT.has(extname(real).toLowerCase()) ? real : null;
+	return anyType || TEXT.has(extname(real).toLowerCase()) ? real : null;
 }
 
-/** True when this call writes a text note inside the agent's work folder and needs no click. */
+/** True when this call writes inside the agent's work folder and needs no click: a text note (write, edit, copy), a copy of any file type, or a move from the work folder to the work folder. */
 export function freeWrite(ctx: WriteCtx, tool: string, args: unknown): boolean {
 	const field = FREE[tool];
 	if (!field) return false;
@@ -198,8 +205,17 @@ export function freeWrite(ctx: WriteCtx, tool: string, args: unknown): boolean {
 	if (typeof raw !== "string" || !raw.trim()) return false;
 	try {
 		if (officeBlock(ctx, tool, args)) return false;
-		const real = inWork(ctx, raw);
+		const real = inWork(ctx, raw, ANY_TYPE.has(tool));
 		if (!real) return false;
+		// a move takes the file away: it must come from the work folder too (a relative `from` is read where move_file reads it), and be a plain file
+		if (tool === "move_file") {
+			const from = (args as Record<string, unknown>).from;
+			if (typeof from !== "string" || !from.trim()) return false;
+			const src = inWork(ctx, resolveRead(ctx, from, (f) => { try { return lstatSync(f) !== undefined; } catch { return false; } }), true);
+			if (!src) return false;
+			const st = lstatSync(src);
+			if (!st.isFile() || st.isSymbolicLink() || st.nlink > 1) return false;
+		}
 		// an existing target must be a plain file the agent could rewrite: no link, no hard link
 		try {
 			const st = lstatSync(real);

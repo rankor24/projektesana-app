@@ -35,7 +35,7 @@ export const TASKS: TaskTemplate[] = [
 			"Uzdevums: esošās ēkas modelis no inventarizācijas (Kadastrālās lietas), darba kopijā.",
 			"1. Nolasi telpu tabulu un stāvus (avots ar telpu eksplikāciju; Telpas panelis) un, ja ir, plāna ģeometriju no vektoru PDF.",
 			"2. Nolasi esošo modeli (līmeņi, asis, telpas) ar lasīšanas rīkiem; to, kas jau ir, nepārbūvē.",
-			"3. Pirmā partija: līmeņi un asis. Apstāj, lai lietotājs apstiprina.",
+			"3. Pirmā partija: līmeņi un asis. Pārbaudi rezultātu ar lasīšanas rīkiem (līmeņi un asis tādi, kā vajag) un turpini; lietotāja klikšķis partijām nav vajadzīgs.",
 			"4. Nākamās partijas pa stāviem: ārsienas, tad iekšsienas (katra siena — viena siena; dala tikai ārējās/iekšējās sienas savienojumā; izvirzījumi ar plānām sienām), tad ailas, tad telpas ar numuru un nosaukumu no inventarizācijas.",
 			"5. Pēc katras partijas lietotne palaiž telpu pārbaudi: list_findings checkId=rooms. Labo, līdz katras telpas platība ir pielaidē.",
 			"6. Pēc katras partijas pārskats: ko izveidoji, kas atšķiras no inventarizācijas, kas nākamajā partijā.",
@@ -58,6 +58,6 @@ export const TASKS: TaskTemplate[] = [
 	{
 		id: "pins",
 		label: "Strādāt pie piezīmēm",
-		text: "Strādā pie lietotāja atvērtajām piezīmēm pēc kārtas. Katrai: izlasi, ko viņš prasa, izdari (ar apstiprināmu partiju, ja tā ir izmaiņa modelī), tad resolve_pin ar to, ko izmainīji.",
+		text: "Strādā pie lietotāja atvērtajām piezīmēm pēc kārtas. Katrai: izlasi, ko viņš prasa, izdari (izmaiņu modelī dari pats, darba kopijā), tad resolve_pin ar to, ko izmainīji.",
 	},
 ];

@@ -191,3 +191,44 @@ test("21.1 an Antigravity session is opened with the server's own writing, runni
 	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.5.1" } }), setup, "every version");
 	assert.deepEqual(antigravitySessionSetup({ agentInfo: { version: "1.4.3" } }, true), { _meta: { antigravity: { disabledTools: ["run_workflow"] } } }, "the minimal setup is the old one");
 });
+
+test("2.15.0 in the work folder a copy of any file type and a move from the work folder to the work folder need no click; a move in or out of anywhere else does", async () => {
+	const r = rig();
+	const other = tmp("pj-other-");
+	writeFileSync(join(other, "avots.pdf"), "pdf", "utf8");
+	assert.equal(r.free("copy_file", { from: join(other, "avots.pdf"), to: "kopija.pdf" }), true, "a PDF copied into the work folder");
+	assert.equal(r.free("copy_file", { from: join(other, "avots.pdf"), to: join(other, "kopija.pdf") }), false, "a copy elsewhere still asks");
+	assert.equal(r.free("copy_file", { from: join(other, "avots.pdf"), to: join(r.root, "kopija.pdf") }), false, "an office folder is never free");
+	mkdirSync(r.work, { recursive: true });
+	writeFileSync(join(r.work, "a.pdf"), "x", "utf8");
+	writeFileSync(join(other, "b.pdf"), "x", "utf8");
+	assert.equal(r.free("move_file", { from: "a.pdf", to: "arhivs/a.pdf" }), true, "work folder to work folder");
+	assert.equal(r.free("move_file", { from: join(r.work, "a.pdf"), to: join(r.work, "b.pdf") }), true);
+	assert.equal(r.free("move_file", { from: join(other, "b.pdf"), to: "b.pdf" }), false, "taking a file from elsewhere asks");
+	assert.equal(r.free("move_file", { from: join(r.work, "a.pdf"), to: join(other, "a.pdf") }), false, "taking a file out of the work folder asks");
+	assert.equal(r.free("move_file", { from: "nav_tada.pdf", to: "x.pdf" }), false, "a file that is not there");
+	assert.equal(r.free("move_file", { to: "x.pdf" }), false, "no `from`");
+	assert.equal(r.free("write_file", { path: "a.docx", content: "x" }), false, "write_file still writes text only");
+});
+
+test("2.15.1 a relative `from` of move_file is checked where the move reads it: the project folder first (refused), the work folder only when the file is there alone", async () => {
+	const r = rig();
+	mkdirSync(r.work, { recursive: true });
+	writeFileSync(join(r.work, "mans.pdf"), "x", "utf8");
+	assert.equal(r.block("move_file", { from: "mans.pdf", to: "arhivs/mans.pdf" }), null, "only in the work folder: not an office move");
+	await r.run("move_file", { from: "mans.pdf", to: "arhivs/mans.pdf" });
+	assert.equal(readFileSync(join(r.work, "arhivs", "mans.pdf"), "utf8"), "x");
+	// the same name in both: the move would take the office file, so it is refused, and it stays
+	writeFileSync(join(r.root, "abi.pdf"), "office", "utf8");
+	writeFileSync(join(r.work, "abi.pdf"), "mine", "utf8");
+	assert.match(r.block("move_file", { from: "abi.pdf", to: "x.pdf" }) ?? "", /neraksta nekad/);
+	assert.equal(r.free("move_file", { from: "abi.pdf", to: "x.pdf" }), false);
+	await assert.rejects(r.run("move_file", { from: "abi.pdf", to: "x.pdf" }), /neraksta nekad/);
+	assert.equal(readFileSync(join(r.root, "abi.pdf"), "utf8"), "office");
+});
+
+test("2.15.0 the tools that only change the app's own project data need no click; the ones that reach further keep it", async () => {
+	const { OWN_DATA_TOOLS } = await import("../src/agent/tools/levels.ts");
+	assert.deepEqual([...OWN_DATA_TOOLS].sort(), ["delete_inventory_rooms", "start_delivery", "unstage_file"]);
+	for (const keep of ["run_command", "memory_write_office", "agent_configure", "app_confirm", "write_file"]) assert.equal(OWN_DATA_TOOLS.has(keep), false, keep);
+});

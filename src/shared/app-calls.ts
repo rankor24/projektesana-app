@@ -3,7 +3,7 @@
 // (main/agent-bridge.ts), at the level set here:
 //   read     app_read: lists, tables, statuses, comparisons; nothing changes
 //   run      app_change: adds and changes the agent may make on its own (logged as the agent's, undoable where the app undoes)
-//   confirm  app_confirm: waits for the user's click: deletes, the user's own decisions (accept a fact, approve a gate),
+//   confirm  app_confirm: waits for the user's click: the user's own decisions (accept a fact, approve a gate),
 //            sending, copying into 1.4, writing into Revit, opening a program on the PC
 //   never    not for the agent: sign-in and API keys, window layout, file pickers, the agent's own controls, raw bytes
 // The record is typed over API_NAMES: a new IPC call without a level here does not compile.
@@ -99,7 +99,8 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"search.reindex": "run",
 	"search.query": "read",
 	"rooms.table": "read",
-	"rooms.delete": "confirm",
+	// the app's own project data, no click since 2.15.0 (the same as the tools delete_inventory_rooms, start_delivery, unstage_file)
+	"rooms.delete": "run",
 	"rooms.update": "run",
 	"rooms.restore": "run",
 	"rooms.compare": "read",
@@ -116,12 +117,12 @@ export const APP_CALL_LEVEL: Record<Name, AppCallLevel> = {
 	"deliveries.markSent": "confirm",
 	"deliveries.setPlanned": "run",
 	"deliveries.addPlanned": "run",
-	"deliveries.start": "confirm",
+	"deliveries.start": "run",
 	"deliveries.checklist": "read",
 	"deliveries.stageSheets": "run",
 	"deliveries.stageIfc": "run",
 	"deliveries.stageFile": "run",
-	"deliveries.unstage": "confirm",
+	"deliveries.unstage": "run",
 	"deliveries.renamePlan": "read",
 	"deliveries.renameApply": "confirm",
 	"deliveries.renameUndo": "confirm",
