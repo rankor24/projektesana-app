@@ -52,6 +52,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 	const levels = { open_document: "confirm", create_level: "confirm", save_document: "confirm" } as const;
 	let result: { block?: boolean; reason?: string } | undefined;
 	let checked = 0;
+	const choices: (Record<string, unknown> | null)[] = [];
 	const asked: unknown[] = [];
 	const content = calls.map((name, i) => ({ type: "toolCall", id: `t${i}`, name, arguments: opts.args ?? {} }));
 	const runner = new ThreadRunner({
@@ -59,7 +60,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 		settings: () => DEFAULT_SETTINGS,
 		toolsServer: () => ({ command: "node", args: [], env: {} }),
 		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
-		revitWork: async () => (checked++, { ok: !!opts.work, title: "XY_AR (cits modelis)" }),
+		revitWork: async (_p, choice) => (checked++, choices.push(choice ?? null), { ok: !!opts.work, title: "XY_AR (cits modelis)" }),
 		isWorkCopyPath: (_p, path) => opts.isWork?.(path) ?? false,
 		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
 		agents: () => [spec],
@@ -77,7 +78,7 @@ async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean;
 	const thread = store.create({ projectId: null, agent: "lead", title: "t", startedBy: "user" });
 	const events: RunEvent[] = [];
 	await runner.run({ runId: "r1", thread, spec: null, text: "atver darba kopiju", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: (e) => void events.push(e), ask: async (q) => (asked.push(q), allow) });
-	return { result, events, asked, checked };
+	return { result, events, asked, checked, choices };
 }
 
 test("open_document alone is allowed to run while another model is active (the user's click asks); mixed with a change in the same message it is refused without a click", async () => {
@@ -119,4 +120,41 @@ test("2.15.0 a Revit change (create, save, delete) on the working copy asks nobo
 		assert.equal(r.checked, 1, `${call}: the working-copy check still ran`);
 		assert.equal(r.result, undefined);
 	}
+});
+
+test("2.15.1 the working-copy check follows the Revit session the agent chose with select_revit_instance (two sessions open), and asks nothing of another one", async () => {
+	// a select_revit_instance call comes first in the run; the next Revit change is checked with the same arguments
+	const dir = tmp("wc-sel-");
+	const store = new ThreadStore(join(dir, "th"));
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const spec = { id: "lead", name: "Lead", description: "", prompt: "", tools: [] };
+	const levels = { select_revit_instance: "read", create_level: "confirm" } as const;
+	const seen: (Record<string, unknown> | null)[] = [];
+	const afterBatchChoice: (Record<string, unknown> | null)[] = [];
+	const runner = new ThreadRunner({
+		runtime: async () => rt,
+		settings: () => DEFAULT_SETTINGS,
+		toolsServer: () => ({ command: "node", args: [], env: {} }),
+		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
+		revitWork: async (_p, choice) => (seen.push(choice ?? null), { ok: true, title: "BD436_AR_WORK" }),
+		afterBatch: async (_p, _s, choice) => (afterBatchChoice.push(choice ?? null), "revīzija r1"),
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
+		agents: () => [spec],
+		runsDir: join(dir, "runs"),
+		chatDir: join(dir, "chat"),
+		emit: () => undefined,
+		threads: () => store,
+		locks: new LockRegistry(),
+		runAgent: async (o) => {
+			const sig = new AbortController().signal;
+			const call = (name: string, args: Record<string, unknown>) => ({ toolCall: { name, id: name, arguments: args }, args, assistantMessage: { content: [{ type: "toolCall", id: name, name, arguments: args }] } }) as never;
+			await o.beforeToolCall?.(call("select_revit_instance", { pid: 14488 }), sig);
+			await o.beforeToolCall?.(call("create_level", {}), sig);
+			o.onEvent({ type: "done", text: "gatavs" });
+		},
+	});
+	const thread = store.create({ projectId: "BD436", agent: "lead", title: "t", startedBy: "user" });
+	await runner.run({ runId: "r1", thread, spec: null, text: "izveido līmeņus", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
+	assert.deepEqual(seen, [{ pid: 14488 }], "the check was made on the chosen session, nobody was asked");
+	assert.deepEqual(afterBatchChoice, [{ pid: 14488 }], "the revision is taken from the same session");
 });

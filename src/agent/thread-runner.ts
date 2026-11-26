@@ -314,6 +314,10 @@ export class ThreadRunner {
 		const holder = `${label} (saruna «${thread.title}»${Number.isNaN(opened.getTime()) ? "" : ` ${opened.toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit" })}`})`;
 		let answer = "";
 		let confirmedBatches = 0;
+		// The Revit session this run chose with select_revit_instance (its arguments as the agent gave them). The agent's Revit server is its own process, so the app's own connection does not
+		// know the choice: with two Revit sessions open the app's working-copy check asked "which session?" and refused every change (seen 2026-11-26). The app now makes the same choice
+		// on its own connection before it checks or records a revision, so the check is made on the session the agent writes to, never on another one.
+		let revitChoice: Record<string, unknown> | null = null;
 		let failed = false;
 		let heldDone = false;
 		// the lane dependencies of the latest attempt (its model, its tools, its locks): what a check turn runs with
@@ -387,11 +391,11 @@ export class ThreadRunner {
 						return OPEN_ALONE;
 					}
 					if (hasRevit && !onlyOpens && this.d.revitWork) {
-						const w = await this.d.revitWork(projectId).catch((e: Error) => ({ ok: false, title: e.message }));
+						const w = await this.d.revitWork(projectId, revitChoice).catch((e: Error) => ({ ok: false, title: e.message, hint: undefined as string | undefined }));
 						if (!w.ok) {
 							// Not an `error` event: that ends the run in the window (card, chat, activity) while the run goes on. A text line tells the user; the agent gets the real reason, never "the user refused".
-							emit({ type: "text", text: `\n\n[lietotne] Revit izmaiņa nav izpildīta: aktīvais Revit dokuments (${w.title}) nav šī projekta darba kopija. Izveido to: Versijas → Revit → Darba kopija.\n\n` });
-							return workCopyRefusal(w.title);
+							emit({ type: "text", text: w.hint ? "\n\n[lietotne] Revit izmaiņa nav izpildīta: darbojas vairākas Revit sesijas, un aģents vēl nav izvēlējies, kurā strādā (select_revit_instance). Aģents to zina un izvēlēsies.\n\n" : `\n\n[lietotne] Revit izmaiņa nav izpildīta: aktīvais Revit dokuments (${w.title}) nav šī projekta darba kopija. Izveido to: Versijas → Revit → Darba kopija.\n\n` });
+							return w.hint ?? workCopyRefusal(w.title);
 						}
 					}
 					// No click for a change of the project's working copy (2.15.0, the user's ruling of 2026-11-26: the agents work on their own where they touch only their own copy). The checks above
@@ -440,6 +444,7 @@ export class ThreadRunner {
 					return agentId !== EKS && level !== "never" && LEVEL_RANK[level] >= LEVEL_RANK.propose && !S5_OPEN(name) && inS5() ? S5_BLOCK : null;
 				};
 				const beforeToolCall: NonNullable<Parameters<typeof runPi>[0]["beforeToolCall"]> = async (ctx, sig) => {
+					if (ctx.toolCall.name === "select_revit_instance") revitChoice = (ctx.args ?? ctx.toolCall.arguments ?? null) as Record<string, unknown> | null;
 					const refused = s5Refusal(ctx.toolCall.name);
 					if (refused) return { block: true, reason: refused };
 					const blocked = await gate.before(ctx);
@@ -885,7 +890,7 @@ export class ThreadRunner {
 			if (confirmedBatches > 0 && projectId && this.d.afterBatch) {
 				try {
 					emit({ type: "text", text: "\n\n[lietotne] Fiksē revīziju un pārbauda telpas…" });
-					const r = await this.d.afterBatch(projectId, answer.slice(0, 500));
+					const r = await this.d.afterBatch(projectId, answer.slice(0, 500), revitChoice);
 					emit({ type: "text", text: `\n[lietotne] ${r}` });
 				} catch (e) {
 					emit({ type: "error", engine: "pi", message: `Revīzija netika fiksēta: ${(e as Error).message}` });

@@ -653,3 +653,19 @@ His words: "Whats the point? asses all current tools so agents can work on their
 **Never, unchanged:** a write into an office folder or an original model; `send_code_to_revit`; Revit through the shell or UI automation; starting or stopping the app itself.
 
 **Test:** `test/24.0-gate-refusal.test.ts`, `test/25.0-working-copy.test.ts`, `test/21.1-free-writes.test.ts`, `test/19.1-room-delete.test.ts`. **Not checked live** (his rule): a Revit batch on a real working copy.
+
+## 2026-11-26: two Revit sessions open, every Revit change refused (version 2.15.1)
+
+His words (the agent's report, then his order): the app refused every change to the model ("aktīvais Revit dokuments (Code execution failed: 2 Revit sessions are running. Call select_revit_instance first …) nav šī projekta darba kopija"); "fix so it can work".
+
+**Cause.** The working-copy check reads the active document through the app's own Revit connection. The agent chooses its Revit session (`select_revit_instance`) in its own, separate Revit server process, so the app's connection never knew the choice, and with two Revit sessions open the Revit server answered "which session?" and the check refused. The second Revit (another project, his Duntes 8 session) blocked the agent even though the agent was connected to `BD436_AR_WORK`. This was there before 2.15.0; the click used to come after the check, so the check failed first.
+
+**Fix (2.15.1).**
+| Where | Now |
+|---|---|
+| The check (`thread-runner.ts`, `main.ts revitWork`) | The run remembers the arguments of the agent's `select_revit_instance` and the app makes the same choice on its own connection before it reads the document. The change is checked on the session the agent writes to; another session with another project never matters. |
+| The revision after a batch (`afterBatch`) | Takes the model from the same session. |
+| Two sessions and the agent has not chosen yet | The app does not guess. The agent is told (not "the user refused") which session holds this project's working copy (pid) and to select it, or that none does and to make the copy. The chat shows one line. |
+| The agent's rules | Rule 9: with several Revit sessions, select the one with this project's working copy first. The task texts no longer say "stop so the user approves" (the old first-batch stop of "Modelēt esošo ēku", "ar apstiprināmu partiju" in the pins task). |
+
+**Test:** `test/25.0-working-copy.test.ts` (a run with `select_revit_instance` then a change: the check and the revision get the chosen session's arguments, no click). **Not checked live** (his rule): two real Revit sessions; the app replays the agent's own arguments, so it does not depend on the argument name.
