@@ -44,7 +44,7 @@ test("a fleet set up before gets revit_save_copy once: only an agent that alread
 });
 
 /** A run whose model asks for ONE assistant message with the given Revit calls; `allow` = the user's click. */
-async function batchRun(calls: string[], allow: boolean) {
+async function batchRun(calls: string[], allow: boolean, opts: { work?: boolean; args?: Record<string, unknown>; isWork?: (p: string) => boolean } = {}) {
 	const dir = tmp("wc-");
 	const store = new ThreadStore(join(dir, "th"));
 	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
@@ -53,13 +53,14 @@ async function batchRun(calls: string[], allow: boolean) {
 	let result: { block?: boolean; reason?: string } | undefined;
 	let checked = 0;
 	const asked: unknown[] = [];
-	const content = calls.map((name, i) => ({ type: "toolCall", id: `t${i}`, name, arguments: {} }));
+	const content = calls.map((name, i) => ({ type: "toolCall", id: `t${i}`, name, arguments: opts.args ?? {} }));
 	const runner = new ThreadRunner({
 		runtime: async () => rt,
 		settings: () => DEFAULT_SETTINGS,
 		toolsServer: () => ({ command: "node", args: [], env: {} }),
 		revit: () => ({ command: "node", args: [], env: {}, tools: Object.keys(levels), levels }),
-		revitWork: async () => (checked++, { ok: false, title: "XY_AR (cits modelis)" }),
+		revitWork: async () => (checked++, { ok: !!opts.work, title: "XY_AR (cits modelis)" }),
+		isWorkCopyPath: (_p, path) => opts.isWork?.(path) ?? false,
 		ctx: { projectsDir: dir, dataDir: dir, appDir: dir },
 		agents: () => [spec],
 		runsDir: join(dir, "runs"),
@@ -69,7 +70,7 @@ async function batchRun(calls: string[], allow: boolean) {
 		locks: new LockRegistry(),
 		runAgent: async (o) => {
 			const first = calls[0]!;
-			result = (await o.beforeToolCall?.({ toolCall: { name: first, id: "t0", arguments: {} }, args: {}, assistantMessage: { content } } as never, new AbortController().signal)) as typeof result;
+			result = (await o.beforeToolCall?.({ toolCall: { name: first, id: "t0", arguments: opts.args ?? {} }, args: opts.args ?? {}, assistantMessage: { content } } as never, new AbortController().signal)) as typeof result;
 			o.onEvent({ type: "done", text: "gatavs" });
 		},
 	});
@@ -96,4 +97,26 @@ test("open_document alone is allowed to run while another model is active (the u
 	const change = await batchRun(["create_level"], true);
 	assert.equal(change.result?.block, true, "a change while another model is active is still refused");
 	assert.equal(change.checked, 1);
+});
+
+test("2.15.0 open_document of the project's working copy needs no click; of any other file (or a call that names no file) it still asks", async () => {
+	const isWork = (p: string) => /_WORK\.rvt$/i.test(p);
+	const mine = await batchRun(["open_document"], false, { args: { filePath: "C:\\data\\projects\\BD1\\work\\XY_AR_WORK.rvt" }, isWork });
+	assert.equal(mine.asked.length, 0, "the working copy opens on its own");
+	assert.equal(mine.result, undefined);
+	const office = await batchRun(["open_document"], true, { args: { filePath: "B:\\Projekti\\BD1\\XY_AR.rvt" }, isWork });
+	assert.equal(office.asked.length, 1, "an office model: the user sees the file and clicks");
+	const both = await batchRun(["open_document"], true, { args: { options: { files: ["C:\\x\\a_WORK.rvt", "B:\\o.rvt"] } }, isWork });
+	assert.equal(both.asked.length, 1, "one file that is not the copy is enough to ask");
+	const none = await batchRun(["open_document"], true, { isWork });
+	assert.equal(none.asked.length, 1, "no file named: ask");
+});
+
+test("2.15.0 a Revit change (create, save, delete) on the working copy asks nobody; a build without the working-copy check lifts nothing", async () => {
+	for (const call of ["create_level", "save_document"]) {
+		const r = await batchRun([call], false, { work: true });
+		assert.equal(r.asked.length, 0, call);
+		assert.equal(r.checked, 1, `${call}: the working-copy check still ran`);
+		assert.equal(r.result, undefined);
+	}
 });

@@ -267,6 +267,13 @@ const session = new AgentSession({
 		const doc = await revitExport.docInfo(revit);
 		return { ok: isWorkCopy(registry.store(projectId), doc.path), title: doc.title };
 	},
+	isWorkCopyPath: (projectId, path) => {
+		try {
+			return !!projectId && isWorkCopy(registry.store(projectId), path);
+		} catch {
+			return false;
+		}
+	},
 	afterBatch: async (projectId, summary) => {
 		const store = registry.store(projectId);
 		const rev = await captureRevision(store, revit, { trigger: "agentBatch", summary, bimcraftApp: join(resourcesDir, "bimcraft", "app") });

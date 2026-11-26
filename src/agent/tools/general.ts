@@ -1,6 +1,6 @@
 // The agent's general tools (2.6.9: "all regular agent tools", the ones a coding agent has): the web, the PC's files and the
 // shell. Reading is free; anything that writes, moves or runs waits for the user's click (level confirm, the batch gate shows
-// the exact path and command), except a text note in the agent's own work folder. The office project folders are read-only here
+// the exact path and command), except what stays in the agent's own work folder: a text note, a copy of any file, a move inside it (2.15.0). The office project folders are read-only here
 // whatever the click (project-write.ts `officeBlock`): a relative path of a write tool means the app's work folder
 // (<app data>\agent-work\<project>), never the project. Folders are never deleted (the user's standing rule). A file that is
 // overwritten is kept first under <data>\backups\agent so the user can take it back.
@@ -212,7 +212,7 @@ export const generalTools: ToolDef[] = [
 	tool({
 		name: "move_file",
 		level: "confirm",
-		description: "Move or rename a file (never a folder). The target must not exist. Neither end may be in an office project folder (read-only for you: refused); a relative target means your work folder. Waits for the user's click.",
+		description: "Move or rename a file (never a folder). The target must not exist. Neither end may be in an office project folder (read-only for you: refused); a relative target means your work folder. Runs without a click when both ends are in your work folder; any other path waits for the user's click.",
 		input: { from: z.string(), to: z.string() },
 		run: (ctx, a) => {
 			noOffice(ctx, "move_file", a);
@@ -228,7 +228,7 @@ export const generalTools: ToolDef[] = [
 	tool({
 		name: "copy_file",
 		level: "confirm",
-		description: "Copy a file (never a folder). An existing target is kept in the app's backups before it is replaced. The target may not be in an office project folder (read-only for you: refused); a relative target means your work folder, and a copy of a text file there needs no click. Any other target waits for the user's click.",
+		description: "Copy a file (never a folder). An existing target is kept in the app's backups before it is replaced. The target may not be in an office project folder (read-only for you: refused); a relative target means your work folder, and a copy of any file type there needs no click. Any other target waits for the user's click.",
 		input: { from: z.string(), to: z.string() },
 		run: (ctx, a) => {
 			noOffice(ctx, "copy_file", { to: a.to });

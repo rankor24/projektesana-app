@@ -1,4 +1,4 @@
-// "Nodot projektu" as agent tools (work plan 7.5). The agent starts a draft (the user confirms), reads its checklist, and
+// "Nodot projektu" as agent tools (work plan 7.5). The agent starts a draft (no click: it is the app's own data), reads its checklist, and
 // fills the staging folder: Revit sheets as PDF, the IFC, files the project already has. It has no tool that copies into
 // 1.4_Nodevumi and none that marks a delivery sent: those are the user's clicks only (7.6, 4.3).
 import { join } from "node:path";
@@ -19,7 +19,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function draft(ctx: ToolCtx, deliveryId?: string) {
 	const store = storeOf(ctx);
 	const d = activeDraft(store, deliveryId);
-	if (!d) throw new Error("Nav gatavojama nodevuma. Vispirms start_delivery (veids un datums) — lietotājs to apstiprina.");
+	if (!d) throw new Error("Nav gatavojama nodevuma. Vispirms start_delivery (veids un datums).");
 	return { store, d };
 }
 
@@ -37,7 +37,7 @@ export const deliveryTools: ToolDef[] = [
 		name: "start_delivery",
 		level: "confirm",
 		description:
-			"Start making a delivery (\"Nodot projektu\"): kind SKICE / MBP / BP / DT / STARP and the delivery date (YYYY-MM-DD, the date the office folder is named after). Creates the draft and its empty staging folder in the app's data folder. The user confirms.",
+			"Start making a delivery (\"Nodot projektu\"): kind SKICE / MBP / BP / DT / STARP and the delivery date (YYYY-MM-DD, the date the office folder is named after). Creates the draft and its empty staging folder in the app's data folder. Runs without a click.",
 		input: { kind: z.enum(DRAFT_KINDS), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) },
 		run: (ctx, { kind, date }) => {
 			const d = startDraft(storeOf(ctx), kind, date, "agent");
@@ -125,7 +125,7 @@ export const deliveryTools: ToolDef[] = [
 	tool({
 		name: "unstage_file",
 		level: "confirm",
-		description: "Remove one file from the delivery's staging folder (by its file name). The user confirms.",
+		description: "Remove one file from the delivery's staging folder (by its file name). Runs without a click; only the app's own staging copy, never an office file.",
 		input: { deliveryId: z.string().optional(), name: z.string().min(1) },
 		run: (ctx, { deliveryId, name }) => {
 			const { store, d } = draft(ctx, deliveryId);

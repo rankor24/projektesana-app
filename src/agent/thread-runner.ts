@@ -36,7 +36,7 @@ import type { Pin } from "../core/model.js";
 import { ctxEnv } from "./tools/context.js";
 import { allTools, appLevels } from "./tools/defs.js";
 import { PLANNING_TOOL_DATA } from "./tools/planning.js";
-import { Gate, makeLevelOf, offered, type ConfirmRequest } from "./tools/levels.js";
+import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
@@ -394,7 +394,17 @@ export class ThreadRunner {
 							return workCopyRefusal(w.title);
 						}
 					}
-					const ok = await i.ask(req);
+					// No click for a change of the project's working copy (2.15.0, the user's ruling of 2026-11-26: the agents work on their own where they touch only their own copy). The checks above
+					// are the hard rules and stay: not the working copy, never the office file; open_document alone; the seat. An open_document of any file but the working copy still asks (it
+					// may be an office model), and so does any call of the batch that is not a Revit change (run_command, an agent's own MCP server): the card then shows the whole batch.
+					const needsClick = (b: { tool: string; args: unknown }) => {
+						if (!(revitTools.has(b.tool) || b.tool.startsWith("revit_"))) return true;
+						// without the working-copy check (a build that has none) nothing is lifted
+						if (b.tool !== "open_document") return !this.d.revitWork;
+						const paths = rvtPathsOf(b.args);
+						return !paths.length || !paths.every((p) => this.d.isWorkCopyPath?.(projectId, p));
+					};
+					const ok = req.batch.some(needsClick) ? await i.ask(req) : true;
 					if (ok) {
 						// a confirmed Revit batch stays whole: other agents' Revit calls wait until it ends
 						if (hasRevit) {
@@ -410,7 +420,7 @@ export class ThreadRunner {
 						confirmedBatches++;
 					}
 					return ok;
-				}, (tool, args) => freeWrite({ ...this.d.ctx, projectId }, tool, args), (tool, args) => officeBlock({ ...this.d.ctx, projectId }, tool, args));
+				}, (tool, args) => OWN_DATA_TOOLS.has(tool) || freeWrite({ ...this.d.ctx, projectId }, tool, args), (tool, args) => officeBlock({ ...this.d.ctx, projectId }, tool, args));
 				// the lead's own writes take their lock after the gate has let them through, and free it when the call is done
 				const locks = this.d.locks;
 				const agentId = spec ? spec.id : LEAD_ID;
