@@ -91,3 +91,34 @@ test("25.1 readRevitChoice: no run folder, no file or a file that is not an obje
 	writeFileSync(join(dir, REVIT_CHOICE_FILE), "{broken", "utf8");
 	assert.equal(readRevitChoice(dir), null);
 });
+
+test("25.1 a screen's call (not strict): the session holding the working copy is chosen automatically; a choice the server does not take lets the call go on in the session it has", async () => {
+	const r = rig();
+	r.rc.strictChoice = false;
+	let listed = 0;
+	r.rc.choice = async (raw) => {
+		await raw("list_revit_instances", {});
+		listed++;
+		return { pid: 14488 };
+	};
+	assert.equal(await r.rc.call("export_room_data", {}), "ok in 14488");
+	assert.deepEqual(r.srv.calls, ["list_revit_instances", "select:14488", "export_room_data"]);
+	assert.equal(listed, 1);
+	const bad = rig();
+	bad.rc.strictChoice = false;
+	bad.rc.choice = () => ({ pid: 99999 });
+	await assert.rejects(bad.rc.call("export_room_data", {}), /2 Revit sessions are running/, "not accepted: the call is made anyway, and the server's own answer counts");
+});
+
+test("25.1 explicitly(): the agent's check of the working copy gets no automatic choice, so a screen cannot move the session under it", async () => {
+	const r = rig();
+	r.choose({ pid: 14488 });
+	let asked = 0;
+	r.rc.choice = () => (asked++, { pid: 17376 });
+	await r.rc.explicitly(async () => {
+		assert.equal(await r.rc.call("select_revit_instance", { pid: 14488 }), "Selected: pid 14488");
+		assert.equal(await r.rc.call("docInfo", {}), "ok in 14488");
+	});
+	assert.equal(asked, 0, "the provider was not asked inside explicitly()");
+	assert.deepEqual(r.srv.calls, ["select:14488", "docInfo"]);
+});

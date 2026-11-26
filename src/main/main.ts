@@ -33,7 +33,7 @@ import { snapshotAppData } from "../core/safe-file.js";
 import { ProjectEngine } from "./engine.js";
 import { RevitClient, defaultServerJs, launchSpec, localAppDataDir, resolveRevitLaunch, setBundledRevitDir, bundledRevitDir } from "../revit/client.js";
 import { syncAddins } from "../revit/addin-install.js";
-import { revitRead, selectSession } from "../revit/commands.js";
+import { parseInstances, revitRead, selectSession } from "../revit/commands.js";
 import { revitExport } from "../revit/exports.js";
 import { captureRevision, isWorkCopy } from "../revit/revision.js";
 import { REVIT_LEVELS, REVIT_TOOLS } from "../agent/tools/revit-levels.js";
@@ -262,7 +262,7 @@ const session = new AgentSession({
 		return l ? { ...launchSpec(l, process.execPath), tools: REVIT_TOOLS, levels: REVIT_LEVELS } : null;
 	},
 	ctx: { projectsDir: settings.projectsDir(), dataDir, appDir, skillsDir },
-	revitWork: async (projectId, choice) => {
+	revitWork: (projectId, choice) => revit.explicitly(async () => {
 		if (!projectId) return { ok: false, title: "nav projekta" };
 		try {
 			// the session the agent chose (select_revit_instance) is chosen here too: with two Revit sessions open the check follows the agent, and a second Revit with another project never blocks it
@@ -279,7 +279,7 @@ const session = new AgentSession({
 			const where = mine.length ? `Šī projekta darba kopija ir atvērta sesijā pid ${mine.map((x) => x.pid).join(", ")}: izsauc select_revit_instance ar to un atkārto izmaiņu.` : "Neviena sesija nav šī projekta darba kopija: izvēlies ar select_revit_instance sesiju, kurā atvērts modelis, izveido darba kopiju ar revit_save_copy un atkārto izmaiņu.";
 			return { ok: false, title: "vairākas Revit sesijas", hint: `Revit izmaiņa NAV izpildīta, un lietotājs partiju NENORAIDĪJA: darbojas vairākas Revit sesijas, un lietotne nezina, kurā tu strādā. ${where} Citā sesijā (cita projekta modelī) nerakstīs.` };
 		}
-	},
+	}),
 	isWorkCopyPath: (projectId, path) => {
 		try {
 			return !!projectId && isWorkCopy(registry.store(projectId), path);
@@ -287,14 +287,14 @@ const session = new AgentSession({
 			return false;
 		}
 	},
-	afterBatch: async (projectId, summary, choice) => {
+	afterBatch: (projectId, summary, choice) => revit.explicitly(async () => {
 		const store = registry.store(projectId);
 		if (choice) await revit.call("select_revit_instance", choice).catch(() => undefined);
 		const rev = await captureRevision(store, revit, { trigger: "agentBatch", summary, bimcraftApp: join(resourcesDir, "bimcraft", "app") });
 		const r = await engine.afterChange(store, "rooms");
 		emit("data.changed", { projectId, what: ["revisions", "findings"] });
 		return `revīzija ${rev.id}${rev.diffFromPrev ? ` (+${rev.diffFromPrev.added} −${rev.diffFromPrev.removed} ~${rev.diffFromPrev.changed})` : ""}; atvērtie atradumi: ${r.open}`;
-	},
+	}),
 	agents: () => settings.agentSpecs().specs,
 	departments: () => settings.departments().departments,
 	runsDir: join(appDir, "runs"),
@@ -346,6 +346,25 @@ try {
 	log(`revit add-in: sync failed: ${(e as Error).message}`);
 }
 const revit = new RevitClient(() => resolveRevitLaunch(settings.get()), process.execPath);
+// The screens' own Revit calls (rooms, selecting a room in Revit, status, the comparison): with several Revit sessions open they use the one session that holds a project's working copy; with none or
+// several of them they stay on the session the server already has, as before. The agent's check of the working copy does not use this: it selects the agent's own choice (revitWork).
+revit.strictChoice = false;
+let screenPick: { at: number; pick: Record<string, unknown> | null } = { at: 0, pick: null };
+revit.choice = async (raw) => {
+	if (Date.now() - screenPick.at < 2000) return screenPick.pick;
+	let pick: Record<string, unknown> | null = null;
+	try {
+		const inst = parseInstances(await raw("list_revit_instances", {}));
+		if (inst.instances.length > 1) {
+			const mine = inst.instances.filter((x) => x.documentPath && registry.list().some((p) => isWorkCopy(registry.store(p.id), x.documentPath!)));
+			if (mine.length === 1) pick = { pid: mine[0].pid };
+		}
+	} catch {
+		pick = null;
+	}
+	screenPick = { at: Date.now(), pick };
+	return pick;
+};
 {
 	// one line per start: what this process sees when it looks for the Revit MCP server
 	const s = settings.get();
