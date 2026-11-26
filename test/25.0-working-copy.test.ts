@@ -2,6 +2,7 @@
 // Every role that changes a model can make its own working copy (revit_save_copy); opening a document stands alone in its batch, so a change in the same message can not land in
 // the model that was just opened.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { LockRegistry } from "../src/agent/locks.ts";
@@ -158,6 +159,8 @@ test("2.15.1 the working-copy check follows the Revit session the agent chose wi
 	await runner.run({ runId: "r1", thread, spec: null, text: "izveido līmeņus", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
 	assert.deepEqual(seen, [{ pid: 14488 }], "the check was made on the chosen session, nobody was asked");
 	assert.deepEqual(afterBatchChoice, [{ pid: 14488 }], "the revision is taken from the same session");
+	// the revit_* tools run in the tools server (another process): the choice reaches it in a file in the run's folder
+	assert.deepEqual(JSON.parse(readFileSync(join(dir, "runs", "r1", "revit-choice.json"), "utf8")), { pid: 14488 });
 });
 
 /** A run whose model asks, in ONE assistant message, for these Revit calls in order; each goes through the gate as the engine would send it. */

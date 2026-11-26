@@ -1,7 +1,7 @@
 // The app's named Revit commands as agent tools (work plan "Agent tools": run level — exports, working copy, view geometry,
 // the room table; confirm level — the named commands of phase 6 that create views and sheets). They run in the tools
 // server with its own Revit client; every call carries a nonce (exports.ts). Files land in the project's data folder only.
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { checkWrite } from "../../core/guard.js";
@@ -15,11 +15,25 @@ import { tool, type ToolDef } from "./tool.js";
 
 let client: RevitClient | null = null;
 /** The tools server's own Revit client (one per process), shared by the Revit command and delivery tools. */
+/** The file the app writes into the run's folder when the agent calls select_revit_instance (thread-runner.ts); the tools server reads it before each Revit call. */
+export const REVIT_CHOICE_FILE = "revit-choice.json";
+export function readRevitChoice(runDir: string | null | undefined): Record<string, unknown> | null {
+	if (!runDir) return null;
+	try {
+		const v = JSON.parse(readFileSync(join(runDir, REVIT_CHOICE_FILE), "utf8")) as unknown;
+		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
 export function revit(): RevitClient {
 	const serverJs = process.env.PROJEKTESANA_REVIT_JS || null;
 	const node = process.env.PROJEKTESANA_REVIT_NODE || null;
 	setBundledRevitDir(process.env.PROJEKTESANA_REVIT_BUNDLED || null);
 	client ??= new RevitClient(() => resolveRevitLaunch({ revitServerJs: serverJs, revitNode: node }), process.execPath);
+	// every revit_* tool of this process follows the session the agent chose; the run's folder is this process's own (PROJEKTESANA_RUN)
+	client.choice ??= () => readRevitChoice(process.env.PROJEKTESANA_RUN);
 	if (!client.configured()) throw new Error("nav konfigurēts: Revit MCP serveris nav atrasts.");
 	return client;
 }
