@@ -3,6 +3,8 @@
 // Order of help: the add-in's own handler answers what Revit's API events show, at once (its log lines are in the same revit-dialogs.jsonl). This watcher is independent of it: it looks
 // at Revit's windows every few seconds, and a popup that is still open after `graceMs` (the add-in did not or could not answer it, the user did not either) goes to the computer-use
 // helper (dialog-agent.ts). What the helper may not answer, or could not clear, is said to the user in the chat, once. One watcher per run that holds Revit.
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 import { dirname, join } from "node:path";
 import { appendDialogLog, chatLine, dialogLogFile, LogTail, type DialogLogLine, type DialogWindow, type PolicyContext } from "../revit/dialog-policy.js";
 import { powershellRun, RevitScreen } from "../revit/screen.js";
@@ -166,6 +168,39 @@ export function startRevitDialogWatch(o: StartWatch): () => void {
 	const stop = () => clearInterval(timer);
 	o.signal.addEventListener("abort", stop, { once: true });
 	return stop;
+}
+
+/** What the app did in Revit that the agent must know (an answered popup, a rolled-back change). The pi engine takes it as a message at once (steer); the Claude and
+ *  Antigravity engines cannot be steered, so the notice waits here until the agent calls `dialog_notices` (the Revit rules say to do so after a timeout or an error). */
+export class Notices {
+	private list: string[] = [];
+	push(text: string): void {
+		if (!this.list.includes(text)) this.list.push(text);
+		if (this.list.length > 20) this.list.shift();
+	}
+	/** Takes all of them (each is told once). */
+	take(): string[] {
+		const out = this.list;
+		this.list = [];
+		return out;
+	}
+}
+
+export const DIALOG_NOTICES_TOOL = "dialog_notices";
+
+/** The agent's way to read the notices on every engine. Read level: it changes nothing. */
+export function dialogNoticesTool(n: Notices): AgentTool<any> {
+	const schema = Type.Object({});
+	return {
+		name: DIALOG_NOTICES_TOOL,
+		label: "Revit: lietotnes ziņas",
+		description: "What the app did in Revit while your call waited: a popup it answered or left to the user, a change Revit rolled back. Call it after a Revit call times out or fails, and before repeating a batch.",
+		parameters: schema,
+		execute: async () => {
+			const t = n.take();
+			return { content: [{ type: "text", text: t.length ? t.join("\n\n") : "Nav jaunu ziņu: lietotne Revit logos neko nedarīja." }], details: {} };
+		},
+	} as AgentTool<any>;
 }
 
 /** Is `p` the project's working copy or inside the app's own folder? (the watcher's `own`) */

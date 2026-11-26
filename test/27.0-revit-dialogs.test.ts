@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { dialogTools, describe, runDialogAgent, type DialogAgentDeps } from "../src/agent/dialog-agent.ts";
-import { DialogWatch } from "../src/agent/dialog-watch.ts";
+import { dialogNoticesTool, DialogWatch, Notices } from "../src/agent/dialog-watch.ts";
 import { appendDialogLog, assess, buttonAt, buttonKind, chatLine, decide, dialogLogFile, pathsIn, type DialogLogLine, type DialogWindow, type PolicyContext } from "../src/revit/dialog-policy.ts";
 import { normalizePopup, RevitScreen } from "../src/revit/screen.ts";
 import { tmp } from "./helpers.ts";
@@ -378,4 +378,19 @@ test("watcher: a screen that cannot be read (locked, no script) is said once and
 	await w.tick();
 	await w.tick();
 	assert.deepEqual(logs.map((l) => [l.action, l.reason]), [["failed", "no desktop"]]);
+});
+
+test("notices: what the app did in Revit waits for the agent on engines that cannot be steered; each is told once, the same one is not queued twice", async () => {
+	const n = new Notices();
+	const tool = dialogNoticesTool(n);
+	const read = async () => ((await (tool as any).execute("id", {})) as { content: { text: string }[] }).content[0].text;
+	assert.match(await read(), /Nav jaunu/);
+	n.push("[lietotne] logs «A» atbildēts");
+	n.push("[lietotne] logs «A» atbildēts");
+	n.push("[lietotne] izmaiņa atcelta");
+	const first = await read();
+	assert.equal(first.split("\n\n").length, 2);
+	assert.match(first, /«A»/);
+	assert.match(await read(), /Nav jaunu/);
+	assert.equal(tool.name, "dialog_notices");
 });

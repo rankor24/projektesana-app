@@ -39,7 +39,7 @@ import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
 import { choiceFile, pickSession, readChoice } from "../revit/target.js";
-import { ownPathOf, startRevitDialogWatch } from "./dialog-watch.js";
+import { dialogNoticesTool, Notices, ownPathOf, startRevitDialogWatch } from "./dialog-watch.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -336,6 +336,7 @@ export class ThreadRunner {
 		let stopDialogWatch = null as (() => void) | null;
 		// the engine's way to put a message into the running conversation (null when it has none, or between attempts)
 		let steerNow: SteerHandle | null = null;
+		const notices = new Notices();
 		// who this run is, for the agent log
 		const logMeta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId, wave: i.wave };
 		// the run's end frees whatever its tool calls or its Revit batch still hold, whatever way it ends
@@ -726,13 +727,13 @@ export class ThreadRunner {
 							act: () => this.d.settings().revitDialogsOnScreen !== false,
 							active: () => revitFlight.open.size > 0 || Date.now() - revitFlight.last < 90_000,
 							maxTurns: 14,
-							tell: (text) => steerNow?.push({ text }, () => undefined),
+							tell: (text) => (steerNow ? steerNow.push({ text }, () => undefined) : notices.push(text)),
 						});
 					}
 					const lanes = spec ? [] : subagentTools(laneDeps);
 					// send_message and close_topic, and for every agent report_answer; BPV and a department's lead also assign_task and escalate
 					const mail = md ? [...mailTools(md), ...taskTools(md, { chief: chiefOf(md) })] : [];
-					const extraTools = [...lanes, ...mail];
+					const extraTools = [...lanes, ...mail, ...(mcp["revit"] ? [dialogNoticesTool(notices)] : [])];
 					const systemPrompt = h.length ? standing : withEarlier(seeded, seed.earlier);
 					// the agent log: what this attempt sends (the model, the system text, the prompt, the tools); everything that comes back arrives as events
 					this.d.agentLog?.start(runId, logMeta, { provider, model: modelId, engine: isAntigravity(provider) ? "antigravity" : claude ? "claude" : "pi", ...(effort ? { effort } : {}), system: systemPrompt, prompt, tools: [...Object.values(mcp).flatMap((m) => [...m.allow]), ...extraTools.map((t) => t.name)], history: h.length, ...(resume ? { resumed: true } : {}), ...(retried ? { backup: true } : {}), ...(turnImages.length ? { images: turnImages.length } : {}) });

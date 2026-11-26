@@ -39,7 +39,7 @@ export const LEVEL_RANK: Record<Level, number> = { read: 0, propose: 1, annotate
 
 /** The main process's own tools, as the gate sees them: the two of this file (starting helpers is no change to the project; a lane's own tools carry
  *  their levels) and the mail tools. None of them is ever offered to a lane. */
-export const MAIN_TOOL_LEVELS: Record<string, Level> = { run_subagent: "read", delegate: "run", ...MAIL_TOOL_LEVELS };
+export const MAIN_TOOL_LEVELS: Record<string, Level> = { run_subagent: "read", delegate: "run", dialog_notices: "read", ...MAIL_TOOL_LEVELS };
 export const MAIN_TOOLS: ReadonlySet<string> = new Set(Object.keys(MAIN_TOOL_LEVELS));
 
 export const SUBAGENT_CAP: Level = "read";
