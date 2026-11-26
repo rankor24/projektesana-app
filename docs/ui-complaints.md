@@ -748,3 +748,13 @@ The user (2026-11-26, a screenshot of the agent's end of message "Next: 1. … 2
 | Agents work to the end | one rule, `agent/work-rule.ts`: do all plan steps in order, do not stop to ask for "go", "turpināt" or approval, do not end with a list of next steps, "one call, one action" is the size of a call and not a pause; stop only for a real blocker (data the tools cannot get, a tool that refuses, a decision that is the user's) and then say what is done and what is needed. It is rule 11 of the lead's text and the end of the specialists' shared rules (`RULES`); the Revit rules (`REVIT_RULES` rule 1, lead rule 6) say the same about calls. |
 
 **Test:** `test/26.0-max-turns.test.ts` (defaults and range, old settings files, the settings tool and Undo, the main run and a lane get the limits, the rule is in every agent's text) and two tests in `test/22.0-antigravity.test.ts` (the server's own limit does not end the task; the app's limit stops a run in words). **Not checked live** (his rule): a real long modelling run on each provider; Antigravity's real server limit and whether its server answers a cancel as `cancelled` (the fake server does).
+
+## 2.17.1: the rail's «Sakļaut» collapses to icon-size buttons, as BIM Crew's
+
+The user (2026-11-26, a screenshot of the expanded rail with its Collapse button): "Sidebar should collapse to just Icon size buttons like BIM-crew".
+
+**Found.** The rail already collapsed to icons (since 2.7.0, `Rail.tsx`, 48 px wide, names as tooltips), so the collapsed look was only checked against the style sheet, not live. It differed from BIM Crew's `NavRail.tsx` in the width, the missing hairline between the groups (the group titles just vanished, so the pages ran together), no width animation, and labels that could wrap while the width changed.
+
+**Fix (2.17.1, `styles.css`, `Rail.tsx`).** Collapsed width 56 px as BIM Crew; a hairline between the groups in place of their titles; the width eases over 0.2 s; labels never wrap or spill; the rail never scrolls sideways; the Collapse / Expand button carries `aria-label` and `aria-expanded`. Unchanged: one icon button per page, the name and hint as a tooltip, the choice remembered (`projektesana:rail`), the bottom group (Sarunas, Prasmes, Aģenti, Žurnāls, Iestatījumi) kept as icons.
+
+**Checked.** The collapsed and expanded rail rendered in Chromium from the real style sheet (icons centred, active mark visible, groups separated). **Not checked live** in the built app: his playtest. If the Collapse button still does nothing for him, that is a different bug and needs the exact behaviour.

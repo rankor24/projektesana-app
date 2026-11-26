@@ -76,8 +76,12 @@ tr.click:hover td { background: var(--elev); }
 .stage .chip { font-size: 11px; }
 
 .body { display: flex; min-height: 0; min-width: 0; }
-.rail { display: flex; flex-direction: column; gap: 2px; width: 170px; padding: 6px; background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; flex: none; }
-.rail-collapsed { width: 48px; align-items: center; }
+.rail { display: flex; flex-direction: column; gap: 2px; width: 170px; padding: 6px; background: var(--panel); border-right: 1px solid var(--border); overflow-x: hidden; overflow-y: auto; flex: none; transition: width 0.2s ease-out; }
+/* collapsed: an icon-size button per page, as BIM Crew's NavRail (56px wide, a hairline between the groups, the name as a tooltip) */
+.rail-collapsed { width: 56px; align-items: center; }
+.rail-collapsed .rail-group + .rail-group::before { content: ""; height: 1px; margin: 2px 8px 6px; background: var(--border-strong); }
+.rail-collapsed .rail-group { margin-bottom: 0; }
+.rail-item > span:not(.rail-icon) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rail-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
 .rail-group-title { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .rail-item { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 10px; text-align: left; background: transparent; border-color: transparent; border-radius: 8px; color: var(--dim); }

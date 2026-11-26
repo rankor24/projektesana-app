@@ -65,7 +65,7 @@ export function Rail() {
 					<span className="rail-icon"><Icon name="sliders" /></span>
 					{!collapsed && <span>{tr("Iestatījumi")}</span>}
 				</button>
-				<button className="rail-item" title={collapsed ? tr("Izvērst joslu") : tr("Sakļaut joslu")} onClick={toggle}>
+				<button className="rail-item" title={collapsed ? tr("Izvērst joslu") : tr("Sakļaut joslu")} aria-label={collapsed ? tr("Izvērst joslu") : tr("Sakļaut joslu")} aria-expanded={!collapsed} onClick={toggle}>
 					<span className="rail-icon"><Icon name={collapsed ? "panelOpen" : "panelClose"} /></span>
 					{!collapsed && <span>{tr("Sakļaut")}</span>}
 				</button>
