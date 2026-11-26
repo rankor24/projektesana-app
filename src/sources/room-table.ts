@@ -8,6 +8,7 @@ import { extname } from "node:path";
 import type { ProjectStore } from "../core/store.js";
 import type { Who } from "../core/model.js";
 import { sourceBytes } from "./bytes.js";
+import { isEksplikacija, roomsFromEksplikacija } from "./extract/eksplikacija.js";
 import { pdfLayoutLines, roomsFromLines, type RoomRow, type RoomTable } from "./extract/kl.js";
 
 export const ROOM_ROLES = new Set(["Īpašuma dokumenti", "Iepirkums", "PU", "Info no pasūtītāja", "Cits"]);
@@ -18,7 +19,8 @@ export type InventoryState = "teksts" | "skenēts" | "labots";
 /** "Telpu grupas kopējā platība …" and the like: a total of a group, not a room. */
 const TOTAL_LINE = /kop[eē]j\p{L}*\s+plat|kop[aā]\s*[:(]|platība\s+kopā/iu;
 
-/** The room table of one source as code reads it; PDFs from text positions, everything else from the cached text lines. */
+/** The room table of one source as code reads it; PDFs from text positions, everything else from the cached text lines.
+ *  A VZD "Būves eksplikācija" (room groups, a room type on every row) has its own reader: its scans move numbers and sizes around. */
 export async function roomTableOf(store: ProjectStore, sourceId: string): Promise<RoomTable | null> {
 	const s = store.read("sources").find((x) => x.id === sourceId);
 	const v = s?.versions[s.versions.length - 1];
@@ -29,7 +31,9 @@ export async function roomTableOf(store: ProjectStore, sourceId: string): Promis
 	if (extname(name.split("::").pop() ?? "").toLowerCase() === ".pdf" && v.textState === "ok") lines = await pdfLayoutLines(sourceBytes(store, sourceId));
 	else if (cached) lines = cached.pages.map((p) => p.split("\n"));
 	else return null;
-	const t = roomsFromLines(lines);
+	const pages = lines.map((p) => p.join("\n"));
+	const ek = isEksplikacija(pages) ? roomsFromEksplikacija(pages) : null;
+	const t = ek?.rows.length ? ek : roomsFromLines(lines);
 	t.rows = t.rows.filter((r) => !TOTAL_LINE.test(r.name));
 	return t.rows.length ? t : null;
 }
@@ -153,7 +157,7 @@ export async function inventoryTables(store: ProjectStore): Promise<{ sourceId: 
 		if (!ROOM_ROLES.has(s.role)) continue;
 		const v = s.versions[s.versions.length - 1];
 		const txt = store.readText(v?.sha256 ?? "");
-		if (!txt || !/eksplikācij|telpas\s+nosaukums|telpu\s+grup/i.test(txt.pages.join(" "))) continue;
+		if (!txt || !(/eksplikācij|telpas\s+nosaukums|telpu\s+grup/i.test(txt.pages.join(" ")) || isEksplikacija(txt.pages))) continue;
 		const t = await roomTableOf(store, s.id);
 		if (t) out.push({ sourceId: s.id, title: s.title, table: t, state: v?.textState === "ocr" ? ("skenēts" as const) : ("teksts" as const) });
 	}

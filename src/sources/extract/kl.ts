@@ -11,14 +11,16 @@ export interface RoomRow {
 	area: number;
 	height: number | null;
 	page: number;
+	/** VZD "Telpu grupas numurs" the room belongs to (numbers restart per group and floor); only the eksplikācija reader sets it */
+	group?: string;
 	/** the whole line, as rebuilt */
 	quote: string;
 }
 
 export interface RoomTable {
 	rows: RoomRow[];
-	/** "Kopā …" lines: floor → stated total */
-	totals: { floor: string; area: number; page: number }[];
+	/** "Kopā …" lines: floor → stated total ("*" = the whole building); `group` set = the total of a room group (all floors) */
+	totals: { floor: string; area: number; page: number; group?: string }[];
 	/** rows that looked like room rows but did not parse, for the user to see */
 	unread: { page: number; line: string }[];
 }
@@ -103,9 +105,10 @@ export function roomsFromLines(pages: string[][]): RoomTable {
 }
 
 /** Sum check: each stated floor total against the rows of that floor (to 0.05 m²). */
-export function totalsCheck(t: RoomTable): { floor: string; stated: number; sum: number; ok: boolean }[] {
+export function totalsCheck(t: RoomTable): { floor: string; stated: number; sum: number; ok: boolean; group?: string }[] {
 	return t.totals.map((x) => {
-		const sum = Math.round(t.rows.filter((r) => x.floor === "*" || r.floor === x.floor).reduce((s, r) => s + r.area, 0) * 100) / 100;
-		return { floor: x.floor, stated: x.area, sum, ok: Math.abs(sum - x.area) < 0.05 };
+		const mine = x.group ? t.rows.filter((r) => r.group === x.group) : t.rows.filter((r) => x.floor === "*" || r.floor === x.floor);
+		const sum = Math.round(mine.reduce((s, r) => s + r.area, 0) * 100) / 100;
+		return { floor: x.floor, stated: x.area, sum, ok: Math.abs(sum - x.area) < 0.05, ...(x.group ? { group: x.group } : {}) };
 	});
 }

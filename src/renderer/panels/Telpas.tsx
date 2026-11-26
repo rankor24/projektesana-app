@@ -378,8 +378,8 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 				<span className="dim small">
 					{tr("{v} telpas · {v2} m²", { v: t.rows.length, v2: sum.toLocaleString(locale()) })}</span>
 				{t.totals.map((x) => (
-					<Badge key={x.floor} tone={x.ok ? "ok" : "bad"} title={tr("dokumentā {stated}, rindu summa {sum}", { stated: x.stated, sum: x.sum })}>
-						{x.floor === "*" ? tr("kopā") : tr("{floor}. st.", { floor: x.floor })} {x.ok ? "✓" : `${x.sum} ≠ ${x.stated}`}
+					<Badge key={`${x.group ?? ""}/${x.floor}`} tone={x.ok ? "ok" : "bad"} title={tr("dokumentā {stated}, rindu summa {sum}", { stated: x.stated, sum: x.sum })}>
+						{x.group ? tr("{group}. gr.", { group: x.group }) : x.floor === "*" ? tr("kopā") : tr("{floor}. st.", { floor: x.floor })} {x.ok ? "✓" : `${x.sum} ≠ ${x.stated}`}
 					</Badge>
 				))}
 				<span className="grow" />
@@ -433,7 +433,7 @@ function InventoryView({ t, projectId, onErr }: { t: InventoryTable; projectId: 
 								<input type="checkbox" checked={sel.has(r.id)} onChange={() => undefined} onClick={(e) => tick(r.id, !sel.has(r.id), e.shiftKey)} />
 							</td>
 							<td>{r.floor}</td>
-							<td>{r.no}</td>
+							<td>{r.no}{r.group && <span className="dim small" title={tr("Telpu grupa")}> {r.group}</span>}</td>
 							<td>{r.name}</td>
 							<td style={{ textAlign: "right" }}>{r.area.toLocaleString(locale(), { minimumFractionDigits: 1 })}</td>
 							<td style={{ textAlign: "right" }}>{r.height ?? ""}</td>

@@ -50,7 +50,7 @@ export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 		},
 		"rooms.table": async (id) => {
 			const tables = await inventoryTables(d.registry.store(id));
-			return tables.map(({ sourceId, title, table: t, state, correctedBy }) => ({ sourceId, title, rows: withRowIds(t.rows).map((r) => ({ id: r.id, floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page })), totals: totalsCheck(t), unread: t.unread, state, ...(correctedBy ? { correctedBy } : {}) }));
+			return tables.map(({ sourceId, title, table: t, state, correctedBy }) => ({ sourceId, title, rows: withRowIds(t.rows).map((r) => ({ id: r.id, floor: r.floor, no: r.no, name: r.name, area: r.area, height: r.height, page: r.page, ...(r.group ? { group: r.group } : {}) })), totals: totalsCheck(t), unread: t.unread, state, ...(correctedBy ? { correctedBy } : {}) }));
 		},
 		"rooms.exportXlsx": async (id, sourceId) => {
 			const store = d.registry.store(id);
@@ -59,7 +59,7 @@ export function roomHandlers(d: RoomsDeps): Pick<Handlers, K> {
 			if (!t) throw new Error("Šajā avotā telpu tabula nav atrasta.");
 			const s = store.read("sources").find((x) => x.id === sourceId)!;
 			const rows = [["Stāvs", "Telpas Nr.", "Nosaukums", "Platība, m²", "Augstums, m", "Lapa"], ...t.rows.map((r) => [r.floor, r.no, r.name, r.area, r.height, r.page])];
-			const check = [["Stāvs", "Dokumentā kopā, m²", "Rindu summa, m²", "Sakrīt"], ...totalsCheck(t).map((x) => [x.floor === "*" ? "visa ēka" : x.floor, x.stated, x.sum, x.ok ? "jā" : "NĒ"])];
+			const check = [["Stāvs", "Dokumentā kopā, m²", "Rindu summa, m²", "Sakrīt"], ...totalsCheck(t).map((x) => [x.group ? `${x.group}. grupa` : x.floor === "*" ? "visa ēka" : x.floor, x.stated, x.sum, x.ok ? "jā" : "NĒ"])];
 			const buf = writeXlsx([
 				{ name: "Telpas", rows, widths: [8, 11, 34, 13, 13, 7] },
 				{ name: "Summas", rows: check, widths: [10, 20, 18, 9] },

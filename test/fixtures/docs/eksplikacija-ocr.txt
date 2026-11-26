@@ -1,0 +1,31 @@
+BŪVES EKSPLIKĀCIJA
+Kadastra apzīmējums 0000 000 0000 001
+Izdrukas datums: 2026.01.15
+Stāvs: 1
+Telpu grupas numurs: 001
+Telpu grupas adreses: Izdomātā iela 1, Izdomāta
+Telpas numurs Telpas nosaukums Telpas veids Platība (kv.m.) Augstums (m) Patvaļīgas būvniecības pazīme
+1 gaitenis Nedzīvojama iekštelpa 17.6 2.95
+2 kabinets Nedzīvojama iekštelpa 12.4 2.95
+3 tualete Nedzīvojama iekštelpa 3.1 2.95
+4 kāpnes Koplietošanas iekštelpa 9.0 2.95
+Telpu grupas numurs: 002
+Telpu grupas izmantošanas veids: Birojs
+1 | vestibils Nedzlvojama iek~telpa 24.5 3.40 |
+2 virtuve Nedzīvojama iekštelpa 15.3 3.40
+3 priekštelpa Nedzīvojama iekštelpa 6.2 3.40 1
+Srnvs: -1
+Telpu grupas numurs: 001
+I 1 I noliktava Nedzlvojama iek~telpa 31.4 2.95 !
+2 paUgtelpa Nedzīvojama iekštelpa 8.2 2.95
+3 tehniska telpa Nedzīvojama iekštelpa 2.95 14.6
+Stays: 2
+Telpu grupas numurs: 002
+4 zāle
+5 sēžu telpa
+Nedzīvojama iekštelpa 116.2 3.45
+Nedzīvojama iekštelpa 24.8 3.45
+noliktava Nedzīvojama iekštelpa 6 7.9 3.45
+001 telpu grupas kopējā platība (kv.m.): 96.3
+002 telpu grupas kopējā platība (kv.m.): 194.9
+Būves kopējā platība (kv.m.): 291.2

@@ -178,6 +178,8 @@ export const part3: Record<string, string> = {
 	"dokumentā {stated} m², rindu summa {sum} m²": "{stated} m² in the document, sum of rows {sum} m²",
 	"rindu summa {sum} m²": "sum of rows {sum} m²",
 	"{floor}. st.": "floor {floor}",
+	"{group}. gr.": "group {group}",
+	"Telpu grupa": "Room group",
 	"· {rooms} telpas": "· {rooms} rooms",
 	" · {diffs} atšķ.": " · {diffs} diff.",
 	"modeļa nav: {state}": "no model: {state}",

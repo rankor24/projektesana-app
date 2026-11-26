@@ -220,8 +220,8 @@ export interface RoleQuestion {
 export interface InventoryTable {
 	sourceId: string;
 	title: string;
-	rows: { id: string; floor: string; no: string; name: string; area: number; height: number | null; page: number }[];
-	totals: { floor: string; stated: number; sum: number; ok: boolean }[];
+	rows: { id: string; floor: string; no: string; name: string; area: number; height: number | null; page: number; group?: string }[];
+	totals: { floor: string; stated: number; sum: number; ok: boolean; group?: string }[];
 	unread: { page: number; line: string }[];
 	/** "teksts" / "skenēts": read by code from a text layer / from a scan (OCR, often wrong); "labots": corrected rows */
 	state: "teksts" | "skenēts" | "labots";
