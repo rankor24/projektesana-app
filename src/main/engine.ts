@@ -14,8 +14,8 @@ export interface EngineDeps {
 	officeStandardPdf: () => string | null;
 	/** resources/bimcraft/app: the engine that reads the models' facts (task 8.9) */
 	bimcraftApp?: string;
-	/** model rooms when Revit is connected (3.2) */
-	modelRooms?: () => Promise<{ number: string; name: string; level: string; area: number; id: string }[] | undefined>;
+	/** model rooms when Revit is connected (3.2): of the Revit session that holds this project's working copy, when several run */
+	modelRooms?: (projectId: string) => Promise<{ number: string; name: string; level: string; area: number; id: string }[] | undefined>;
 }
 
 export class ProjectEngine {
@@ -45,7 +45,7 @@ export class ProjectEngine {
 		const today = new Date().toISOString().slice(0, 10);
 		if (what === "sources" || what === "facts" || what === "roles" || what === "requirements" || what === "manual") refreshRequirements(store, this.d.dataDir, await this.officeStandard(), today);
 		const event = (["sources", "facts", "roles", "requirements", "delivery", "pins", "rooms", "manual"].includes(what) ? what : "manual") as CheckEvent;
-		const modelRooms = event === "rooms" || event === "manual" ? await this.d.modelRooms?.().catch(() => undefined) : undefined;
+		const modelRooms = event === "rooms" || event === "manual" ? await this.d.modelRooms?.(store.project.id).catch(() => undefined) : undefined;
 		const app = this.d.bimcraftApp;
 		const ifcFacts: CheckContext["ifcFacts"] = app ? (names, deliveryId) => projectFacts(app, store, names, deliveryId ?? opts.deliveryId) : undefined;
 		return runChecks(store, event, { dataDir: this.d.dataDir, today, deliveryId: opts.deliveryId, modelRooms, ifcFacts, only: opts.only });

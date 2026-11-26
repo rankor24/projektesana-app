@@ -712,3 +712,25 @@ His words (the agent's report, then his order): the model could be read and elem
 ## 2.16.2: «Apturēt visu» was not instant
 
 The user (2026-11-26): "stop all not working", then "not working instantly". The jobs bar kept showing «Darbi: 1» after the click. **Cause.** Stop fired the run's abort signal at once, but the run stayed in the running list and held its slot until its engine had finished winding down (a provider that answers a cancel late, the Revit/tool servers closing; Antigravity waits up to 15 s for a cancel). **Fix.** `Coordinator.abortRun`: the signal fires, the run is hidden from the list and frees its slot in the same call, the chat gets the `aborted` end event immediately, and after 1.5 s the run's bookkeeping is ended even if the engine has not (its late events are dropped, only cost is kept). The app's shutdown still waits for the engines. **Test:** `test/21.2-parallel-chats.test.ts` (an engine that never answers the abort).
+
+## 2026-11-26: two Revit sessions: still refused in 2.16.1 (version 2.16.3)
+
+The user, with a screenshot of the `revit_read_parameters` card in 2.16.1: "2 Revit sessions are running. Call select_revit_instance first". The order: no guessing, no fake server, read the real code, fix it for good, prove it with both Revits open.
+
+**Evidence (the run logs on the PC).** The agent chose its session (`select_revit_instance`, `{ "pid": … }`) in one message and the tools worked. The next message was a new run: its first `revit_read_parameters` was refused, before any selection in that run; after the agent selected again it worked. The same day an agent's own Revit tool (`create_line_based_element`) was refused the same way at the start of another message.
+
+**Cause (the server's code, `ConnectionManager.ts`).** The Revit MCP server keeps one selection per server process (`let selectedPid`) and no tool takes a target: with two sessions and no selection every call is refused. Every message starts new server processes, and 2.16.1 kept the choice in a file in the run's own folder, so the next message did not have it. The agent's own server had no such help at all. A pid also changes each time Revit restarts.
+
+**Fix (2.16.3).** Every connection selects its session itself, right before each call, from the sessions listed at that moment (`src/revit/target.ts`): (1) the agent's own choice, kept per conversation, while that session runs; (2) else the only session; (3) else the one session whose active document is the project's working copy; (4) else the call is refused, naming the sessions, and nothing is sent.
+| Connection | Calls |
+|---|---|
+| The agent's own Revit server (all engines) | selected before each tool (`agent/pi/mcp.ts`); its own `list_` and `select_revit_instance` are left to it |
+| The tools server (`revit_*`, delivery tools) | the same rules (`revit-commands.ts`) |
+| The app's check before a change, and the revision | the same rules, the check and its read as one unbroken step |
+| The screens (rooms, INV Area, sheets, exports, working copy, revisions, coordination) | the project's working copy; a call that names no project takes the one session with any project's working copy |
+
+Calls of one connection run one at a time, so nothing moves the session between the selection and the call. A change is still allowed only when the session it will go to has the project's working copy active. The 2.15.1 to 2.16.1 replay (per-run file, `applied` memory, `explicitly()`) is gone.
+
+**Tests:** `test/25.1-two-revit-sessions.test.ts`, rewritten against the real bundled server with an invented session registry (skipped where `resources/revit-mcp` is missing); `test/25.0-working-copy.test.ts` (the choice holds in the next message). **Checked live** with two real Revit 2026 sessions, through the compiled app code: reads, the view list and one parameter written back with its own value went to the working copy with no selection and with a pid that no longer existed; the agent's own server the same; with no working copy counted the call was refused.
+
+**Seen, not fixed here.** While an agent was working in the same Revit, one reply to the app's tools belonged to another caller; the app's reply check rejected it. Two programs calling one Revit session at the same moment can get each other's replies.

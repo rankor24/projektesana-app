@@ -14,6 +14,8 @@ import { COORDINATION_META } from "../../checks/checks/coordination.js";
 import { revitRead } from "../../revit/commands.js";
 import type { RevitClient } from "../../revit/client.js";
 import { revitExport } from "../../revit/exports.js";
+import { projectSession } from "../../revit/revision.js";
+import type { ProjectStore } from "../../core/store.js";
 import { auditedModels, projectFacts } from "../../sources/ifc-facts.js";
 import { draftOf, refreshDraft } from "../../sources/staging.js";
 import { coordinatesGuide, guideInput } from "../../rules/coordinates-guide.js";
@@ -23,11 +25,11 @@ type K = "coordination.get" | "coordination.save" | "coordination.seed" | "coord
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** The Revit document's levels as a model, or why not: a page load does not wait the long time a Revit call may take. */
-async function revitModel(revit: RevitClient, ms = 8000): Promise<{ facts: ModelFacts | null; note: string | null }> {
+async function revitModel(revit: RevitClient, store: ProjectStore, ms = 8000): Promise<{ facts: ModelFacts | null; note: string | null }> {
 	if (!revit.where()) return { facts: null, note: "Revit MCP nav konfigurēts" };
 	let timer: NodeJS.Timeout | undefined;
 	try {
-		const both = Promise.all([revitExport.docInfo(revit), revitRead.levels(revit)]);
+		const both = revit.session((r) => Promise.all([revitExport.docInfo(r), revitRead.levels(r)]), projectSession(store));
 		const [doc, levels] = await Promise.race([both, new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Revit neatbild")), ms)))]);
 		return { facts: factsFromRevit(doc.title, levels, today()), note: null };
 	} catch (e) {
@@ -48,7 +50,7 @@ export function coordinationHandlers(d: { registry: Registry; engine: ProjectEng
 			const files = audited.map((m) => ({ file: m.file, key: m.key }));
 			if (!reference) return { reference: null, audit: null, warnings: [], models, files, errors: [], revit: null };
 			const { facts, errors } = await projectFacts(d.bimcraftApp, store, reference.cubeNames);
-			const rv = withRevit ? await revitModel(d.revit) : { facts: null, note: null };
+			const rv = withRevit ? await revitModel(d.revit, store) : { facts: null, note: null };
 			const all = rv.facts ? [...facts, rv.facts] : facts;
 			return { reference, audit: buildAudit(all, reference, today()), warnings: referenceWarnings(reference, facts), models, files, errors, revit: rv.note };
 		},

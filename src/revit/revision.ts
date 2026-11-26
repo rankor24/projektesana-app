@@ -11,6 +11,7 @@ import { diffIfc } from "../sources/ifc-diff.js";
 import type { RevitCaller } from "./client.js";
 import { revitRead } from "./commands.js";
 import { revitExport, workName } from "./exports.js";
+import { pickSession, type SessionPicker } from "./target.js";
 
 export const workDir = (store: ProjectStore) => join(store.dir, "work");
 export const revisionDir = (store: ProjectStore, id: string) => join(store.dir, "revisions", id);
@@ -26,6 +27,9 @@ const norm = (p: string) => resolve(p).toLowerCase();
 export function isWorkCopy(store: ProjectStore, docPath: string): boolean {
 	return !!docPath && /_WORK\.rvt$/i.test(docPath) && norm(docPath).startsWith(norm(workDir(store)));
 }
+
+/** The session of a project's Revit work (target.ts): the agent's own choice while it runs, else the one session whose active document is this project's working copy. */
+export const projectSession = (store: ProjectStore, choice: Record<string, unknown> | null = null): SessionPicker => pickSession(() => ({ choice, isWork: (path) => isWorkCopy(store, path) }));
 
 /** Saves the open document as the working copy in the data folder (the user's click). The office file stays as it was. */
 export async function makeWorkCopy(store: ProjectStore, revit: RevitCaller): Promise<string> {

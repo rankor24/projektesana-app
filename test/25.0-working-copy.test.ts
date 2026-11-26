@@ -9,6 +9,7 @@ import { LockRegistry } from "../src/agent/locks.ts";
 import { createPiRuntime } from "../src/agent/pi/index.ts";
 import { OPEN_ALONE, SELECT_AFTER_CHANGE, ThreadRunner } from "../src/agent/thread-runner.ts";
 import { selectSession } from "../src/revit/commands.ts";
+import { choiceFile } from "../src/revit/target.ts";
 import { REVIT_RULES } from "../src/agent/tools/revit.ts";
 import { FLEET_ADDITIONS, FLEET_DEFAULTS, withFleetAddition } from "../src/shared/fleet-defaults.ts";
 import { DEFAULT_SETTINGS, type RunEvent } from "../src/shared/types.ts";
@@ -150,7 +151,7 @@ test("2.15.1 the working-copy check follows the Revit session the agent chose wi
 		runAgent: async (o) => {
 			const sig = new AbortController().signal;
 			const call = (name: string, args: Record<string, unknown>) => ({ toolCall: { name, id: name, arguments: args }, args, assistantMessage: { content: [{ type: "toolCall", id: name, name, arguments: args }] } }) as never;
-			await o.beforeToolCall?.(call("select_revit_instance", { pid: 14488 }), sig);
+			if (!seen.length) await o.beforeToolCall?.(call("select_revit_instance", { pid: 14488 }), sig);
 			await o.beforeToolCall?.(call("create_level", {}), sig);
 			o.onEvent({ type: "done", text: "gatavs" });
 		},
@@ -159,8 +160,11 @@ test("2.15.1 the working-copy check follows the Revit session the agent chose wi
 	await runner.run({ runId: "r1", thread, spec: null, text: "izveido līmeņus", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
 	assert.deepEqual(seen, [{ pid: 14488 }], "the check was made on the chosen session, nobody was asked");
 	assert.deepEqual(afterBatchChoice, [{ pid: 14488 }], "the revision is taken from the same session");
-	// the revit_* tools run in the tools server (another process): the choice reaches it in a file in the run's folder
-	assert.deepEqual(JSON.parse(readFileSync(join(dir, "runs", "r1", "revit-choice.json"), "utf8")), { pid: 14488 });
+	// the revit_* tools run in the tools server (another process): the choice reaches it in the conversation's file
+	assert.deepEqual(JSON.parse(readFileSync(choiceFile(dir, thread.id), "utf8")), { pid: 14488 });
+	// the next message of the same conversation makes no select_revit_instance: the check and the revision still get the choice (2.16.3; it was lost with the run before)
+	await runner.run({ runId: "r2", thread, spec: null, text: "vēl vienu līmeni", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: () => undefined, ask: async () => false });
+	assert.deepEqual(seen[1], { pid: 14488 });
 });
 
 /** A run whose model asks, in ONE assistant message, for these Revit calls in order; each goes through the gate as the engine would send it. */

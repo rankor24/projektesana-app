@@ -1,39 +1,43 @@
 // The app's named Revit commands as agent tools (work plan "Agent tools": run level — exports, working copy, view geometry,
 // the room table; confirm level — the named commands of phase 6 that create views and sheets). They run in the tools
 // server with its own Revit client; every call carries a nonce (exports.ts). Files land in the project's data folder only.
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { checkWrite } from "../../core/guard.js";
+import { ProjectStore } from "../../core/store.js";
 import { RevitClient, resolveRevitLaunch, setBundledRevitDir } from "../../revit/client.js";
 import { revitExport, runSnippet } from "../../revit/exports.js";
-import { makeWorkCopy } from "../../revit/revision.js";
+import { isWorkCopy, makeWorkCopy } from "../../revit/revision.js";
+import { choiceFile, pickSession, readChoice, type SessionRules } from "../../revit/target.js";
 import { inventoryTables } from "../../sources/room-table.js";
 import { writeXlsx } from "../../sources/export/xlsx.js";
 import { storeOf, type ToolCtx } from "./context.js";
 import { tool, type ToolDef } from "./tool.js";
 
-let client: RevitClient | null = null;
-/** The tools server's own Revit client (one per process), shared by the Revit command and delivery tools. */
-/** The file the app writes into the run's folder when the agent calls select_revit_instance (thread-runner.ts); the tools server reads it before each Revit call. */
-export const REVIT_CHOICE_FILE = "revit-choice.json";
-export function readRevitChoice(runDir: string | null | undefined): Record<string, unknown> | null {
-	if (!runDir) return null;
-	try {
-		const v = JSON.parse(readFileSync(join(runDir, REVIT_CHOICE_FILE), "utf8")) as unknown;
-		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-	} catch {
-		return null;
-	}
+/** What the tools server knows about which Revit session is meant: the conversation's own choice and its project's working copy (ctxEnv gives both). */
+export function toolsSessionRules(env: NodeJS.ProcessEnv): SessionRules {
+	const { PROJEKTESANA_APP: appDir, PROJEKTESANA_THREAD: thread, PROJEKTESANA_PROJECTS: projects, PROJEKTESANA_PROJECT: project } = env;
+	return {
+		choice: appDir && thread ? readChoice(choiceFile(appDir, thread)) : null,
+		isWork: (path) => {
+			try {
+				return !!projects && !!project && isWorkCopy(ProjectStore.load(projects, project), path);
+			} catch {
+				return false;
+			}
+		},
+	};
 }
 
+let client: RevitClient | null = null;
+/** The tools server's own Revit client (one per process), shared by the Revit command and delivery tools. Every call of it selects its session first (revit/target.ts). */
 export function revit(): RevitClient {
 	const serverJs = process.env.PROJEKTESANA_REVIT_JS || null;
 	const node = process.env.PROJEKTESANA_REVIT_NODE || null;
 	setBundledRevitDir(process.env.PROJEKTESANA_REVIT_BUNDLED || null);
 	client ??= new RevitClient(() => resolveRevitLaunch({ revitServerJs: serverJs, revitNode: node }), process.execPath);
-	// every revit_* tool of this process follows the session the agent chose; the run's folder is this process's own (PROJEKTESANA_RUN)
-	client.choice ??= () => readRevitChoice(process.env.PROJEKTESANA_RUN);
+	client.pick ??= pickSession(() => toolsSessionRules(process.env));
 	if (!client.configured()) throw new Error("nav konfigurēts: Revit MCP serveris nav atrasts.");
 	return client;
 }

@@ -1,5 +1,5 @@
 // Revit read state for the panels: connection status and the open model's rooms.
-import { bundledRevitDir, defaultServerJs, localAppDataDir, type RevitClient } from "../../revit/client.js";
+import { bundledRevitDir, defaultServerJs, localAppDataDir, type RevitCaller, type RevitClient } from "../../revit/client.js";
 import { addinStatus, installAddins } from "../../revit/addin-install.js";
 import { revitRead, revitSelect, writeInvArea } from "../../revit/commands.js";
 import type { Registry } from "../../core/registry.js";
@@ -8,7 +8,7 @@ import { inventoryTables } from "../../sources/room-table.js";
 import type { Handlers } from "../../shared/api.js";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { revitExport } from "../../revit/exports.js";
-import { captureRevision, makeWorkCopy } from "../../revit/revision.js";
+import { captureRevision, makeWorkCopy, projectSession } from "../../revit/revision.js";
 import { TASKS } from "../../agent/tasks.js";
 import { join } from "node:path";
 import { checkRead } from "../../core/guard.js";
@@ -29,13 +29,15 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		return dir;
 	};
 	const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+	/** A project's own Revit work: with several sessions open it goes to the one whose active document is this project's working copy, for every call inside `fn`. */
+	const inProject = <T>(id: string, fn: (r: RevitCaller) => Promise<T>): Promise<T> => d.revit.session(fn, projectSession(d.registry.store(id)));
 	return {
 		"tasks.list": () => TASKS,
 		"revit.views": () => revitExport.listViews(d.revit),
 		"revit.exportView": async (id, viewId, name) => {
 			const dir = exportsDir(id);
 			const file = `${name.replace(/[^\p{L}\d._ -]+/gu, "_").slice(0, 60)}_${stamp()}`;
-			await revitExport.exportPdf(d.revit, dir, file, [viewId]);
+			await inProject(id, (r) => revitExport.exportPdf(r, dir, file, [viewId]));
 			const out = join(dir, `${file}.pdf`);
 			if (!existsSync(out)) throw new Error(`Revit neizveidoja ${out}`);
 			d.registry.store(id).log({ kind: "revit.exported", by: "user", data: { kind: "pdf", viewId } });
@@ -45,13 +47,13 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		"revit.exportIfc": async (id) => {
 			const dir = exportsDir(id);
 			const file = `${id}_${stamp()}.ifc`;
-			await revitExport.exportIfc(d.revit, dir, file);
+			await inProject(id, (r) => revitExport.exportIfc(r, dir, file));
 			if (!existsSync(join(dir, file))) throw new Error(`Revit neizveidoja ${file}`);
 			d.registry.store(id).log({ kind: "revit.exported", by: "user", data: { kind: "ifc" } });
 			return join(dir, file);
 		},
-		"revit.workCopy": (id) => makeWorkCopy(d.registry.store(id), d.revit),
-		"revisions.capture": (id, summary, sheetIds) => captureRevision(d.registry.store(id), d.revit, { trigger: "manualSave", summary, sheetIds, bimcraftApp: d.bimcraftApp }),
+		"revit.workCopy": (id) => inProject(id, (r) => makeWorkCopy(d.registry.store(id), r)),
+		"revisions.capture": (id, summary, sheetIds) => inProject(id, (r) => captureRevision(d.registry.store(id), r, { trigger: "manualSave", summary, sheetIds, bimcraftApp: d.bimcraftApp })),
 		"models.list": (id) => projectModels(d.registry.store(id)),
 		"sheets.sets": async (id) => drawingSets(await listProjectFiles(d.registry.store(id).project.root, [".pdf", ".dwg"])),
 		"revit.files": async (id) => {
@@ -122,13 +124,13 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 		"rooms.invAreaPlan": async (id) => {
 			const tables = await inventoryTables(d.registry.store(id));
 			const inv = new Map(tables.flatMap((t) => t.table.rows).map((r) => [normNo(r.no), r]));
-			const model = await revitRead.rooms(d.revit);
+			const model = await inProject(id, (r) => revitRead.rooms(r));
 			// only rooms whose number is in the inventory; the value is the inventory area as written there
 			return model.filter((m) => inv.has(normNo(m.number))).map((m) => ({ elementId: Number(m.id), number: m.number, name: m.name, areaM2: inv.get(normNo(m.number))!.area }));
 		},
 		"rooms.writeInvArea": async (id, items) => {
 			const store = d.registry.store(id);
-			const r = await writeInvArea(d.revit, items);
+			const r = await inProject(id, (revit) => writeInvArea(revit, items));
 			store.log({ kind: "revit.invArea.written", by: "user", data: { written: r.written, noParam: r.noParam.length } });
 			return r;
 		},
@@ -138,7 +140,7 @@ export function revitHandlers(d: { revit: RevitClient; registry: Registry; bimcr
 			if (!inv.length) return { state: "nav inventarizācijas", inventory: 0, model: 0, matched: 0, diffs: [] };
 			let model;
 			try {
-				model = (await revitRead.rooms(d.revit)).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.id }));
+				model = (await inProject(id, (r) => revitRead.rooms(r))).map((r) => ({ number: r.number, name: r.name, level: r.level, area: r.areaM2, id: r.id }));
 			} catch (e) {
 				return { state: "nav savienojuma", message: (e as Error).message, inventory: inv.length, model: 0, matched: 0, diffs: [] };
 			}

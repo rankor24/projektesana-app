@@ -6,6 +6,8 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "typebox";
 import { McpClient, StdioTransport, StreamableHttpTransport, toLlmContent } from "@earendil-works/pi-mcp";
+import type { RevitCaller } from "../../revit/client.js";
+import { SESSION_TOOLS, type SessionPicker } from "../../revit/target.js";
 
 /** How to start the server: command, arguments and extra environment, as the app's `McpLaunch` describes it. */
 export interface McpLaunchSpec {
@@ -20,6 +22,8 @@ export interface McpLaunchSpec {
 	prefix?: string;
 	/** An agent's own server that does not start must not stop the agent's run: it is left out and named in `missing` (the app's own and Revit's stay required). */
 	optional?: boolean;
+	/** Revit's server only: run before each of its tools (but not before the ones that list or select sessions), it puts this connection on the right Revit session (revit/target.ts). */
+	pick?: SessionPicker;
 }
 
 /** The name the model sees for a tool of a prefixed server: letters, digits, "_" and "-" only and at most 64 characters, as the providers require. */
@@ -87,13 +91,35 @@ export async function connectMcpTools(spec: McpLaunchSpec, opts: McpToolsOptions
 		const listed = await client.listTools();
 		const allow = opts.allow ? new Set(opts.allow) : null;
 		const offered = listed.filter((t) => !allow || allow.has(t.name));
+		// with a session to pick, the calls of this connection run one at a time: nothing moves the session between its selection and the tool
+		let queue: Promise<unknown> = Promise.resolve();
+		const direct: RevitCaller = {
+			call: async (tool, args = {}) => {
+				const r = await client.callTool(tool, args, { timeoutMs });
+				const text = toLlmContent(r).map((c) => (c.type === "text" ? c.text : "")).join("\n");
+				if (r.isError === true) throw new Error(text || tool);
+				return text;
+			},
+		};
+		// a server without sessions to list (an older one) has nothing to pick
+		const pick = listed.some((t) => t.name === "list_revit_instances") ? spec.pick : undefined;
+		const onSession = <T>(tool: string, call: () => Promise<T>): Promise<T> => {
+			if (!pick) return call();
+			const run = async () => {
+				if (!SESSION_TOOLS.has(tool)) await pick(direct);
+				return call();
+			};
+			const next = queue.then(run, run);
+			queue = next.catch(() => undefined);
+			return next;
+		};
 		const tools: AgentTool<TSchema>[] = offered.map((t) => ({
 			name: spec.prefix ? prefixedToolName(spec.prefix, t.name) : t.name,
 			label: t.title ?? t.name,
 			description: t.description ?? t.name,
 			parameters: parametersOf(t.inputSchema),
 			execute: async (_toolCallId, params, signal) => {
-				const result = await client.callTool(t.name, (params ?? {}) as Record<string, unknown>, { signal, timeoutMs });
+				const result = await onSession(t.name, () => client.callTool(t.name, (params ?? {}) as Record<string, unknown>, { signal, timeoutMs }));
 				let content = toLlmContent(result);
 				if (maxChars !== undefined) {
 					content = content.map((c) => (c.type === "text" && c.text.length > maxChars ? { type: "text" as const, text: `${c.text.slice(0, maxChars)}\n[… cut: ${c.text.length} characters in all]` } : c));

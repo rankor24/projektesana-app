@@ -8,6 +8,8 @@ import { draftOf, stageFile, startDraft, unstageFile } from "../../sources/stagi
 import { checklistOf, type SheetRow } from "../../checks/checklist.js";
 import { revitExport } from "../../revit/exports.js";
 import { stageRevitIfc, stageRevitSheets } from "../../revit/stage.js";
+import { projectSession } from "../../revit/revision.js";
+import type { ProjectStore } from "../../core/store.js";
 import type { RevitClient } from "../../revit/client.js";
 import { copyDelivery, copyPlan } from "../../sources/deliver-copy.js";
 import { refreshDeliveries } from "../../sources/pipeline.js";
@@ -28,11 +30,11 @@ type K = "deliveries.copyPlan" | "deliveries.copy" | "deliveries.checklist" | "d
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** The model's sheets for the checklist, or why not: a page load does not wait the 120 s a Revit call may take. */
-async function sheetsOrNote(revit: RevitClient, ms = 8000): Promise<{ sheets: SheetRow[] | null; note: string | null }> {
+async function sheetsOrNote(revit: RevitClient, store: ProjectStore, ms = 8000): Promise<{ sheets: SheetRow[] | null; note: string | null }> {
 	if (!revit.where()) return { sheets: null, note: "Revit MCP nav konfigurēts" };
 	let timer: NodeJS.Timeout | undefined;
 	try {
-		const sheets = await Promise.race([revitExport.listSheets(revit), new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Revit neatbild")), ms)))]);
+		const sheets = await Promise.race([revit.session((r) => revitExport.listSheets(r), projectSession(store)), new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Revit neatbild")), ms)))]);
 		return { sheets, note: null };
 	} catch (e) {
 		return { sheets: null, note: (e as Error).message.split("\n")[0].slice(0, 160) };
@@ -48,20 +50,22 @@ export function deliveryHandlers(d: DeliveryDeps): Pick<Handlers, K> {
 	return {
 		"deliveries.checklist": async (id, deliveryId, withRevit) => {
 			const store = d.registry.store(id);
-			const r = withRevit ? await sheetsOrNote(d.revit) : { sheets: null, note: "lapu saraksts no Revit nav prasīts" };
+			const r = withRevit ? await sheetsOrNote(d.revit, store) : { sheets: null, note: "lapu saraksts no Revit nav prasīts" };
 			return { rows: checklistOf(store, deliveryId, { today: today(), sheets: r.sheets, revitNote: r.note }), revitNote: r.note };
 		},
 		"deliveries.stageSheets": async (id, deliveryId, opts) => {
 			const run = `sheets-${Date.now().toString(36)}`;
 			try {
-				return await stageRevitSheets(d.registry.store(id), d.revit, deliveryId, { ...opts, onProgress: (n, t, c) => progress(id, run, n, t, c) }, "user");
+				const store = d.registry.store(id);
+				return await d.revit.session((r) => stageRevitSheets(store, r, deliveryId, { ...opts, onProgress: (n, t, c) => progress(id, run, n, t, c) }, "user"), projectSession(store));
 			} finally {
 				changed(id);
 			}
 		},
 		"deliveries.stageIfc": async (id, deliveryId, opts) => {
 			try {
-				return await stageRevitIfc(d.registry.store(id), d.revit, deliveryId, opts, "user");
+				const store = d.registry.store(id);
+				return await d.revit.session((r) => stageRevitIfc(store, r, deliveryId, opts, "user"), projectSession(store));
 			} finally {
 				changed(id);
 			}

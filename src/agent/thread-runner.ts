@@ -6,7 +6,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { isContextOverflow, normalizeContext, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ChatAttachmentRef, ChatEntry, ContextInfo, FocusItem } from "../shared/api.js";
 import { findSpec, type AgentSpec } from "../shared/agent-types.js";
 import { LEAD_ID, type IncidentView, type RunMeta, type Thread } from "../shared/thread-types.js";
@@ -38,7 +38,7 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
-import { REVIT_CHOICE_FILE } from "./tools/revit-commands.js";
+import { choiceFile, pickSession, readChoice } from "../revit/target.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -319,10 +319,11 @@ export class ThreadRunner {
 		const holder = `${label} (saruna «${thread.title}»${Number.isNaN(opened.getTime()) ? "" : ` ${opened.toLocaleTimeString("lv-LV", { hour: "2-digit", minute: "2-digit" })}`})`;
 		let answer = "";
 		let confirmedBatches = 0;
-		// The Revit session this run chose with select_revit_instance (its arguments as the agent gave them). The agent's Revit server is its own process, so the app's own connection does not
-		// know the choice: with two Revit sessions open the app's working-copy check asked "which session?" and refused every change (seen 2026-11-26). The app now makes the same choice
-		// on its own connection before it checks or records a revision, so the check is made on the session the agent writes to, never on another one.
-		let revitChoice: Record<string, unknown> | null = null;
+		// The Revit session the agent chose with select_revit_instance (its arguments as it gave them), kept per conversation: the agent chooses once and goes on in later messages, but every
+		// message starts new Revit server processes that know no choice. Each of them (the agent's own, the tools server's, the app's check and revision) selects its session before a call
+		// by the same rules (revit/target.ts): this choice while that session runs, else the one that holds the project's working copy.
+		const choicePath = choiceFile(this.d.ctx.appDir, thread.id);
+		let revitChoice = readChoice(choicePath);
 		let failed = false;
 		let heldDone = false;
 		// the lane dependencies of the latest attempt (its model, its tools, its locks): what a check turn runs with
@@ -363,11 +364,14 @@ export class ThreadRunner {
 				}
 				const { revit, levelOf, revitTools, listed, own } = plan;
 				const mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }> = {};
+				// the agent's own Revit server is put on its session before each of its tools, by the same rules as the app's check, so both mean one session
+				const isWork = this.d.isWorkCopyPath;
+				const pick = isWork ? pickSession(() => ({ choice: revitChoice, isWork: (p) => isWork(projectId, p) })) : undefined;
 				if (own) {
 					const mine = [...own].filter((n) => appSet.has(n));
 					if (mine.length) mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: mine };
 					const theirs = [...own].filter((n) => revitTools.has(n));
-					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs };
+					if (revit && theirs.length) mcp["revit"] = { ...revit, allow: theirs, pick };
 					// the agent's own MCP servers (agent-mcp.ts), this agent's thread only: never a lane (`delegate`), never another agent. Their tools are `confirm` (or `read`
 					// where the user marked them); `app` (this run's own table of the app's levels) and `own` take the names, so the level lookup and the gate below know them.
 					if (spec?.mcp?.length) {
@@ -378,7 +382,7 @@ export class ThreadRunner {
 					}
 				} else {
 					mcp["projektesana-tools"] = { ...this.d.toolsServer(env), allow: offered(appTools, levelOf).filter((n) => !PROCESS_OWN_TOOLS.has(n)) };
-					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf) };
+					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf), pick };
 				}
 
 				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : (n) => (PROCESS_OWN_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
@@ -399,7 +403,7 @@ export class ThreadRunner {
 						const w = await this.d.revitWork(projectId, revitChoice).catch((e: Error) => ({ ok: false, title: e.message, hint: undefined as string | undefined }));
 						if (!w.ok) {
 							// Not an `error` event: that ends the run in the window (card, chat, activity) while the run goes on. A text line tells the user; the agent gets the real reason, never "the user refused".
-							emit({ type: "text", text: w.hint ? "\n\n[lietotne] Revit izmaiņa nav izpildīta: darbojas vairākas Revit sesijas, un aģents vēl nav izvēlējies, kurā strādā (select_revit_instance). Aģents to zina un izvēlēsies.\n\n" : `\n\n[lietotne] Revit izmaiņa nav izpildīta: aktīvais Revit dokuments (${w.title}) nav šī projekta darba kopija. Izveido to: Versijas → Revit → Darba kopija.\n\n` });
+							emit({ type: "text", text: w.hint ? "\n\n[lietotne] Revit izmaiņa nav izpildīta: darbojas vairākas Revit sesijas, un lietotne nevar droši pateikt, kurā strādāt. Aģents zina, kuras sesijas ir atvērtas.\n\n" :`\n\n[lietotne] Revit izmaiņa nav izpildīta: aktīvais Revit dokuments (${w.title}) nav šī projekta darba kopija. Izveido to: Versijas → Revit → Darba kopija.\n\n` });
 							return w.hint ?? workCopyRefusal(w.title);
 						}
 					}
@@ -472,11 +476,12 @@ export class ThreadRunner {
 					// remembered only for a choice that is going to run: a refused one never moved the agent's session
 					if (selects) {
 						revitChoice = (ctx.args ?? ctx.toolCall.arguments ?? null) as Record<string, unknown> | null;
-						// the revit_* tools run in the tools server, another process: it reads the choice from the run's folder before each Revit call
+						// the revit_* tools run in the tools server, another process: it reads the choice from the conversation's file before each Revit call
 						try {
-							writeFileSync(join(runDir, REVIT_CHOICE_FILE), JSON.stringify(revitChoice ?? {}), "utf8");
+							mkdirSync(dirname(choicePath), { recursive: true });
+							writeFileSync(choicePath, JSON.stringify(revitChoice ?? {}), "utf8");
 						} catch {
-							// the folder is gone: the tools server then has no choice and says so
+							// the folder cannot be written: the tools server then goes by the working copy alone
 						}
 					}
 					return undefined;

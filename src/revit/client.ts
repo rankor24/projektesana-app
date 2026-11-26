@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SESSION_TOOLS, type SessionPicker } from "./target.js";
 
 export interface RevitCaller {
 	call(tool: string, args?: Record<string, unknown>): Promise<string>;
@@ -67,24 +68,9 @@ export function launchSpec(l: RevitLaunch, electronNode: string): { command: str
 
 export class RevitClient implements RevitCaller {
 	private client: Promise<Client> | null = null;
-	/** The Revit session the agent chose (the arguments of its select_revit_instance), when this client works for an agent's run. The agent's own Revit server is another process with its own choice,
-	 *  so every call of this client first makes the same choice on its connection (again after a reconnect or when the agent changes it). With two Revit sessions open the server otherwise
-	 *  answers "2 Revit sessions are running. Call select_revit_instance first" to every call. A choice the server does not accept stops the call: nothing is done in another session. */
-	choice?: (raw: (tool: string, args: Record<string, unknown>) => Promise<string>) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
-	/** true: a choice the server does not accept stops the call (an agent's tool). false: the call goes on in the session the server has (a screen's call). */
-	strictChoice = true;
-	private applied: string | null = null;
-	private explicit = 0;
-
-	/** Runs `fn` with no automatic choice: its calls go to the session already selected on this connection (the agent's check of the working copy, which selects explicitly). */
-	async explicitly<T>(fn: () => Promise<T>): Promise<T> {
-		this.explicit++;
-		try {
-			return await fn();
-		} finally {
-			this.explicit--;
-		}
-	}
+	/** Run before every call: it puts this connection on the right Revit session (target.ts). Null: calls go as they are. */
+	pick: SessionPicker | null = null;
+	private queue: Promise<unknown> = Promise.resolve();
 
 	constructor(
 		private launch: () => RevitLaunch | null,
@@ -108,10 +94,7 @@ export class RevitClient implements RevitCaller {
 			const spec = launchSpec(l, this.electronNode);
 			const transport = new StdioClientTransport({ command: spec.command, args: spec.args, env: { ...(process.env as Record<string, string>), ...spec.env }, stderr: "pipe" });
 			const c = new Client({ name: "projektesana", version: "2.0.0" });
-			transport.onclose = () => {
-				this.client = null;
-				this.applied = null;
-			};
+			transport.onclose = () => (this.client = null);
 			await c.connect(transport);
 			return c;
 		})().catch((e) => {
@@ -121,24 +104,26 @@ export class RevitClient implements RevitCaller {
 	}
 
 	async call(tool: string, args: Record<string, unknown> = {}): Promise<string> {
-		const c = await this.connect();
-		// a caller moving the session itself (the agent's check, the revision) ends what the automatic choice had made: the next call that wants one selects it again
-		if (tool === "select_revit_instance") this.applied = null;
-		const want = tool === "select_revit_instance" || this.explicit > 0 ? null : ((await this.choice?.((t, a) => this.callOn(c, t, a))) ?? null);
-		// an explicit run (the agent's check) began while the choice was being worked out: it selects for itself, and this call must not move the session under it
-		if (want && this.explicit === 0) {
-			const key = JSON.stringify(want);
-			if (key !== this.applied) {
-				this.applied = null;
-				const said = await this.callOn(c, "select_revit_instance", want);
-				if (/^Selected:/.test(said.trim())) this.applied = key;
-				else if (this.strictChoice) throw new Error(`select_revit_instance: lietotne nevarēja izvēlēties to pašu Revit sesiju, ko aģents (${said.trim().slice(0, 200)}). Nekas netika darīts citā sesijā.`);
-			}
-		}
-		return this.callOn(c, tool, args);
+		if (tool === "list_revit_instances") return this.send(tool, args);
+		// a selection asked for by name goes through the queue too, so it cannot move the session under a running call
+		return this.session((r) => r.call(tool, args), SESSION_TOOLS.has(tool) ? null : this.pick);
 	}
 
-	private async callOn(c: Client, tool: string, args: Record<string, unknown>): Promise<string> {
+	/** Runs `fn` against one Revit session: `pick` selects it first, and no other call of this client can move it until `fn` ends. `fn` talks to Revit only through the caller it is given
+	 *  (a call on the client itself would wait for `fn` to end). */
+	session<T>(fn: (r: RevitCaller) => Promise<T>, pick: SessionPicker | null = this.pick): Promise<T> {
+		const run = async () => {
+			const r: RevitCaller = { call: (tool, args = {}) => this.send(tool, args) };
+			if (pick) await pick(r);
+			return fn(r);
+		};
+		const next = this.queue.then(run, run);
+		this.queue = next.catch(() => undefined);
+		return next;
+	}
+
+	private async send(tool: string, args: Record<string, unknown>): Promise<string> {
+		const c = await this.connect();
 		const res = (await c.callTool({ name: tool, arguments: args }, undefined, { timeout: this.timeoutMs })) as { content?: { type: string; text?: string }[]; isError?: boolean };
 		const text = (res.content ?? []).map((x) => (x.type === "text" ? (x.text ?? "") : "")).join("\n");
 		if (res.isError) throw new Error(text || `Revit rīks ${tool} atgrieza kļūdu.`);
