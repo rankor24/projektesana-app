@@ -1,5 +1,5 @@
 // The VZD "Būves eksplikācija" of an inventarizācijas / kadastrālās uzmērīšanas lieta, read from OCR text (a scan of 2000 and
-// later): every room, not a sample (BD424, 2026-11-20: the column reader kept 22 of the rooms, with area and height swapped).
+// later): every room, not a sample (2026-11-20, a real scan: the column reader kept 22 of the rooms, with area and height swapped).
 //   Stāvs: -1                          the floor, for the rows below it (OCR: "Srnvs", "Stays", "Stavs")
 //   Telpu grupas numurs: 003           a room group; numbers restart per group and floor
 //   1  gaitenis  Nedzīvojama iekštelpa  17.6  2.95  [pazīme]

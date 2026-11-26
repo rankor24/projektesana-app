@@ -683,7 +683,7 @@ A choice that is refused is no longer remembered. **Test:** `test/25.0-working-c
 
 His words (project chat): the build was blocked by the unfinished `eksplikacija.ts`; "FINISH IT TOO".
 
-**What it is.** The VZD room table of an inventarizācijas / kadastrālās uzmērīšanas lieta ("Stāvs", "Telpu grupas numurs", a room type on every row). Scans of it moved numbers, names and sizes around (BD424: the old column reader kept 22 of the rooms, area and height swapped). `src/sources/extract/eksplikacija.ts` reads it line by line from the OCR text.
+**What it is.** The VZD room table of an inventarizācijas / kadastrālās uzmērīšanas lieta ("Stāvs", "Telpu grupas numurs", a room type on every row). Scans of it moved numbers, names and sizes around (a real scan: the old column reader kept 22 of the rooms, area and height swapped). `src/sources/extract/eksplikacija.ts` reads it line by line from the OCR text.
 
 | Part | Done in 2.16.0 |
 |---|---|
