@@ -678,3 +678,19 @@ His words (the agent's report, then his order): the app refused every change to 
 | `move_file` with a relative `from` that is only in the work folder | refused as an office-folder move, so the 2.15.0 "no click inside the work folder" did not work (the one failing test) | checked where the move reads it: the project folder first (still refused), the work folder only when the file is there alone |
 
 A choice that is refused is no longer remembered. **Test:** `test/25.0-working-copy.test.ts`, `test/21.1-free-writes.test.ts`.
+
+## 2026-11-26: the VZD "Būves eksplikācija" is read by its own reader (version 2.16.0)
+
+His words (project chat): the build was blocked by the unfinished `eksplikacija.ts`; "FINISH IT TOO".
+
+**What it is.** The VZD room table of an inventarizācijas / kadastrālās uzmērīšanas lieta ("Stāvs", "Telpu grupas numurs", a room type on every row). Scans of it moved numbers, names and sizes around (BD424: the old column reader kept 22 of the rooms, area and height swapped). `src/sources/extract/eksplikacija.ts` reads it line by line from the OCR text.
+
+| Part | Done in 2.16.0 |
+|---|---|
+| The reader was a loose file nobody called | `roomTableOf` (`src/sources/room-table.ts`) uses it for any document that has room groups and room types (`isEksplikacija`), from the OCR text or from a text-layer PDF's rebuilt lines; any other table still goes through the old `kl.ts` reader. A document whose text says "Telpu grupas numurs" now also gets into the inventory (Telpas, comparison with the model, checks). |
+| "Stāvs: 1" was not read as a floor (`\w` does not match "ā") | the floor line allows any letter and the OCR forms (Srnvs, Stays) |
+| The document's group totals were collected but never used | every row keeps its room group (`RoomRow.group`); the group totals ("001 telpu grupas kopējā platība") and the building total are checked against the rows. Telpas shows a badge per group next to the floor badges (✓ or "sum ≠ stated"), the room number shows its group in grey, the Excel export has the groups on the "Summas" sheet. |
+
+**Test:** `test/1.10-eksplikacija.test.ts` on the invented scan `test/fixtures/docs/eksplikacija-ocr.txt` (2 room groups, 3 floors, 13 rooms, table borders and misread letters, a page read column by column, area and height swapped, the number behind the name, a trailing "pazīme" digit; totals check; a line without sizes goes to "unread"; the inventory takes the reader; a plain table does not). No real project data. **Not checked live** (his rule): a real VZD scan.
+
+**Not done / his call.** Room numbers restart per group and floor, so the model comparison (which pairs by number only) reports "Nr. 1 ir N reizes" for such a document. Pairing by group and number would need the room numbers in the Revit model to follow the same scheme; how the office numbers rooms there is his call. The room names the reader fixes (diacritics from OCR) come from a fixed list of names these documents use; a name not in the list is kept as read.
