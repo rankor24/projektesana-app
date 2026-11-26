@@ -67,6 +67,11 @@ export function launchSpec(l: RevitLaunch, electronNode: string): { command: str
 
 export class RevitClient implements RevitCaller {
 	private client: Promise<Client> | null = null;
+	/** The Revit session the agent chose (the arguments of its select_revit_instance), when this client works for an agent's run. The agent's own Revit server is another process with its own choice,
+	 *  so every call of this client first makes the same choice on its connection (again after a reconnect or when the agent changes it). With two Revit sessions open the server otherwise
+	 *  answers "2 Revit sessions are running. Call select_revit_instance first" to every call. A choice the server does not accept stops the call: nothing is done in another session. */
+	choice?: () => Record<string, unknown> | null;
+	private applied: string | null = null;
 
 	constructor(
 		private launch: () => RevitLaunch | null,
@@ -90,7 +95,10 @@ export class RevitClient implements RevitCaller {
 			const spec = launchSpec(l, this.electronNode);
 			const transport = new StdioClientTransport({ command: spec.command, args: spec.args, env: { ...(process.env as Record<string, string>), ...spec.env }, stderr: "pipe" });
 			const c = new Client({ name: "projektesana", version: "2.0.0" });
-			transport.onclose = () => (this.client = null);
+			transport.onclose = () => {
+				this.client = null;
+				this.applied = null;
+			};
 			await c.connect(transport);
 			return c;
 		})().catch((e) => {
@@ -101,6 +109,20 @@ export class RevitClient implements RevitCaller {
 
 	async call(tool: string, args: Record<string, unknown> = {}): Promise<string> {
 		const c = await this.connect();
+		const want = tool === "select_revit_instance" ? null : (this.choice?.() ?? null);
+		if (want) {
+			const key = JSON.stringify(want);
+			if (key !== this.applied) {
+				this.applied = null;
+				const said = await this.callOn(c, "select_revit_instance", want);
+				if (!/^Selected:/.test(said.trim())) throw new Error(`select_revit_instance: lietotne nevarēja izvēlēties to pašu Revit sesiju, ko aģents (${said.trim().slice(0, 200)}). Nekas netika darīts citā sesijā.`);
+				this.applied = key;
+			}
+		}
+		return this.callOn(c, tool, args);
+	}
+
+	private async callOn(c: Client, tool: string, args: Record<string, unknown>): Promise<string> {
 		const res = (await c.callTool({ name: tool, arguments: args }, undefined, { timeout: this.timeoutMs })) as { content?: { type: string; text?: string }[]; isError?: boolean };
 		const text = (res.content ?? []).map((x) => (x.type === "text" ? (x.text ?? "") : "")).join("\n");
 		if (res.isError) throw new Error(text || `Revit rīks ${tool} atgrieza kļūdu.`);

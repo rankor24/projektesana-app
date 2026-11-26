@@ -38,6 +38,7 @@ import { allTools, appLevels } from "./tools/defs.js";
 import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
+import { REVIT_CHOICE_FILE } from "./tools/revit-commands.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -469,7 +470,15 @@ export class ThreadRunner {
 						}
 					}
 					// remembered only for a choice that is going to run: a refused one never moved the agent's session
-					if (selects) revitChoice = (ctx.args ?? ctx.toolCall.arguments ?? null) as Record<string, unknown> | null;
+					if (selects) {
+						revitChoice = (ctx.args ?? ctx.toolCall.arguments ?? null) as Record<string, unknown> | null;
+						// the revit_* tools run in the tools server, another process: it reads the choice from the run's folder before each Revit call
+						try {
+							writeFileSync(join(runDir, REVIT_CHOICE_FILE), JSON.stringify(revitChoice ?? {}), "utf8");
+						} catch {
+							// the folder is gone: the tools server then has no choice and says so
+						}
+					}
 					return undefined;
 				};
 				const afterToolCall = async (ctx: { toolCall: { id: string } }) => {
