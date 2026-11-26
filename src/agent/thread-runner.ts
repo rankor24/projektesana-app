@@ -332,7 +332,8 @@ export class ThreadRunner {
 		let batchOpen = false;
 		// Revit calls of this run in flight (and when one last moved): the popup watch acts only while an agent call waits for Revit (agent/dialog-watch.ts)
 		const revitFlight = { open: new Set<string>(), last: 0, n: 0 };
-		let stopDialogWatch: (() => void) | null = null;
+		// (the cast keeps TypeScript from reading it as always null: it is assigned inside the attempt's closure)
+		let stopDialogWatch = null as (() => void) | null;
 		// the engine's way to put a message into the running conversation (null when it has none, or between attempts)
 		let steerNow: SteerHandle | null = null;
 		// who this run is, for the agent log
