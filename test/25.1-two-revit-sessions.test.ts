@@ -122,3 +122,15 @@ test("25.1 explicitly(): the agent's check of the working copy gets no automatic
 	assert.equal(asked, 0, "the provider was not asked inside explicitly()");
 	assert.deepEqual(r.srv.calls, ["select:14488", "docInfo"]);
 });
+
+test("25.1 after the agent's check has moved the session, a screen's next call makes its own choice again (a write from a screen never follows the agent's session)", async () => {
+	const r = rig();
+	r.rc.strictChoice = false;
+	r.rc.choice = () => ({ pid: 17376 });
+	assert.equal(await r.rc.call("export_room_data", {}), "ok in 17376");
+	await r.rc.explicitly(async () => {
+		await r.rc.call("select_revit_instance", { pid: 14488 });
+	});
+	assert.equal(await r.rc.call("send_code_to_revit", {}), "ok in 17376");
+	assert.deepEqual(r.srv.calls, ["select:17376", "export_room_data", "select:14488", "select:17376", "send_code_to_revit"]);
+});

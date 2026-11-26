@@ -122,6 +122,8 @@ export class RevitClient implements RevitCaller {
 
 	async call(tool: string, args: Record<string, unknown> = {}): Promise<string> {
 		const c = await this.connect();
+		// a caller moving the session itself (the agent's check, the revision) ends what the automatic choice had made: the next call that wants one selects it again
+		if (tool === "select_revit_instance") this.applied = null;
 		const want = tool === "select_revit_instance" || this.explicit > 0 ? null : ((await this.choice?.((t, a) => this.callOn(c, t, a))) ?? null);
 		// an explicit run (the agent's check) began while the choice was being worked out: it selects for itself, and this call must not move the session under it
 		if (want && this.explicit === 0) {
