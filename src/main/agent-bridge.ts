@@ -13,7 +13,7 @@ import type { Registry } from "../core/registry.js";
 import { sourceBytes } from "../sources/bytes.js";
 import type { PageRenderer } from "./offscreen.js";
 import type { AppSettingsHost } from "./app-settings/host.js";
-import { cleanRegion, viewImage, type NativeLike } from "./image-view.js";
+import { viewImage, type NativeLike } from "./image-view.js";
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
@@ -81,14 +81,19 @@ export function startAgentBridge(d: { handlers: Handlers; registry: Registry; re
 				if (!s) return send(404, { error: `Avots ${sourceId} nav atrasts.` });
 				const name = (s.container?.inner ?? s.paths[0] ?? "").split("::").pop() ?? "";
 				const ext = extname(name).toLowerCase();
+				if (![".png", ".jpg", ".jpeg", ".webp", ".pdf"].includes(ext)) return send(400, { error: `${s.title}: lapas attēls ir tikai PDF un attēliem (${ext || "nezināms"}).` });
 				const bytes = sourceBytes(store, sourceId);
-				if ([".png", ".jpg", ".jpeg", ".webp"].includes(ext)) return send(200, { image: Buffer.from(bytes).toString("base64"), mimeType: ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg", page: 1, pages: 1 });
-				if (ext !== ".pdf") return send(400, { error: `${s.title}: lapas attēls ir tikai PDF un attēliem (${ext || "nezināms"}).` });
-				const page = Math.max(1, Math.floor(Number(b.page) || 1));
-				// scale 2: a scan's small print stays readable for the model, the image under ~2 MB
-				const [img] = await d.renderer.render(bytes, [page], Math.min(3, Math.max(1, Number(b.scale) || 2)));
-				if (!img) return send(400, { error: `${s.title}: lapa ${page} nav.` });
-				return send(200, { image: Buffer.from(img.png).toString("base64"), mimeType: "image/png", page, width: img.width, height: img.height });
+				// the same code as view_image: a whole page, or one part of it (region) drawn at its own scale (2.17.2: region was dropped here before)
+				const r = await viewImage({ renderer: d.renderer, native: d.native }, { path: name, bytes, page: Number(b.page) || 1, scale: Number(b.scale) || undefined, region: b.region as never });
+				return send(200, { ...r, page: r.page ?? 1 });
+			}
+			// view_image (agent/tools/media.ts): a file on this PC (an image, a PDF page, a sheet the tools server already turned into a PDF), whole or one part of it
+			if (req.url === "/image") {
+				const path = String(b.path ?? "");
+				if (!isAbsolute(path)) return send(400, { error: `view_image: ceļam jābūt pilnam (saņemts «${path}»).` });
+				if (!existsSync(path) || !statSync(path).isFile()) return send(404, { error: `Faila nav: ${path}` });
+				const r = await viewImage({ renderer: d.renderer, native: d.native }, { path, page: Number(b.page) || undefined, scale: Number(b.scale) || undefined, region: b.region as never });
+				return send(200, r);
 			}
 			return send(404, { error: "nezināms ceļš" });
 		} catch (e) {

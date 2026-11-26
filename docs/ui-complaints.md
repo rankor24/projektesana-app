@@ -760,3 +760,14 @@ The user (2026-11-26, a screenshot of the expanded rail with its Collapse button
 **Checked.** The collapsed and expanded rail rendered in Chromium from the real style sheet (icons centred, active mark visible, groups separated). **Not checked live** in the built app: his playtest. If the Collapse button still does nothing for him, that is a different bug and needs the exact behaviour.
 
 **Corrected before the 2.17.1 build (`styles.css`).** Reading the style sheet again showed that the collapsed rail centres its children while `.rail-group` had no width, so each page group shrank to its icon: page buttons about 18 px wide (the bottom group's were full width), the hairline about 2 px and the active mark away from the edge. The collapsed groups now take the rail's full width, as BIM Crew's. **Checked** by reading the style sheet only; not rendered and not checked live.
+
+## 2026-11-26: the agents' problem list read through, view_image never worked (version 2.17.2)
+
+The user asked for everything the agents wrote into the app's problem list (Atmiņa, `<app data>\app-issues.jsonl`, one list for the whole office) to be checked against the code and fixed. Eight entries, four problems:
+
+| Problem (entries) | State in 2.17.1 | What 2.17.2 does |
+|---|---|---|
+| Two Revit sessions: `revit_*` tools and the working-copy check ignored the chosen session (3) | Fixed in 2.16.1 and 2.16.3 (the reports were written before that build). | Nothing to change. |
+| A source's stored path no longer matches where the file is (the folder was moved or unpacked one level less after the scan): `view_page`, `list_rooms` stopped with a bare ENOENT (3) | The list had been corrected by a later scan, but until a scan the source stayed unreadable. | `sources/bytes.ts`: a file missing from its stored path is looked for under the project's 1.1 folder by name and read only if its hash (size when there is none) is the source's; the error otherwise says the file moved and names `app_change projects.scan`. |
+| `view_image` answered «nezināms ceļš» for every path; `view_page` with `region` returned the whole page (1) | **A real bug since 2.14.0**: the commit added the imports of the bridge's `/image` route but not the route; `/page` never passed `region` on. | `main/agent-bridge.ts`: `/image` (absolute path, whole or `region`) and `/page` both go through `viewImage`, so a region is drawn at its own scale. `test/23.2-bridge-image.test.ts`. |
+| `view_page` image "Resource offloaded to file" and the agent cannot see it (1, 25 Nov) | Not changed. The Antigravity server writes every image a tool returns to a file and shows the model that file through its own `view_file`; the app returns an ordinary MCP image block. **Not checked live** (needs the signed-in Google account). | Stays open until a live run on Antigravity shows whether `view_file` shows the picture; the Claude engine hands the image block to the model as it is (`claude/tools.ts`). |
