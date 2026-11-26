@@ -89,7 +89,18 @@ interface Live {
 	request: string;
 	/** the way into the agent while an attempt of the engine is going (steering); null when the engine has none or the attempt is over */
 	steer: RunSteer | null;
+	/** Stop was pressed: the run is no longer shown as running and holds no slot, though its engine may still be winding down (closing a tool server, a provider that answers a cancel late) */
+	stopped?: boolean;
+	/** the run's bookkeeping is done (it left `live`): what its engine still says is dropped, except what the provider charged */
+	over?: boolean;
+	/** says an event as the run (the engine's own channel) */
+	say?: (e: RunEvent) => void;
+	/** ends the run's bookkeeping now, whether or not the engine has finished */
+	wrapUp?: () => void;
 }
+
+/** How long a stopped run's engine gets to wind down by itself before the run is ended without it (ms). */
+const STOP_GRACE_MS = 1500;
 
 /** A message the user wrote while a chat's agent was answering. One per thread. */
 interface HeldMsg {
@@ -130,6 +141,8 @@ const steerView = (m: HeldMsg): SteerView => ({ threadId: m.threadId, projectId:
 
 export class Coordinator {
 	private live = new Map<string, Live>();
+	/** engines of stopped runs that are still winding down (the run itself is already out of `live`, or on its way out) */
+	private winding = new Set<Promise<unknown>>();
 	private queue: QueueItem[] = [];
 	private paused = false;
 	/** threads `restore()` found in flight; they stay `interrupted` until the user resumes or discards */
@@ -256,7 +269,7 @@ export class Coordinator {
 
 	private running(): Running[] {
 		const waiting = new Set([...this.confirms.values()].map((c) => c.live));
-		return [...this.live.values()].map((l) => ({ runId: l.runId, threadId: l.thread.id, agent: l.thread.agent, projectId: l.thread.projectId, wave: l.wave, waitingConfirm: waiting.has(l) }));
+		return [...this.live.values()].filter((l) => !l.stopped).map((l) => ({ runId: l.runId, threadId: l.thread.id, agent: l.thread.agent, projectId: l.thread.projectId, wave: l.wave, waitingConfirm: waiting.has(l) }));
 	}
 
 	view(): QueueView {
@@ -478,6 +491,8 @@ export class Coordinator {
 		let answer = "";
 		let lastError: string | null = null;
 		const emit = (e: RunEvent) => {
+			// a run ended without its engine (Stop): the engine's late words are not shown, only what the provider charged
+			if (live.over && e.type !== "usage") return;
 			// any event is a sign of life: the stall watchdog counts from the last one
 			live.lastActive = Date.now();
 			if (e.type === "error") lastError = e.message;
@@ -522,6 +537,34 @@ export class Coordinator {
 			if (h) this.arm(thread.id, live);
 			else for (const m of this.steering.values()) if (m.armed && m.armed === prev) m.armed = null;
 		};
+		const wrapUp = () => {
+			if (live.over) return;
+			live.over = true;
+			this.denyConfirms((c) => c.live === live, false);
+			this.live.delete(runId);
+			// a run a message started that did not finish its work: the senders are told, so none waits for ever (a closing app keeps it all for the next start)
+			if (!this.closing && ids.length && (abort.signal.aborted || !ok)) {
+				const why = live.stalled ? "darbs 20 minūtes nerādīja nekādu aktivitāti un tika apturēts." : abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
+				this.blockMessages(thread.projectId, ids, `Aģents «${thread.agent}» nevarēja izpildīt: ${why}`, live.silent ? "stopped" : "queued");
+			}
+			// a run a message started that ended well but sent nothing back: its final answer goes to the sender, so the sender does not wait for ever
+			else if (!this.closing && ids.length) this.autoReply(thread.projectId, ids, answer);
+			// a run cut by the app closing is not finished: its thread stays `interrupted`, so the next start asks the user and tells the senders (I1)
+			if (this.closing && abort.signal.aborted && !ok && !live.silent) this.mark(thread, { state: "interrupted" });
+			else this.settle(thread.projectId, thread.id);
+			// a message the user wrote while this run went on and the agent did not read: sent as a new run now, or kept for the user when this run was stopped or failed
+			this.afterRun(thread, { ok, aborted: abort.signal.aborted });
+			// what the user must be able to see and retry: a run that failed or stalled; a run the user stopped (or a pause did) is not one, and a run that worked clears the thread's
+			if (!this.closing) {
+				// a stall was recorded by the watchdog the moment it stopped the run (an engine that ignores its signal never gets here)
+				if (!live.stalled && !ok && !abort.signal.aborted) this.noteIncident(thread.projectId, thread.id, thread.agent, "failed", lastError ?? "gājiens beidzās bez rezultāta", item.input.text);
+				else if (ok && this.d.incidents?.settled(thread.id)) this.waitingChanged();
+			}
+			if (!this.closing) this.wake(thread.projectId);
+			this.pump();
+		};
+		live.say = emit;
+		live.wrapUp = wrapUp;
 		live.done = this.d.runner
 			.run({ runId, thread, spec, text, focus: item.input.focus, files: extra?.files ?? { images: [], text: "", refs: [] }, wave, signal: abort.signal, emit, ask, depth, peer: ids.length > 0, ...(levelCap ? { levelCap } : {}), wake: () => this.wake(thread.projectId), notesChanged: () => this.waitingChanged(), dataChanged: (what) => this.d.onData?.(thread.projectId, what), onSteer })
 			.then(
@@ -535,30 +578,7 @@ export class Coordinator {
 					throw e;
 				},
 			)
-			.finally(() => {
-				this.denyConfirms((c) => c.live === live, false);
-				this.live.delete(runId);
-				// a run a message started that did not finish its work: the senders are told, so none waits for ever (a closing app keeps it all for the next start)
-				if (!this.closing && ids.length && (abort.signal.aborted || !ok)) {
-					const why = live.stalled ? "darbs 20 minūtes nerādīja nekādu aktivitāti un tika apturēts." : abort.signal.aborted ? "darbs tika apturēts." : `gājiens beidzās ar kļūdu: ${lastError ?? "nezināma kļūda"}`;
-					this.blockMessages(thread.projectId, ids, `Aģents «${thread.agent}» nevarēja izpildīt: ${why}`, live.silent ? "stopped" : "queued");
-				}
-				// a run a message started that ended well but sent nothing back: its final answer goes to the sender, so the sender does not wait for ever
-				else if (!this.closing && ids.length) this.autoReply(thread.projectId, ids, answer);
-				// a run cut by the app closing is not finished: its thread stays `interrupted`, so the next start asks the user and tells the senders (I1)
-				if (this.closing && abort.signal.aborted && !ok && !live.silent) this.mark(thread, { state: "interrupted" });
-				else this.settle(thread.projectId, thread.id);
-				// a message the user wrote while this run went on and the agent did not read: sent as a new run now, or kept for the user when this run was stopped or failed
-				this.afterRun(thread, { ok, aborted: abort.signal.aborted });
-				// what the user must be able to see and retry: a run that failed or stalled; a run the user stopped (or a pause did) is not one, and a run that worked clears the thread's
-				if (!this.closing) {
-					// a stall was recorded by the watchdog the moment it stopped the run (an engine that ignores its signal never gets here)
-					if (!live.stalled && !ok && !abort.signal.aborted) this.noteIncident(thread.projectId, thread.id, thread.agent, "failed", lastError ?? "gājiens beidzās bez rezultāta", item.input.text);
-					else if (ok && this.d.incidents?.settled(thread.id)) this.waitingChanged();
-				}
-				if (!this.closing) this.wake(thread.projectId);
-				this.pump();
-			});
+			.finally(wrapUp);
 		return runId;
 	}
 
@@ -793,7 +813,7 @@ export class Coordinator {
 		const lives = [...this.live.values()].filter((l) => agents.has(l.thread.agent) || l.askedBy.some((a) => agents.has(a)));
 		for (const l of lives) {
 			l.silent = true;
-			l.abort.abort();
+			this.abortRun(l);
 		}
 		this.denyConfirms((c) => lives.includes(c.live), true);
 		// handed-out work that has not begun: stopped with the one who handed it out (kept in the saved queue as stopped)
@@ -884,13 +904,34 @@ export class Coordinator {
 		this.waitingChanged();
 	}
 
+	/** Stop for a run, at once: its signal fires (the provider request and the tool calls are cancelled), the window is told the run ended and the list stops showing it,
+	 *  and its slot is free. The engine may still be winding down (a provider that answers a cancel late, a tool server that is slow to close): it gets `STOP_GRACE_MS`,
+	 *  then the run's bookkeeping is ended without it. `shutdown` still waits for the engine itself. */
+	private abortRun(l: Live): void {
+		if (l.stopped) return;
+		l.stopped = true;
+		l.abort.abort();
+		try {
+			l.say?.({ type: "error", engine: "pi", message: "aborted" });
+		} catch {
+			// a window already gone
+		}
+		const timer = setTimeout(() => l.wrapUp?.(), STOP_GRACE_MS);
+		timer.unref?.();
+		this.winding.add(l.done);
+		void l.done.catch(() => undefined).finally(() => {
+			clearTimeout(timer);
+			this.winding.delete(l.done);
+		});
+	}
+
 	/** Aborts the runs that match, marks their queued items stopped (kept in the saved queue) and answers their confirmations with no.
 	 *  The messages those items were to deliver are stopped with them. `silent`: Stop for everything or a wave, where no sender is to be woken. */
 	private stopWhere(match: (x: { wave: string; threadId: string }) => boolean, silent: boolean): void {
 		const lives = [...this.live.values()].filter((l) => match({ wave: l.wave, threadId: l.thread.id }));
 		for (const l of lives) {
 			l.silent = silent;
-			l.abort.abort();
+			this.abortRun(l);
 		}
 		this.denyConfirms((c) => lives.includes(c.live), true);
 		const dropped: QueueItem[] = [];
@@ -1273,7 +1314,7 @@ export class Coordinator {
 		this.held?.abort();
 		for (const l of this.live.values()) l.abort.abort();
 		this.denyConfirms(() => true, true);
-		await Promise.all([...this.live.values()].map((l) => l.done.catch(() => undefined)));
+		await Promise.all([...[...this.live.values()].map((l) => l.done), ...this.winding].map((d) => d.catch(() => undefined)));
 		this.closing = false;
 	}
 }

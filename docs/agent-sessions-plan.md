@@ -246,7 +246,7 @@ export function saveQueue(file: string, q: { items: QueueItem[]; paused: boolean
 
 ```ts
 start(i: StartInput): Promise<{ runId: string | null; queued: boolean }>; // runs now or queues
-stopAll(wave?: string): void;        // aborts runs, marks queued items stopped, denies confirmations, frees locks
+stopAll(wave?: string): void;        // aborts runs, marks queued items stopped, denies confirmations, frees locks. Instant (2.16.2): a stopped run leaves the running list and frees its slot in the same call, the window gets its `aborted` end at once, and an engine that is slow to wind down (provider cancel, tool server close) gets 1.5 s before the run's bookkeeping is ended without it
 stopThread(threadId: string): void;
 pause(): void; resume(): void;
 view(): QueueView;
