@@ -14,7 +14,7 @@ import { LIMIT_RANGES } from "../../core/messages.js";
 import type { HoldRow, ProviderRow } from "../../shared/api.js";
 import { entryById, settingWhere } from "../../shared/settings-index.js";
 import type { SettingTier } from "../../shared/app-settings.js";
-import type { Effort, Settings } from "../../shared/types.js";
+import { DEFAULT_MAX_TURNS, DEFAULT_MAX_TURNS_SUB, MAX_TURNS_LIMIT, type Effort, type Settings } from "../../shared/types.js";
 import type { Limits } from "../../shared/thread-types.js";
 
 export interface RegistryDeps {
@@ -187,6 +187,23 @@ export async function buildRegistry(deps: RegistryDeps): Promise<SettingEntry[]>
 		restore: (v) => set(v as Partial<Settings>),
 		write: async (v) => (set({ maxParallelAgents: v as number }), null),
 	});
+	for (const [id, key, def, who] of [
+		["agents.maxTurns", "maxTurns", DEFAULT_MAX_TURNS, "galvenais aģents"],
+		["agents.maxTurnsSub", "maxTurnsSub", DEFAULT_MAX_TURNS_SUB, "palīgs vai speciālists"],
+	] as const) {
+		entries.push({
+			...meta(id),
+			tier: "safe",
+			help: `Cik modeļa atbilžu (soļu) viens skrējiens drīkst veikt, pirms to aptur: ${who}. Augsts skaitlis nozīmē, ka aģents strādā, līdz uzdevums ir gatavs; pēc šī skaita skrējiens beidzas ar kļūdu «Sasniegts soļu limits». Noklusējums ${def}.`,
+			allowed: `vesels skaitlis 1–${MAX_TURNS_LIMIT}`,
+			value: z.number().int().min(1).max(MAX_TURNS_LIMIT),
+			read: () => String(s()[key]),
+			current: () => s()[key],
+			snap: () => ({ [key]: s()[key] }),
+			restore: (v) => set(v as Partial<Settings>),
+			write: async (v) => (set({ [key]: v as number }), null),
+		});
+	}
 	const LIMIT_HELP: Record<keyof Limits, string> = {
 		exchangesPerTopic: "Cik ziņu par vienu tematu drīkst nosūtīt katra puse, pirms temats jāslēdz.",
 		chainDepth: "Cik dziļi ziņa var izraisīt nākamo ziņu (aģents → aģents → aģents…).",

@@ -693,6 +693,7 @@ export class ThreadRunner {
 						emit: handle,
 						log: this.d.agentLog ? { start: (lane, info) => this.d.agentLog!.start(runId, logMeta, info, lane), event: (lane, e) => this.d.agentLog!.event(runId, e, undefined, lane) } : undefined,
 						maxParallel: () => this.d.settings().maxParallelAgents,
+						maxTurns: s.maxTurnsSub,
 						specs: () => this.d.agents?.() ?? DEFAULT_AGENTS,
 						// a paused specialist is not handed work (holds.ts): the lead is told not to route around the pause
 						held: (agentId) => this.d.held?.(agentId) ?? null,
@@ -716,6 +717,7 @@ export class ThreadRunner {
 						systemPrompt,
 						mcp,
 						signal,
+						maxTurns: s.maxTurns,
 						beforeToolCall,
 						afterToolCall,
 						history: h,

@@ -504,3 +504,37 @@ test("unpacking: both readers take the two pinned files and refuse anything else
 		}
 	}
 });
+
+test("the server's own limit of model requests per prompt does not end the task: the same session carries on until the app's step limit (the setting)", async () => {
+	const root = tmp("agy-limit-");
+	const { host, run, calls } = engine(root);
+	try {
+		const events: RunEvent[] = [];
+		await run(base(events, { prompt: "MAXTURNS2 sāc darbu", maxTurns: 1000 }) as never);
+		assert.equal(events.some((e) => e.type === "error"), false, JSON.stringify(events.filter((e) => e.type === "error")));
+		assert.equal(events.filter((e) => e.type === "done").length, 1, "the run ends once, when the task is done");
+		assert.equal(events.filter((e) => e.type === "text" && /apturēja gājienu pēc sava limita/.test(e.text)).length, 2, "the chat says it twice");
+		const prompts = calls().filter((c) => c.method === "session/prompt");
+		assert.equal(prompts.length, 3);
+		assert.equal(new Set(prompts.map((p) => p.params.sessionId)).size, 1, "one session");
+		assert.match(prompts[1].params.text, /Turpini darbu no vietas, kur apstājies/);
+		assert.equal(calls().filter((c) => c.method === "session/cancel").length, 0);
+	} finally {
+		await host.closeAll();
+	}
+});
+
+test("the app's step limit stops an Antigravity run in words: past it the prompt is cancelled and the run ends with the step-limit error, not \"aborted\"", async () => {
+	const root = tmp("agy-steps-");
+	const { host, run, calls } = engine(root, { cancelWaitMs: 600 });
+	try {
+		const events: RunEvent[] = [];
+		await run(base(events, { prompt: "CALLTOOL lūdzu", extraTools: [echoTool], maxTurns: 0 }) as never);
+		const errors = events.filter((e) => e.type === "error") as Extract<RunEvent, { type: "error" }>[];
+		assert.deepEqual(errors.map((e) => e.message), ["Sasniegts soļu limits (0)."]);
+		assert.equal(events.some((e) => e.type === "done"), false);
+		assert.equal(calls().filter((c) => c.method === "session/cancel").length, 1);
+	} finally {
+		await host.closeAll();
+	}
+});

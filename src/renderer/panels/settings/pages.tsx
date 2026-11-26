@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { call, errText } from "../../bridge";
 import { usageText } from "../../../shared/tokens";
 import type { Limits } from "../../../shared/thread-types";
+import { MAX_TURNS_LIMIT } from "../../../shared/types";
 import type { SettingsPageId } from "../../../shared/settings-index";
 import { Badge, Err, useLoad } from "../../ui";
 import { getLang, LANGS, locale, setLang, tr, trDyn } from "../../i18n";
@@ -411,6 +412,42 @@ function LimitsPage({ x }: { x: SettingsCtx }) {
 					</div>
 				)}
 				<div className="dim small">{tr("Katrs palīgs ir atsevišķs modeļa izsaukums ar savu kontekstu, un maksā savus tokenus (skat. Izmantojums).")}</div>
+			</Block>
+			<Block anchor="turns" title={tr("Soļu limits")}>
+				{s && (
+					<>
+						<Field label={tr("Galvenajam aģentam (soļi vienā skrējienā)")}>
+							<input
+								key={`mt${s.maxTurns}`}
+								type="number"
+								min={1}
+								max={MAX_TURNS_LIMIT}
+								defaultValue={s.maxTurns}
+								style={{ width: 110 }}
+								onBlur={(e) => {
+									// saved on leaving the field; main puts it into 1 – MAX_TURNS_LIMIT and the field shows what was kept
+									const v = Number(e.target.value);
+									if (Number.isFinite(v) && v !== s.maxTurns) void act(() => call("settings.set", { maxTurns: v }));
+								}}
+							/>
+						</Field>
+						<Field label={tr("Palīgiem un speciālistiem (soļi vienā skrējienā)")}>
+							<input
+								key={`ms${s.maxTurnsSub}`}
+								type="number"
+								min={1}
+								max={MAX_TURNS_LIMIT}
+								defaultValue={s.maxTurnsSub}
+								style={{ width: 110 }}
+								onBlur={(e) => {
+									const v = Number(e.target.value);
+									if (Number.isFinite(v) && v !== s.maxTurnsSub) void act(() => call("settings.set", { maxTurnsSub: v }));
+								}}
+							/>
+						</Field>
+					</>
+				)}
+				<div className="dim small">{tr("Cik modeļa atbilžu viens skrējiens drīkst veikt, pirms to aptur. Augsts skaitlis (noklusējums 1000 un 500) nozīmē, ka aģents strādā, līdz uzdevums ir gatavs, un neprasa «turpini» pēc katra soļa. Sasniedzot limitu, skrējiens beidzas ar kļūdu «Sasniegts soļu limits». Darbojas ar visiem AI pakalpojumiem.")}</div>
 			</Block>
 			<Block anchor="limits" title={tr("Aģentu ierobežojumi")}>
 				{s &&
