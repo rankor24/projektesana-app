@@ -1,13 +1,18 @@
 // 27.0 Revit popup windows (docs/revit-dialogs-plan.md): what may be answered, the watcher, the computer-use helper's tools. Invented popups only; the screen is a fake.
 // Not covered here (needs a live Revit on the PC): the add-in's own handler, resources/revit-screen.ps1, and a real click.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { dialogTools, describe, runDialogAgent, type DialogAgentDeps } from "../src/agent/dialog-agent.ts";
 import { dialogNoticesTool, DialogWatch, Notices } from "../src/agent/dialog-watch.ts";
 import { appendDialogLog, assess, buttonAt, buttonKind, chatLine, decide, dialogLogFile, pathsIn, type DialogLogLine, type DialogWindow, type PolicyContext } from "../src/revit/dialog-policy.ts";
 import { normalizePopup, RevitScreen } from "../src/revit/screen.ts";
+import { LockRegistry } from "../src/agent/locks.ts";
+import { createPiRuntime, type PiRunOptions } from "../src/agent/pi/index.ts";
+import { ThreadRunner } from "../src/agent/thread-runner.ts";
+import { ThreadStore } from "../src/core/threads.ts";
+import { DEFAULT_SETTINGS, type RunEvent, type Settings } from "../src/shared/types.ts";
 import { tmp } from "./helpers.ts";
 
 const WORK = "C:\\Data\\agent-work\\proj1\\House_WORK.rvt";
@@ -393,4 +398,72 @@ test("notices: what the app did in Revit waits for the agent on engines that can
 	assert.match(first, /«A»/);
 	assert.match(await read(), /Nav jaunu/);
 	assert.equal(tool.name, "dialog_notices");
+});
+
+/** A whole run of one agent that has a Revit tool; `engine` is what the model "does". The lead (no spec) or a specialist with its own tool list. */
+async function revitRun(o: { specialist: boolean; settings?: Partial<Settings>; skillsDir?: string; engine: (r: PiRunOptions) => Promise<void> }) {
+	const dir = tmp("dlg-run-");
+	const store = new ThreadStore(join(dir, "th"));
+	const rt = createPiRuntime({ path: join(dir, "pi.json"), apiKey: () => null });
+	const spec = { id: o.specialist ? "ar" : "lead", name: "A", description: "", prompt: "", tools: o.specialist ? ["create_level"] : [], ...(o.specialist ? { maxLevel: "confirm" as const } : {}) };
+	const runner = new ThreadRunner({
+		runtime: async () => rt,
+		settings: () => ({ ...DEFAULT_SETTINGS, ...o.settings }),
+		toolsServer: () => ({ command: "node", args: [], env: {} }),
+		revit: () => ({ command: "node", args: [], env: {}, tools: ["create_level"], levels: { create_level: "confirm" } }),
+		revitWork: async () => ({ ok: true, title: "XY_AR_WORK" }),
+		ctx: { projectsDir: dir, dataDir: dir, appDir: dir, ...(o.skillsDir ? { skillsDir: o.skillsDir } : {}) },
+		agents: () => [spec],
+		runsDir: join(dir, "runs"),
+		chatDir: join(dir, "chat"),
+		emit: () => undefined,
+		threads: () => store,
+		locks: new LockRegistry(),
+		runAgent: async (r) => {
+			await o.engine(r);
+			r.onEvent({ type: "done", text: "gatavs" });
+		},
+	});
+	const thread = store.create({ projectId: null, agent: spec.id, title: "t", startedBy: "user" });
+	const events: RunEvent[] = [];
+	await runner.run({ runId: "r1", thread, spec: o.specialist ? spec : null, text: "strādā", focus: [], files: { images: [], text: "", refs: [] }, wave: "w", signal: new AbortController().signal, emit: (e) => void events.push(e), ask: async () => false });
+	return events;
+}
+
+for (const specialist of [false, true])
+	test(`dialog_notices is offered to ${specialist ? "a specialist" : "the lead"} with a Revit tool, and the gate lets it run`, async () => {
+		let offered = false;
+		let blocked: unknown = "never asked";
+		await revitRun({
+			specialist,
+			engine: async (r) => {
+				offered = !!r.extraTools?.some((t) => t.name === "dialog_notices");
+				blocked = await r.beforeToolCall?.({ toolCall: { name: "dialog_notices", id: "t", arguments: {} }, args: {}, assistantMessage: { content: [{ type: "toolCall", id: "t", name: "dialog_notices", arguments: {} }] } } as never, new AbortController().signal);
+			},
+		});
+		assert.equal(offered, true);
+		assert.equal(blocked, undefined);
+	});
+
+// the real watcher and the real powershell.exe, on a stand-in script that only prints one invented popup: nothing on the screen is read or touched
+test("the screen helper switched off in the settings: the user is still told that a Revit popup waits", { skip: process.platform !== "win32" && "Windows only" }, async () => {
+	const res = tmp("dlg-res-");
+	const answer = '{"popups":[{"hwnd":5,"pid":7,"title":"Invented popup","className":"#32770","rect":{"left":0,"top":0,"right":300,"bottom":200},"text":"Invented text","buttons":[],"checkboxes":[],"edits":0}],"ok":true}';
+	writeFileSync(join(res, "revit-screen.ps1"), `param([string]$Op)\n'${answer}'\n`, "utf8");
+	let runs = 0;
+	const events = await revitRun({
+		specialist: false,
+		settings: { revitDialogsOnScreen: false },
+		skillsDir: join(res, "skills"),
+		engine: async (r) => {
+			runs++;
+			r.onEvent({ type: "tool", name: "create_level", id: "c1", detail: "{}" });
+			// two looks of the watcher past its grace time (3 s apart, 8 s grace)
+			await new Promise((done) => setTimeout(done, 13_000));
+		},
+	});
+	const told = events.flatMap((e) => (e.type === "text" ? [e.text] : [])).join("");
+	assert.match(told, /Invented popup/);
+	assert.match(told, /gaida tevi.*izslēgts/s);
+	assert.equal(runs, 1, "no screen helper run");
 });

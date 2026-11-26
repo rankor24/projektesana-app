@@ -772,6 +772,12 @@ The user asked for everything the agents wrote into the app's problem list (Atmi
 | `view_image` answered «nezināms ceļš» for every path; `view_page` with `region` returned the whole page (1) | **A real bug since 2.14.0**: the commit added the imports of the bridge's `/image` route but not the route; `/page` never passed `region` on. | `main/agent-bridge.ts`: `/image` (absolute path, whole or `region`) and `/page` both go through `viewImage`, so a region is drawn at its own scale. `test/23.2-bridge-image.test.ts`. |
 | `view_page` image "Resource offloaded to file" and the agent cannot see it (1, 25 Nov) | Not changed. The Antigravity server writes every image a tool returns to a file and shows the model that file through its own `view_file`; the app returns an ordinary MCP image block. **Not checked live** (needs the signed-in Google account). | Stays open until a live run on Antigravity shows whether `view_file` shows the picture; the Claude engine hands the image block to the model as it is (`claude/tools.ts`). |
 
+**Checked again on the user's PC before the 2.17.2 build.** The list still holds the same eight entries; the three Revit ones are dated before the 2.16.3 commit. **Entry about Antigravity:** that runtime's own session logs of 25 Nov show `view_file` answering a saved page image with the PNG's raw bytes as text, so on Antigravity the agent does not see tool images (the server's behaviour; the app declares no file access of its own to it). Still open.
+
+**A regression of the change above, corrected (`main/image-view.ts`).** Sending `/page` through `viewImage` broke WebP sources: Electron's `nativeImage` decodes PNG and JPEG only (checked on 43.8.7 with a sample file), so `view_page` and `view_image` answered that a good WebP is damaged. A WebP is now sent whole as it is; a `region` of it is refused with the reason. `test/23.2-bridge-image.test.ts`.
+
+**Not covered:** the Word tools and the delivery copy still read a source by its stored path, so for a moved file they say it is missing until the list is scanned again (no entry reported it).
+
 ## 2026-11-26: Revit popup windows that stop the agent (plan only, no version)
 
 The user (2026-11-26): "I think you need to properly plan some Computer Use, for times when Revit has popup window that needs clicking ok/cancel to continue/re-try." A narrow exception to the rule of 2026-11-24 (Revit only through the Revit MCP): it covers Revit's own dialog windows only; `run_command` keeps refusing UI automation.
@@ -792,3 +798,9 @@ The code written without a build (`docs/revit-dialogs-plan.md`) compiled, tested
 | On a stand-in program | List, picture, press by name, click and Escape close the popup; wrong window, other program, other key refused; the allowed answers match the rules for an information, a delete and a save popup. One call takes about 0.84 s. |
 
 **Open, not changed.** `get_dialog_state` waits behind a blocked call of the same MCP server process (one queue in `ConnectionManager.ts`), so it answers only after that call has ended. On the Claude and Antigravity engines the app cannot put its «[lietotne]» note into the running turn (only pi takes one). The picture is of a screen area, so a window lying over the popup is in it. **Not checked live:** the add-in's handlers, and reading Revit's own dialogs.
+
+## 2026-11-26: Revit popup handling released as 2.18.0
+
+Released to `main` as 2.18.0. The app's notices reach agents on every engine: pi gets them as a message at once, the others read them with the `dialog_notices` tool. **Still to be proven live inside a real Revit with the new add-in installed.**
+
+Two faults found by the release check and fixed, each with a test in `test/27.0-revit-dialogs.test.ts`: a specialist was offered `dialog_notices` but the gate refused it; with the screen helper switched off in Iestatījumi nothing watched at all, so the promised "a popup is waiting" message never came.

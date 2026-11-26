@@ -87,7 +87,13 @@ export async function viewImage(d: { renderer: Pick<PageRenderer, "render" | "re
 	if (!d.native) throw new Error("Attēlu apstrāde nav pieejama (nativeImage trūkst).");
 	const buf = req.bytes ? Buffer.from(req.bytes) : readFileSync(req.path);
 	let img = d.native.createFromBuffer(buf);
-	if (img.isEmpty()) throw new Error("Attēlu nevar nolasīt (bojāts fails vai nepareizs formāts).");
+	if (img.isEmpty()) {
+		// Electron's nativeImage decodes PNG and JPEG only (checked on 43.8.7): a WebP goes to the model as it is, whole, as view_page sent it before 2.17.2
+		if (mime !== "image/webp" || buf.toString("latin1", 0, 4) !== "RIFF" || buf.toString("latin1", 8, 12) !== "WEBP") throw new Error("Attēlu nevar nolasīt (bojāts fails vai nepareizs formāts).");
+		if (region) throw new Error("region: WebP attēla daļu šeit nevar izgriezt. Skaties visu attēlu (bez region).");
+		if (buf.length * 1.34 > MAX_BYTES) throw new Error("WebP attēls ir par lielu modelim, un šeit to nevar samazināt.");
+		return { image: buf.toString("base64"), mimeType: mime, width: 0, height: 0 };
+	}
 	const full = img.getSize();
 	let note: string | undefined;
 	let changed = false;

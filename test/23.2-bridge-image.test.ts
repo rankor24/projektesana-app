@@ -69,6 +69,28 @@ test("view_page /page: the region is honoured (it was dropped before)", async ()
 	}
 });
 
+test("view_page / view_image: a WebP, which nativeImage cannot decode, is passed on whole; a region of it or a broken file is refused", async () => {
+	const dir = tmp("pj-webp-");
+	const webp = join(dir, "foto.webp");
+	const bytes = Buffer.from("RIFF\0\0\0\0WEBPVP8 invented");
+	writeFileSync(webp, bytes);
+	const broken = join(dir, "bojats.webp");
+	writeFileSync(broken, Buffer.from("not a picture"));
+	const empty = { createFromBuffer: () => ({ isEmpty: () => true }) } as never;
+	const b = await startAgentBridge({ handlers: {} as never, registry: {} as never, renderer: {} as never, native: empty });
+	const post = (body: object) => fetch(`${b.url}/image`, { method: "POST", headers: { "x-bridge-token": b.token }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...((await r.json()) as Record<string, unknown>) }));
+	try {
+		const whole = await post({ path: webp });
+		assert.equal(whole.status, 200);
+		assert.equal(whole.mimeType, "image/webp");
+		assert.equal(whole.image, bytes.toString("base64"));
+		assert.equal((await post({ path: webp, region: { x: 0, y: 0, w: 0.5, h: 0.5 } })).status, 500);
+		assert.equal((await post({ path: broken })).status, 500);
+	} finally {
+		b.close();
+	}
+});
+
 test("sourceBytes: a file that moved one folder up since the scan is found by its hash; a changed or missing one says to re-scan", () => {
 	const root = tmp("pj-moved-");
 	const data = tmp("pj-moved-data-");

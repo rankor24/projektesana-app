@@ -39,7 +39,7 @@ import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
 import { choiceFile, pickSession, readChoice } from "../revit/target.js";
-import { dialogNoticesTool, Notices, ownPathOf, startRevitDialogWatch } from "./dialog-watch.js";
+import { DIALOG_NOTICES_TOOL, dialogNoticesTool, Notices, ownPathOf, startRevitDialogWatch } from "./dialog-watch.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -393,7 +393,7 @@ export class ThreadRunner {
 					if (revit) mcp["revit"] = { ...revit, allow: offered(revit.tools, levelOf), pick };
 				}
 
-				const gate = new Gate(own ? (n) => (own.has(n) || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") : (n) => (PROCESS_OWN_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
+				const gate = new Gate(own ? (n) => (own.has(n) || n === DIALOG_NOTICES_TOOL || Object.hasOwn(MAIL_TOOL_LEVELS, n) ? levelOf(n) : "never") :(n) => (PROCESS_OWN_TOOLS.has(n) ? "never" : levelOf(n)), async (req: ConfirmRequest) => {
 					if (signal.aborted) return false;
 					const hasRevit = req.batch.some((b) => revitTools.has(b.tool) || b.tool.startsWith("revit_"));
 					// a batch that changes the Revit model runs only on this project's working copy (never the office file)
@@ -715,7 +715,8 @@ export class ThreadRunner {
 					// the check turns of a run with `check` use the same lane machinery, with their own event sink
 					lastLaneDeps = laneDeps;
 					// a popup of Revit that stays open while a Revit call of this run waits: the add-in's own handler comes first, then the computer-use helper, then the user (agent/dialog-watch.ts)
-					if (!stopDialogWatch && mcp["revit"] && s.revitDialogsOnScreen !== false) {
+					// started with the screen helper switched off too: `act` then keeps it to telling the user and the agent, and nothing is clicked
+					if (!stopDialogWatch && mcp["revit"]) {
 						stopDialogWatch = startRevitDialogWatch({
 							appDir: this.d.ctx.appDir,
 							resourcesDir: dirname(this.d.ctx.skillsDir ?? ""),
