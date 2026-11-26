@@ -71,7 +71,7 @@ async function plotToPdf(ctx: ToolCtx, file: string, a: { layout?: string; area?
 /** The result as the tools server sends images: text and an image block. */
 async function show(ctx: ToolCtx, path: string, o: { page?: number; scale?: number; region?: unknown }, label: string): Promise<ImageResult> {
 	const r = await bridge(ctx, "/image", { path, page: o.page, scale: o.scale, region: o.region });
-	const bits = [label, `${r.width}×${r.height}`, r.page ? `lapa ${r.page}` : "", r.note ? String(r.note) : ""].filter(Boolean);
+	const bits = [label, r.width ? `${r.width}×${r.height}` : "", r.page ? `lapa ${r.page}` : "", r.note ? String(r.note) : ""].filter(Boolean);
 	return { __image: { data: String(r.image), mimeType: String(r.mimeType) }, text: bits.join(" · ") };
 }
 
