@@ -779,3 +779,16 @@ The user (2026-11-26): "I think you need to properly plan some Computer Use, for
 **Found (read, not run).** The bundled add-in handles no dialogs and no failures (no `DialogBoxShowing`, no `FailuresProcessing`); `DeleteWarningSuperUtils` exists but is used nowhere and would resolve errors by deleting elements; a blocked call ends as a bare timeout (60 s / 120 s / 600 s in different layers) with no reason.
 
 **Plan:** `docs/revit-dialogs-plan.md`: option (a) in the add-in (events, a dialog-state command on the socket thread, answer table with "lose nothing" as the default, learn mode first), (b) UI Automation limited to Revit's dialogs as a later second layer, (c) screenshots and clicks not recommended. Nothing is built; waiting for the user's choice. **Not checked live.**
+
+## 2026-11-26: Revit popup handling checked on the PC (no version)
+
+The code written without a build (`docs/revit-dialogs-plan.md`) compiled, tested and tried against a stand-in program. **No live Revit was used.**
+
+| Part | Result |
+|---|---|
+| App (TypeScript) | Typecheck had one error (`thread-runner.ts`), one Settings index label had no English text. Both fixed; the focused tests pass. |
+| Add-in (Revit 2024, 2025, 2026) and MCP server | `DialogGuard.cs` lacked `using System.IO`. Two fixes from the Revit API documentation: a rolled-back transaction now also clears its failures (else Revit still shows the error window), and dismissed warnings no longer ask for a re-commit. All years build; the server lists `get_dialog_state` (41 tools). |
+| `resources/revit-screen.ps1` | Read **no text and no buttons** from a Win32 message box (fixed: the .NET client-side providers are registered); "no popup" was read by the app as one popup (fixed); a click or Escape could go into another program's window (fixed: refused unless the popup is on top at the point, or is the active window). |
+| On a stand-in program | List, picture, press by name, click and Escape close the popup; wrong window, other program, other key refused; the allowed answers match the rules for an information, a delete and a save popup. One call takes about 0.84 s. |
+
+**Open, not changed.** `get_dialog_state` waits behind a blocked call of the same MCP server process (one queue in `ConnectionManager.ts`), so it answers only after that call has ended. On the Claude and Antigravity engines the app cannot put its «[lietotne]» note into the running turn (only pi takes one). The picture is of a screen area, so a window lying over the popup is in it. **Not checked live:** the add-in's handlers, and reading Revit's own dialogs.

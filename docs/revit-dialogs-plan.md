@@ -1,6 +1,6 @@
 # Plan: when Revit shows a popup and the agent's Revit calls stop
 
-Status: **plan only, nothing built.** Written 2026-11-26 from the user's request: "properly plan some Computer Use, for times when Revit has popup window that needs clicking ok/cancel to continue/re-try."
+Status: **built on a branch, checked without a live Revit; not released** (results and open points: `docs/ui-complaints.md`, 2026-11-26 "Revit popup handling checked on the PC"). The text below is the plan as written before the build; where the build differs (the screen helper was built too, with a model that can click), the code is what counts. Written 2026-11-26 from the user's request: "properly plan some Computer Use, for times when Revit has popup window that needs clicking ok/cancel to continue/re-try."
 
 Scope: this is the user's own, narrow exception to the rule of 2026-11-24 (agents use only the Revit MCP, never drive Revit through the shell or UI automation). It covers **Revit's own popup windows only**. The rule stays for everything else: `run_command` keeps refusing UI automation (`levels.ts` `UI_AUTOMATION`, `revitShellBlock`), and nothing here loosens that.
 

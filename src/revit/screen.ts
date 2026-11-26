@@ -58,7 +58,10 @@ export class RevitScreen {
 	/** The modal popups Revit shows right now (all Revit processes). Empty when there is none or no Revit. */
 	async popups(): Promise<DialogWindow[]> {
 		const r = json<{ popups?: RawPopup | RawPopup[] | null }>(await this.run(["-Op", "windows"]));
-		return asList(r.popups).map(normalizePopup);
+		// an entry with no window id is not a popup (Windows PowerShell writes an empty result as {})
+		return asList(r.popups)
+			.filter((p) => typeof p.hwnd === "number")
+			.map(normalizePopup);
 	}
 
 	/** A PNG (base64) of a screen area. */

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { dialogTools, describe, runDialogAgent, type DialogAgentDeps } from "../src/agent/dialog-agent.ts";
 import { DialogWatch } from "../src/agent/dialog-watch.ts";
 import { appendDialogLog, assess, buttonAt, buttonKind, chatLine, decide, dialogLogFile, pathsIn, type DialogLogLine, type DialogWindow, type PolicyContext } from "../src/revit/dialog-policy.ts";
-import { normalizePopup } from "../src/revit/screen.ts";
+import { normalizePopup, RevitScreen } from "../src/revit/screen.ts";
 import { tmp } from "./helpers.ts";
 
 const WORK = "C:\\Data\\agent-work\\proj1\\House_WORK.rvt";
@@ -121,6 +121,13 @@ test("the script's single-popup answer (an object, not a list) and missing parts
 	assert.deepEqual(one.buttons, [{ name: "OK", id: null, rect: null }]);
 	assert.deepEqual(one.checkboxes, ["Do not show"]);
 	assert.equal(normalizePopup({ hwnd: 5, pid: 2, rect: { left: 0, top: 0, right: 10, bottom: 10 } }).buttons.length, 0);
+});
+
+test("no popup is an empty list, in whatever way Windows PowerShell writes it ({}, [], null)", async () => {
+	for (const popups of ["{}", "[]", "null", "[{}]"]) {
+		const screen = new RevitScreen(async () => `{"popups":${popups},"ok":true}`);
+		assert.deepEqual(await screen.popups(), [], popups);
+	}
 });
 
 test("the log: one JSON line per event in the app's folder, text cut; the chat line says what was done", () => {

@@ -20,7 +20,11 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Windows.Forms
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, UIAutomationClientsideProviders, System.Drawing, System.Windows.Forms
+# Without this, Windows PowerShell's UI Automation reads a plain Win32 popup (a message box) as unnamed panes: no text, no buttons, nothing to press.
+# The desktop element is read first: registering before any UI Automation call fails in PowerShell (a NullReferenceException inside the .NET client).
+[void][System.Windows.Automation.AutomationElement]::RootElement.Current.Name
+[System.Windows.Automation.ClientSettings]::RegisterClientSideProviders([UIAutomationClientsideProviders.UIAutomationClientSideProviders]::ClientSideProviderDescriptionTable)
 Add-Type @'
 using System;
 using System.Collections.Generic;
@@ -37,6 +41,9 @@ public static class RevitScreenNative {
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
 	[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
 	[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+	[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+	[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+	[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
 	[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 	[DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
 	[DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
@@ -119,7 +126,8 @@ function Assert-Popup([long]$h) {
 
 switch ($Op) {
 	'windows' {
-		$list = Get-Popups
+		# @(...): with no popup the answer is an empty list, not {} (which the app would read as one popup)
+		$list = @(Get-Popups)
 		@{ ok = $true; popups = $list } | ConvertTo-Json -Depth 8 -Compress
 	}
 	'cursor' {
@@ -145,6 +153,10 @@ switch ($Op) {
 		Start-Sleep -Milliseconds 80
 		$n = 1; if ($Double) { $n = 2 }
 		for ($i = 0; $i -lt $n; $i++) {
+			# a mouse click goes to whatever window lies on top at that point, whoever it belongs to: it is made only when that window is this popup
+			# (the first click of a double click may close the popup, so each one is checked)
+			$pt = New-Object RevitScreenNative+POINT; $pt.X = $X; $pt.Y = $Y
+			if ([RevitScreenNative]::GetAncestor([RevitScreenNative]::WindowFromPoint($pt), 2) -ne $ptr) { throw 'another window covers that point: not clicking' }
 			[RevitScreenNative]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
 			[RevitScreenNative]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
 			Start-Sleep -Milliseconds 60
@@ -156,6 +168,8 @@ switch ($Op) {
 		if ($Key -ne 'Escape') { throw 'only the Escape key is allowed' }
 		[void][RevitScreenNative]::SetForegroundWindow($ptr)
 		Start-Sleep -Milliseconds 120
+		# a key goes to the active window; Windows may refuse to make the popup active (the user is working in another program): then no key is sent
+		if ([RevitScreenNative]::GetForegroundWindow() -ne $ptr) { throw 'the popup is not the active window: no key sent' }
 		[RevitScreenNative]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
 		[RevitScreenNative]::keybd_event(0x1B, 0, 0x0002, [UIntPtr]::Zero)
 		@{ ok = $true; key = 'Escape' } | ConvertTo-Json -Compress
