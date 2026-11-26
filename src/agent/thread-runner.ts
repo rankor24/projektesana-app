@@ -39,6 +39,7 @@ import { PLANNING_TOOL_DATA } from "./tools/planning.js";
 import { Gate, OWN_DATA_TOOLS, makeLevelOf, offered, rvtPathsOf, type ConfirmRequest } from "./tools/levels.js";
 import { freeWrite, officeBlock } from "./tools/project-write.js";
 import { choiceFile, pickSession, readChoice } from "../revit/target.js";
+import { ownPathOf, startRevitDialogWatch } from "./dialog-watch.js";
 import { pinsText } from "./tools/pins.js";
 import { lockKeyOf, type LockRegistry } from "./locks.js";
 import { DEFAULT_AGENTS, LEVEL_RANK, MAIN_TOOLS, MAIN_TOOL_LEVELS, RULES, capOf, laneTools, ownTools, runLanes, subagentTools, type Job, type LaneDeps } from "./subagents.js";
@@ -329,6 +330,11 @@ export class ThreadRunner {
 		// the lane dependencies of the latest attempt (its model, its tools, its locks): what a check turn runs with
 		let lastLaneDeps: LaneDeps | null = null;
 		let batchOpen = false;
+		// Revit calls of this run in flight (and when one last moved): the popup watch acts only while an agent call waits for Revit (agent/dialog-watch.ts)
+		const revitFlight = { open: new Set<string>(), last: 0, n: 0 };
+		let stopDialogWatch: (() => void) | null = null;
+		// the engine's way to put a message into the running conversation (null when it has none, or between attempts)
+		let steerNow: SteerHandle | null = null;
 		// who this run is, for the agent log
 		const logMeta: RunMeta = { threadId: thread.id, agent: thread.agent, projectId, wave: i.wave };
 		// the run's end frees whatever its tool calls or its Revit batch still hold, whatever way it ends
@@ -607,6 +613,12 @@ export class ThreadRunner {
 					const base = estimateContext(h).tokens;
 					const handle = (e: RunEvent): void => {
 						if (e.type === "tool") st.toolsRan = true;
+						if ((e.type === "tool" || e.type === "tool_result") && (revitTools.has(e.name) || e.name.startsWith("revit_"))) {
+							revitFlight.last = Date.now();
+							const id = e.id ?? e.name;
+							if (e.type === "tool") revitFlight.open.add(id);
+							else revitFlight.open.delete(id);
+						}
 						// the tools server writes the process file in its own process: a process tool's result is how the main process learns a gate may be waiting
 						if (e.type === "tool_result" && e.ok && PROCESS_TOOL.test(e.name)) {
 							i.notesChanged?.();
@@ -700,6 +712,22 @@ export class ThreadRunner {
 					};
 					// the check turns of a run with `check` use the same lane machinery, with their own event sink
 					lastLaneDeps = laneDeps;
+					// a popup of Revit that stays open while a Revit call of this run waits: the add-in's own handler comes first, then the computer-use helper, then the user (agent/dialog-watch.ts)
+					if (!stopDialogWatch && mcp["revit"] && s.revitDialogsOnScreen !== false) {
+						stopDialogWatch = startRevitDialogWatch({
+							appDir: this.d.ctx.appDir,
+							resourcesDir: dirname(this.d.ctx.skillsDir ?? ""),
+							run: runId,
+							own: ownPathOf(this.d.ctx.appDir, (p) => this.d.isWorkCopyPath?.(projectId, p) ?? false),
+							laneDeps,
+							emit: handle,
+							signal,
+							act: () => this.d.settings().revitDialogsOnScreen !== false,
+							active: () => revitFlight.open.size > 0 || Date.now() - revitFlight.last < 90_000,
+							maxTurns: 14,
+							tell: (text) => steerNow?.push({ text }, () => undefined),
+						});
+					}
 					const lanes = spec ? [] : subagentTools(laneDeps);
 					// send_message and close_topic, and for every agent report_answer; BPV and a department's lead also assign_task and escalate
 					const mail = md ? [...mailTools(md), ...taskTools(md, { chief: chiefOf(md) })] : [];
@@ -731,10 +759,10 @@ export class ThreadRunner {
 						onEvent: handle,
 						extraTools: extraTools.length ? extraTools : undefined,
 						// a message the user writes while this attempt goes is read after its current step: the engine reads it (pi's steer), the thread keeps it from that moment
-						...(i.onSteer
-							? {
-									onSteer: (h: SteerHandle | null) =>
-										i.onSteer!(
+						// always taken: the popup watch uses the same handle to tell the agent what the app did in Revit (steerNow), the user's own messages go on as before
+						onSteer: (h: SteerHandle | null) => {
+							steerNow = h;
+							i.onSteer?.(
 											h && {
 												push: (m, taken) =>
 													h.push({ text: buildPrompt([], m.focus, [m.text.trim(), m.files.text].filter(Boolean).join("\n\n")), images: m.files.images.length ? m.files.images : undefined }, () => {
@@ -748,9 +776,8 @@ export class ThreadRunner {
 													}),
 												withdraw: () => h.withdraw(),
 											},
-										),
-								}
-							: {}),
+										);
+						},
 					});
 				};
 				await attempt(history, shape);
@@ -929,6 +956,7 @@ export class ThreadRunner {
 				}
 			}
 		} finally {
+			stopDialogWatch?.();
 			// the seat first (after afterBatch, which ran above): a throw in endBatch or releaseOwner must not keep the next run off Revit for good
 			this.d.locks.releaseSeat(owner);
 			try {

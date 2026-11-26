@@ -33,6 +33,8 @@ extraResources:
     to: office-text.ps1
   - from: resources/office-word.ps1
     to: office-word.ps1
+  - from: resources/revit-screen.ps1
+    to: revit-screen.ps1
 asarUnpack:
   - dist/agent/tools/**
   # the relay Google's Antigravity server starts for the app's tools (a node script run by a program outside the app)

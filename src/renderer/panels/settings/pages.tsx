@@ -89,6 +89,17 @@ function PathsPage({ x }: { x: SettingsCtx }) {
 					</>
 				)}
 			</Block>
+			<Block anchor="revit-dialogs" title={tr("Revit logi")}>
+				{s && (
+					<>
+						<label className="row">
+							<input type="checkbox" checked={s.revitDialogsOnScreen !== false} onChange={(e) => act(() => call("settings.set", { revitDialogsOnScreen: e.target.checked }))} />
+							<span>{tr("Revit logus atbild ekrāna palīgs")}</span>
+						</label>
+						<div className="dim small">{tr("Ieslēgts: ja Revit logs paliek atvērts, kamēr aģents gaida Revit, ekrāna palīgs (AI ar peli un Esc taustiņu, tikai Revit logos) to aizver ar drošāko atbildi: Atcelt, Aizvērt vai Nē. Nekad nespiež Dzēst, Pārrakstīt, Saglabāt vai Sinhronizēt un neskar oriģinālos modeļus; pieteikšanās, licences un avāriju logus atstāj tev. Katra darbība ir čatā un žurnālā revit-dialogs.jsonl. Izslēgts: lietotne tikai pasaka tev, ka logs gaida.")}</div>
+					</>
+				)}
+			</Block>
 			<Block anchor="data-folder" title={tr("Lietotnes datu mape")}>
 				{info.error ? <Err error={info.error} /> : info.data ? <div className="mono small st-wrap">{info.data.dataDir}</div> : <div className="dim small">{tr("ielādē…")}</div>}
 				<div className="dim small">{tr("Šeit lietotne glabā iestatījumus, projektus un žurnālus. Tikai lasāma.")}</div>

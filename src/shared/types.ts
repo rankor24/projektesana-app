@@ -88,6 +88,8 @@ export interface Settings {
 	backup?: ModelChoice | null;
 	/** On: a run that fails before any tool ran is tried once more on the backup (limit, expired sign-in, a provider that is down). Off by default. */
 	automaticRecovery?: boolean;
+	/** a Revit popup that stays open while an agent waits for Revit may be answered by the computer-use helper on the screen (default yes); off = only the user is told */
+	revitDialogsOnScreen?: boolean;
 	/** The folder the team was last imported from (Aģenti → «Importēt BD komandu…»); the picker offers it again. null / absent = never imported. */
 	teamFolder?: string | null;
 }
@@ -102,7 +104,7 @@ export function clampTurns(v: unknown, fallback: number): number {
 	return Number.isFinite(n) && n >= 1 ? Math.min(MAX_TURNS_LIMIT, n) : fallback;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, maxTurns: DEFAULT_MAX_TURNS, maxTurnsSub: DEFAULT_MAX_TURNS_SUB, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, maxTurns: DEFAULT_MAX_TURNS, maxTurnsSub: DEFAULT_MAX_TURNS_SUB, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false, revitDialogsOnScreen: true };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

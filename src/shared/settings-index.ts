@@ -59,6 +59,7 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
 	// Projekts · Ceļi un standarts
 	{ id: "paths.officeStandardPdf", page: "paths", anchor: "office-standard", label: "Biroja standarta PDF", topFor: ["standarts", "office standard"], synonyms: ["projekta mapju koks", "mapju koks", "biroja prasības", "folder tree", "pdf", "standard", "nosaukumi", "datumi"] },
 	{ id: "paths.revitServerJs", page: "paths", anchor: "revit-paths", label: "Revit MCP servera fails (index.js)", synonyms: ["revit mcp", "mcp serveris", "mcp server", "index.js", "revit ceļš", "revit path", "serveris"] },
+	{ id: "paths.revitDialogs", page: "paths", anchor: "revit-dialogs", label: "Revit logu atbildēšana uz ekrāna", synonyms: ["revit popup", "popup", "dialog", "dialogs", "logs", "ok", "cancel", "computer use", "ekrāns", "ekrāna palīgs", "revit logs", "brīdinājums", "warning"] },
 	{ id: "paths.revitNode", page: "paths", anchor: "revit-paths", label: "Revit MCP node.exe", synonyms: ["node", "node.exe", "runtime", "revit ceļš", "revit path"] },
 	{ id: "paths.dataFolder", page: "paths", anchor: "data-folder", label: "Lietotnes datu mape", synonyms: ["data folder", "appdata", "dati", "mape", "krātuve", "storage", "kur glabājas"] },
 	// AI · Pakalpojums un modelis

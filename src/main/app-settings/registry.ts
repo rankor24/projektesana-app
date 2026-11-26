@@ -174,6 +174,13 @@ export async function buildRegistry(deps: RegistryDeps): Promise<SettingEntry[]>
 		write: async (v) => (set({ automaticRecovery: v as boolean }), null),
 	});
 
+	entries.push({
+		...meta("paths.revitDialogs"),
+		tier: "owner-only",
+		help: "Vai ekrāna palīgs (AI ar peli un Esc taustiņu, tikai Revit logos) drīkst atbildēt Revit logus, kas paliek atvērti, kamēr aģents gaida Revit. Tā ir aģenta pilnvara lietot peli, tāpēc to maina tikai lietotājs.",
+		read: () => display(s().revitDialogsOnScreen !== false),
+	});
+
 	// ---- Agents: how many at once, and the five limits on how far they talk to each other
 	entries.push({
 		...meta("agents.maxParallel"),

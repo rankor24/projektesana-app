@@ -36,7 +36,7 @@ export class AppSettings {
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "maxTurns", "maxTurnsSub", "limits", "backup", "automaticRecovery", "teamFolder"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "maxTurns", "maxTurnsSub", "limits", "backup", "automaticRecovery", "revitDialogsOnScreen", "teamFolder"];
 		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
 		if ("language" in clean && clean.language !== "lv" && clean.language !== "en") delete clean.language;
 		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
@@ -50,6 +50,7 @@ export class AppSettings {
 			else throw new Error("Rezerves AI: nezināms pakalpojums vai modelis.");
 		}
 		if ("automaticRecovery" in clean) clean.automaticRecovery = clean.automaticRecovery === true;
+		if ("revitDialogsOnScreen" in clean) clean.revitDialogsOnScreen = clean.revitDialogsOnScreen !== false;
 		if ("teamFolder" in clean) clean.teamFolder = typeof clean.teamFolder === "string" && clean.teamFolder.trim() ? clean.teamFolder.trim() : null;
 		// a patch may name only some limits: the rest stay as they are
 		if ("limits" in clean) clean.limits = clampLimits(clean.limits as Partial<Limits>, this.get().limits);

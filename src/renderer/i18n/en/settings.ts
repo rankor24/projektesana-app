@@ -113,6 +113,10 @@ export const settings: Record<string, string> = {
 	"Automātiskā atkopšana": "Automatic recovery",
 	"Ieslēgta: ja gājiens neizdodas, pirms kāds rīks ir darbojies (limits, beigusies pieteikšanās, pakalpojums nedarbojas), to mēģina vēlreiz vienu reizi ar rezerves AI. Izslēgta: tu nosūti ziņu vēlreiz. Cita aģenta uzdevumu pēc limita pārsūta uz rezervi vienmēr, ar tām pašām tiesībām.":
 		"On: when a run fails before any tool has run (a limit, an expired sign-in, a provider that is down), it is tried once more on the backup AI. Off: you send the message again. Another agent's task is resent to the backup after a limit in any case, with the same rights.",
+	"Revit logi": "Revit popups",
+	"Revit logus atbild ekrāna palīgs": "Revit popups are answered by the screen helper",
+	"Ieslēgts: ja Revit logs paliek atvērts, kamēr aģents gaida Revit, ekrāna palīgs (AI ar peli un Esc taustiņu, tikai Revit logos) to aizver ar drošāko atbildi: Atcelt, Aizvērt vai Nē. Nekad nespiež Dzēst, Pārrakstīt, Saglabāt vai Sinhronizēt un neskar oriģinālos modeļus; pieteikšanās, licences un avāriju logus atstāj tev. Katra darbība ir čatā un žurnālā revit-dialogs.jsonl. Izslēgts: lietotne tikai pasaka tev, ka logs gaida.":
+		"On: when a Revit popup stays open while an agent waits for Revit, the screen helper (an AI with the mouse and the Esc key, in Revit's popups only) closes it with the safest answer: Cancel, Close or No. It never presses Delete, Overwrite, Save or Synchronize and never touches original models; sign-in, licence and crash windows are left to you. Every action is in the chat and in the log revit-dialogs.jsonl. Off: the app only tells you that a popup is waiting.",
 	"Aizturēts": "On hold",
 	"Iemesls": "Reason",
 	"Mēģina vēlreiz": "Tried again",

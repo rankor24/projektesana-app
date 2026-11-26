@@ -17,6 +17,8 @@ export const REVIT_LEVELS: Record<string, Level> = {
 	ai_element_filter: "read",
 	query_stored_data: "read",
 	say_hello: "never",
+	// the add-in's own popup and failure log (does not wait for Revit's thread)
+	get_dialog_state: "read",
 	// create, modify, delete: no click, working copy only
 	create_level: "confirm",
 	create_grid: "confirm",
