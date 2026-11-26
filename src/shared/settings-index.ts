@@ -79,6 +79,8 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
 	{ id: "agents.skills", page: "team", anchor: "skills", label: "Prasmju bibliotēka", jump: "prasmes", topFor: ["skills", "prasmes"], synonyms: ["skill", "prasme", "bibliotēka", "library", "import"] },
 	// Aģenti · Aģentu ierobežojumi
 	{ id: "agents.maxParallel", page: "limits", anchor: "parallel", label: "Cik palīgi drīkst strādāt reizē", synonyms: ["parallel", "concurrency", "palīgi", "helpers", "vienlaikus", "reizē", "max agents", "workers"] },
+	{ id: "agents.maxTurns", page: "limits", anchor: "turns", label: "Soļu limits aģenta darbam", topFor: ["max turns", "soļu limits"], synonyms: ["turns", "steps", "soļi", "limits", "step limit", "max turns", "turn limit", "iterations", "stops", "apstājas", "go", "turpināt", "continue", "long run", "ilgs darbs", "main agent", "galvenais aģents"] },
+	{ id: "agents.maxTurnsSub", page: "limits", anchor: "turns", label: "Soļu limits palīgiem un speciālistiem", synonyms: ["turns", "steps", "soļi", "limits", "step limit", "max turns", "helpers", "specialists", "palīgi", "speciālisti", "subagents", "lane"] },
 	{ id: "agents.limits.exchangesPerTopic", page: "limits", anchor: "limits", label: "Ziņas par vienu tematu", synonyms: ["exchanges", "topic", "temats", "messages", "sarunas", "ziņas"] },
 	{ id: "agents.limits.chainDepth", page: "limits", anchor: "limits", label: "Ziņu ķēdes dziļums", synonyms: ["chain", "depth", "ķēde", "dziļums"] },
 	{ id: "agents.limits.runsPerWave", page: "limits", anchor: "limits", label: "Skrējieni vienā vilnī", synonyms: ["runs", "wave", "vilnis", "skrējieni", "runs per wave"] },

@@ -63,11 +63,25 @@ async function prompt(msg, text) {
 		return;
 	}
 	if (text.includes("STALLDEAF")) return;
+	// "MAXTURNS2": the next two prompts of the session end at the server's own limit of model requests per prompt (`max_turn_requests`), a third one is answered
+	const lim = /MAXTURNS(\d)/.exec(text);
+	if (lim) s.limits = Number(lim[1]);
+	if (s.limits > 0) {
+		s.limits--;
+		chunk("deļa. ");
+		return out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "max_turn_requests" } });
+	}
 	if (text.includes("WAIT")) {
 		s.cancelled = () => out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "cancelled" } });
 		return;
 	}
 	if (text.includes("CALLTOOL")) {
+		// a cancel during the work ends the prompt as "cancelled", like the real server (no answer after it)
+		let cancelled = false;
+		s.cancelled = () => {
+			cancelled = true;
+			out({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "cancelled" } });
+		};
 		chunk("Looking it up. ");
 		const asked = await askClient("session/request_permission", {
 			sessionId,
@@ -82,6 +96,7 @@ async function prompt(msg, text) {
 		log({ permission: { own: asked.outcome, native: native.outcome } });
 		const r = await callThroughRelay(s.mcpServers[0], "echo_tool", { word: "pelēks" });
 		log({ relay: { tools: r.tools, result: r.called.result ?? r.called.error } });
+		if (cancelled) return;
 		chunk(`&_a_m_p_;_Gatavs: ${r.called.result?.content?.[0]?.text ?? "(nav)"}`);
 		// the real server reports the size of the context (the prompt of its newest model call) apart from the turn's summed usage
 		out({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: { sessionUpdate: "usage_update", used: 1234, size: 5000 } } });

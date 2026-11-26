@@ -15,6 +15,7 @@ import { antigravityContext, antigravityEnd, antigravityEvents, antigravitySignI
 import { AntigravitySignInRequired, noteAntigravitySignInRequired } from "./acp.js";
 import type { AntigravityHost } from "./host.js";
 import { ANTIGRAVITY_NOT_CONNECTED, ANTIGRAVITY_SIGN_IN_AGAIN } from "./provider.js";
+import { DEFAULT_MAX_TURNS } from "../pi/run.js";
 
 export interface AntigravityEngineConfig {
 	host: AntigravityHost;
@@ -33,6 +34,9 @@ export interface AntigravityEngineConfig {
 
 /** The default silence after which a prompt counts as stuck. A model that thinks without streaming its thoughts is quiet for a minute or two; ten minutes of nothing (a stalled call, a quota backoff the server retries silently) must not leave the chat "working" for ever. */
 export const STALL_MS = 5 * 60_000;
+
+/** What the next prompt says when the server ended one at its own limit of model requests per prompt (`max_turn_requests`): the session still holds the whole task. */
+export const LIMIT_RESUME = "[lietotne] Serveris apturēja šo gājienu pēc sava modeļa izsaukumu limita, bet uzdevums nav pabeigts. Turpini darbu no vietas, kur apstājies: tas pats uzdevums, tie paši rīki. Neatkārto jau izdarīto.";
 
 /** What the resumed prompt says after a stall: the same session still holds the whole task. */
 export const STALL_RESUME = "[lietotne] Serveris ilgi neatbildēja, tāpēc pēdējais solis tika pārtraukts. Turpini darbu no vietas, kur apstājies: tas pats uzdevums, tie paši rīki.";
@@ -74,6 +78,13 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 		// signs of life: the server's updates, the app's own tool calls (one going keeps the run alive however long it takes: a Revit batch, a question to the user)
 		let lastAt = Date.now();
 		let inFlight = 0;
+		// The step limit (Iestatījumi → Aģenti) is this app's, not the server's: the server's loop is its own, so the app counts the tool calls the server makes (a model
+		// response that does work is one tool call or more) and stops the prompt past the limit. The server's own per-prompt limit is not the user's: see the loop below.
+		const maxTurns = o.maxTurns ?? DEFAULT_MAX_TURNS;
+		let toolCalls = 0;
+		let limitHit = false;
+		let cancelPrompt: (() => void) | null = null;
+		const limitError = (): RunEvent => ({ type: "error", engine: "pi", message: `Sasniegts soļu limits (${maxTurns}).` });
 		const alive = () => {
 			lastAt = Date.now();
 		};
@@ -100,6 +111,10 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				onToolStart: () => {
 					inFlight++;
 					alive();
+					if (++toolCalls > maxTurns && !limitHit) {
+						limitHit = true;
+						cancelPrompt?.();
+					}
 					antigravityToolStarted(st).forEach(send);
 				},
 			});
@@ -143,6 +158,7 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 			// `stallMs` is cancelled by the watchdog: `stalled` with a result = the server honoured the cancel (the session is usable), `stalled` without = it did not.
 			const prompt = async (parts: unknown[]): Promise<{ result: Awaited<ReturnType<typeof cfg.host.prompt>> | null; stalled: boolean }> => {
 				const inner = new AbortController();
+				cancelPrompt = () => inner.abort();
 				const onOuter = () => inner.abort();
 				if (o.signal.aborted) inner.abort();
 				else o.signal.addEventListener("abort", onOuter, { once: true });
@@ -166,6 +182,7 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 					if (stalled && !o.signal.aborted) return { result: null, stalled: true };
 					throw e;
 				} finally {
+					cancelPrompt = null;
 					clearInterval(timer);
 					o.signal.removeEventListener("abort", onOuter);
 				}
@@ -179,13 +196,27 @@ export function createAntigravityRun(cfg: AntigravityEngineConfig) {
 				r = await prompt([{ type: "text", text: STALL_RESUME }]);
 			}
 			if (r.stalled || !r.result) throw new Error(`Antigravity ilgi (vairāk nekā ${Math.max(1, Math.round(stallMs / 60_000))} min) neko nedarīja un neatsaucās uz pārtraukšanu vai apstājās atkal. Spied «Sūtīt» vēlreiz vai izvēlies citu modeli.`);
+			// The server ended the prompt at its own limit of model requests, with the task not done: the same session carries on, as long as this app's limit (the setting) is not
+			// reached. A server that stops at once, again and again, is bounded by the same number.
+			for (let resumes = 0; r.result?.stopReason === "max_turn_requests" && !limitHit && !o.signal.aborted && toolCalls < maxTurns && resumes < maxTurns; resumes++) {
+				const part = antigravityUsage(r.result, context);
+				if (part) send(part);
+				send({ type: "text", text: "[lietotne] Serveris apturēja gājienu pēc sava limita; darbs turpinās tajā pašā sesijā.\n\n" });
+				r = await prompt([{ type: "text", text: LIMIT_RESUME }]);
+				if (r.stalled || !r.result) throw new Error(`Antigravity ilgi (vairāk nekā ${Math.max(1, Math.round(stallMs / 60_000))} min) neko nedarīja un neatsaucās uz pārtraukšanu vai apstājās atkal. Spied «Sūtīt» vēlreiz vai izvēlies citu modeli.`);
+			}
 			const usage = antigravityUsage(r.result, context);
 			if (usage) send(usage);
-			antigravityEnd(r.result, st, o.signal.aborted).forEach(send);
+			// this app's limit stopped the prompt (the server answers a cancel as "cancelled"): a limit error, not "aborted"; a prompt the server finished before the cancel reached it is done
+			if (limitHit && !o.signal.aborted && r.result?.stopReason !== "end_turn") {
+				st.errored = true;
+				send(limitError());
+			} else antigravityEnd(r.result, st, o.signal.aborted).forEach(send);
 		} catch (e) {
 			if (!reported) {
 				const err = e as Error;
 				if (o.signal.aborted) send({ type: "error", engine: "pi", message: "aborted" });
+				else if (limitHit) send(limitError());
 				else if (err instanceof AntigravitySignInRequired || antigravitySignInError(err)) {
 					await noteAntigravitySignInRequired(cfg.host.tokenPath);
 					send({ type: "error", engine: "pi", message: ANTIGRAVITY_SIGN_IN_AGAIN });

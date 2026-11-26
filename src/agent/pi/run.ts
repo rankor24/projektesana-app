@@ -7,7 +7,7 @@
 // A turn that fails on the wire is restarted with backoff (retry.ts) instead of ending the run.
 import { Agent, type AfterToolCallContext, type AfterToolCallResult, type AgentMessage, type AgentTool, type BeforeToolCallContext, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, ImageContent, Model, RetryPolicy, TextContent } from "@earendil-works/pi-ai";
-import type { RunEvent } from "../../shared/types.js";
+import { DEFAULT_MAX_TURNS as DEFAULT_TURNS, type RunEvent } from "../../shared/types.js";
 import { newPiState, piEvents } from "./events.js";
 import { connectMcpServers, type McpLaunchSpec } from "./mcp.js";
 import { effortFor, lookupPiModel, streamFn, type PiEffort, type PiRuntime } from "./models.js";
@@ -37,7 +37,7 @@ export interface PiRunOptions {
 	mcp: Record<string, McpLaunchSpec & { allow: readonly string[] }>;
 	signal: AbortSignal;
 	onEvent: (e: RunEvent) => void;
-	/** Stop after this many model responses (default 80: a modelling batch makes many tool calls). */
+	/** Stop after this many model responses (Iestatījumi → Aģenti; default 1000: a modelling task makes hundreds of tool calls). */
 	maxTurns?: number;
 	/** Chosen effort; ignored when the model does not support it (then the model's default). */
 	effort?: PiEffort;
@@ -62,7 +62,8 @@ export interface PiRunOptions {
 	onSteer?: (h: SteerHandle | null) => void;
 }
 
-export const DEFAULT_MAX_TURNS = 80;
+/** When the caller names no limit (the app always does, from the settings): the settings default, 1000 model responses. */
+export const DEFAULT_MAX_TURNS = DEFAULT_TURNS;
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"You work inside a desktop application for architectural design. Use only the tools you are given. Follow the task exactly, and answer in the language the task is written in.";

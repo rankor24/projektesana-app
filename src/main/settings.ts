@@ -10,7 +10,7 @@ import { isKnownProvider } from "../agent/failover/plan.js";
 import type { AgentSpec } from "../shared/agent-types.js";
 import { DEFAULT_DEPARTMENTS, type Department } from "../shared/departments.js";
 import type { Limits } from "../shared/thread-types.js";
-import { DEFAULT_SETTINGS, type Settings } from "../shared/types.js";
+import { DEFAULT_MAX_TURNS, DEFAULT_MAX_TURNS_SUB, DEFAULT_SETTINGS, clampTurns, type Settings } from "../shared/types.js";
 
 export interface Crypto {
 	available(): boolean;
@@ -32,14 +32,16 @@ export class AppSettings {
 		const saved = readJson<Partial<Settings>>(join(this.dir, "settings.json"), (v) => !!v && typeof v === "object" && !Array.isArray(v));
 		if (!saved) return { ...DEFAULT_SETTINGS };
 		// a file from before the limits, or one edited by hand, still gives limits inside their ranges
-		return { ...DEFAULT_SETTINGS, ...saved, limits: clampLimits(saved.limits, DEFAULT_LIMITS) };
+		return { ...DEFAULT_SETTINGS, ...saved, maxTurns: clampTurns(saved.maxTurns, DEFAULT_MAX_TURNS), maxTurnsSub: clampTurns(saved.maxTurnsSub, DEFAULT_MAX_TURNS_SUB), limits: clampLimits(saved.limits, DEFAULT_LIMITS) };
 	}
 
 	set(patch: Partial<Settings>): Settings {
-		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "limits", "backup", "automaticRecovery", "teamFolder"];
+		const allowed: (keyof Settings)[] = ["provider", "model", "effort", "theme", "language", "revitServerJs", "revitNode", "officeStandardPdf", "userName", "maxParallelAgents", "maxTurns", "maxTurnsSub", "limits", "backup", "automaticRecovery", "teamFolder"];
 		const clean: Record<string, unknown> = Object.fromEntries(Object.entries(patch).filter(([k]) => allowed.includes(k as keyof Settings)));
 		if ("language" in clean && clean.language !== "lv" && clean.language !== "en") delete clean.language;
 		if ("maxParallelAgents" in clean) clean.maxParallelAgents = Math.max(1, Math.min(6, Math.round(Number(clean.maxParallelAgents)) || 3));
+		if ("maxTurns" in clean) clean.maxTurns = clampTurns(clean.maxTurns, DEFAULT_MAX_TURNS);
+		if ("maxTurnsSub" in clean) clean.maxTurnsSub = clampTurns(clean.maxTurnsSub, DEFAULT_MAX_TURNS_SUB);
 		// the app-wide backup: a provider this app knows and a model of it (empty = the provider's default), or null for none
 		if ("backup" in clean) {
 			const b = clean.backup as { provider?: unknown; model?: unknown } | null | undefined;

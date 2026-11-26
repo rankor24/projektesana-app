@@ -78,6 +78,10 @@ export interface Settings {
 	userName: string;
 	/** how many helpers / specialists may work at once (task 8.15), 1–6 */
 	maxParallelAgents: number;
+	/** the most model responses one run of the main agent may take before it is stopped (Iestatījumi → Aģenti); high on purpose: a modelling task makes hundreds of calls */
+	maxTurns: number;
+	/** the same for a helper or specialist's run (a lane of the main agent) */
+	maxTurnsSub: number;
 	/** how far agents may talk to each other and how much one wave may start and spend (task 12.4) */
 	limits: Limits;
 	/** The AI an agent carries on with when its provider is at its usage limit or signed out; an agent's own backup (AgentSpec.backup) wins. null / absent = none. */
@@ -88,7 +92,17 @@ export interface Settings {
 	teamFolder?: string | null;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false };
+/** Run length limits (model responses per run): effectively unlimited, like Claude Code, so an agent works until its task is done. The settings keep them inside 1 – MAX_TURNS_LIMIT. */
+export const DEFAULT_MAX_TURNS = 1000;
+export const DEFAULT_MAX_TURNS_SUB = 500;
+export const MAX_TURNS_LIMIT = 10000;
+/** A turn limit as the settings keep it: a whole number in 1 – MAX_TURNS_LIMIT, else the default. */
+export function clampTurns(v: unknown, fallback: number): number {
+	const n = Math.round(Number(v));
+	return Number.isFinite(n) && n >= 1 ? Math.min(MAX_TURNS_LIMIT, n) : fallback;
+}
+
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, maxTurns: DEFAULT_MAX_TURNS, maxTurnsSub: DEFAULT_MAX_TURNS_SUB, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =
