@@ -4,6 +4,7 @@
 // panel lists under "Incidenti"); BPV's escalation question shows its options as buttons that fill the answer, the recommended one marked.
 import { useEffect, useState } from "react";
 import type { AgentSpec } from "../../shared/agent-types";
+import { confirmNotes } from "../../shared/confirm-text";
 import type { ExpertRemark } from "../../shared/expert-types";
 import { gateStage } from "../../shared/process-view";
 import { parseEscalation } from "../../shared/escalation";

@@ -823,6 +823,8 @@ The user (2026-11-27): "we need some Auto mode button, that Allows all commands 
 
 Test: `test/27.1-auto-mode.test.ts`.
 
+**Release check (2026-11-27).** Typecheck found two faults left by the merges, both fixed: `Waiting.tsx` used `confirmNotes` without importing it (a waiting confirmation in Gaida tevi would have failed to draw), and the `zap` icon was listed twice. Released to `main` as 2.19.0.
+
 
 ## 2026-11-27: the message box can be made taller (his words: "let me resize Text input field up to make bigger")
 
