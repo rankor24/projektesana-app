@@ -62,8 +62,9 @@ export const MIN_W = 280;
 export const TOOLS_W = 60;
 export const minWOf = (tabs: readonly string[]): number => (tabs.length === 1 && tabs[0] === TOOLS ? TOOLS_W : MIN_W);
 export const MIN_H = 200;
-/** The slim comment tools window may be as low as one row of icons under its header; the window is meant to fit its contents. */
-export const TOOLS_H = 72;
+/** The floating comment tools window is as tall as its contents (CSS, one row of icons under a one-row header is 67 px); the stored
+ *  height only records that, so its floor is below any real contents. */
+export const TOOLS_H = 40;
 /** The lowest a floating window may be, from its lowest width (only the comment tools alone have a width under MIN_W). */
 export const minHOf = (minW: number): number => (minW < MIN_W ? TOOLS_H : MIN_H);
 export const MIN_DOCK = 200;

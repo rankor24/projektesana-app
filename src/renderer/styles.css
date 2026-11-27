@@ -805,6 +805,9 @@ tr.subject td, .subject { background: color-mix(in srgb, var(--accent) 14%, tran
    grip glyph and the window buttons: pressing the glyph resized the window instead of moving it ("it gets bigger on its own"). */
 .fw:has(> .tg-slim) .fw-rz-nw, .fw:has(> .tg-slim) .fw-rz-ne { width: 8px; height: 8px; }
 .fw:has(> .tg-slim) .fw-rz-n { height: 3px; left: 8px; right: 8px; }
+/* its height is its contents (FloatingWindow sets no height): only the width is dragged, so no top / bottom grip, and the corners resize sideways */
+.fw:has(> .tg-slim) .fw-rz-n, .fw:has(> .tg-slim) .fw-rz-s { display: none; }
+.fw:has(> .tg-slim) .fw-rz-ne, .fw:has(> .tg-slim) .fw-rz-nw, .fw:has(> .tg-slim) .fw-rz-se, .fw:has(> .tg-slim) .fw-rz-sw { cursor: ew-resize; }
 .tg-slim[data-tier="m"] .tg-buttons { flex: none; flex-direction: row; align-self: center; justify-content: flex-end; gap: 2px; }
 .tg-slim[data-tier="m"] .tg-buttons button { width: 28px; height: 24px; }
 

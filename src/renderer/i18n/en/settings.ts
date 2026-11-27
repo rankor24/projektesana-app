@@ -46,7 +46,7 @@ export const settings: Record<string, string> = {
 	"DWG ar šo nosaukumu projekta mapē nav.": "No DWG with this name in the project folder.",
 	"PDF ar šo nosaukumu projekta mapē nav.": "No PDF with this name in the project folder.",
 	"klikšķis: notīrīt": "click: clear",
-	"Vilkt, lai pārvietotu; dubultklikšķis: logs pēc satura augstuma": "Drag to move; double-click: fit the window to its contents",
+	"Vilkt, lai pārvietotu": "Drag to move",
 	"nolasīts no skenēta dokumenta": "read from a scanned document",
 	"Rindas var būt kļūdainas vai trūkt; pārbaudi pret lapām.": "Rows may be wrong or missing; check them against the pages.",
 	"Lūgt aģentam pārbaudīt un salabot": "Ask the agent to check and fix",

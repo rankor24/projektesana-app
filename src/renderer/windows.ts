@@ -246,6 +246,12 @@ export const windows = {
 	setActive: (id: string) => op((l) => L.setActive(l, id)),
 	move: (id: string, x: number, y: number) => op((l, v) => L.move(l, id, x, y, v)),
 	resize: (id: string, g: L.Geo) => op((l, v) => L.resize(l, id, g, v)),
+	/** The comment tools window draws its own height (its contents, CSS): the store only records it, so a move keeps it on the screen. */
+	recordHeight(id: string, h: number) {
+		const p = L.groupOf(state.layout, id)?.place;
+		if (!p || p.kind !== "float" || h <= 0 || Math.abs(p.h - h) < 2) return;
+		op((l, v) => L.resize(l, id, { x: p.x, y: p.y, w: p.w, h }, v));
+	},
 	/** a floating group fills the screen, or goes back (BIM Crew: the maximize button, a double-click on the title bar) */
 	maximize: (id: string) => op((l, v) => L.toggleMaximize(l, id, v)),
 	resizeDock: (side: L.Side, size: number) => op((l, v) => L.resizeDock(l, side, size, v)),

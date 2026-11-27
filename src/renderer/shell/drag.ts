@@ -48,7 +48,7 @@ export function tabRects(id: string): { x: number; w: number }[] {
 }
 
 let following = 0;
-/** True while a window is being moved or resized (the comment tools window fits itself only after the drag ends). */
+/** True while a window is being moved or resized (the comment tools window records its drawn height only when no drag runs). */
 export const dragActive = (): boolean => following > 0;
 
 export interface Follow {

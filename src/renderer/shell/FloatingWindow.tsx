@@ -7,15 +7,17 @@
 // element (one write per animation frame), so the window's contents (a model viewer, a table of hundreds of rows) are not
 // rendered again for every pixel the mouse travels; the store gets the final geometry once, on release. The component is
 // memoised, so the drop hint that follows the pointer (a separate layer) never re-renders the windows either.
-import { memo, useCallback, useRef, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { clampGeo, minHOf, minWOf, TOOLS, type FloatPlace, type Geo, type Group } from "../../shared/layout";
 import { windows } from "../windows";
-import { followMouse, track } from "./drag";
-import { fitToolsHeight, TabGroup } from "./TabGroup";
+import { dragActive, followMouse, track } from "./drag";
+import { TabGroup } from "./TabGroup";
 
 type Dir = "se" | "sw" | "ne" | "nw" | "e" | "w" | "s" | "n";
 const DIRS: Dir[] = ["e", "w", "s", "n", "se", "sw", "ne", "nw"];
 const vp = () => ({ w: window.innerWidth, h: window.innerHeight });
+/** The comment tools window is as tall as its contents, but never past the bottom of the screen (then its icons scroll). */
+const maxH = (top: number) => `calc(100vh - ${Math.round(top)}px - 8px)`;
 
 function FloatingWindowView({ group, focused, render }: { group: Group; focused: boolean; render: (id: string, filter?: string) => ReactNode }) {
 	const p = group.place as FloatPlace;
@@ -25,9 +27,20 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 	const minH = minHOf(minW);
 	const slimTools = group.tabs.length === 1 && group.tabs[0] === TOOLS;
 	const frame = useRef(0);
-	/** The comment tools window stays as compact as possible: after a move or resize has been committed its height is fitted again. */
-	const refit = useCallback(() => {
-		if (slimTools) requestAnimationFrame(() => requestAnimationFrame(() => fitToolsHeight(id)));
+	// The comment tools alone in a window: the width is the one the user drags to, the height is never set by code. The browser
+	// makes the window exactly as tall as its icons at that width (CSS height: auto), live while the width is dragged, so nothing
+	// changes after the mouse is let go. Measuring the icons and storing a fitted size (2.13.2 to 2.18.2) fought the user: it
+	// measured under one header layout and the header switched layout after the store write, so the window grew.
+	// The stored height only records what the browser drew (it keeps the window on the screen when moved).
+	const measured = () => root.current?.offsetHeight ?? p.h;
+	useEffect(() => {
+		const el = root.current;
+		if (!slimTools || !el || typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(() => {
+			if (!dragActive()) windows.recordHeight(id, el.offsetHeight);
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
 	}, [slimTools, id]);
 
 	/** Writes a geometry to the element, at most once per animation frame. */
@@ -39,9 +52,10 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			el.style.left = `${g.x}px`;
 			el.style.top = `${g.y}px`;
 			el.style.width = `${g.w}px`;
-			el.style.height = `${g.h}px`;
+			if (slimTools) el.style.maxHeight = maxH(g.y);
+			else el.style.height = `${g.h}px`;
 		});
-	}, []);
+	}, [slimTools]);
 	/** The element shows `g` now (a drag that ends: the store is about to say the same). */
 	const settle = useCallback(
 		(g: Geo) => {
@@ -54,7 +68,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 	const onMove = (e: React.MouseEvent) => {
 		if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
 		windows.focus(id);
-		const o = { x: p.x, y: p.y, w: p.w, h: p.h };
+		const o = { x: p.x, y: p.y, w: p.w, h: slimTools ? measured() : p.h };
 		let final: Geo = o;
 		track(e, id, group.tabs.length > 1 ? `${group.tabs.length} logi` : id, {
 			onMove: (_x, _y, dx, dy) => {
@@ -66,8 +80,8 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 				if (target?.kind === "tabs") return windows.mergeGroup(id, target.targetId);
 				if (target?.kind === "side") return windows.dock(id, target.side, { whole: true });
 				settle(final);
-				windows.move(id, final.x, final.y);
-				refit();
+				if (slimTools) windows.resize(id, final);
+				else windows.move(id, final.x, final.y);
 			},
 		});
 	};
@@ -77,7 +91,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			e.preventDefault();
 			e.stopPropagation();
 			windows.focus(id);
-			const o = { x: p.x, y: p.y, w: p.w, h: p.h };
+			const o = { x: p.x, y: p.y, w: p.w, h: slimTools ? measured() : p.h };
 			const sx = e.clientX;
 			const sy = e.clientY;
 			let final: Geo = o;
@@ -86,12 +100,13 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 				const dy = ev.clientY - sy;
 				let { x, y, w, h } = o;
 				if (dir.includes("e")) w = Math.max(minW, o.w + dx);
-				if (dir.includes("s")) h = Math.max(minH, o.h + dy);
+				// the comment tools' height is their contents: a drag changes the width only
+				if (dir.includes("s") && !slimTools) h = Math.max(minH, o.h + dy);
 				if (dir.includes("w")) {
 					w = Math.max(minW, o.w - dx);
 					x = o.x + (o.w - w);
 				}
-				if (dir.includes("n")) {
+				if (dir.includes("n") && !slimTools) {
 					h = Math.max(minH, o.h - dy);
 					y = o.y + (o.h - h);
 				}
@@ -100,19 +115,18 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			};
 			const up = () => {
 				settle(final);
-				windows.resize(id, final);
-				refit();
+				windows.resize(id, slimTools ? { ...final, h: measured() } : final);
 			};
 			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
-		[id, p.x, p.y, p.w, p.h, minW, minH, apply, settle, refit],
+		[id, p.x, p.y, p.w, p.h, minW, minH, slimTools, apply, settle],
 	);
 
 	return (
 		<div
 			ref={root}
 			className={`fw ${focused ? "fw-focused" : ""}`}
-			style={{ left: p.x, top: p.y, width: p.w, height: p.h, zIndex: 200 + p.z }}
+			style={slimTools ? { left: p.x, top: p.y, width: p.w, maxHeight: maxH(p.y), zIndex: 200 + p.z } : { left: p.x, top: p.y, width: p.w, height: p.h, zIndex: 200 + p.z }}
 			onMouseDown={() => windows.focus(id)}
 			// Alt + drag anywhere on the window moves it (BIM Crew), not only by the title strip
 			onMouseDownCapture={(e) => {
