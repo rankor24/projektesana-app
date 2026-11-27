@@ -84,6 +84,7 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 	return (
 		<>
 			{err && <div className="err">{err}</div>}
+			{!err && msg && <div className="dim small" style={{ padding: "2px 10px" }}>{msg}</div>}
 			<div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 				<div className="fill-col" style={{ minWidth: 0 }}>
 					<PdfView
