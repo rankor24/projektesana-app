@@ -116,7 +116,6 @@ export const part5: Record<string, string> = {
 	"Taisnstūris": "Rectangle",
 	"Zīmēt": "Draw",
 	"Piezīmi var likt tikai avotam (A ir fails ārpus avotiem).": "A note can only be placed on a source (A is a file outside the sources).",
-	"Ieraksti piezīmi laukā virs lapas, tad klikšķini lapā.": "Type the note in the field above the page, then click on the page.",
 	"Shēma": "Schema",
 	"Garais nosaukums": "Long name",
 	"Fāze": "Phase",

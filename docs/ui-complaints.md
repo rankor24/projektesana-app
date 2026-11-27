@@ -812,3 +812,13 @@ Two faults found by the release check and fixed, each with a test in `test/27.0-
 | 1 | The agent chat's message box (`composer-field` in `AgentDock.tsx`) has a drag edge along its top: drag **up** to make the box taller, down to make it smaller. The chat above shrinks to make room. The height is written to the box while dragging and saved once on release (`localStorage`, per computer, key `projektesana.chatInputHeight`); **double-click** the edge puts the box back to its two lines. Smallest: the two lines; tallest: 70 % of the window height. Same drag helper (`followMouse`) and the same "write while dragging, save on release" pattern as the sidebar's edge. This follows his rule that all panels are resizable. |
 
 **Not checked live** (his rule). The edge is 9 px high and shows the accent colour on hover; the cursor is the up/down resize arrow.
+
+## 2026-11-27: Two sets of comment tools on the PDF view (version 2.18.1)
+
+The user (screenshot of the PDF bar): "Why there is duplicate of worse working comment tools on PDF viewer?"
+
+**Why both existed.** A leftover. When the comment tool window was built (D6), the 3D view's inline pin, marks and sketch moved into it; the source PDF (`SourcePdf`) was missed. It kept its own row (note field, Piezīme, Līnija / Aplis / Taisnstūris / Zīmēt, Skice → aģentam), and the window offered nothing on a PDF (its viewer tools exist only while a model is open).
+
+**Done.** The focused source PDF puts its actions into the comment tool window (`viewer-actions.ts`, new `kind: "page"`), as the 3D view does: Piezīme (write the note in the window's box, then click the page), Līnija / Aplis / Taisnstūris / Zīmēt, Notīrīt, Skice (write the text, then drag a rectangle). No selection is needed on a page, and Izolēt / Rādīt visu / Krāsot pēc are not shown. The window's colour now goes with a PDF pin and sketch too. The PDF bar keeps page controls, Teksts, Apgabals and Ģeometrija / CSV (not comment tools); the note field, Piezīme, the four shape buttons and Skice → aģentam are gone from it (`PdfView.tsx`, `SourcePdf.tsx`, `CommentTools.tsx`).
+
+**Not changed.** The sheet compare (`SheetCompare.tsx`) still has its own inline shape buttons (its marks reach the window's Apgabals tool through `page-marks.ts`); a compare of two IFC models still has its inline Skice → aģentam. **Not checked live:** typecheck and `15.2-i18n`, `9.12-ui-review` pass; no test covers these views, so the pin / shape / sketch flow on a PDF needs a look in the app.
