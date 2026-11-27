@@ -53,6 +53,7 @@ export function Waiting({ items, specs, projectId, onConfirm, onOpen }: Props) {
 											{tr("Atvērt sarunu")}</button>
 									)}
 								</div>
+								{confirmNotes(w.batch).map((n, j) => <div key={j} className="confirm-note">{tr(n.text, n.vars)}</div>)}
 								<pre>{w.batch}</pre>
 								<div className="row">
 									<button className="primary" onClick={() => run(onConfirm(w.id, true))}>{tr("Atļaut")}</button>

@@ -226,6 +226,7 @@ tr.click:hover td { background: var(--elev); }
 .tool.bad { border-left-color: var(--bad); }
 .tool pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: var(--bg); padding: 6px; border-radius: 4px; }
 .confirm { border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.confirm-note { font-weight: 600; color: var(--warn); }
 .confirm pre { white-space: pre-wrap; max-height: 180px; overflow: auto; margin: 0; }
 .confirm-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .confirm-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

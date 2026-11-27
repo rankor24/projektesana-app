@@ -34,6 +34,7 @@ import { agentName, mentionOptions, useThreads } from "./useThreads";
 import { Waiting } from "./Waiting";
 import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
+import { confirmNotes } from "../../shared/confirm-text";
 import { cycleReasoning, REASONING_LABEL, useReasoning } from "../reasoning-pref";
 
 export function AgentDock() {
@@ -745,6 +746,7 @@ function ConfirmLine({ l, onAnswer }: { l: Extract<Line, { kind: "confirm" }>; o
 					{open ? "▾" : "▸"}
 				</button>
 			</div>
+			{open && confirmNotes(l.batch).map((n, i) => <div key={i} className="confirm-note">{tr(n.text, n.vars)}</div>)}
 			{open && <pre>{l.batch}</pre>}
 			{open && (l.answered ? badge : (
 				<div className="row">

@@ -1,5 +1,6 @@
 // Approval levels (design doc 4.2, work plan "Agent tools"). Every tool the agent can reach has one; a tool without one is
 // treated as `never`. The gate runs in the main process on pi's beforeToolCall hook, for the app's tools and Revit's alike.
+import { AUTO_STILL_ASKS_CALLS, AUTO_STILL_ASKS_TOOLS } from "../../shared/auto-mode.js";
 import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 
 export type Level = "read" | "propose" | "annotate" | "run" | "confirm" | "never";
@@ -82,15 +83,7 @@ export function offered(listed: readonly string[], levelOf: LevelOf): string[] {
 	return listed.filter((n) => levelOf(n) !== "never");
 }
 
-/** Auto mode (the button in the agent chat, Settings.autoApprove) answers every approval card with yes, except a batch with one of these: they stay with the user.
- *  - what changes who the agents are or what they may do (agent_configure and the app calls that save an agent, a department, a role, a skill),
- *  - the one sanctioned write into an office folder (the delivery copy into 1.4_Nodevumi) and "sent", which is the user's own word about what he sent out.
- *  The hard refusals are not here: they come before any card (the gate's `never` and `deny`, the working-copy check) and Auto mode never reaches them. */
-export const AUTO_STILL_ASKS_TOOLS: ReadonlySet<string> = new Set(["agent_configure"]);
-export const AUTO_STILL_ASKS_CALLS: ReadonlySet<string> = new Set([
-	"agents.save", "agents.move", "departments.save", "agents.role.set", "agents.role.import", "agents.shared.set", "agents.importTeam", "skills.import",
-	"deliveries.copy", "deliveries.markSent",
-]);
+export { AUTO_STILL_ASKS_CALLS, AUTO_STILL_ASKS_TOOLS };
 
 /** True when a batch of confirm calls may be answered by Auto mode: none of its calls is one the user keeps. */
 export function autoMayApprove(batch: readonly { tool: string; args: unknown }[]): boolean {

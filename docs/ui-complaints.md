@@ -815,9 +815,11 @@ The user (2026-11-27): "we need some Auto mode button, that Allows all commands 
 
 **Not lifted by Auto mode (the user's hard rules).** `send_code_to_revit` and Revit by shell or UI automation (`never`), the app's own program, a write into an office folder (B: and any project root), the working-copy check for Revit changes, `open_document` alone in its batch. These are refused before any card exists.
 
-**Kept with the user in Auto mode (the build session's choice, not his words; one list in `tools/levels.ts`).** `agent_configure` and the app calls that save an agent, department, role or skill: an agent should not widen its own rights. The delivery copy into `1.4_Nodevumi` (`deliveries.copy`) and `deliveries.markSent`: the one sanctioned office write, and his own word about what he sent. **Open question for him:** whether these should also run in Auto mode.
+**Kept with the user in Auto mode (the build session's choice, not his words; one list in `tools/levels.ts`).** `agent_configure` and the app calls that save an agent, department, role or skill: an agent should not widen its own rights. The delivery copy into `1.4_Nodevumi` (`deliveries.copy`) and `deliveries.markSent`: the one sanctioned office write, and his own word about what he sent. He ruled they stay guarded (below).
 
 **Also in Auto mode** (his "all commands"): `open_document` of a file that is not the working copy (a later change in it is still refused), the user's `app_confirm` decisions such as accepting a fact or passing a gate.
+
+**His answer (2026-11-27), his words:** "no keep it guarded with clear command". So the guarded group stays guarded, and its card now says in plain words what it would do (`shared/confirm-text.ts`: a bold line above the raw batch, in the chat and in Gaida tevi).
 
 Test: `test/27.1-auto-mode.test.ts`.
 

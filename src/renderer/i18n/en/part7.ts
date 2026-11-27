@@ -230,4 +230,9 @@ export const part7: Record<string, string> = {
 	"Aģents strādā — raksti tālāk, ziņa nonāks pie viņa pēc tekošā soļa (Ctrl+Enter)": "The agent is working — keep writing, the message reaches it after its current step (Ctrl+Enter)",
 	"Auto režīms ir ieslēgts: aģenta jautājumi tiek atļauti bez klikšķa. Nospied, lai izslēgtu.": "Auto mode is on: what the agent asks is allowed without a click. Press to switch off.",
 	"Auto režīms: atļaut visu, ko aģents jautā, bez klikšķa. Nemainās: biroja mapes, send_code_to_revit, darba kopijas pārbaude.": "Auto mode: allow everything the agent asks without a click. Unchanged: the office folders, send_code_to_revit, the working-copy check.",
+	"Maina aģenta {agent} iestatījumus, tiesības vai lomas tekstu. Iemesls: {reason}": "Changes agent {agent}'s settings, rights or role text. Reason: {reason}",
+	"Kopē nodevumu uz biroja mapi 1.4_Nodevumi (vienīgā atļautā ierakstīšana biroja mapē).": "Copies the delivery into the office folder 1.4_Nodevumi (the only write into an office folder that is allowed).",
+	"Atzīmē nodevumu kā nosūtītu (tavs paziņojums par to, ko esi nosūtījis).": "Marks the delivery as sent (your own word about what you sent out).",
+	"Saglabā aģenta, nodaļas, lomas vai prasmes izmaiņas ({call}): aģents maina, kas aģenti ir un ko tie drīkst.": "Saves a change to an agent, department, role or skill ({call}): an agent is changing who the agents are and what they may do.",
+	"{tool}: šo Auto režīms nekad neatļauj pats.": "{tool}: Auto mode never allows this by itself.",
 };

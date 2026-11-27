@@ -96,3 +96,14 @@ test("27.1 the setting is the user's: it is stored as true only for true, off by
 	assert.equal(s.set({ autoApprove: true }).autoApprove, true);
 	assert.equal(s.set({ autoApprove: false }).autoApprove, false);
 });
+
+test("27.1 a guarded card says in plain words what it would do (the user: keep it guarded, with a clear command)", async () => {
+	const { confirmNotes } = await import("../src/shared/confirm-text.ts");
+	const notes = confirmNotes(JSON.stringify([{ tool: "agent_configure", args: { agent: "ar", reason: "vajag Revit rīku" } }, app("deliveries.copy"), app("agents.save"), { tool: "run_command", args: { command: "dir" } }]));
+	assert.equal(notes.length, 3, "run_command has no note");
+	assert.match(notes[0].text, /Maina aģenta/);
+	assert.deepEqual(notes[0].vars, { agent: "ar", reason: "vajag Revit rīku" });
+	assert.match(notes[1].text, /1\.4_Nodevumi/);
+	assert.deepEqual(notes[2].vars, { call: "agents.save" });
+	assert.deepEqual(confirmNotes("not json"), []);
+});
