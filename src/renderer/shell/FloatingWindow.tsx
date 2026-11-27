@@ -25,6 +25,10 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 	const minH = minHOf(minW);
 	const slimTools = group.tabs.length === 1 && group.tabs[0] === TOOLS;
 	const frame = useRef(0);
+	/** The comment tools window stays as compact as possible: after a move or resize has been committed its height is fitted again. */
+	const refit = useCallback(() => {
+		if (slimTools) requestAnimationFrame(() => requestAnimationFrame(() => fitToolsHeight(id)));
+	}, [slimTools, id]);
 
 	/** Writes a geometry to the element, at most once per animation frame. */
 	const apply = useCallback((g: Geo) => {
@@ -63,6 +67,7 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 				if (target?.kind === "side") return windows.dock(id, target.side, { whole: true });
 				settle(final);
 				windows.move(id, final.x, final.y);
+				refit();
 			},
 		});
 	};
@@ -96,10 +101,11 @@ function FloatingWindowView({ group, focused, render }: { group: Group; focused:
 			const up = () => {
 				settle(final);
 				windows.resize(id, final);
+				refit();
 			};
 			followMouse(move, up, { cursor: `${dir}-resize` });
 		},
-		[id, p.x, p.y, p.w, p.h, minW, minH, slimTools, apply, settle],
+		[id, p.x, p.y, p.w, p.h, minW, minH, apply, settle, refit],
 	);
 
 	return (

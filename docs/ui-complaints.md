@@ -804,3 +804,16 @@ The code written without a build (`docs/revit-dialogs-plan.md`) compiled, tested
 Released to `main` as 2.18.0. The app's notices reach agents on every engine: pi gets them as a message at once, the others read them with the `dialog_notices` tool. **Still to be proven live inside a real Revit with the new add-in installed.**
 
 Two faults found by the release check and fixed, each with a test in `test/27.0-revit-dialogs.test.ts`: a specialist was offered `dialog_notices` but the gate refused it; with the screen helper switched off in Iestatījumi nothing watched at all, so the promised "a popup is waiting" message never came.
+
+
+## 2026-11-27: Comment tools window stays as compact as possible, also after moving (version 2.18.1)
+
+His words (via the project chat, with a screenshot of a ~296 x 219 px window): "Comment tools moving still resized, not keeps set site." and "SHOULD BE AS COMPACT AS POSSIBLE AT ALL TIMES". The screenshot shows the tools in one row, one colour dot alone on a second row, and empty height under it.
+
+**Cause (read from the code, not reproduced live: his rule).** The height was fitted to the icons only on two events (2.13.2): letting go of a left/right edge, and a double-click on the grip. Any other time (after a move, after a change of the page's tools, after the window was brought back from the column or from minimised, after a restart that kept a taller stored size) nothing re-fitted it, so the window kept whatever height it had and showed empty space. A move itself only changes x and y in the layout (checked in `shared/layout.ts` `move`), so the fix is to keep the fit always on, not to change the move.
+
+| Change | Where |
+|---|---|
+| The floating comment tools window fits its height to its icons all the time: whenever the icons re-flow (window width, the page's tools, colours, the window shown again) and after every move or resize ends. The width stays what he set; the fit never runs while a drag is in progress. A fit that cannot change anything (screen or minimum height reached) does nothing, so it cannot loop. The stored size is the fitted size, so it also holds across restarts. | `TabGroup.tsx` (`fitToolsHeight`, observer effect), `FloatingWindow.tsx` (`refit`), `drag.ts` (`dragActive`) |
+
+**Not checked live** (his rule): the fit reads the real layout of the icons, which only the running app has. If an empty row remains because the width leaves one dot alone on a row, that is the width he set; say so and the next step is to fit the width too.

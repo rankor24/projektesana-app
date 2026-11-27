@@ -47,6 +47,10 @@ export function tabRects(id: string): { x: number; w: number }[] {
 	});
 }
 
+let following = 0;
+/** True while a window is being moved or resized (the comment tools window fits itself only after the drag ends). */
+export const dragActive = (): boolean => following > 0;
+
 export interface Follow {
 	/** puts the cover sheet up now (for drags that start as a possible click) */
 	cover(): void;
@@ -78,6 +82,7 @@ export function followMouse(
 		onMove(ev);
 	};
 	const up = (ev: { clientX: number; clientY: number }) => {
+		following = Math.max(0, following - 1);
 		document.removeEventListener("mousemove", move);
 		document.removeEventListener("mouseup", up);
 		window.removeEventListener("blur", blur);
@@ -86,6 +91,7 @@ export function followMouse(
 		onUp(ev);
 	};
 	const blur = () => up(last);
+	following++;
 	document.addEventListener("mousemove", move);
 	document.addEventListener("mouseup", up);
 	window.addEventListener("blur", blur);

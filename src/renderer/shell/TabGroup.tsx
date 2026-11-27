@@ -3,9 +3,9 @@
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
 import { useEffect, useRef, type ReactNode } from "react";
 import { Icon } from "../icons";
-import { CHAT, canClose, tabIndexAt, TOOLS, type Group } from "../../shared/layout";
+import { CHAT, canClose, clampGeo, minWOf, tabIndexAt, TOOLS, type Group } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
-import { tabRects, track } from "./drag";
+import { dragActive, tabRects, track } from "./drag";
 import { tr } from "../i18n";
 
 /** Widths (px) at which the comment tools' window changes shape: colours in threes, then the header in a row with a wrapped grid of tools. */
@@ -13,9 +13,10 @@ const SLIM_MID = 100;
 const SLIM_WIDE = 140;
 
 /**
- * The comment tools' window is meant to be exactly as tall as its icons need: measures the icon grid against the body it sits in
+ * The comment tools' window is always exactly as tall as its icons need: measures the icon grid against the body it sits in
  * and resizes the floating window by the difference (shrinks it when there is empty room, grows it when icons are cut off).
- * Called when the user lets go of a width drag, and by a double-click on the grip.
+ * Run whenever the icons re-flow (a width change, other tools on the page), after every move or resize, and on a double-click on
+ * the grip. The width stays what the user set.
  */
 export function fitToolsHeight(id: string): void {
 	const fw = document.querySelector<HTMLElement>(`[data-strip="${id}"]`)?.closest<HTMLElement>(".fw");
@@ -24,7 +25,9 @@ export function fitToolsHeight(id: string): void {
 	if (!fw || !body || !col) return;
 	const delta = col.offsetHeight - body.clientHeight;
 	if (Math.abs(delta) < 2) return;
-	windows.resize(id, { x: fw.offsetLeft, y: fw.offsetTop, w: fw.offsetWidth, h: fw.offsetHeight + delta });
+	const want = clampGeo({ x: fw.offsetLeft, y: fw.offsetTop, w: fw.offsetWidth, h: fw.offsetHeight + delta }, { w: window.innerWidth, h: window.innerHeight }, minWOf([TOOLS]));
+	if (want.h === fw.offsetHeight) return; // already as tight as the screen and the minimum allow: nothing to do, no loop
+	windows.resize(id, want);
 }
 
 export function TabGroup({
@@ -104,6 +107,31 @@ export function TabGroup({
 			delete el.dataset.tier;
 		};
 	}, [slim]);
+	// the floating comment tools keep themselves as compact as possible at all times: whenever the icons re-flow (width, the page's
+	// tools, colours) the height is fitted again; while the window is being dragged nothing is touched (the drag ends with a fit)
+	useEffect(() => {
+		const el = tg.current;
+		if (!slim || mode !== "float" || !el) return;
+		let raf = 0;
+		const schedule = () => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				if (!dragActive()) fitToolsHeight(own);
+			});
+		};
+		const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+		ro?.observe(el);
+		const col = el.querySelector(".ctool-col");
+		if (col) ro?.observe(col);
+		const mo = new MutationObserver(schedule);
+		mo.observe(el.querySelector(".tg-body") ?? el, { childList: true, subtree: true });
+		schedule();
+		return () => {
+			cancelAnimationFrame(raf);
+			ro?.disconnect();
+			mo.disconnect();
+		};
+	}, [slim, mode, own]);
 	return (
 		<div ref={tg} className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
 			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? (mode === "float" ? fitToolsHeight(own) : undefined) : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
