@@ -160,7 +160,7 @@ export function CommentTools() {
 				<AskBox
 					at={anchor ? { left: anchor.left, top: anchor.top } : undefined}
 					title={asking.kind === "page" ? tr(asking.tool.label) : asking.kind === "pin" ? tr("Piezīme pie elementa") : asking.kind === "sketch" ? tr("Skice → aģentam") : tr("Krāsot pēc")}
-					hint={asking.kind === "page" ? tr(asking.tool.hint) : asking.kind === "colourBy" ? tr("klase, typename, objecttype vai Pset.Nosaukums") : asking.kind === "pin" ? tr("Iezīmē elementu modelī; piezīme tiek pie tā ar skatu") : tr("Iezīmētie elementi ar šo tekstu aiziet aģentam")}
+					hint={asking.kind === "page" ? tr(asking.tool.hint) : asking.kind === "colourBy" ? tr("klase, typename, objecttype vai Pset.Nosaukums") : asking.kind === "pin" ? (viewer?.kind === "page" ? tr("Pēc Saglabāt klikšķini lapā, kur likt piezīmi (atzīmējumi tiek līdzi)") : tr("Iezīmē elementu modelī; piezīme tiek pie tā ar skatu")) : viewer?.kind === "page" ? tr("Pēc Saglabāt velc taisnstūri lapā; teksts un apgabals aiziet aģentam") : tr("Iezīmētie elementi ar šo tekstu aiziet aģentam")}
 					value={text}
 					setValue={setText}
 					colour={asking.kind === "colourBy" ? null : colour}
@@ -212,22 +212,30 @@ function ToolButton({ icon, label, hint, count, on, disabled, onClick }: { icon:
 	);
 }
 
-/** The model viewer's tools (M2): a pin with the camera, marks over the view, the sketch for the agent, isolate, colour by. */
+/** The viewer's tools (M2): a pin (with the camera on a model, at a click on a PDF page), marks over the view, the sketch for the
+ *  agent; on a model also isolate and colour by. */
 function ViewerTools({ va, asking, ask }: { va: ViewerActions; asking: Asking | null; ask: (a: Asking) => void }) {
 	const marks = VIEWER_TOOLS.filter((t) => t.id !== "pin");
+	const onPage = va.kind === "page";
+	// a model's pin and sketch work on the selected elements; a page's need no selection
+	const noTarget = !onPage && !va.selected;
 	return (
 		<>
-			<div className="ctool-sep" title={tr("Modelis")} />
-			<ToolButton icon={ICON.pin} label={tr("Piezīme")} hint={tr("Piezīme pie iezīmētā elementa, ar skatu")} on={asking?.kind === "pin"} disabled={!va.selected} onClick={() => ask({ kind: "pin" })} />
+			<div className="ctool-sep" title={onPage ? tr("Lapa") : tr("Modelis")} />
+			<ToolButton icon={ICON.pin} label={tr("Piezīme")} hint={onPage ? tr("Ieraksti piezīmi, tad klikšķini lapā, kur to likt") : tr("Piezīme pie iezīmētā elementa, ar skatu")} on={asking?.kind === "pin"} disabled={noTarget} onClick={() => ask({ kind: "pin" })} />
 			{marks.map((t) => {
 				const shape = SHAPE_OF[t.id];
 				return <ToolButton key={t.id} icon={ICON[t.id] ?? "•"} label={tr(t.label)} hint={tr(t.hint)} on={va.shape === shape} onClick={() => va.setShape(va.shape === shape ? null : shape)} />;
 			})}
 			{va.marks > 0 && <ToolButton icon="⌫" label={tr("Notīrīt ({n})", { n: va.marks })} hint={tr("Notīrīt zīmējumu virs skata")} onClick={va.clearMarks} />}
-			<ToolButton icon="➜" label={tr("Skice")} hint={tr("Iezīmētos elementus ar tekstu nodod aģentam kā norādījumu")} on={asking?.kind === "sketch"} disabled={!va.selected} onClick={() => ask({ kind: "sketch" })} />
-			<ToolButton icon="◎" label={tr("Izolēt")} hint={tr("Rādīt tikai iezīmētos, pārējie pelēki")} disabled={!va.selected} onClick={va.isolate} />
-			<ToolButton icon="◉" label={tr("Rādīt visu")} hint={tr("Atkal rādīt visus elementus")} onClick={va.showAll} />
-			<ToolButton icon="🎨" label={tr("Krāsot pēc")} hint={tr("Krāsot modeli pēc klases vai īpašības")} on={asking?.kind === "colourBy"} onClick={() => ask({ kind: "colourBy" })} />
+			<ToolButton icon="➜" label={tr("Skice")} hint={onPage ? tr("Ieraksti tekstu, tad velc taisnstūri lapā: tas nonāk aģentam kā norādījums") : tr("Iezīmētos elementus ar tekstu nodod aģentam kā norādījumu")} on={asking?.kind === "sketch"} disabled={noTarget} onClick={() => ask({ kind: "sketch" })} />
+			{!onPage && (
+				<>
+					<ToolButton icon="◎" label={tr("Izolēt")} hint={tr("Rādīt tikai iezīmētos, pārējie pelēki")} disabled={!va.selected} onClick={va.isolate} />
+					<ToolButton icon="◉" label={tr("Rādīt visu")} hint={tr("Atkal rādīt visus elementus")} onClick={va.showAll} />
+					<ToolButton icon="🎨" label={tr("Krāsot pēc")} hint={tr("Krāsot modeli pēc klases vai īpašības")} on={asking?.kind === "colourBy"} onClick={() => ask({ kind: "colourBy" })} />
+				</>
+			)}
 		</>
 	);
 }

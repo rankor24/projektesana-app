@@ -823,3 +823,13 @@ The user (2026-11-27): "we need some Auto mode button, that Allows all commands 
 
 Test: `test/27.1-auto-mode.test.ts`.
 
+
+## 2026-11-27: Two sets of comment tools on the PDF view (version 2.18.1)
+
+The user (screenshot of the PDF bar): "Why there is duplicate of worse working comment tools on PDF viewer?"
+
+**Why both existed.** A leftover. When the comment tool window was built (D6), the 3D view's inline pin, marks and sketch moved into it; the source PDF (`SourcePdf`) was missed. It kept its own row (note field, Piezīme, Līnija / Aplis / Taisnstūris / Zīmēt, Skice → aģentam), and the window offered nothing on a PDF (its viewer tools exist only while a model is open).
+
+**Done.** The focused source PDF puts its actions into the comment tool window (`viewer-actions.ts`, new `kind: "page"`), as the 3D view does: Piezīme (write the note in the window's box, then click the page), Līnija / Aplis / Taisnstūris / Zīmēt, Notīrīt, Skice (write the text, then drag a rectangle). No selection is needed on a page, and Izolēt / Rādīt visu / Krāsot pēc are not shown. The window's colour now goes with a PDF pin and sketch too. The PDF bar keeps page controls, Teksts, Apgabals and Ģeometrija / CSV (not comment tools); the note field, Piezīme, the four shape buttons and Skice → aģentam are gone from it (`PdfView.tsx`, `SourcePdf.tsx`, `CommentTools.tsx`).
+
+**Not changed.** The sheet compare (`SheetCompare.tsx`) still has its own inline shape buttons (its marks reach the window's Apgabals tool through `page-marks.ts`); a compare of two IFC models still has its inline Skice → aģentam. **Not checked live:** typecheck and `15.2-i18n`, `9.12-ui-review` pass; no test covers these views, so the pin / shape / sketch flow on a PDF needs a look in the app.

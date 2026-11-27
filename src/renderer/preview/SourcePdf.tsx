@@ -1,15 +1,16 @@
 // A project source in the PDF view, with its overlays: the plan geometry read from a vector inventory (3.4) and the user's
-// pins (6.4, 8.2). The overlay draws in page fractions, so it stays on the plan at any zoom. Pins are made with the note
-// field in the toolbar (Electron has no window.prompt): write the note, press Piezīme, click the page.
-import { useCallback, useEffect, useState } from "react";
+// pins (6.4, 8.2). The overlay draws in page fractions, so it stays on the plan at any zoom. The comment tools (pin, line,
+// circle, rectangle, draw, sketch → agent) are the comment tool window's: this view puts its actions there (viewer-actions.ts)
+// while it is the focused pane, as the 3D view does. A pin: Piezīme in the window, write the note, click the page.
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Markup, Pin } from "../../core/model";
-import { MarkupTools } from "./Markup";
 import { call, errText } from "../bridge";
 import { ui } from "../state";
 import { viewer } from "../viewer-store";
 import { factReview } from "../fact-review";
 import { pinFocus } from "../../shared/pins-view";
-import { PdfView } from "./PdfView";
+import { PdfView, type PdfControl } from "./PdfView";
+import { viewerActions, type ViewerActions } from "../viewer-actions";
 import { PinSide, useFilePins } from "./Annotate";
 import { tr } from "../i18n";
 
@@ -20,6 +21,8 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 	const [geoOn, setGeoOn] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [note, setNote] = useState("");
+	const [msg, setMsg] = useState<string | null>(null);
+	const control = useRef<PdfControl | null>(null);
 	const [active, setActive] = useState<string | null>(null);
 	const [jump, setJump] = useState<number | undefined>(page);
 	// marks drawn and not yet saved with a note (page, mark), and the shape being drawn
@@ -29,6 +32,37 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 	useEffect(() => {
 		if (page) setJump(page);
 	}, [page]);
+	// the comment tool window drives this view while it is the focused pane (viewer-actions.ts, kind "page")
+	useEffect(() => {
+		if (!focused) return;
+		const a: ViewerActions = {
+			kind: "page",
+			ready: true,
+			selected: 0,
+			shape,
+			marks: drawn.length,
+			pin: (t) => {
+				if (!t.trim()) return setErr(tr("Ieraksti piezīmes tekstu."));
+				setNote(t);
+				setErr(null);
+				setMsg(tr("Klikšķini lapā, kur likt piezīmi."));
+				control.current?.setMode("pin");
+			},
+			sketch: (t) => {
+				setNote(t);
+				setErr(null);
+				setMsg(tr("Velc taisnstūri lapā: tas ar tekstu aiziet aģentam."));
+				control.current?.setMode("sketch");
+			},
+			setShape,
+			clearMarks: () => setDrawn([]),
+			isolate: () => {},
+			showAll: () => {},
+			colourBy: () => {},
+		};
+		viewerActions.set(a);
+		return () => viewerActions.clear(a);
+	}, [focused, shape, drawn.length]);
 	const belongs = useCallback((p: Pin) => "sourceId" in p.target && p.target.sourceId === sourceId, [sourceId]);
 	const pins = useFilePins(projectId, belongs);
 	const toggleGeo = async () => {
@@ -66,11 +100,10 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 						}}
 						markup={{ shape, shown: (pg) => [...pins.items.filter(({ pin }) => "page" in pin.target && pin.target.page === pg).flatMap(({ pin }) => pin.markup ?? []), ...drawn.filter((d) => d.page === pg).map((d) => d.m)], onDone: (pg, m) => setDrawn((d) => [...d, { page: pg, m }]) }}
 						sketchNote={note}
-						onSketchSent={() => setNote("")}
+						onSketchSent={() => (setNote(""), setMsg(null))}
+						control={control}
 						toolbar={
 							<>
-								<input placeholder="piezīme: Piezīme + klikšķis, vai Skice + taisnstūris" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 230 }} />
-								<MarkupTools shape={shape} setShape={setShape} count={drawn.length} onClear={() => setDrawn([])} />
 								<button className={geoOn ? "primary" : ""} onClick={toggleGeo} title="Plāna līnijas no vektoru PDF">
 									Ģeometrija
 								</button>
@@ -82,11 +115,11 @@ export function SourcePdf({ projectId, sourceId, title, page, quote, paneIndex =
 							</>
 						}
 						onPageClick={(pg, x, y) => {
-							if (!note.trim()) return setErr(tr("Ieraksti piezīmi laukā virs lapas, tad klikšķini lapā."));
+							if (!note.trim()) return setErr(tr("Spied Piezīme komentāru rīkos, ieraksti tekstu, tad klikšķini lapā."));
 							setErr(null);
 							const marks = drawn.filter((d) => d.page === pg).map((d) => d.m);
 							call("pins.add", projectId, { sourceId, page: pg, x, y }, note.trim(), marks.length ? { intent: "mark", markup: marks } : undefined)
-								.then((p) => (setNote(""), setDrawn((d) => d.filter((x) => x.page !== pg)), setActive(p.id), pins.reload()))
+								.then((p) => (setNote(""), setMsg(null), setDrawn((d) => d.filter((x) => x.page !== pg)), setActive(p.id), control.current?.setMode("text"), pins.reload()))
 								.catch((e) => setErr(errText(e)));
 						}}
 						overlay={(pg) => {
