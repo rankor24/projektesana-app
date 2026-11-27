@@ -89,6 +89,8 @@ export function coreHandlers(d: CoreDeps): Pick<Handlers, Extract<keyof Handlers
 		"settings.get": () => d.settings.get(),
 		"settings.set": (patch) => {
 			const s = d.settings.set(patch);
+			// Auto mode just switched on: the cards that already wait are answered too
+			if (patch.autoApprove === true) d.session.approveWaiting();
 			d.emit("data.changed", { projectId: null, what: ["settings"] });
 			return s;
 		},

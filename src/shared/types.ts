@@ -90,6 +90,8 @@ export interface Settings {
 	automaticRecovery?: boolean;
 	/** a Revit popup that stays open while an agent waits for Revit may be answered by the computer-use helper on the screen (default yes); off = only the user is told */
 	revitDialogsOnScreen?: boolean;
+	/** Auto mode (the button in the agent chat): the app answers every approval card with yes, except what stays with the user (tools/levels.ts `autoStillAsks`). The hard refusals never lift: office folders, send_code_to_revit, Revit by shell, the working-copy check. Off by default; only the user sets it (settings.set is never the agent's). */
+	autoApprove?: boolean;
 	/** The folder the team was last imported from (Aģenti → «Importēt BD komandu…»); the picker offers it again. null / absent = never imported. */
 	teamFolder?: string | null;
 }
@@ -104,7 +106,7 @@ export function clampTurns(v: unknown, fallback: number): number {
 	return Number.isFinite(n) && n >= 1 ? Math.min(MAX_TURNS_LIMIT, n) : fallback;
 }
 
-export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, maxTurns: DEFAULT_MAX_TURNS, maxTurnsSub: DEFAULT_MAX_TURNS_SUB, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false, revitDialogsOnScreen: true };
+export const DEFAULT_SETTINGS: Settings = { provider: "openai-codex", model: "", effort: "", theme: "auto", language: "en", revitServerJs: null, revitNode: null, officeStandardPdf: null, userName: "", maxParallelAgents: 3, maxTurns: DEFAULT_MAX_TURNS, maxTurnsSub: DEFAULT_MAX_TURNS_SUB, limits: DEFAULT_LIMITS, backup: null, automaticRecovery: false, revitDialogsOnScreen: true, autoApprove: false };
 
 /** One step of a sign-in the person is going through. */
 export type LoginNotice =

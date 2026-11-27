@@ -804,3 +804,20 @@ The code written without a build (`docs/revit-dialogs-plan.md`) compiled, tested
 Released to `main` as 2.18.0. The app's notices reach agents on every engine: pi gets them as a message at once, the others read them with the `dialog_notices` tool. **Still to be proven live inside a real Revit with the new add-in installed.**
 
 Two faults found by the release check and fixed, each with a test in `test/27.0-revit-dialogs.test.ts`: a specialist was offered `dialog_notices` but the gate refused it; with the screen helper switched off in Iestatījumi nothing watched at all, so the promised "a popup is waiting" message never came.
+
+## 2026-11-27: Auto mode button (version 2.19.0)
+
+The user (2026-11-27): "we need some Auto mode button, that Allows all commands that agent asking persimions otherwise".
+
+**Read first:** no such switch existed. Since 2.15.0 the working copy, the work folder and the app's own tables run with no click; what still asked was `run_command`, `open_document` of another file, a path outside the work folder, an agent's own MCP server, `agent_configure`, `memory_write_office` and the `app_confirm` decisions (59 calls).
+
+**Built.** An **Auto** pill in the agent chat's header (next to the log button; yellow while on). On: the coordinator answers each approval card yes at once, and cards already waiting are answered when it is switched on. Off by default; it stays as set across restarts (the button shows it all the time). Only the user can set it (`settings.set` is `never` for agents).
+
+**Not lifted by Auto mode (the user's hard rules).** `send_code_to_revit` and Revit by shell or UI automation (`never`), the app's own program, a write into an office folder (B: and any project root), the working-copy check for Revit changes, `open_document` alone in its batch. These are refused before any card exists.
+
+**Kept with the user in Auto mode (the build session's choice, not his words; one list in `tools/levels.ts`).** `agent_configure` and the app calls that save an agent, department, role or skill: an agent should not widen its own rights. The delivery copy into `1.4_Nodevumi` (`deliveries.copy`) and `deliveries.markSent`: the one sanctioned office write, and his own word about what he sent. **Open question for him:** whether these should also run in Auto mode.
+
+**Also in Auto mode** (his "all commands"): `open_document` of a file that is not the working copy (a later change in it is still refused), the user's `app_confirm` decisions such as accepting a fact or passing a gate.
+
+Test: `test/27.1-auto-mode.test.ts`.
+

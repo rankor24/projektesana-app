@@ -406,6 +406,7 @@ export function AgentDock() {
 					<b>{tr("Aģents")}</b>
 					<span className="badge dim" title={tr("Revit MCP")}>{tr("Revit:")} {st?.revit ?? "…"}</span>
 					<span className="grow" />
+					<AutoMode />
 					<button className="icon-btn" title={tr("Atvērt aģenta žurnālu: viss, ko aģents dara un saņem")} aria-label={tr("Žurnāls")} onClick={() => windows.openLog(viewId ? `thread:${viewId}` : undefined)}>
 						<Icon name="terminal" />
 					</button>
@@ -703,6 +704,30 @@ function ArchiveView({ thread, projectId, id }: { thread: string; projectId: str
  * The batch approval card. Waiting for an answer it is open (the batch and Atļaut / Noraidīt); once answered it shrinks to one line,
  * the tool and the answer, so old approvals do not fill the chat. The chevron opens or closes it either way; a choice made by hand stays.
  */
+/** The Auto mode button (Settings.autoApprove): while it is on, the app answers every approval card with yes, except what stays with the user (agent changes, the delivery copy into the office folder). */
+function AutoMode() {
+	const settings = useLoad(() => call("settings.get"), []);
+	const [on, setOn] = useState<boolean | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+	const value = on ?? settings.data?.autoApprove === true;
+	const flip = () => {
+		const next = !value;
+		setOn(next);
+		setErr(null);
+		call("settings.set", { autoApprove: next }).then((s) => setOn(s.autoApprove === true)).catch((e) => (setOn(!next), setErr(errText(e))));
+	};
+	return (
+		<button
+			className={`auto-btn${value ? " on" : ""}`}
+			title={err ?? (value ? tr("Auto režīms ir ieslēgts: aģenta jautājumi tiek atļauti bez klikšķa. Nospied, lai izslēgtu.") : tr("Auto režīms: atļaut visu, ko aģents jautā, bez klikšķa. Nemainās: biroja mapes, send_code_to_revit, darba kopijas pārbaude."))}
+			aria-pressed={value}
+			onClick={flip}
+		>
+			<Icon name="zap" /> {tr("Auto")}
+		</button>
+	);
+}
+
 function ConfirmLine({ l, onAnswer }: { l: Extract<Line, { kind: "confirm" }>; onAnswer: (id: string, allow: boolean) => void }) {
 	const [pick, setPick] = useState<boolean | null>(null);
 	const open = pick ?? !l.answered;

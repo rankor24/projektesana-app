@@ -21,7 +21,7 @@ import { BPV_ID, departmentOf, DEFAULT_DEPARTMENTS, type Department } from "../s
 import type { ThreadStore } from "../core/threads.js";
 import { loadQueue, pickNext, saveQueue, waitReason, waveCheck, type QueueItem, type Running, type WaitReason } from "../core/queue.js";
 import type { PreparedAttachments } from "./attachments.js";
-import type { ConfirmRequest } from "./tools/levels.js";
+import { autoMayApprove, type ConfirmRequest } from "./tools/levels.js";
 import type { RunSteer, ThreadRunner } from "./thread-runner.js";
 
 export interface CoordinatorDeps {
@@ -510,6 +510,9 @@ export class Coordinator {
 		const live: Live = { runId, thread, wave, abort, done: Promise.resolve(), lastActive: Date.now(), askedBy, request: item.input.text, steer: null };
 		const ask = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
+				// Auto mode (Settings.autoApprove, the button in the chat): the card is not shown. This is asked only after every refusal that no click lifts has been made
+				// (the gate's `never` and office-folder `deny`, the working-copy check), and the batch the user keeps (tools/levels.ts autoMayApprove) still asks.
+				if (this.d.settings().autoApprove === true && autoMayApprove(req.batch)) return resolve(true);
 				// the gate numbers its confirmations per run (c1, c2…), so two runs both ask "c1": the id the window sees names the run too
 				const id = `${runId}:${req.id}`;
 				// the list shows the same text the `confirm` event carries
@@ -1304,6 +1307,19 @@ export class Coordinator {
 		c.resume();
 		this.waitingChanged();
 		this.pump();
+	}
+
+	/** Auto mode was just switched on: the cards already waiting that Auto mode may answer are answered yes (the checks that no click lifts were made before each card was shown). */
+	approveWaiting(): void {
+		for (const [id, c] of [...this.confirms]) {
+			let batch: { tool: string; args: unknown }[] = [];
+			try {
+				batch = JSON.parse(c.item.batch) as { tool: string; args: unknown }[];
+			} catch {
+				continue; // a batch cut for display (4000 characters) cannot be judged: it stays with the user
+			}
+			if (Array.isArray(batch) && batch.length > 0 && autoMayApprove(batch)) this.confirm(id, true);
+		}
 	}
 
 	/** App is quitting: abort the runs (queued items stay queued for the next start) and wait until they have closed their tool servers (the Revit MCP child and the tools child). */

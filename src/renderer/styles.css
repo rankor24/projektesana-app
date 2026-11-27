@@ -244,6 +244,10 @@ tr.click:hover td { background: var(--elev); }
 .reasoning-btn { flex: none; color: var(--muted); }
 .reasoning-btn.hidden { color: var(--dim); }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; background: transparent; border-color: transparent; border-radius: 8px; color: var(--dim); }
+.auto-btn { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12px; background: transparent; border: 1px solid var(--border); color: var(--dim); }
+.auto-btn:hover { color: var(--text); background: var(--elev2); }
+.auto-btn.on { color: var(--accent-ink); background: var(--warn); border-color: var(--warn); font-weight: 600; }
+.auto-btn svg { width: 14px; height: 14px; }
 .icon-btn:hover { color: var(--text); background: var(--elev2); border-color: transparent; }
 .send-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .send-btn:hover { background: color-mix(in srgb, var(--accent), #fff 14%); border-color: transparent; }

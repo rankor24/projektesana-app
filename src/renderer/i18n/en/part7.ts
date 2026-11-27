@@ -228,4 +228,6 @@ export const part7: Record<string, string> = {
 	"Aģents vēl strādā: pagaidi mirkli vai aptur.": "The agent is still working: wait a moment or stop it.",
 	"Sūtīt: ziņa nonāks pie aģenta pēc tekošā soļa": "Send: the message reaches the agent after its current step",
 	"Aģents strādā — raksti tālāk, ziņa nonāks pie viņa pēc tekošā soļa (Ctrl+Enter)": "The agent is working — keep writing, the message reaches it after its current step (Ctrl+Enter)",
+	"Auto režīms ir ieslēgts: aģenta jautājumi tiek atļauti bez klikšķa. Nospied, lai izslēgtu.": "Auto mode is on: what the agent asks is allowed without a click. Press to switch off.",
+	"Auto režīms: atļaut visu, ko aģents jautā, bez klikšķa. Nemainās: biroja mapes, send_code_to_revit, darba kopijas pārbaude.": "Auto mode: allow everything the agent asks without a click. Unchanged: the office folders, send_code_to_revit, the working-copy check.",
 };

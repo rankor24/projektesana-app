@@ -525,6 +525,11 @@ export class AgentSession {
 		this.coordinator.confirm(id, allow);
 	}
 
+	/** Auto mode was switched on: answer the cards that already wait, as far as Auto mode may. */
+	approveWaiting() {
+		this.coordinator.approveWaiting();
+	}
+
 	/** The chosen model, or null when it cannot be looked up (the run itself reports why). */
 	private async modelOf(s: Settings): Promise<Model<Api> | null> {
 		try {
