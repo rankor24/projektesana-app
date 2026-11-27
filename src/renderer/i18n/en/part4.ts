@@ -127,6 +127,7 @@ export const part4: Record<string, string> = {
 	"nav pieslēgts — atver Iestatījumi": "not connected — open Settings",
 	"Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu": "Write to the agent… @ picks a specialist (Ctrl+Enter) · Ctrl+V pastes a screenshot",
 	"Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)": "Attach a file or image (also: Ctrl+V, drag in)",
+	"Velc uz augšu, lai ziņas lauks būtu lielāks (dubultklikšķis: atpakaļ uz parasto)": "Drag up to make the message box taller (double-click: back to normal)",
 	"Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.": "Auto: every message carries the open file, page, selected elements and camera (3D). Manual: only the Focus you chose.",
 	"Auto": "Auto",
 	"Manuāli": "Manual",

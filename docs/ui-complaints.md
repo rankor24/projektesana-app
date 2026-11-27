@@ -804,3 +804,11 @@ The code written without a build (`docs/revit-dialogs-plan.md`) compiled, tested
 Released to `main` as 2.18.0. The app's notices reach agents on every engine: pi gets them as a message at once, the others read them with the `dialog_notices` tool. **Still to be proven live inside a real Revit with the new add-in installed.**
 
 Two faults found by the release check and fixed, each with a test in `test/27.0-revit-dialogs.test.ts`: a specialist was offered `dialog_notices` but the gate refused it; with the screen helper switched off in Iestatījumi nothing watched at all, so the promised "a popup is waiting" message never came.
+
+## 2026-11-27: the message box can be made taller (his words: "let me resize Text input field up to make bigger")
+
+| # | Done |
+|---|---|
+| 1 | The agent chat's message box (`composer-field` in `AgentDock.tsx`) has a drag edge along its top: drag **up** to make the box taller, down to make it smaller. The chat above shrinks to make room. The height is written to the box while dragging and saved once on release (`localStorage`, per computer, key `projektesana.chatInputHeight`); **double-click** the edge puts the box back to its two lines. Smallest: the two lines; tallest: 70 % of the window height. Same drag helper (`followMouse`) and the same "write while dragging, save on release" pattern as the sidebar's edge. This follows his rule that all panels are resizable. |
+
+**Not checked live** (his rule). The edge is 9 px high and shows the accent colour on hover; the cursor is the up/down resize arrow.
