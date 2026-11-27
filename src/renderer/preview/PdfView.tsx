@@ -23,6 +23,11 @@ export interface PageSize {
 	scale: number;
 }
 
+export type PdfMode = "text" | "region" | "pin" | "sketch";
+export interface PdfControl {
+	setMode(m: PdfMode): void;
+}
+
 export function PdfView({
 	load,
 	sourceId,
@@ -37,6 +42,7 @@ export function PdfView({
 	toolbar,
 	sketchNote,
 	onSketchSent,
+	control,
 }: {
 	load: () => Promise<Uint8Array>;
 	/** absent = a file that is not a source: nothing to point the agent at, so selections stay out of the Fokuss */
@@ -44,7 +50,7 @@ export function PdfView({
 	title: string;
 	initialPage?: number;
 	overlay?: (page: number, size: PageSize) => ReactNode;
-	/** a click in "pin" mode: page fractions */
+	/** a click in "pin" mode (set by the comment tool window): page fractions */
 	onPageClick?: (page: number, x: number, y: number) => void;
 	/** text to mark on the page (a fact's quote, 9.7) and what was found: "whole", "start" (only its first words) or null */
 	highlight?: string;
@@ -54,9 +60,11 @@ export function PdfView({
 	toolbar?: ReactNode;
 	/** marks over the page (task 9.4): the saved ones of this page, the pending ones, and the shape being drawn (null = not drawing) */
 	markup?: { shape: Markup["shape"] | null; shown: (page: number) => Markup[]; onDone: (page: number, m: Markup) => void };
-	/** given = the view offers Skice → aģentam: a drawn rectangle goes to the Fokuss with this note (8.2) */
+	/** a rectangle drawn in "sketch" mode (set by the comment tool window) goes to the Fokuss with this note (8.2) */
 	sketchNote?: string;
 	onSketchSent?: () => void;
+	/** the comment tool column drives the view through this (its pin and sketch tools switch the mode); the view fills it in */
+	control?: { current: PdfControl | null };
 }) {
 	const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
 	const [err, setErr] = useState<string | null>(null);
@@ -65,7 +73,15 @@ export function PdfView({
 		onPage?.(page);
 	}, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 	const [zoom, setZoom] = useState<number | "fit">("fit");
-	const [mode, setMode] = useState<"text" | "region" | "pin" | "sketch">("text");
+	const [mode, setMode] = useState<PdfMode>("text");
+	useEffect(() => {
+		if (!control) return;
+		const c: PdfControl = { setMode };
+		control.current = c;
+		return () => {
+			if (control.current === c) control.current = null;
+		};
+	}, [control]);
 	const [size, setSize] = useState<PageSize | null>(null);
 	const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 	const body = useRef<HTMLDivElement>(null);
@@ -200,14 +216,8 @@ export function PdfView({
 				<span className="grow" />
 				<button className={mode === "text" ? "primary" : ""} onClick={() => setMode("text")} title={tr("Iezīmē tekstu — tas nonāk Fokusā")}>{tr("Teksts")}</button>
 				{sourceId && <button className={mode === "region" ? "primary" : ""} onClick={() => setMode("region")} title={tr("Velc taisnstūri — apgabals nonāk Fokusā")}>{tr("Apgabals")}</button>}
-				{onPageClick && (
-					<button className={mode === "pin" ? "primary" : ""} onClick={() => setMode("pin")} title={tr("Klikšķis lapā pievieno piezīmi")}>{tr("Piezīme")}</button>
-				)}
 				{toolbar}
-				{sketchNote !== undefined && (
-					<button className={mode === "sketch" ? "primary" : ""} onClick={() => setMode("sketch")} title={tr("Velc taisnstūri lapā: tas ar piezīmi no lauka nonāk aģenta Fokusā kā norādījums")}>
-						{tr("Skice → aģentam")}</button>
-				)}
+				{/* the pin and the sketch are comment tools: they live in the comment tool window (D6), not here */}
 			</div>
 			{err && <div className="err">{err}</div>}
 			<div className="viewer-body" ref={body}>
