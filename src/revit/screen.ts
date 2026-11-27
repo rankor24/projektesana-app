@@ -1,7 +1,7 @@
 // The app's way to look at and act on a Revit popup: resources/revit-screen.ps1, started by the app (never by an agent's shell), one call per action. Every call is on
 // Revit's own windows only (the script refuses any other window); what is allowed is decided before the call by dialog-policy.ts.
 import { execFile } from "node:child_process";
-import type { DialogWindow, Rect } from "./dialog-policy.js";
+import { revitInternal, type DialogWindow, type Rect } from "./dialog-policy.js";
 
 export type ScreenRun = (args: string[]) => Promise<string>;
 
@@ -61,7 +61,9 @@ export class RevitScreen {
 		// an entry with no window id is not a popup (Windows PowerShell writes an empty result as {})
 		return asList(r.popups)
 			.filter((p) => typeof p.hwnd === "number")
-			.map(normalizePopup);
+			.map(normalizePopup)
+			// Revit's hidden "<guid>Monitor" window under a modal popup is no popup: it closes with the real one
+			.filter((p) => !revitInternal(p));
 	}
 
 	/** A PNG (base64) of a screen area. */

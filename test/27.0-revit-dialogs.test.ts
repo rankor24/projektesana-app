@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { dialogTools, describe, runDialogAgent, type DialogAgentDeps } from "../src/agent/dialog-agent.ts";
 import { dialogNoticesTool, DialogWatch, Notices } from "../src/agent/dialog-watch.ts";
-import { appendDialogLog, assess, buttonAt, buttonKind, chatLine, decide, dialogLogFile, pathsIn, type DialogLogLine, type DialogWindow, type PolicyContext } from "../src/revit/dialog-policy.ts";
+import { appendDialogLog, assess, buttonAt, buttonKind, chatLine, decide, dialogLogFile, pathsIn, revitInternal, type DialogLogLine, type DialogWindow, type PolicyContext } from "../src/revit/dialog-policy.ts";
 import { normalizePopup, RevitScreen } from "../src/revit/screen.ts";
 import { LockRegistry } from "../src/agent/locks.ts";
 import { createPiRuntime, type PiRunOptions } from "../src/agent/pi/index.ts";
@@ -103,6 +103,66 @@ test("sign-in, licence, crash and typing popups are the user's: nothing is click
 		assert.equal(!r.ok && r.person, true);
 		assert.equal(decide(d, { type: "key", key: "Escape" }, ctx).ok, false);
 	}
+});
+
+test("Revit's warnings window (2026-11-27: pressed from outside during create_room it crashed Revit) is the user's: nothing is pressed, not even Escape", () => {
+	// as the fixed screen script reads it: the read-only message box is text, not a field to fill in, so the reason is the warnings window, not "typing"
+	const d = popup({ title: "Autodesk Revit 2026", text: "Warning\n0 Errors, 3 Warnings\nElements have duplicate \"Number\" values.", edits: 0, buttons: ["OK", "Cancel", "Show", "More Info", "Expand >>", "<<", ">>"] });
+	const as = assess(d, ctx);
+	assert.equal(as.warningsOnly, true);
+	assert.equal(as.person, true);
+	assert.match(as.why, /warnings window/);
+	assert.doesNotMatch(as.why, /typed/);
+	for (const name of ["OK", "Cancel", "Show"]) assert.equal(decide(d, { type: "press", name }, ctx).ok, false);
+	assert.equal(decide(d, { type: "key", key: "Escape" }, ctx).ok, false);
+	// counts line not read: Revit's own buttons (Show, Expand) are enough
+	assert.equal(assess(popup({ text: "", buttons: ["OK", "Cancel", "Show", "More Info", "Expand >>"] }), ctx).warningsOnly, true);
+	// with errors it is no warnings-only window: the usual rules (Cancel rolls back, nothing deleted to make it pass)
+	const err = popup({ text: "1 Error, 2 Warnings\nCan't keep elements joined.", buttons: ["OK", "Cancel", "Delete Element(s)", "Show", "Expand >>"] });
+	assert.equal(assess(err, ctx).warningsOnly, false);
+	assert.equal(decide(err, { type: "press", name: "Cancel" }, ctx).ok, true);
+	assert.equal(decide(err, { type: "press", name: "Delete Element(s)" }, ctx).ok, false);
+	// Revit's serious-error window is the user's
+	const serious = popup({ title: "Revit", text: "Revit encountered a serious error. The current action could not be completed.", buttons: ["Yes", "No"] });
+	assert.equal(assess(serious, ctx).person, true);
+});
+
+test("a press that reports an error is never followed by a second press or a click (the 52 ms double press of 2026-11-27)", async () => {
+	const d = popup({ buttons: ["OK", "Cancel"] });
+	const calls: string[] = [];
+	const deps = {
+		screen: {
+			popups: async () => [d],
+			shot: async () => ({ png: "", width: 1, height: 1 }),
+			cursor: async () => ({ x: 0, y: 0 }),
+			click: async () => void calls.push("click"),
+			key: async () => void calls.push("key"),
+			press: async () => {
+				calls.push("press");
+				throw new Error("timed out");
+			},
+		},
+		ctx,
+		log: () => undefined,
+		run: async () => undefined,
+		base: {} as DialogAgentDeps["base"],
+		signal: new AbortController().signal,
+		seesImages: false,
+		sleep: async () => undefined,
+	} as DialogAgentDeps;
+	const tools = dialogTools(deps, { actions: 0, person: false, cleared: false, lastPoint: null });
+	const r = await tools.find((t) => t.name === "screen_press")!.execute("1", { button: "OK" } as never);
+	assert.deepEqual(calls, ["press"]);
+	assert.equal(r.isError, true);
+	assert.match((r.content[0] as { text: string }).text, /Do not press again/);
+});
+
+test("Revit's hidden «<guid>Monitor» window is no popup", async () => {
+	assert.equal(revitInternal({ title: "9c2f7d7b-ce5a-4eb4-8f43-a0ad6995042bMonitor" }), true);
+	assert.equal(revitInternal({ title: "Autodesk Revit 2026" }), false);
+	const rect = { left: 0, top: 0, right: 300, bottom: 200 };
+	const s = new RevitScreen(async () => JSON.stringify({ ok: true, popups: [{ hwnd: 1, pid: 7, title: "Autodesk Revit 2026", rect }, { hwnd: 2, pid: 7, title: "9c2f7d7b-ce5a-4eb4-8f43-a0ad6995042bMonitor", rect }] }));
+	assert.deepEqual((await s.popups()).map((p) => p.hwnd), [1]);
 });
 
 test("clicks: on a button yes, on the popup's blank part, a check box or outside it no; the title-bar × counts as Close; only Escape is a key", () => {
@@ -370,6 +430,28 @@ test("watcher: the screen helper switched off only tells the user; no Revit call
 	idle.at(20000);
 	await idle.w.tick();
 	assert.deepEqual([idle.logs.length, idle.helped.length], [0, 0]);
+});
+
+test("watcher: in the minutes after an agent's Revit call (none waiting now) a popup is the user's own: told once, never clicked", async () => {
+	const logs: Omit<DialogLogLine, "at" | "source">[] = [];
+	const helped: number[] = [];
+	let t = 0;
+	let waiting = false;
+	const w = new DialogWatch({ screen: { popups: async () => [popup()] }, help: async (p) => (helped.push(p.length), { cleared: false, person: false, report: "" }), log: (l) => logs.push(l), act: () => true, active: () => true, waiting: () => waiting, graceMs: 8000, now: () => t });
+	for (const at of [0, 9000, 12000]) {
+		t = at;
+		await w.tick();
+	}
+	assert.deepEqual(helped, []);
+	assert.deepEqual(logs.map((l) => l.action), ["seen", "person"]);
+	// a call waiting for it: the helper gets it (a new popup)
+	waiting = true;
+	const w2 = new DialogWatch({ screen: { popups: async () => [popup()] }, help: async (p) => (helped.push(p.length), { cleared: true, person: false, report: "" }), log: () => undefined, act: () => true, active: () => true, waiting: () => waiting, graceMs: 8000, now: () => t });
+	t = 0;
+	await w2.tick();
+	t = 9000;
+	await w2.tick();
+	assert.deepEqual(helped, [1]);
 });
 
 test("watcher: a screen that cannot be read (locked, no script) is said once and the watch goes on", async () => {

@@ -872,3 +872,30 @@ His words: "i ask for 5th time, Comment tool bar after resizing, not keeping its
 | Grip tooltip: "Vilkt, lai pārvietotu" (no double-click fit any more). | `TabGroup.tsx`, `i18n/en/settings.ts` |
 
 **Checked:** on the test page with the real stylesheet, the CSS height gives 339 px at 60–80 px wide (column), 183 px at 120–141 px (stacked header, three rows), 89/85 px at 155–280 px (two rows), and 67 px from 294 px (one row). No scrollbar and no empty space at any width; capped at 150 px, the icons scroll. `npm run typecheck`, `test/9.0-layout.test.ts`, `test/15.2-i18n.test.ts` pass. **Not checked in his running app** (his rule).
+
+## 2026-11-27: the Revit popup helper refused a warning, then Revit crashed (version 2.19.3)
+
+The user (2026-11-27), with a screenshot of the chat line «the Revit popup … is flagged as asking for something to be typed (name or password)» over Revit's warnings window (0 Errors, 3 Warnings, duplicate «Number»): "Why it not trying computer-use?" Then, while it was being fixed: "you crashed it" (Revit: "Revit encountered a serious error").
+
+**What the log and the journal showed (read, `revit-dialogs.jsonl` and `journal.0161.txt`).**
+
+| Time | What happened |
+|---|---|
+| 16:07 | The screen helper (2.18.0 code, run `rmwz1st045`) refused the warnings window as "typing": `revit-screen.ps1` counted its read-only message box as a field to fill in, and read no text from it. |
+| 16:14:20, 16:14:46 | The warnings came from the agent's own `MCP: create_room` transactions, yet the add-in logged "no MCP call is running": its call counter drops when the socket call times out, while the queued ExternalEvent still runs later in Revit. So the add-in left the warnings to Revit's window instead of deleting them. |
+| 16:14:44 | The helper pressed OK on that window (journal: PushButton). |
+| 16:15:29 | The window was pressed twice, 52 ms apart; Revit then showed "serious error" (journal: "Acquired transaction group has a proxy"). The helper's press had a fallback that clicked the same button again when the press reported an error. |
+| 16:15:41 | The serious-error window was answered Yes (save a recovery file). |
+
+**Fixed.**
+
+| Change | Where |
+|---|---|
+| The add-in knows an agent's transaction by its name (`MCP: …`), not only by the call count, so the agent's own warnings are deleted before any window shows. «serious error» is a person-only popup. Log lines carry the transaction name. Commit `abcb1b3` in `D:\Code\BIM\revit-mcp` (local branch `bv/p1-safety`), built for 2024, 2025, 2026. | `commandset/Services/Dialogs/DialogGuard.cs` |
+| Revit's warnings window is never pressed from outside (not OK, not Cancel, not Escape): it is the user's, and the chat says why (not "typing"). | `src/revit/dialog-policy.ts` |
+| A press that reports an error is never followed by a second press or a click; the helper is told not to press again. | `src/agent/dialog-agent.ts` |
+| A read-only or disabled text box is read as the popup's text, not counted as a field to fill in. | `resources/revit-screen.ps1` |
+| Revit's hidden «<guid>Monitor» window is not listed as a popup. | `src/revit/screen.ts` |
+| The helper acts only while an agent's Revit call is waiting; in the 90 s after a call a popup is told to the user, never pressed. | `src/agent/dialog-watch.ts`, `thread-runner.ts` |
+
+**Checked:** `test/27.0-revit-dialogs.test.ts` (30 pass, with the exact popup of the screenshot, the double press, the Monitor window and the after-call rule), `npm run typecheck`. **Not checked live:** the new add-in inside Revit (it is installed only when Revit is closed), and the screen script on a real warnings window. **Still open:** a call that timed out still runs later in Revit (the queued ExternalEvent), so an agent's retry can create the same room twice; the plan's step "a queued ExternalEvent carries its request id and expires with the call" is not built.

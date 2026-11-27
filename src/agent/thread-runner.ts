@@ -727,6 +727,7 @@ export class ThreadRunner {
 							signal,
 							act: () => this.d.settings().revitDialogsOnScreen !== false,
 							active: () => revitFlight.open.size > 0 || Date.now() - revitFlight.last < 90_000,
+							waiting: () => revitFlight.open.size > 0,
 							maxTurns: 14,
 							tell: (text) => (steerNow ? steerNow.push({ text }, () => undefined) : notices.push(text)),
 						});

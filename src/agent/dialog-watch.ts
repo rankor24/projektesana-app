@@ -26,6 +26,9 @@ export interface WatchDeps {
 	onAddin?: (l: DialogLogLine) => void;
 	/** is a Revit call of the run going now (or just ended)? A popup the user opened themselves, while no agent call waits for Revit, is not touched or reported. Default: always. */
 	active?: () => boolean;
+	/** is a Revit call of the run waiting right now? Only then is a popup answered on the screen: in the minutes after a call (`active` still true) a popup is most likely
+	 *  the user's own, from their own work, and is only told to them. Default: same as `active`. */
+	waiting?: () => boolean;
 	graceMs?: number;
 	/** a popup the helper tried this often and still open goes to the user */
 	maxTries?: number;
@@ -80,6 +83,13 @@ export class DialogWatch {
 				}
 				return;
 			}
+			if (this.d.waiting && !this.d.waiting()) {
+				for (const p of fresh) {
+					this.seen.get(keyOf(p))!.told = true;
+					this.d.log({ action: "person", title: p.title, text: p.text, reason: "neviens aģenta Revit izsaukums to negaida, tātad tas ir tavs logs: lietotne to neaiztiek", pid: p.pid });
+				}
+				return;
+			}
 			for (const p of fresh) this.seen.get(keyOf(p))!.tries++;
 			const out = await this.d.help(fresh);
 			const left = await this.d.screen.popups().catch(() => [] as DialogWindow[]);
@@ -120,6 +130,8 @@ export interface StartWatch {
 	act: () => boolean;
 	/** is a Revit call of this run going now (or just ended)? */
 	active: () => boolean;
+	/** is a Revit call of this run waiting right now? Only then does the helper act on the screen */
+	waiting?: () => boolean;
 	/** puts a message into the running conversation (the agent reads it after its current step); absent = the engine cannot */
 	tell?: (text: string) => void;
 	maxTurns?: number;
@@ -162,7 +174,7 @@ export function startRevitDialogWatch(o: StartWatch): () => void {
 		// a rolled-back transaction means the change did not happen, and the call that made it may have reported success
 		if (l.action === "rollback") o.tell?.(`[lietotne] Revit atcēla darbību (kļūda, ko nevar ignorēt): ${(l.text ?? "").slice(0, 300)}. Izmaiņa NENOTIKA. Pārbaudi modeļa stāvokli un izlabo cēloni; neatkārto to pašu partiju neizmainītu.`);
 	};
-	const watch = new DialogWatch({ screen, help, log, act: o.act, active: o.active, tail: () => tail.read(), onAddin });
+	const watch = new DialogWatch({ screen, help, log, act: o.act, active: o.active, waiting: o.waiting, tail: () => tail.read(), onAddin });
 	const timer = setInterval(() => void watch.tick(), o.intervalMs ?? 3000);
 	timer.unref?.();
 	const stop = () => clearInterval(timer);

@@ -42,6 +42,8 @@ Rules (the program also enforces them and refuses the rest):
 2. Answer the way that loses nothing: Cancel, Close or No. Never press Delete, Remove, Overwrite, Replace, Save, Don't save, Synchronize, Relinquish, Detach or Discard, and do not tick or untick anything.
 3. A popup that names a model file that is not this project's working copy (an original model, any B: path), asks for a sign-in, a licence, a password or any typing, or reports a crash or recovery: do not answer it. Call ask_user with the reason and stop.
 4. A plain information or warning popup (OK, Close, Continue, Retry): answer it with the button that lets work go on. If it is a question you do not understand, Cancel or Escape.
+   Revit's own warnings window ("0 Errors, N Warnings", buttons OK, Cancel, Show, More Info, Expand) is never pressed: call ask_user and stop. Pressed from outside while a change was running, it crashed Revit.
+7. Never press the same button twice. If a press reports an error, screen_look: the popup may already be gone or changed. A second press on a closing popup can crash Revit.
 5. Prefer screen_press with the button's name. Use screen_click with coordinates only when the button cannot be pressed by name. Escape is screen_key. Never press Enter or type.
 6. After every action screen_look again. Stop when no popup is open. Do not repeat an action that did not work: ask_user.
 Finish with one or two sentences: what the popup said, what you pressed, whether it is gone. Write the report in English.`;
@@ -136,20 +138,12 @@ export function dialogTools(deps: DialogAgentDeps, state: { actions: number; per
 			if (busy) return text(busy, true);
 			try {
 				await deps.screen.press(d.hwnd, dec.button);
-			} catch {
-				// the button has no Invoke: a click at its centre, checked by the same rules
-				const b = d.buttons.find((x) => x.name === dec.button);
-				if (!b?.rect) return failed(d, "the button cannot be pressed and has no position");
-				const x = (b.rect.left + b.rect.right) / 2;
-				const y = (b.rect.top + b.rect.bottom) / 2;
-				const again = decide(d, { type: "click", x, y }, deps.ctx);
-				if (!again.ok) return refuse(d, again.reason, again.person, p.button);
-				try {
-					await deps.screen.click(d.hwnd, x, y);
-					state.lastPoint = { x: Math.round(x), y: Math.round(y) };
-				} catch (e) {
-					return failed(d, (e as Error).message);
-				}
+			} catch (e) {
+				// No click "instead": a press that reports an error may still have reached the button (Invoke waits while Revit works on the answer, and the
+				// script can give up first). A second press on that closing popup is what crashed Revit on 2026-11-27 (two presses 52 ms apart, journal.0161).
+				state.actions++;
+				deps.log({ action: "failed", title: d.title, button: dec.button, reason: `the press reported an error and may still have happened: ${(e as Error).message}`, pid: d.pid });
+				return text(`The press reported an error, but it may still have reached the button. Do not press again: screen_look, and if the popup is still there call ask_user.\n${await afterAction(d.title)}`, true);
 			}
 			state.actions++;
 			deps.log({ action: "press", title: d.title, text: d.text, button: dec.button, kind: dec.kind, pid: d.pid });

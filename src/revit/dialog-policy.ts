@@ -65,13 +65,32 @@ export function buttonKind(name: string): ButtonKind {
 }
 
 // A window that must be dealt with by a person: signing in, the licence, a crash, a password.
-const PERSON = /licen[cs]|sign.?in|autodesk id|activat|subscription|account|password|parole|pieteik|aktiviz|crash|not responding|nereaģē|recovery|atkopšan|unexpected error|encountered a problem|journal|žurnāl/i;
+const PERSON = /licen[cs]|sign.?in|autodesk id|activat|subscription|account|password|parole|pieteik|aktiviz|crash|not responding|nereaģē|recovery|atkopšan|unexpected error|serious.?error|encountered a problem|journal|žurnāl/i;
 // A question whose "yes" loses something.
 const DATA_LOSS = /delet|remov|overwrit|replac|discard|\blose\b|\blost\b|permanent|cannot be undone|will be removed|dzēs|noņem|pārrakst|aizstāj|zaudē|neatgriezeniski|nevar atsaukt/i;
 // "Save changes?": the only safe answer is Cancel.
 const SAVE_QUESTION = /save (the )?changes|unsaved|saglabāt izmaiņas|nesaglabāt|izmaiņas netika saglabātas|before (closing|you close)|pirms aizvēršanas|sync(hroni[sz]e)? with central|sinhroniz/i;
 const MODEL_PATH = /(?:[A-Za-z]:\\|\\\\)[^\r\n"<>|*?]*?\.(?:rvt|rfa|rte|rft|ifc|nwc|nwd|dwg|dxf|rvl)\b/gi;
 const NETWORK_PATH = /(?:^|[^A-Za-z])B:\\|\\\\[A-Za-z0-9_.-]+\\/i;
+
+// Revit's own warnings window ("Warning -- 0 Errors, 3 Warnings", OK / Cancel / Show / More Info / Expand >>). It is never pressed from outside: on 2026-11-27 the helper
+// pressed it while the agent's API transaction (create_room) was still open, it was pressed twice within 52 ms, and Revit stopped with "Revit encountered a serious
+// error" (journal: "Acquired transaction group has a proxy"). The agent's own warnings are deleted by the add-in before this window can show (FailuresProcessing,
+// known by the transaction name "MCP: ..."); one that shows anyway is the user's own work or something the add-in missed, and is the user's.
+const WARNINGS_COUNT = /\b(\d+)\s+errors?\s*,\s*(\d+)\s+warnings?\b/i;
+
+/** Revit's warnings window with warnings only (no errors), from its counts line or, when that was not read, from its own buttons (Show, Expand >>) with no error count. */
+export function revitWarningsOnly(d: Pick<DialogWindow, "text" | "buttons">): boolean {
+	const m = WARNINGS_COUNT.exec(d.text);
+	if (m) return Number(m[1]) === 0 && Number(m[2]) > 0;
+	const names = d.buttons.map((b) => clean(b.name));
+	return names.includes("show") && names.some((n) => n.startsWith("expand")) && names.includes("ok") && !/\berrors?\b/i.test(d.text);
+}
+
+/** A window of Revit's that is no popup to answer: the hidden "<guid>Monitor" helper window that sits under a modal popup. */
+export function revitInternal(d: Pick<DialogWindow, "title">): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}monitor$/i.test(d.title.trim());
+}
 
 /** The model-file paths a popup names (title and text). */
 export function pathsIn(d: Pick<DialogWindow, "title" | "text">): string[] {
@@ -90,6 +109,8 @@ export interface Assessment {
 	outside: boolean;
 	dataLoss: boolean;
 	saveQuestion: boolean;
+	/** Revit's warnings window (no errors): never pressed from outside, it is the user's */
+	warningsOnly: boolean;
 	/** the button kinds that may be answered with; empty = none */
 	allowed: ButtonKind[];
 	why: string;
@@ -97,7 +118,8 @@ export interface Assessment {
 
 export function assess(d: DialogWindow, ctx: PolicyContext): Assessment {
 	const all = `${d.title}\n${d.text}`;
-	const person = PERSON.test(all) || d.edits > 0;
+	const warningsOnly = revitWarningsOnly(d);
+	const person = PERSON.test(all) || d.edits > 0 || warningsOnly;
 	const paths = pathsIn(d);
 	const outside = paths.some((p) => !ctx.own(p)) || NETWORK_PATH.test(all);
 	const dataLoss = DATA_LOSS.test(all);
@@ -106,7 +128,11 @@ export function assess(d: DialogWindow, ctx: PolicyContext): Assessment {
 	let why: string;
 	if (person) {
 		allowed = [];
-		why = d.edits > 0 ? "the popup asks for something to be typed (name, password): that is the user's" : "licence, sign-in, crash or recovery window: that is the user's";
+		why = warningsOnly
+			? "Revit's warnings window: the app never presses it (pressed from outside during an agent's change it crashed Revit); the add-in clears the agent's own warnings before they show, so this one is yours: OK keeps the change, Cancel undoes it"
+			: d.edits > 0
+				? "the popup asks for something to be typed (name, password): that is the user's"
+				: "licence, sign-in, crash or recovery window: that is the user's";
 	} else if (outside) {
 		allowed = ["cancel", "close"];
 		why = "it names a model file that is not the project's working copy (an original): only Cancel or Close";
@@ -120,7 +146,7 @@ export function assess(d: DialogWindow, ctx: PolicyContext): Assessment {
 		allowed = ["cancel", "close", "ok", "no", "yes", "retry", "ignore", "continue"];
 		why = "a plain popup: Cancel, Close, OK, Yes, No, Retry, Ignore, Continue";
 	}
-	return { person, outside, dataLoss, saveQuestion, allowed, why };
+	return { person, outside, dataLoss, saveQuestion, warningsOnly, allowed, why };
 }
 
 /** The popup's title-bar close box, which no automation tree shows: the top band at the right edge. */

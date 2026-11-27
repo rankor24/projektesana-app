@@ -101,7 +101,23 @@ function Get-Popups {
 						if ($n) { $buttons += @{ name = $n; id = $el.Current.AutomationId; rect = (Rect-Of $el) } }
 					} elseif ($t -eq [System.Windows.Automation.ControlType]::CheckBox -or $t -eq [System.Windows.Automation.ControlType]::RadioButton) {
 						if ($n) { $boxes += $n }
-					} elseif ($t -eq [System.Windows.Automation.ControlType]::Edit -or $t -eq [System.Windows.Automation.ControlType]::ComboBox) {
+					} elseif ($t -eq [System.Windows.Automation.ControlType]::Edit -or $t -eq [System.Windows.Automation.ControlType]::Document) {
+						# Revit's warnings window shows its message in a read-only text box: that is text to read, not a field to fill in. Only a box that can be typed in
+						# (enabled and not read-only) counts as one; a box whose state cannot be read counts too (the safe side).
+						$ro = $false; $val = ''
+						try {
+							$vp = $null
+							if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) { $ro = $vp.Current.IsReadOnly; $val = $vp.Current.Value }
+							elseif ($t -eq [System.Windows.Automation.ControlType]::Document) {
+								$tp = $null
+								if ($el.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$tp)) { $ro = $true; $val = $tp.DocumentRange.GetText(2000) }
+							}
+						} catch { }
+						if ($ro -or -not $el.Current.IsEnabled) {
+							if (-not $val) { $val = $n }
+							if ($val) { $texts += $val.Trim() }
+						} else { $edits++ }
+					} elseif ($t -eq [System.Windows.Automation.ControlType]::ComboBox) {
 						$edits++
 					} elseif ($t -eq [System.Windows.Automation.ControlType]::Text -or $t -eq [System.Windows.Automation.ControlType]::Hyperlink) {
 						if ($n) { $texts += $n }
