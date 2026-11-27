@@ -3,28 +3,102 @@
 // strip drags the whole group. BIM Crew's windows have a title bar per window; here the title bar is the tab strip.
 import { useEffect, useRef, type ReactNode } from "react";
 import { Icon } from "../icons";
-import { CHAT, canClose, tabIndexAt, TOOLS, type Group } from "../../shared/layout";
+import { CHAT, canClose, clampGeo, minWOf, tabIndexAt, TOOLS, type Group } from "../../shared/layout";
 import { WINDOW_TITLE, useWindows, windows } from "../windows";
-import { tabRects, track } from "./drag";
+import { dragActive, tabRects, track } from "./drag";
 import { tr } from "../i18n";
 
 /** Widths (px) at which the comment tools' window changes shape: colours in threes, then the header in a row with a wrapped grid of tools. */
 const SLIM_MID = 100;
 const SLIM_WIDE = 140;
 
+/** The icons of the comment tools window that take part in its wrapping (the colour dots flow with them). */
+const TOOL_ITEMS = ".ctool, .ctool-ab, .ctool-swatch, .ctool-sep";
+/** The window's own header needs this much width in a row; narrower than SLIM_MID it is the one-column tier, left as it is. */
+const FIT_MIN_W = SLIM_WIDE;
+/** Widening to remove a lone icon on the last row is allowed only up to this width. */
+const FIT_MAX_W = 520;
+
+/** How many rows the icons sit in now, and how many icons (dividers not counted) the last row holds. */
+function toolRows(col: HTMLElement): { rows: number; last: number } {
+	// the note box opens beside the column but is its child: its colour dot is not one of the icons
+	const icons = [...col.querySelectorAll<HTMLElement>(TOOL_ITEMS)].filter((el) => !el.closest(".ctool-ask"));
+	const items = icons.map((el) => {
+		const r = el.getBoundingClientRect();
+		return { y: r.top + r.height / 2, sep: el.classList.contains("ctool-sep") };
+	});
+	items.sort((a, b) => a.y - b.y);
+	let rows = 0;
+	let last = 0;
+	let prev = -1e9;
+	for (const it of items) {
+		if (it.y - prev > 8) {
+			rows++;
+			last = 0;
+		}
+		prev = it.y;
+		if (!it.sep) last++;
+	}
+	return { rows, last };
+}
+
 /**
- * The comment tools' window is meant to be exactly as tall as its icons need: measures the icon grid against the body it sits in
- * and resizes the floating window by the difference (shrinks it when there is empty room, grows it when icons are cut off).
- * Called when the user lets go of a width drag, and by a double-click on the grip.
+ * The comment tools' window is always as compact as it can be: exactly as tall as its icons need, as narrow as those rows need,
+ * and never with one icon alone on the last row (it gets a little wider for one row fewer, up to FIT_MAX_W). Probes the real
+ * layout by setting the window's width on the element (nothing is stored until the answer is known), then stores the fitted
+ * size once. Run whenever the icons re-flow (a width change, other tools on the page), after every move or resize, and on a
+ * double-click on the grip. The one-column tier (under 100 px wide) keeps its width and only fits its height.
  */
 export function fitToolsHeight(id: string): void {
 	const fw = document.querySelector<HTMLElement>(`[data-strip="${id}"]`)?.closest<HTMLElement>(".fw");
 	const body = fw?.querySelector<HTMLElement>(".ctool-win");
 	const col = fw?.querySelector<HTMLElement>(".ctool-col");
 	if (!fw || !body || !col) return;
+	const vp = { w: window.innerWidth, h: window.innerHeight };
+	const w0 = fw.offsetWidth;
+	let w = w0;
+	// a scroll bar appearing while the window is probed would change the width the icons wrap in
+	const overflow = body.style.overflow;
+	body.style.overflow = "hidden";
+	if (w0 >= SLIM_MID) {
+		const at = (x: number) => {
+			fw.style.width = `${x}px`;
+			return toolRows(col);
+		};
+		/** the narrowest width in [FIT_MIN_W, hi] that keeps the icons in at most `rows` rows */
+		const narrowest = (rows: number, hi: number) => {
+			let lo = FIT_MIN_W;
+			let up = hi;
+			while (up - lo > 1) {
+				const mid = Math.floor((lo + up) / 2);
+				if (at(mid).rows <= rows) up = mid;
+				else lo = mid;
+			}
+			return at(lo).rows <= rows ? lo : up;
+		};
+		const wide = Math.max(FIT_MIN_W, Math.min(vp.w - 16, Math.max(w0, FIT_MAX_W)));
+		let now = at(Math.max(FIT_MIN_W, w0));
+		let rows = now.rows;
+		w = narrowest(rows, Math.max(FIT_MIN_W, w0));
+		now = at(w);
+		// a lone icon (or two) on the last row: one row fewer, if that costs no more than FIT_MAX_W
+		while (rows > 1 && now.last <= 2) {
+			const wider = narrowest(rows - 1, wide);
+			if (wider > FIT_MAX_W || at(wider).rows > rows - 1) break;
+			rows -= 1;
+			w = wider;
+			now = at(w);
+		}
+		fw.style.width = `${w0}px`;
+	}
+	// the height follows the rows at the chosen width (measured with that width on the element, then put back)
+	fw.style.width = `${w}px`;
 	const delta = col.offsetHeight - body.clientHeight;
-	if (Math.abs(delta) < 2) return;
-	windows.resize(id, { x: fw.offsetLeft, y: fw.offsetTop, w: fw.offsetWidth, h: fw.offsetHeight + delta });
+	fw.style.width = `${w0}px`;
+	body.style.overflow = overflow;
+	const want = clampGeo({ x: fw.offsetLeft, y: fw.offsetTop, w, h: fw.offsetHeight + delta }, vp, minWOf([TOOLS]));
+	if (Math.abs(want.w - w0) < 2 && Math.abs(want.h - fw.offsetHeight) < 2) return; // already as compact as the screen allows: no store write, no loop
+	windows.resize(id, want);
 }
 
 export function TabGroup({
@@ -104,6 +178,31 @@ export function TabGroup({
 			delete el.dataset.tier;
 		};
 	}, [slim]);
+	// the floating comment tools keep themselves as compact as possible at all times: whenever the icons re-flow (width, the page's
+	// tools, colours) the height is fitted again; while the window is being dragged nothing is touched (the drag ends with a fit)
+	useEffect(() => {
+		const el = tg.current;
+		if (!slim || mode !== "float" || !el) return;
+		let raf = 0;
+		const schedule = () => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				if (!dragActive()) fitToolsHeight(own);
+			});
+		};
+		const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+		ro?.observe(el);
+		const col = el.querySelector(".ctool-col");
+		if (col) ro?.observe(col);
+		const mo = new MutationObserver(schedule);
+		mo.observe(el.querySelector(".tg-body") ?? el, { childList: true, subtree: true });
+		schedule();
+		return () => {
+			cancelAnimationFrame(raf);
+			ro?.disconnect();
+			mo.disconnect();
+		};
+	}, [slim, mode, own]);
 	return (
 		<div ref={tg} className={`tg ${mode === "edge" ? "tg-edge" : ""} ${slim ? "tg-slim" : ""}`}>
 			<div className="tg-strip" data-strip={own} data-tabs={group.tabs.join(",")} onMouseDown={startGroup} onDoubleClick={() => (slim ? (mode === "float" ? fitToolsHeight(own) : undefined) : mode === "float" ? windows.maximize(own) : windows.undock(own))}>
