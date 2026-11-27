@@ -36,7 +36,6 @@ import { Waiting } from "./Waiting";
 import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
 import { confirmNotes } from "../../shared/confirm-text";
-import { cycleReasoning, REASONING_LABEL, useReasoning } from "../reasoning-pref";
 
 const INPUT_H_KEY = "projektesana.chatInputHeight";
 /** the message box: never smaller than its two lines, never taller than most of the window (the chat above must stay in sight) */
@@ -62,7 +61,6 @@ export function AgentDock() {
 	const sendFocus = useMemo(() => focusForSend(focus, mode, view), [focus, mode, view]);
 	const status = useLoad<AgentStatus>(() => call("agent.status"), []);
 	const tasks = useLoad(() => call("tasks.list"), []);
-	const reasoning = useReasoning();
 	const [lines, setLines] = useState<Line[]>([]);
 	const [runId, setRunId] = useState<string | null>(null);
 	const [text, setText] = useState("");
@@ -419,17 +417,10 @@ export function AgentDock() {
 				})()
 			: null;
 	const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
-	// Darbi, the queue's pause and Apturēt visu: the right end of the Uzdevumi row (there only while something runs, waits or is paused)
-	const jobsHead = (
-		<LaneHead
-			count={T.lanes.length}
-			paused={T.queue.paused}
-			wave={currentWave(T.queue.waves, T.queue.running, projectId)}
-			elsewhere={T.elsewhere}
-			onStopAll={stopAll}
-			onTogglePause={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")}
-		/>
-	);
+	// Darbi and the wave: the right end of the Uzdevumi row (there only while something runs, waits or is paused)
+	const jobsHead = <LaneHead count={T.lanes.length} paused={T.queue.paused} wave={currentWave(T.queue.waves, T.queue.running, projectId)} elsewhere={T.elsewhere} />;
+	// the queue's buttons sit in the composer bar beside this chat's Apturēt: one row, one style
+	const queueOn = T.lanes.length > 0 || T.elsewhere > 0 || T.queue.paused;
 	// why the conversation on screen waits (its own lane carries the reason); null reads as plain "queued"
 	const queuedWhy = T.lanes.find((l) => l.threadId === viewId && l.state === "queued")?.why ?? null;
 	const lastRun = [...lines].reverse().find((l): l is Extract<Line, { kind: "run" }> => l.kind === "run")?.runId ?? null;
@@ -482,6 +473,11 @@ export function AgentDock() {
 				</div>
 				<div className="focus-head">
 					<span className="dim">{tr("Fokuss:")}</span>
+					{/* Auto adds what is open in the viewer to every message; Manuāli sends only the chips here */}
+					<div className="view-toggle mini" title={tr("Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.")}>
+						<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>{tr("Auto")}</button>
+						<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>{tr("Manuāli")}</button>
+					</div>
 					{focus.length === 0 ? (
 						<span className="dim">{tr("nekas")}</span>
 					) : (
@@ -646,29 +642,34 @@ export function AgentDock() {
 								e.target.value = "";
 							}}
 						/>
-						<div className="view-toggle" title={tr("Auto: katrai ziņai līdzi iet atvērtais fails, lapa, iezīmētie elementi un kamera (3D). Manuāli: tikai Fokuss, ko tu esi izvēlējies.")}>
-							<span className="dim small">{tr("Skats:")}</span>
-							<button className={mode === "auto" ? "on" : ""} onClick={() => ui.setViewMode("auto")}>{tr("Auto")}</button>
-							<button className={mode === "manual" ? "on" : ""} onClick={() => ui.setViewMode("manual")}>{tr("Manuāli")}</button>
-						</div>
 						{st ? (
 							<button
 								className={`chip model-chip ${st.signedIn ? "" : "bad"}`}
 								onClick={() => windows.open("iestatijumi")}
 								title={`${st.providerLabel} · ${st.model} · ${st.signedIn ? tr("pieslēgts") : tr("nav pieslēgts")}${st.reason ? `\n${st.reason}` : ""}`}
 							>
-								{st.providerLabel} · {st.model}
+								{st.model}
 								{st.signedIn ? "" : ` · ${tr("nav pieslēgts")}`}
 							</button>
 						) : null}
 						<span className="grow" />
-						<button className={`ghost small reasoning-btn ${reasoning}`} title={tr("Modeļa domāšana sarunā: paslēpta, sakļauta (atveras tikai tā, kas top) vai atvērta")} onClick={cycleReasoning}>
-							{tr("Domāšana:")} {REASONING_LABEL[reasoning]}
-						</button>
+						{/* the run buttons: one size, one style, one row; a narrow dock keeps only their icons (styles.css, .composer-bar container) */}
+						{queueOn && (
+							<button className="run-btn" onClick={() => void call(T.queue.paused ? "queue.resume" : "queue.pause")} title={T.queue.paused ? tr("Rindā gaidošie darbi sāks darbu") : tr("Kas jau strādā, turpina; jauni darbi gaida")}>
+								<Icon name={T.queue.paused ? "play" : "pause"} size={13} />
+								<span className="lbl">{T.queue.paused ? tr("Turpināt") : tr("Pauzēt")}</span>
+							</button>
+						)}
 						{runId && (
-							<button className="stop-btn" onClick={stop}>
-								<Icon name="square" size={12} />
-								{tr("Apturēt")}
+							<button className="run-btn" onClick={stop} title={tr("Apturēt šo sarunu")}>
+								<Icon name="square" size={13} />
+								<span className="lbl">{tr("Apturēt")}</span>
+							</button>
+						)}
+						{queueOn && (
+							<button className="run-btn danger" onClick={stopAll} disabled={T.lanes.length === 0 && T.elsewhere === 0} title={tr("Aptur visus darbus, arī citos projektos")}>
+								<Icon name="octagonX" size={13} />
+								<span className="lbl">{tr("Apturēt visu")}</span>
 							</button>
 						)}
 						<button className="send-btn" title={workingHere ? tr("Sūtīt: ziņa nonāks pie aģenta pēc tekošā soļa") : tr("Sūtīt")} aria-label={tr("Sūtīt")} disabled={!canSend || blind} onClick={send}>

@@ -148,6 +148,9 @@ const SHAPES = {
 	arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
 	square: <rect width="14" height="14" x="5" y="5" rx="2" />,
 	play: <path d="M6 3l14 9-14 9z" />,
+	pause: <path d="M7 4h3v16H7zM14 4h3v16h-3z" />,
+	/** Apturēt visu: Lucide octagon-x */
+	octagonX: <path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586zM15 9l-6 6M9 9l6 6" />,
 	alert: (
 		<>
 			<circle cx="12" cy="12" r="10" />

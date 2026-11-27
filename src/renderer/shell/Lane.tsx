@@ -56,17 +56,16 @@ interface HeadProps {
 	/** running and queued threads of the open project */
 	count: number;
 	paused: boolean;
-	/** the open project's current wave, shown beside Pauzēt */
+	/** the open project's current wave, shown beside the count */
 	wave: Wave | null;
 	/** running or queued in other projects */
 	elsewhere: number;
-	onStopAll: () => void;
-	onTogglePause: () => void;
 }
 
 /** The queue's own controls, drawn at the right end of the Uzdevumi row. Shown only while something runs, waits in the queue, or the queue is paused: an idle window has none. */
-export function LaneHead({ count, paused, wave, elsewhere, onStopAll, onTogglePause }: HeadProps) {
+export function LaneHead({ count, paused, wave, elsewhere }: HeadProps) {
 	if (count === 0 && elsewhere === 0 && !paused) return null;
+	// only what is going on: the buttons (Pauzēt, Apturēt, Apturēt visu) are one row in the composer bar
 	return (
 		<div className="lanes-head small">
 			<span className="dim">{tr("Darbi:")}</span>
@@ -74,11 +73,6 @@ export function LaneHead({ count, paused, wave, elsewhere, onStopAll, onTogglePa
 			{elsewhere > 0 && <span className="dim">{tr("· citos projektos {elsewhere}", { elsewhere: elsewhere })}</span>}
 			{paused && <span className="badge warn">{tr("rinda apturēta")}</span>}
 			{wave && <span className={`small ${wave.paused ? "badge warn" : "dim"}`}>{waveLine(wave)}</span>}
-			<button className="small" onClick={onTogglePause} title={paused ? tr("Rindā gaidošie darbi sāks darbu") : tr("Kas jau strādā, turpina; jauni darbi gaida")}>
-				{paused ? tr("Turpināt rindu") : tr("Pauzēt rindu")}
-			</button>
-			<button className="small danger" onClick={onStopAll} disabled={count === 0 && elsewhere === 0} title={tr("Aptur visus darbus, arī citos projektos")}>
-				{tr("Apturēt visu")}</button>
 		</div>
 	);
 }

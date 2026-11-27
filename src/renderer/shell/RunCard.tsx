@@ -11,7 +11,6 @@ import { runViewerAction } from "../run-ui";
 import { viewerChips } from "../../shared/ui-instruction";
 import { useLoad } from "../ui";
 import { locale, tr } from "../i18n";
-import { useReasoning, type Reasoning } from "../reasoning-pref";
 
 const ICON: Record<ActKind | "thinking" | "note" | "confirm" | "error", string> = {
 	read: "▤",
@@ -47,7 +46,7 @@ function Mark({ status }: { status?: Activity["status"] }) {
 	return null;
 }
 
-function Step({ a, live, reasoning }: { a: Activity; live: boolean; reasoning: Reasoning }) {
+function Step({ a, live }: { a: Activity; live: boolean }) {
 	const icon = a.kind === "tool" ? ICON[a.tool ?? "other"] : ICON[a.kind as "thinking" | "note" | "confirm" | "error"] ?? "·";
 	const label = a.kind === "tool" ? KIND_LABEL[a.tool ?? "other"] : a.kind === "thinking" ? KIND_LABEL.thinking : "";
 	const head = (
@@ -91,8 +90,8 @@ function Step({ a, live, reasoning }: { a: Activity; live: boolean; reasoning: R
 		);
 	return (
 		<div className={cls}>
-			{/* reasoning: folded = only the newest one stays open while it is being written; open = all of them */}
-			<details open={a.kind === "thinking" && (reasoning === "open" || (reasoning === "folded" && live))}>
+			{/* reasoning folds to one line; only the one being written stays open */}
+			<details open={a.kind === "thinking" && live}>
 				<summary className="act-sum">{head}</summary>
 				<pre className="act-pre">{a.detail}</pre>
 			</details>
@@ -162,8 +161,7 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 	const end = lines.find((l) => l.kind === "done" || l.kind === "error");
 	const running = isRunning(lines);
 	const summary = summaryOf(lines);
-	const reasoning = useReasoning();
-	const steps = lines.filter((l) => l.kind === "tool" || (l.kind === "thinking" && reasoning !== "hidden") || l.kind === "note" || l.kind === "confirm" || (l.kind === "error" && !!l.text));
+	const steps = lines.filter((l) => l.kind === "tool" || l.kind === "thinking" || l.kind === "note" || l.kind === "confirm" || (l.kind === "error" && !!l.text));
 	const lastStep = steps[steps.length - 1];
 
 	// open while it runs and for the newest run; the person's own open/close wins from then on
@@ -234,7 +232,7 @@ export function RunCard({ lines, latest }: { lines: Activity[]; latest: boolean 
 				}}
 			>
 				{steps.map((l, i) => (
-					<Step key={`${l.step ?? l.kind}-${i}`} a={l} live={running && l === lastStep} reasoning={reasoning} />
+					<Step key={`${l.step ?? l.kind}-${i}`} a={l} live={running && l === lastStep} />
 				))}
 				{running && steps.length === 0 && <div className="dim small">{tr("Aģents sāk darbu…")}</div>}
 			</div>
