@@ -824,6 +824,14 @@ The user (2026-11-27): "we need some Auto mode button, that Allows all commands 
 Test: `test/27.1-auto-mode.test.ts`.
 
 
+## 2026-11-27: the message box can be made taller (his words: "let me resize Text input field up to make bigger")
+
+| # | Done |
+|---|---|
+| 1 | The agent chat's message box (`composer-field` in `AgentDock.tsx`) has a drag edge along its top: drag **up** to make the box taller, down to make it smaller. The chat above shrinks to make room. The height is written to the box while dragging and saved once on release (`localStorage`, per computer, key `projektesana.chatInputHeight`); **double-click** the edge puts the box back to its two lines. Smallest: the two lines; tallest: 70 % of the window height. Same drag helper (`followMouse`) and the same "write while dragging, save on release" pattern as the sidebar's edge. This follows his rule that all panels are resizable. |
+
+**Not checked live** (his rule). The edge is 9 px high and shows the accent colour on hover; the cursor is the up/down resize arrow.
+
 ## 2026-11-27: Two sets of comment tools on the PDF view (version 2.18.1)
 
 The user (screenshot of the PDF bar): "Why there is duplicate of worse working comment tools on PDF viewer?"

@@ -235,9 +235,14 @@ tr.click:hover td { background: var(--elev); }
 .confirm.folded { padding: 3px 6px 3px 10px; border-color: var(--border-strong); }
 /* composer: the checklist, the message and the buttons are one block pinned to the bottom of the dock */
 .chat-input { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
-.composer { display: flex; flex-direction: column; background: var(--elev); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; }
+.composer { position: relative; display: flex; flex-direction: column; background: var(--elev); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; }
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { width: 100%; resize: none; border: 0; outline: 0; border-radius: 0; background: transparent; padding: 10px 12px 4px; line-height: 1.45; }
+/* the top edge of the message box: drag up to make the box taller (kept per computer; double-click puts it back) */
+.composer-field { position: relative; }
+.composer-field textarea { display: block; }
+.composer-grip { position: absolute; z-index: 3; top: 0; left: 0; right: 0; height: 9px; cursor: row-resize; }
+.composer-grip:hover, .composer-grip:active { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .composer-attach { padding: 8px 12px 0; }
 .composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 8px 8px; }
 /* the model sits in the bar's empty middle; it gives way (ellipsis) before the buttons do */

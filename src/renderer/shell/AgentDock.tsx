@@ -28,6 +28,7 @@ import { parseEveryone } from "../../shared/everyone";
 import { BPV_ID } from "../../shared/departments";
 import { LaneHead, LaneRows, whyText } from "./Lane";
 import { ProcessStrip } from "./ProcessStrip";
+import { followMouse } from "./drag";
 import { MentionPop, SentNotice, ThreadPanel } from "./ThreadList";
 import { currentWave } from "../../shared/wave";
 import { agentName, mentionOptions, useThreads } from "./useThreads";
@@ -36,6 +37,20 @@ import { TeamOffer } from "./TeamOffer";
 import { tr } from "../i18n";
 import { confirmNotes } from "../../shared/confirm-text";
 import { cycleReasoning, REASONING_LABEL, useReasoning } from "../reasoning-pref";
+
+const INPUT_H_KEY = "projektesana.chatInputHeight";
+/** the message box: never smaller than its two lines, never taller than most of the window (the chat above must stay in sight) */
+const INPUT_H_MIN = 52;
+const clampInputH = (h: number) => Math.round(Math.max(INPUT_H_MIN, Math.min(h, Math.max(INPUT_H_MIN, window.innerHeight * 0.7))));
+
+function readInputH(): number | null {
+	try {
+		const v = Number(localStorage.getItem(INPUT_H_KEY));
+		return Number.isFinite(v) && v > 0 ? clampInputH(v) : null;
+	} catch {
+		return null;
+	}
+}
 
 export function AgentDock() {
 	startChatStreams();
@@ -60,6 +75,8 @@ export function AgentDock() {
 	const stick = useRef(true);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	/** the message box's own height, set by dragging its top edge up (empty: the two-line default); kept per computer */
+	const [inputH, setInputH] = useState<number | null>(readInputH);
 	// files waiting to go with the next message: pasted screenshots, dropped or picked files
 	const [pending, setPending] = useState<Pending[]>([]);
 	const [reading, setReading] = useState(0);
@@ -229,6 +246,40 @@ export function AgentDock() {
 	const workingHere = !!runId || (!!viewId && (T.queue.running.some((r) => r.threadId === viewId) || T.queue.queued.some((q) => q.threadId === viewId && q.state === "queued")));
 	const held = viewId ? T.queue.steering.find((m) => m.threadId === viewId) : undefined;
 	const canSend = (text.trim().length > 0 || pending.length > 0) && reading === 0 && !closedView;
+	const saveInputH = (h: number | null) => {
+		setInputH(h);
+		try {
+			if (h) localStorage.setItem(INPUT_H_KEY, String(h));
+			else localStorage.removeItem(INPUT_H_KEY);
+		} catch {
+			// not remembered: the box starts at two lines next time
+		}
+	};
+	/** drag the box's top edge: up makes it taller, down smaller (BIM Crew's ResizeHandle pattern; the height is written while dragging, saved on release) */
+	const startInputResize = (e: React.MouseEvent) => {
+		e.preventDefault();
+		const ta = inputRef.current;
+		if (!ta) return;
+		const y0 = e.clientY;
+		const h0 = ta.getBoundingClientRect().height;
+		let h = h0;
+		let raf = 0;
+		followMouse(
+			(ev) => {
+				h = clampInputH(h0 + (y0 - ev.clientY));
+				cancelAnimationFrame(raf);
+				raf = requestAnimationFrame(() => {
+					ta.style.height = `${h}px`;
+				});
+			},
+			() => {
+				cancelAnimationFrame(raf);
+				saveInputH(h);
+			},
+			{ cursor: "row-resize" },
+		);
+	};
+
 	const send = async () => {
 		if (!canSend) return;
 		setErr(null);
@@ -547,28 +598,39 @@ export function AgentDock() {
 							{reading > 0 && <span className="dim small">{tr("sagatavo {reading} …", { reading: reading })}</span>}
 						</div>
 					)}
-					<textarea
-						ref={inputRef}
-						rows={2}
-						value={text}
-						placeholder={closedView ? tr("Saruna ir slēgta") : st && !st.signedIn ? tr("nav pieslēgts — atver Iestatījumi") : workingHere ? tr("Aģents strādā — raksti tālāk, ziņa nonāks pie viņa pēc tekošā soļa (Ctrl+Enter)") : tr("Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu")}
-						onChange={(e) => {
-							setText(e.target.value);
-							setPick(0);
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) return void send();
-							if (options.length === 0) return;
-							const at = Math.min(pick, options.length - 1);
-							if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-								e.preventDefault();
-								setPick((at + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
-							} else if (e.key === "Tab" || e.key === "Enter") {
-								e.preventDefault();
-								choose(options[at].id);
-							}
-						}}
-					/>
+					<div className="composer-field">
+						<div
+							className="composer-grip"
+							role="separator"
+							aria-orientation="horizontal"
+							title={tr("Velc uz augšu, lai ziņas lauks būtu lielāks (dubultklikšķis: atpakaļ uz parasto)")}
+							onMouseDown={startInputResize}
+							onDoubleClick={() => saveInputH(null)}
+						/>
+						<textarea
+							ref={inputRef}
+							rows={2}
+							style={inputH ? { height: inputH } : undefined}
+							value={text}
+							placeholder={closedView ? tr("Saruna ir slēgta") : st && !st.signedIn ? tr("nav pieslēgts — atver Iestatījumi") : workingHere ? tr("Aģents strādā — raksti tālāk, ziņa nonāks pie viņa pēc tekošā soļa (Ctrl+Enter)") : tr("Raksti aģentam… @ izvēlas speciālistu (Ctrl+Enter) · Ctrl+V ielīmē ekrānuzņēmumu")}
+							onChange={(e) => {
+								setText(e.target.value);
+								setPick(0);
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) return void send();
+								if (options.length === 0) return;
+								const at = Math.min(pick, options.length - 1);
+								if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+									e.preventDefault();
+									setPick((at + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length);
+								} else if (e.key === "Tab" || e.key === "Enter") {
+									e.preventDefault();
+									choose(options[at].id);
+								}
+							}}
+						/>
+					</div>
 					<div className="composer-bar">
 						<button className="icon-btn" title={tr("Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)")} aria-label={tr("Pievienot failu vai attēlu (arī: Ctrl+V, ievilkt)")} onClick={() => fileRef.current?.click()}>
 							<Icon name="paperclip" />
